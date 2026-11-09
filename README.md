@@ -46,12 +46,12 @@ These practical approximations are separate from Grand Challenge acceptance.
 
 | Cluster | Scheme | Output |
 |---|---|---|
-| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. Natural-Rb D2 additionally exposes the finite-probe model tested in `references/AutoOD-NatRbD2`: transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 mW preserving the exact weak-probe result. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the vapor-density and Doppler-width temperatures can be released from each other (cold spot vs beam path). Imports oscilloscope A/B CSV data for robust correction and manual transmission-overlay alignment. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
+| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to `references/AutoOD-Rb` at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. Imports oscilloscope A/B CSV data for robust correction and manual transmission-overlay alignment. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
 | A | **Lambda coherence (EIT / AT / CPT)** | one 3-level Lambda engine with regime-driven defaults, physical MHz/kHz controls, Rb/Cs D-line media, EIT transparency, AT splitting, and CPT dark resonance |
 | A | **Rydberg-EIT electrometry** | 85Rb cascade EIT / microwave AT spectrum for the 5S-5P-40D ladder and 37 GHz 40D-39F RF leg; first-order finite-IF weak-SIG response, AT→field calibration, balanced-detector PSN/RIN/electronics budget, temperature/cold-spot sweep, and conditional absolute sensitivity |
 | C — Magneto-optics | **Hanle / EIA / NMOR** | two distinct effects vs B: the **Hanle** effect (zero-field transmission dip/peak, EIA variant) from ground-state coherence, and **magneto-optical rotation** (MOR/NMOR, polarization-plane rotation) — both over the Zeeman manifold |
 | C | **Polarization squeezing (PSR)** | Rb85/Rb87 D1/D2 atomic self-rotation slope with conditional Gaussian polarization noise; phase and optical-detuning scans, distributed absorption, detector loss and explicit assumed atomic excess noise. [Model and applicability](docs/psr/README.md) |
-| D — Wave mixing | **FWM** | seeded 85Rb D1 double-Λ Squeezing indicator (mean-field only; physical squeezing unavailable), plus generic SFWM biphoton source estimates (`g²_SI(τ)`, CAR, rates, phase matching, velocity-class waveform) |
+| D — Wave mixing | **FWM** | seeded 85Rb D1 double-Λ gains, optional 10/13 experimental peak/width/gain calibration, effective Jasperse two-arm noise, and a selectable passive L1 diagnostic; generic SFWM biphoton source estimates (`g²_SI(τ)`, CAR, rates, phase matching, velocity-class waveform) |
 
 Roadmap (parking lot): group-index / slow-light readout (OD/SAS now returns the
 dispersive refractive index, but no group quantity), Raman gain, higher-order
@@ -117,9 +117,9 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
     temperature/density dephasing fits; re-exports the `vapor_cell` layer.
   - `rydberg_experimental_csv.py` — unit-aware EIT/RF/PSD trace import with
     duplicate handling and SHA-256 provenance.
-  - `probe_saturation.py` — Natural-Rb D2 finite-probe saturation, power broadening,
+  - `probe_saturation.py` — alkali D-line finite-probe saturation, power broadening,
     and Gaussian radial/longitudinal propagation helpers ported from the tested
-    AutoOD reference.
+    Rb-D2 AutoOD reference; D1/Cs callers carry a generalized-model qualifier.
   - `schemes/` — experiment plugins: `base.py` (`Scheme`/`ParamSpec`/`Preset`/`ExtraView`),
     `absorption.py` (Lambda EIT/AT/CPT + the unregistered `ODScheme` validation
     primitive), `rydberg.py` (Rydberg-EIT electrometry), `sas.py`
@@ -129,15 +129,18 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
 - `streamlit_app.py` — generic UI. Renders only the selected scheme's
   `param_schema()`; caches the heavy solve on `recompute` knobs only (so
   navigate-only knobs like the FWM two-photon detuning update instantly).
-- `archive/` — retired legacy entry points and artifacts. It preserves the former
+- `archive/` — retired legacy entry points and artifacts. It preserves the
+  early `AutoOD/` calculator; the current Rb D1/D2 calculator with selectable
+  isotope composition lives in `references/AutoOD-Rb/`. It also keeps the
   `fwm_obe.py` compatibility shim and its generated
   `fwm_double_lambda_gain_squeezing.png`; the active physics lives in `gabes/`.
 - `tests/` — regression + physics validation; `baseline_focused.npz` is an
   intentional compatibility snapshot documented by `baseline_focused_manifest.json`.
 - `analysis/rydberg_cell_heating/` — config-driven temperature sweep, clean CSV
   overlays, provenance manifest, figures, and XeLaTeX report inputs.
-- `requirements.txt` — streamlit, numpy, matplotlib.
+- `requirements.txt` — Streamlit, NumPy, SciPy, matplotlib and runtime helpers.
 - `references/` — Sim et al. 2025 paper PDF + Steck Rb85 data + OE stabilization paper. The Rydberg-EIT scheme cites arXiv:2606.04354 for its 85Rb reference defaults; the Biphoton defaults cite the Cs biphoton-temporal-waveform paper and the 87Rb telecom biphoton source paper from the app's Reference panel.
+- `references/rydberg_experiments/` — [Rydberg-EIT electrometry literature database](references/rydberg_experiments/README.md), using the FWM/PSR evidence structure. Ju et al. (2026) is the temporary Gold reference for experimental geometry and conditions, designated by the user on 2026-11-03.
 
 ## Run
 
@@ -331,8 +334,8 @@ python tests/test_rydberg_experiment.py # thermal/axial/SAM/dephasing experiment
 python -m pytest -q tests/test_vapor_cell.py # shared cell layer: cold-spot pressure, Rydberg density pin
 python tests/test_rydberg_experimental_csv.py # unit-aware EIT/RF/PSD import
 python -m pytest -q analysis/rydberg_cell_heating/test_workflow.py # report workflow
-python tests/test_sas.py             # 6j↔CF2, HF splittings, no-pump→OD (49/25), hyperfine-pumping crossovers, internal Generic compatibility
-python -m pytest -q tests/test_probe_saturation.py # Natural-Rb D2 finite probe, Gaussian propagation, AutoOD anchors
+python tests/test_sas.py             # 6j↔CF2, HF splittings, no-pump→OD (7/5), hyperfine-pumping crossovers, internal Generic compatibility
+python -m pytest -q tests/test_probe_saturation.py # alkali D-line finite probe, Gaussian propagation, tiered AutoOD anchors
 python tests/test_experimental_csv.py # A/B parsing, correction, ReferenceOD, manual alignment
 
 python tests/test_magneto.py         # CG values, Hanle dip, EIA peak, NMOR zero-crossing
@@ -390,7 +393,7 @@ Each current publication is self-contained; earlier editions are archives.
 |---|---|
 | [Squeezing report](docs/squeezing_report/squeezing_report_v8.pdf) | Simulation–experiment agreement, parameter/frontier exploration, uncertainty and applicability |
 | [Analytic reconstruction](docs/FWM%20physics%20and%20analytic%20reconstruction/squeezing_analytic_reconstruction_v3.pdf) | Definitions, derivations, physical assumptions and theoretical precision |
-| [Quotient structure](docs/FWM%20physics%20and%20analytic%20reconstruction/fwm_quotient_structure_v4.html) | Logical dependencies, equivalences, partial orders and the conditions for each claim |
+| [Quotient structure](docs/FWM%20physics%20and%20analytic%20reconstruction/fwm_quotient_structure_v3.2.html) | Logical dependencies, equivalences, partial orders and the conditions for each claim |
 
 [Publication policy](docs/grand_challenge/publication_policy.md) requires content
 preservation and keeps development/version records in Grand Challenge, including
@@ -411,58 +414,61 @@ sidebar controls and the plots follow `param_schema()` and the observables dict.
 - One-photon detuning Δ: ω_pump = ω(F=2→F'=3) + Δ.
 - Two-photon detuning δ: ω_seed = ω_pump − ν_HF + δ.   ν_HF = 3.0357 GHz.
 - Plot x-axis ref = **F=2→F'=3** line. (−) Raman branch = standard FWM seed, at Δ − ν_HF.
+- Seed power and small-signal gains refer to the atomic-medium entrance/exit,
+  after/before the cell windows. Comparing with pump-on/pump-off output ratios
+  requires the atomic pump-off transmission and output throughputs; total-cell
+  transmission alone cannot identify them. Unknown reference conversion is
+  reported as unavailable. Historical empirical fixtures retain their own
+  measured-ratio convention.
+- Absorbing probe gains remain below one after the pump-budget cap. Optical
+  carriers use the F=2→F'=3 origin relative to the fine-structure centroid;
+  atomic detuning is unchanged. `legacy_mean_field_fixture=True` restores the
+  historical carrier/floor only for labelled snapshots.
+  [Independent light-shift and gain-plane review](docs/grand_challenge/mean_gain_2026_10_15/README.md).
 - Beam waists = **1/e² radius** (paper convention), not diameter. They are sidebar
   knobs (`pump_waist_um`, `probe_waist_um`) whose defaults are the paper geometry
   530 / 330 µm; `W_PUMP` / `W_PROBE` remain as those defaults. The pump waist sets
   the pump Rabi through I=2P/πw² **and** the Gaussian crossing overlap; the seed
   waist is nearly inert (its own Rabi is weak and the overlap is already ≈1), so it
   matters mainly for the downstream divergence λ/πw₀, which this scheme does not model.
-- **Excess noise model** under Detection & scaling switches between
-  **Constant Noise N** (0–5, step 0.01) and **Gain proportional Noise a**
-  (slope 0–1, step 0.0001). Constant mode is the default; both coefficients
-  default to 0 and retain their values when switching noise modes.
-  N is dimensionless source noise in linear SQL units. It represents external
-  noise generated along the FWM beam path that cannot be spatially separated
-  from the collected beams. The detected indicator is `S = S₀ + ηN`, where
-  `S₀` is the existing zero-N model; for ideal twin-beam gain this reduces to
-  `S = (1−η) + η[1/(2G−1) + N]`. Positive `10 log₁₀(S)` is above SQL (0 dB).
-  Gain proportional mode uses `N = a·max(G_s−1, 0)` with the displayed seed
-  power gain (after gain correction and depletion limiting). The zero floor
-  avoids negative noise in absorbing regions. Only the selected noise model
-  contributes; constant N and gain-proportional N are not added together.
-  Mode and coefficient changes update the readout and full-scan rendering
-  without another atomic solve; N=0 or a=0 preserves the existing noise values.
-  At an off-grid operating point, gain-proportional N uses the displayed
-  interpolated gain and is added to the interpolated baseline indicator; this
-  selected point is included in the plotted curve. This is a phenomenological
-  input, not a microscopic noise calculation.
-  As an algebraic check in the ideal twin-beam limit, for `η>0` and `0<a<2`,
-  the noise minimum is at `G* = (1+sqrt(2/a))/2`, and the noise crosses back
-  above SQL at `G = 1/2 + 1/a`. Thus sufficiently large gain can worsen the
-  noise when a is nonzero; actual mean-field scans need not follow that ideal
-  optimum.
+- **Seed classical noise a** is the one-sided input classical RIN [Hz⁻¹]. The
+  disabled **Seed shot noise b** slider directly below it shows the calculated
+  shot RIN `b = 2ℏω_seed/P_seed` in the same units. The input Fano factor is
+  `1+a/b`; the corresponding optical power PSDs are `a P_seed²` and
+  `2ℏω_seed P_seed` [W²/Hz]. An integrated variance also needs measurement
+  bandwidth. Constant N and the old gain-proportional coefficient are retired.
+- The linear intensity-difference noise factor follows Jasperse:
+  `NF = Var(N_probe−N_conjugate)/mean(N_probe+N_conjugate)`. **Squeezing
+  [dB]** is `10 log₁₀(NF)`; SQL is 0 dB. Input a and downstream efficiencies
+  update the readout without repeating the atomic scan.
+- **After-cell optical efficiency** and **Detector quantum efficiency** are the
+  adjustable loss controls. Disabled total-efficiency sliders show
+  `η_probe = η_in cell,probe × η_after cell × η_QE` and the corresponding
+  conjugate product at the selected detuning. QRT separates positive absorption
+  from emission in the finite-seed dressed atomic state; cell absorption
+  transmission is `exp(−α_abs L)`, whereas net diagonal transmission uses
+  `α_abs−α_em` and can exceed one. Emission is retained separately. Cell
+  absorption is already included in the atomic transfer used by NF, so these
+  total products are not applied to NF again. Zero detected power has no NF.
 
-### Fast/Balanced gain hotfix
+### Retired gain calibration
 
-Fast/Balanced default to a temporary **semi-empirical gain estimate**. The
-correction multiplies both off-diagonal nonlinear susceptibilities by the fitted
-effective participation **0.5594938027** before Maxwell propagation. The atomic
-solve, diagonal absorption/dispersion, and detector/noise
-parameters retain their definitions. Ultra keeps its original production physics.
-**Advanced → Gain estimate → Semi-empirical gain correction** switches the patch
-off; API callers can pass `gain_closure_enabled=False`. Untiered
-`compute_spectrum` and `full_spectrum` calls keep the original physics.
-
-Calibration uses the repository's Sim 2025 representative probe power gain
-**15.5** (reported range 15–16), with `G_s = P_probe,out / P_seed,in`.
-The separately reported rounded powers give **111/8 = 13.875** for the probe and
-**109/8 = 13.625** for conjugate/seed; these are not alternative loss-corrected
-versions of 15.5. This is a single-point calibration. Other operating conditions
-remain conditional estimates, and physical squeezing remains unavailable.
-Frozen-coefficient comparisons give Liu **6.45 vs 8** and McCormick **1.93 vs 9**;
-the latter deteriorates from the original **7.13**. Broad accuracy is unsupported.
-Raw output records the correction in `gain_closure`.
-See [calibration, held-out comparisons, limitations and runtime measurements](analysis/fwm_gain_hotfix/DEVLOG.md).
+Current Fast, Balanced and Ultra runs apply neither the fitted cross-coupling
+multiplier nor the local empirical output-gain fit. The correction control is
+removed. A historical API replay requires both
+`legacy_gain_calibration_fixture=True` and `gain_closure_enabled=True`;
+the old switch alone cannot enable calibration. The development method, data
+and labelled fixtures remain in [the historical development log](analysis/fwm_gain_hotfix/DEVLOG.md).
+With **2026-10-13 lab** selected, the **Empirical gain calibration** toggle applies a frozen frequency shift/width
+and armwise gain correction to the current model. It remains active outside
+3022–3044 MHz and after changing temperature, powers, detuning or geometry;
+the readout identifies extrapolation and changed conditions. The corrected
+quantity is the measured pump-on / pump-off detector-reference ratio.
+The **DEFAULTS → 2026-10-13 experiment** preset enables this path.
+The old bounded measured-data interpolation remains a separate Advanced reference.
+See [calibration method and reproducible fit](analysis/fwm_experiment_20261022/README.md).
+See the [measured-reference review](docs/grand_challenge/gain_calibration_2026_10_16/README.md)
+and [Jasperse equation, noise and efficiency review](docs/grand_challenge/jasperse_2026_10_16/README.md).
 
 ### Generic SFWM / biphoton mode
 
@@ -585,40 +591,47 @@ as the default full-scan solver.
 5. **OD is the pump-off limit of the Absorption (OD/SAS) scheme.** Pump power = 0
    → linear Doppler-broadened absorption; raising it burns the SAS sub-Doppler
    features on the *same* spectrum. For ⁸⁵Rb D1 the pump-off limit reproduces the
-   lab AutoOD calculator (`references/AutoOD/`) to <0.1 %: the absolute scale uses
-   the CRC vapor-pressure density (Rb) and the AutoOD C_F²·|d|² normalisation
+   normalization-corrected AutoOD calculator (`archive/AutoOD/`): the scale uses
+   the CRC vapor-pressure density (Rb) and C_F²·|d|²/[2(2I+1)] normalization
    (`species.line_integrated_alpha`, `species.cf2`/`reduced_dipole_sq`). The old
    **single 2-level** OD model is kept as an internal validation primitive
    (`schemes.absorption.ODScheme`, *no longer registered*) that the Λ schemes
-   reduce to and the analytic FWHM=Γ tests use. Probe power defaults to 0 mW,
-   which preserves this weak-probe result exactly. For **Natural Rb D2 only**, a
-   finite probe applies the supplied AutoOD model: I₀=2P/πw²,
-   I_sat=πhcΓ/3λ³, transition `s_t∝C_F²`, Γ_eff√(1+s_t) power broadening,
-   self-consistent `dI/dz=−α(I)I`, and full Gaussian power averaging. The
-   pump-off, unbuffered, one-temperature Natural-Rb D2 path is regression-matched
-   to the supplied calculator, but the reference contains no trusted finite-power
-   experimental CSV and therefore does not experimentally validate the result.
+   reduce to and the analytic FWHM=Γ tests use. Probe power is exposed over
+   0–100 µW in 0.1 µW steps and defaults to 0 µW, which preserves this weak-probe
+   result exactly. A finite probe applies the supplied AutoOD-style model:
+   I₀=2P/πw², line-specific I_sat=πhcΓ/3λ³, transition
+   `s_t∝C_F²/C_F,max²`, Γ_eff√(1+s_t) power broadening, self-consistent
+   `dI/dz=−α(I)I`, and full Gaussian power averaging. Natural Rb D2 and the
+   pure-⁸⁵Rb/pure-⁸⁷Rb D2 endpoints are regression-matched to the supplied
+   isotope-composition calculator for pump-off, unbuffered, tied-temperature,
+   unit-line-strength conditions. The reference contains no trusted finite-power
+   experimental CSV and therefore does not experimentally validate those results.
+   Rb D1 and Cs D1/D2 use their own line frequency and natural linewidth in the
+   same closed-two-level construction, but are labelled **generalized qualitative
+   estimates**: D1 has no closed hyperfine cycling transition, mF/polarization and
+   shared-population saturation are absent, and Cs currently inherits the existing
+   Rb self-broadening coefficient.
    With the SAS pump on, its correction is applied to frozen pump-prepared profiles
    and is qualitative (no probe-induced hyperfine repumping or coherent joint
    pump/probe solve). If the separated correction would imply gain, its residual is
    reduced to a passive scale and the result is flagged passivity-limited.
    The beam waist is held constant and the detector collects the full output beam;
    diffraction, clipping and transverse atomic transport are omitted, so small-waist
-   long-cell settings require a Rayleigh-range check. D1, pure-isotope and Cs
-   probe-saturation controls stay hidden until their species/line/polarization
-   scales have sourced provenance.
-6. **SAS line weight is `(2Fg+1)·line_strength`, not `line_strength`.** The
-   observable strength of a lumped Fg↔Fe hyperfine line — absorption per ground
-   atom *and* the spontaneous-emission branching — carries the ground degeneracy:
-   `T = (2Fg+1)(2Fe+1)(2Jg+1){6j}²`. One quantity drives the line weight, the
-   CG decay branching (→ hyperfine pumping) and (√T) the relative pump Rabi. It
-   reproduces the validated ⁸⁵Rb D1 `CF2` (`T = 9·CF2`) and the 49/25 F=3/F=2
-   manifold ratio. **Hyperfine pumping** (decay into the *other* ground state)
-   is what turns crossovers into enhanced/inverted transmission peaks — the
-   dominant feature of real alkali SAS; a single-ground model cannot make them.
-   A transit-time relaxation `γ_t` (atoms leaving the beam, an Advanced knob)
-   regularises the pumping: without it the dark ground state saturates, and a
-   smaller `γ_t` gives stronger inverted crossovers.
+   long-cell settings require a Rayleigh-range check. New elements remain hidden
+   until their hyperfine, dipole, vapor-pressure, saturation, and collisional data
+   have sourced provenance.
+6. **Count thermal sublevel populations once.** `C_F²` sums magnetic
+   sublevels, so the weak-probe absorption area is proportional to
+   `C_F²/[2(2I+1)]`, with no extra ground-manifold `p_F`. The September 2026
+   normalization correction changes the 85Rb upper/lower ground-manifold
+   integrated absorption ratio from 49/25 to 7/5 (87Rb: 25/9 to 5/3).
+   `line_strength` is the per-ground-atom absorption weight; multiplying it by
+   `(2Fg+1)` and normalizing over ground states gives spontaneous-emission
+   branching. The inherited effective pump Rabi uses the square root of this
+   sublevel-summed strength and remains a lumped-manifold approximation.
+   **Hyperfine pumping** transfers population between ground states and creates
+   the crossover features. A transit-time relaxation `γ_t` replenishes the
+   thermal ground populations; slower replenishment strengthens pumping.
    The Advanced **Paraffin-coated cell** checkbox replaces the immediate thermal
    reset with a two-ground-F reservoir: velocity is rethermalized between beam
    passages, while hyperfine population relaxes with the nominal `T1 = 25.1 ms`
@@ -671,8 +684,8 @@ as the default full-scan solver.
   See [the proof and performance validation](docs/ultra_performance.md) before
   reintroducing a redundant negative-chain solve for numerical rigor.
 - Squeezing **Fast/Balanced** solve the same finite-Floquet atomic model and Maxwell
-  measure without a per-velocity solve, then apply the optional gain hotfix before
-  propagation. With that correction off, they retain the shared Ultra readout.
+  measure without a per-velocity solve, with the shared Ultra readout and no
+  empirical atomic-gain correction in current production.
   At fixed δ the velocity enters
   only through `−Δ_eff·S_v`, so eliminating the shift-free coordinates makes each
   response an exact partial fraction in Δ_eff; the Maxwell sum is a cheap pole sum
@@ -682,8 +695,43 @@ as the default full-scan solver.
   is guarded against the compiled kernel. The two-branch full probe-scan view
   solves every displayed detuning with poles in both tiers. See
   `analysis/fwm_lite/DEVLOG.md`.
+- The `analysis/squeezing` scanners use the same pole engine on their own velocity
+  measures (`GABES_FWM_RESPONSE=maxwell_grid` restores the per-class grid).
+- **Magneto** Doppler on is the exact untruncated Maxwell average of the
+  light-region shift, not a velocity grid. Without a transverse field the paraffin
+  Zeeman populations relax only through the optical coherences, so the shift-free
+  block is singular; `pole_doppler.ShiftInvertSystem` expands about a regular
+  detuning instead of eliminating it. Every B row is guarded against a direct
+  solve. See `analysis/pole_reuse/DEVLOG.md`.
 
 ## FWM future physics work
+
+The seeded view defaults to **Experimental Jasperse**, a uniform effective
+distributed mixing/loss model including vacuum injection into both arms.
+It matches the displayed gain pair with a declared common cell-loss assumption
+(Advanced: **Jasperse common cell loss**). Calibrated detector-reference gains
+can be adopted as effective source gains; this is an experimental approximation.
+When numerical limits prevent an exact gain match, the selected readout and table
+identify the approximation and its residual. The original atomic solve is unchanged.
+
+The selectable **Passive L1** evaluates a conditional NF diagnostic from
+`T_canonical_small_signal`, including vacuum completion and seed Fano factor
+`1+a/b` (coherent seed = 1). Noise above SQL is retained; infeasible passive
+completions appear as unavailable. The diagnostic uses photon-flux gains before
+the pump-energy cap. Historical `gain_referred_noise_dB` and `S_dB` retain their
+legacy algebraic meaning for compatibility.
+
+This static bright-seed diagnostic assumes conjugate vacuum and equal downstream
+efficiencies in the current UI; the reference also supports unequal external
+efficiencies. Loss represented by M must be excluded from that downstream
+efficiency. Passive endpoint feasibility does not establish distributed
+probe-only loss. A lower-bound interpretation requires phase-insensitive
+reservoirs; correlated phase-sensitive noise and finite-RF phase conversion
+require the microscopic covariance and sideband model. Experimentally validated
+microscopic squeezing remains open. The separate QRT absorption/emission readout uses the
+reduced, locally uniform four-level state and a truncated one-dimensional
+Maxwell average; it does not yet propagate the full microscopic covariance.
+[Jasperse verification and scope](docs/grand_challenge/jasperse_2026_10_16/README.md).
 
 - Every non-legacy seeded tier uses Option-A bare frequency-specific wavevectors
   and vacuum/geometric mismatch. Ultra adds 64-segment propagation, Gaussian
@@ -692,12 +740,18 @@ as the default full-scan solver.
   non-collinear Maxwell average. Promotion into the finite-seed production scan,
   beam-divergence averaging, and segmentwise pump-state recomputation remain future
   work.
-- The diagonal Maxwell drift carries mean-field attenuation. Distributed in-cell
-  vacuum/atomic covariance is unavailable and is not applied a second time.
+- The diagonal Maxwell drift carries mean-field attenuation. The passive L1
+  completion supplies a conditional endpoint vacuum diagnostic; microscopic
+  distributed atomic covariance remains unavailable.
   Pump scatter is an optional phenomenological diagnostic. EOM configuration
-  belongs to SABES. It passes seed, residual-carrier, and other-sideband powers
-  into the audit ledger; residual modes remain explicitly `unapplied/unsupported`
-  in the reduced atomic response.
+  belongs to SABES, which passes seed, residual-carrier, and other-sideband powers
+  into the internal audit ledger. Residual
+  modes remain explicitly `unapplied/unsupported` in the reduced **atomic**
+  response, but the SABES balanced-detector layer now applies their calculable
+  unpaired shot noise and an explicit effective unwanted-mode RIN as a positive
+  thermal-like (`I²·RIN`) penalty. That RIN is assumed until measured; the result
+  is a sensitivity diagnostic, not a microscopic squeezing prediction or proof
+  that EOM sidebands dominate the present apparatus.
 - The 24-level 85Rb D1 Zeeman manifold is built for CG diagnostics and correction
   bookkeeping; the full Zeeman Floquet solve remains future work because the
   density matrix jumps from 4-level `M=16` to 24-level `M=576`.
@@ -712,14 +766,16 @@ G. Sim, H. Kim, H. S. Moon, Sci. Rep. **15**, 7727 (2025). 85Rb squeezing-optima
 
 Geometry: cell L=12.5 mm, pump⊥probe. Pump/seed waist, crossing angle and detector
 efficiency describe this apparatus point. GABES exposes total detection efficiency
-η; SABES retains the optical-loss and detector-QE split. Fast/Balanced's optional
-gain hotfix is calibrated at this point; Ultra retains the uncalibrated reduced
-model. Neither path predicts validated physical squeezing.
+η; SABES retains the optical-loss and detector-QE split. The historical
+Fast/Balanced gain hotfix was anchored at this point and is retained only in an
+explicit legacy API fixture. Current production retains the uncalibrated reduced
+model. No tier predicts validated physical squeezing.
 
-**Detection caveat.** The 86.94 % default combines the historical 92 % QE with
-5.5 % post-cell loss. The separate compatibility inputs remain available to SABES
-and the API, but are not GABES sliders. This efficiency only affects the algebraic
-mean-field indicator; it does not make that indicator a physical squeezing bound.
+**Detection reference.** The 86.94 % value in this experimental table combines
+the historical 92 % QE with 5.5 % post-cell loss. Current GABES exposes separate
+after-cell optical efficiency and detector QE controls. These enter the
+conditional L1 readout; cell absorption already represented by the atomic
+transfer is not applied again. The result remains a conditional diagnostic.
 
 ## Deploy
 

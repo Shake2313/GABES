@@ -1,18 +1,25 @@
 {
-  "_ui_figure_research_2026_11_05": {
-    "provenance": "⟦AI⟧ User requested browser-based figure research for Rydberg and Lambda graph design.",
-    "status": "stages-1-to-3-implemented-stages-4-5-pending",
-    "source": "docs/ui_redesign/audit/rydberg_lambda_figures_2026_11_05.md",
-    "design_proposal": "docs/ui_redesign/three_scheme_view_proposal_2026_11_05.md",
-    "proposal_scope": "User explicitly requested stages 1 common map/selection, 2 Lambda views, and 3 Rydberg EIT/AT maps, power/temperature analysis and finite-IF sensitivity. Stages 4-5 remain pending.",
-    "evidence": "Six papers, fourteen figures visually inspected via publisher figure viewers and Chrome PDF.",
-    "recommendation": "Linked 2D maps, native 1D cuts, and performance trends; reuse existing arrays and sweeps before adding physics.",
-    "implementation": "Stages 1-3 implemented: common maps/selection/scans/export, Lambda views, and Rydberg native spectra and conditional finite-IF sensitivity. Existing scientific calculations/defaults preserved. Magneto stage 4 and integration stage 5 remain pending.",
-    "stage_1_evidence": "docs/ui_redesign/audit/common_map_stage1_2026_11_05.md",
-    "stage_2_implementation": "Lambda: EIT/AT native maps, power/Rabi display coordinates, T/OD and dispersion cuts, existing-extractor AT peak positions, CPT contrast/FWHM/quality panels, ground-relaxation and beam-angle comparisons, and optical Delta-p x Delta-c maps with two-photon resonance guide. No solver or original numerical defaults changed.",
-    "stage_2_evidence": "docs/ui_redesign/audit/lambda_stage2_2026_11_05.md",
-    "stage_3_implementation": "Rydberg: EIT probe-power map and residual comparison; AT RF spectra, native transmission peaks and field estimates; probe/coupling/linked-or-separated-temperature/RF-detuning/IF controls; client Spectra/Sensitivity profiles, actual IF response and wrapped phase, PSN/total ASD, opacity scenarios, and separate inspected vs sampled-optimum points. Sparse Doppler response retains its own coordinates and gaps. No solver, physical presets or 801-point optical grids changed.",
-    "stage_3_evidence": "docs/ui_redesign/audit/rydberg_stage3_2026_11_05.md"
+  "_repo_restructure_2026_11_09": {
+    "provenance": "Explicit user request: split heavy results and Grand Challenge records into a private archive repository, keep a light GABES main, and consolidate [tests+tools+analysis] and [gabes_ui+assets+SABES UI] with reusable blocks and a Migration Manifest. R1-R8 are user decisions 2026-11-09, each choosing the ⟦AI⟧-recommended option; boundary, step and gitignore details are ⟦AI⟧ design with direction approved by the user.",
+    "status": "S0-decided-S1-pending",
+    "hub": "docs/repo_restructure/README.md",
+    "decisions": {
+      "R1": "Current repo Shake2313/fwm-squeezing-app becomes the private archive by rename; full history, paths and hashes preserved. Name GABES-archive is an ⟦AI⟧ proposal, not yet confirmed.",
+      "R2": "Light main history via git filter-repo on main paths; new hashes; old-to-new commit-map goes into the Split Manifest.",
+      "R3": "Light main is a new repository named GABES; the old name is not reused so it keeps redirecting to the archive.",
+      "R4": "Main keeps only the latest editions of the three scientific documents under docs/papers/; tex sources, old editions and development records stay in the archive.",
+      "R5": "UI package keeps the name gabes_ui; assets/ -> gabes_ui/assets/, SABES UI (sabes/components, sabes/layout/render.py, sabes_page.py) -> gabes_ui/sabes/; streamlit_app.py, .streamlit/ and static/ stay at the root.",
+      "R6": "Development package gabes_lab (blocks + pipelines) absorbs tools/; tests/ stays at the root.",
+      "R7": "Tests run through pytest only; root pytest config/conftest resolves imports and per-file sys.path.insert is removed; README updated.",
+      "R8": "Revise the Grand Challenge rule 'Preserve historical evidence bytes and paths' at split time: pre-split evidence is re-verified at the archive split tag; post-split evidence records {repo, commit, path}. Wording draft in the hub."
+    },
+    "steps": "S0 decisions (done 2026-11-09); S1 freeze and baseline; S2 cut main dependencies on records and add gitignore/size guard, then full pytest; S3 split and Streamlit re-link; S4 archive engine submodule and GC re-verification at split tag; S5 main consolidation; S6 validation.",
+    "next": "S1: land other sessions' work, triage the untracked analysis files, tag pre-split, store baseline full pytest + tests/quantum + GC validator results.",
+    "unverified": [
+      "Whether the Streamlit Community Cloud app URL survives re-linking to the new repository.",
+      "Exact packed size of the filtered main (estimate: about 21 MB zlib of blobs).",
+      "Old fwm-squeezing-app URLs (Rydberg brief v3 clone URL, older User Guide/README copies) will redirect to a private archive and be unreachable for outside readers."
+    ]
   },
   "_psr_staged_model_2026_11_05": {
     "provenance": "⟦AI⟧ Implementation record for explicit user requests S0/S1, S2, S3 and S4.",
@@ -43,6 +50,21 @@
     "s4_numerical_scope": "Local Maxwell kernel/cutoff checks plus accumulated output checks on a fixed candidate mean path. This is an empirical error estimate, not a rigorous fully coupled velocity/z bound."
   },
   "_comment": "⟦AI⟧ GABES work registry. Daily-report reconciliation2026-10-19 covers55reports after08-07. Historical completed contracts and the FWM/SABES reconstruction remain scoped; current review evidence and explicit P1/P2/P3 followups are linked below.",
+  "_ui_figure_research_2026_11_05": {
+    "provenance": "⟦AI⟧ User requested browser-based figure research for Rydberg and Lambda graph design.",
+    "status": "stages-1-to-3-implemented-stages-4-5-pending",
+    "source": "docs/ui_redesign/audit/rydberg_lambda_figures_2026_11_05.md",
+    "design_proposal": "docs/ui_redesign/three_scheme_view_proposal_2026_11_05.md",
+    "proposal_scope": "User explicitly requested stages 1 common map/selection, 2 Lambda views, and 3 Rydberg EIT/AT maps, power/temperature analysis and finite-IF sensitivity. Stages 4-5 remain pending.",
+    "evidence": "Six papers, fourteen figures visually inspected via publisher figure viewers and Chrome PDF.",
+    "recommendation": "Linked 2D maps, native 1D cuts, and performance trends; reuse existing arrays and sweeps before adding physics.",
+    "implementation": "Stages 1-3 implemented: common maps/selection/scans/export, Lambda views, and Rydberg native spectra and conditional finite-IF sensitivity. Existing scientific calculations/defaults preserved. Magneto stage 4 and integration stage 5 remain pending.",
+    "stage_1_evidence": "docs/ui_redesign/audit/common_map_stage1_2026_11_05.md",
+    "stage_2_implementation": "Lambda: EIT/AT native maps, power/Rabi display coordinates, T/OD and dispersion cuts, existing-extractor AT peak positions, CPT contrast/FWHM/quality panels, ground-relaxation and beam-angle comparisons, and optical Delta-p x Delta-c maps with two-photon resonance guide. No solver or original numerical defaults changed.",
+    "stage_2_evidence": "docs/ui_redesign/audit/lambda_stage2_2026_11_05.md",
+    "stage_3_implementation": "Rydberg: EIT probe-power map and residual comparison; AT RF spectra, native transmission peaks and field estimates; probe/coupling/linked-or-separated-temperature/RF-detuning/IF controls; client Spectra/Sensitivity profiles, actual IF response and wrapped phase, PSN/total ASD, opacity scenarios, and separate inspected vs sampled-optimum points. Sparse Doppler response retains its own coordinates and gaps. No solver, physical presets or 801-point optical grids changed.",
+    "stage_3_evidence": "docs/ui_redesign/audit/rydberg_stage3_2026_11_05.md"
+  },
   "_scientific_publication_policy": {
     "policy": "docs/grand_challenge/publication_policy.md",
     "current_manifest": "docs/grand_challenge/current_publications.json",
@@ -7257,13 +7279,18 @@
         "docs/daily_report/2026-10-15_scheme-1_od-sas.md"
       ],
       "source_documents": [
-        "docs/daily_report/reconciliation_2026-10-19/README.md"
+        "docs/daily_report/reconciliation_2026-10-19/README.md",
+        "gabes/lineshape.py",
+        "gabes/schemes/sas.py",
+        "tests/test_sas.py"
       ],
       "acceptance_criteria": [
         "⟦AI⟧ 기존 hero gate 유지; 정량 export에 feature window/grid/refinement comparison 기록.",
-        "⟦AI⟧ bounded local refinement 또는 4001점 등 실제 수렴값 확보 후 numeric lock/linewidth 사용."
+        "⟦AI⟧ bounded local refinement 또는 4001점 등 실제 수렴값 확보 후 numeric lock/linewidth 사용.",
+        "⟦AI⟧ 경사 배경·잡음·겹친 피크를 가진 선언된 fixture에서 고정된 물리 창과 feature identity를 유지하고 linewidth·lock slope의 정량 오차 및 refinement 결과를 기록한다. 검출 대상을 구분할 수 없는 사례는 숫자를 강제하지 않고 unresolved 등 유효성 상태로 내보낸다.",
+        "⟦AI⟧ 기존 running-median 배경 제거·보간된 연결 half-height 경계·최소 표본/scan-edge gate와 완료된 sas-subdoppler-readout-trust 범위를 보존한다. sample count만으로 수렴을 선언하거나 검증 임계값을 사용자 조절값으로 열어 실패를 통과시키지 않는다."
       ],
-      "last_reviewed_at": "2026-10-19",
+      "last_reviewed_at": "2026-10-30",
       "daily_review_2026_10_19": {
         "origin": "ai_recheck",
         "status": "triaged",
@@ -7280,7 +7307,13 @@
       "depends_on": [
         "sas-subdoppler-readout-trust"
       ],
-      "problem": "⟦AI⟧ subdoppler_feature correctly demotes unresolved default and tests/test_sas.py holds fixed-window refinement. Reports correctly distinguish this status gate from default-grid convergence. Current 1401 default remains resolution-limited; do not reopen completed core readout as absent."
+      "problem": "⟦AI⟧ subdoppler_feature correctly demotes unresolved default and tests/test_sas.py holds fixed-window refinement. Reports correctly distinguish this status gate from default-grid convergence. Current 1401 default remains resolution-limited; do not reopen completed core readout as absent.",
+      "external_review_2026_10_30": {
+        "origin": "ai_review_of_external_feedback",
+        "source": "docs/checklist.json#_external_code_review_2026_10_30",
+        "adoption_status": "user_approved_checklist_supplement_only",
+        "note": "⟦AI⟧ 배경 처리와 해상도 gate는 이미 구현되어 있다. 기존 완료 항목을 재개하지 않고 열린 정량 export·고정창 수렴 항목에 난해한 파형의 검증 범위만 보강한다."
+      }
     },
     {
       "id": "od-sas-csv-branch-selection",
@@ -7415,14 +7448,20 @@
         "docs/daily_report/2026-10-17_scheme-3_rydberg-eit.md"
       ],
       "source_documents": [
-        "docs/daily_report/reconciliation_2026-10-19/README.md"
+        "docs/daily_report/reconciliation_2026-10-19/README.md",
+        "gabes/schemes/rydberg.py",
+        "gabes_ui/controls.py",
+        "streamlit_app.py",
+        "tests/test_rydberg_eit.py"
       ],
       "acceptance_criteria": [
         "⟦AI⟧ Atomic spectrum depends on drive/temperature/dephasing inputs, IF changes invalidate only finite-IF response, cell/opacity invalidate propagation, detector/RF conversion/SAM changes invalidate only consumed readout fields.",
         "⟦AI⟧ After cache warmup, heating detector-only reevaluation performs zero static/finite-IF atomic solves and matches uncached full results.",
-        "⟦AI⟧ Bound memory and protect cached mutable arrays; expose numeric sweep fields directly instead of parsing display strings."
+        "⟦AI⟧ Bound memory and protect cached mutable arrays; expose numeric sweep fields directly instead of parsing display strings.",
+        "⟦AI⟧ 대표 반복 작업의 cache hit/miss와 cold/warm 원자 solve 횟수를 계측한다. 물리 입력을 임의 소수 자릿수로 반올림해 서로 다른 조건을 합치지 않으며, 근사 키를 도입하려면 별도 오차 한계 검증이 필요하다.",
+        "⟦AI⟧ Rydberg 모드별 실제 소비 입력과 계층별 캐시 키를 명시한다. A→B→A 전환에서 저장·가져온 숨김 입력을 보존하고, 실제 미사용 입력의 독립성 및 표시값 변경 시 uncached 결과와의 일치를 확인한다. visible_if나 Advanced 여부만으로 물리 입력을 초기화하지 않는다."
       ],
-      "last_reviewed_at": "2026-10-19",
+      "last_reviewed_at": "2026-10-30",
       "daily_review_2026_10_19": {
         "origin": "ai_recheck",
         "status": "triaged",
@@ -7441,7 +7480,13 @@
       "depends_on": [
         "rydberg-extra-view-dependency-correctness"
       ],
-      "problem": "⟦AI⟧ The phasor LRU exists, but direct detector-only heating reevaluation still calls self.compute 20 times.; The probe sweep direct invocation computes 16 spectra; actual app key omits detector-only knobs, so it should not invalidate for them."
+      "problem": "⟦AI⟧ The phasor LRU exists, but direct detector-only heating reevaluation still calls self.compute 20 times.; The probe sweep direct invocation computes 16 spectra; actual app key omits detector-only knobs, so it should not invalidate for them.",
+      "external_review_2026_10_30": {
+        "origin": "ai_review_of_external_feedback",
+        "source": "docs/checklist.json#_external_code_review_2026_10_30",
+        "adoption_status": "user_approved_checklist_supplement_only",
+        "note": "⟦AI⟧ 실제 캐시는 exact physical-input key와 static-slope 선택점을 사용하는 bounded LRU다. 부동소수점 키 자체를 버그로 확정하지 않고 기존 계층별 재사용 과제에 계측·입력 보존 조건만 보강한다."
+      }
     },
     {
       "id": "rydberg-finite-if-affine-postprocess",
@@ -8408,6 +8453,71 @@
         "gabes/zeeman.py",
         "tests/test_level_structure.py"
       ]
+    },
+    {
+      "id": "compiled-solver-failure-contract",
+      "area": "gabes/kernels.py + compiled-solver callers + tests/test_kernels.py",
+      "title": "⟦AI⟧ 컴파일 LU 실패 상태·계산점 진단 계약 보완",
+      "origin": "ai_review_of_external_feedback",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "ready",
+      "adoption_status": "user_approved_registration_only",
+      "problem": "⟦AI⟧ 실수·복소 LU의 피벗 역수 계산에 특이/비유한 실패 상태와 해당 kernel·배치 계산점 정보를 전달하는 명시적 계약이 부족하다. 상위 FWM 비유한값·수렴 검증은 이미 존재하므로, 모든 스킴이 잘못된 값을 조용히 게시한다는 주장과 구분한다. 이번 검수는 정적 대조이며 실패 재현은 미실행이다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 실수·복소 컴파일/참조 경로의 특이·비유한 입력 실패 처리를 일관되게 정의하고 kernel·해당 계산점·원인을 호출부에 전달한다. 기존 상위 유효성 검사와 참조 fallback을 보존한다.",
+        "⟦AI⟧ 정상 입력의 pivot 산술과 수치 결과를 유지한다. 단위·스케일에 무관한 절대 eps로 작은 pivot을 치환하거나 물리 감쇠율을 추가하지 않는다.",
+        "⟦AI⟧ 특이·비유한·정상 행렬, 스케일을 바꾼 동등한 계, 좁지만 유효한 응답 fixture에서 선언한 잔차/conditioning 기준과 compiled/reference 일치를 확인한다.",
+        "⟦AI⟧ 정상 대표 배치의 정확도·실행시간 영향을 비교하고 기존 FWM 수렴 판정과 Numba 유무 fallback 계약을 유지한다."
+      ],
+      "source_documents": [
+        "gabes/kernels.py",
+        "gabes/core.py",
+        "tests/test_kernels.py",
+        "tests/test_fwm_floquet.py"
+      ],
+      "related_items": [
+        "fwm-floquet-convergence-gate"
+      ],
+      "evidence": [
+        "⟦AI⟧ kernels._lu_factor/_lu_solve 및 real twin에 1/pivot 계산이 있으며, Gemini가 지칭한 _lu_factor_solve_3x3/4x4 함수명은 현 코드에 없다. 완료된 상위 수렴 gate를 재개하는 항목이 아니다."
+      ],
+      "review_source": "docs/checklist.json#_external_code_review_2026_10_30",
+      "last_reviewed_at": "2026-10-30"
+    },
+    {
+      "id": "shared-rendering-synchronization-coverage",
+      "area": "streamlit_app.py + gabes_ui/plotcard.py + sabes_page.py",
+      "title": "⟦AI⟧ GABES·SABES 공용 렌더링 동기화 범위 점검",
+      "origin": "ai_review_of_external_feedback",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "ready",
+      "adoption_status": "user_approved_registration_only",
+      "problem": "⟦AI⟧ GABES는 plotcard.PLOT_LOCK을 사용하고 SABES는 별도 _PLOT_LOCK을 사용한다. SABES _cached_observables와 Spectrum 그림 표시 경로에는 동일한 보호 범위가 명시되어 있지 않다. 공유 Matplotlib 상태에 대한 정적 보호 범위 점검 과제이며, 실제 race/crash나 락 경합 병목을 재현했다는 뜻은 아니다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 두 화면의 figure 생성·mathtext/layout·artist 변경·복사·draw/export·표시·정리 경로와 lock 소유권을 목록화하고, 같은 프로세스의 공유 Matplotlib 상태가 일관된 동기화 범위에 있는지 확인한다.",
+        "⟦AI⟧ 병렬 호출·캐시 cold/warm·중첩 렌더링·예외 복원 fixture로 오류와 세션 간 figure/label 혼입, 교착 및 lock 해제를 검증한다. 보호가 필요한 경로는 동등한 동기화를 유지한다.",
+        "⟦AI⟧ Figure() 직접 생성이나 Agg 사용만으로 thread safety를 선언하지 않는다. 기존 보호를 제거하거나 락 범위를 줄이려면 대체 보호와 동시 실행 검증 근거를 먼저 제시한다.",
+        "⟦AI⟧ 원자 계산과 lock 대기·그림 생성/렌더 시간을 분리해 경합을 측정하고, 수치 결과·headless API·표시 및 export 계약을 보존한다. 측정 없이 병목이나 속도 개선을 확정하지 않는다."
+      ],
+      "source_documents": [
+        "streamlit_app.py",
+        "gabes_ui/plotcard.py",
+        "sabes_page.py",
+        "tests/test_schemes_render.py"
+      ],
+      "external_references": [
+        "https://matplotlib.org/stable/faq/index.html#work-with-threads"
+      ],
+      "related_items": [
+        "figureless-observables-paths"
+      ],
+      "evidence": [
+        "⟦AI⟧ streamlit_app._cached_observables는 PLOT_LOCK으로 보호된다. SABES의 별도 lock은 일부 trace 그림에 사용되지만 _cached_observables/Spectrum에는 같은 범위가 드러나지 않는다. 완료된 headless 분리와 별개의 점검이다."
+      ],
+      "review_source": "docs/checklist.json#_external_code_review_2026_10_30",
+      "last_reviewed_at": "2026-10-30"
     }
   ],
   "_daily_report_sync_history": [
@@ -8514,5 +8624,28 @@
     "source": "docs/grand_challenge/rydberg_opacity_2026_10_23/README.md",
     "validation": "docs/grand_challenge/rydberg_opacity_2026_10_23/full_pytest_receipt.json",
     "official_grand_challenges_unchanged": true
+  },
+  "_external_code_review_2026_10_30": {
+    "origin": "ai_review_of_external_feedback",
+    "reviewer": "Gemini, with GPT static verification",
+    "reviewed_on": "2026-10-30",
+    "reviewed_head": "40f9c76b186dd798e26d40ad38c047207404ca94",
+    "source_label": "User-supplied Gemini code review text in this chat, 2026-10-30",
+    "source_text_sha256": "d8299343f7a9ce38390dea6e91f25f5b91f3974aadc01184f15bee3a25fc7106",
+    "human_request": "2026-10-30: LU 실패 진단과 GABES·SABES 렌더링 동기화 점검 2건은 P2로 등록하고, 기존 항목 보강은 중복 없이 반영",
+    "adoption_status": "user_approved_checklist_registration_and_supplements_only",
+    "new_items": [
+      "compiled-solver-failure-contract",
+      "shared-rendering-synchronization-coverage"
+    ],
+    "updated_items": [
+      "rydberg-layered-sweep-cache",
+      "sas-local-readout-convergence-export"
+    ],
+    "scope": "⟦AI⟧ 현재 코드·기존 테스트 내용·체크리스트를 정적으로 대조했다. 등록/검증 조건 보강만 수행하며 구현·수치 재현·완료 판정은 수행하지 않았다.",
+    "not_adopted": [
+      "⟦AI⟧ Figure() 전환만을 근거로 한 락 제거, 숨김 입력 일괄 초기화, 물리 cache key의 임의 반올림, pivot/물리 이완율의 임의 하한 추가는 채택하지 않았다.",
+      "⟦AI⟧ FWM/SABES 파일 분할·Numba 런타임 전환 등 별도 P3 후보는 이번 등록에 추가하지 않았다. 기존 완료 항목과 Claude의 진행 중인 원자 데이터/빌더 통합 기록은 유지한다."
+    ]
   }
 }
