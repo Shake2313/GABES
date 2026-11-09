@@ -45,8 +45,7 @@ def test_beam_path_density_matches_the_rydberg_scheme(temps):
     heater, effective, cold = temps
     state = vapor_cell.resolve_cell_temperature(
         heater, effective_vapor_temp_c=effective, cold_spot_temp_c=cold)
-    # The Rydberg scheme still computes this inline (its file is being edited
-    # elsewhere); this pins the two equal until it calls the shared method.
+    # The Rydberg scheme delegates to the shared method.
     assert state.beam_path_density_m3() == RydbergEITScheme._local_density_from_temperature_state(state)
     assert state.beam_path_density_m3(species.CS133) == vapor_cell.cold_spot_limited_density(
         species.number_density(species.CS133, cold + 273.15), cold + 273.15, effective + 273.15)

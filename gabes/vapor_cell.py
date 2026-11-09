@@ -49,10 +49,11 @@ def cold_spot_limited_density(cold_spot_density_m3, cold_spot_k, path_k):
     The reservoir holds the saturated pressure P = n_cold k_B T_cold; the vapor
     along the beam is an ideal gas at that pressure, so n = n_cold·T_cold/T_path.
     ``cold_spot_density_m3`` is the saturated density at the reservoir (any
-    isotope weighting already applied); ``path_k`` may be an array.
+    isotope weighting already applied); ``path_k`` may be an array. The ratio is
+    formed first, so equal temperatures return ``cold_spot_density_m3`` exactly.
     """
 
-    return cold_spot_density_m3 * cold_spot_k / path_k
+    return cold_spot_density_m3 * (cold_spot_k / path_k)
 
 
 @dataclass(frozen=True)

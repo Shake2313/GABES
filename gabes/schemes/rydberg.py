@@ -608,13 +608,11 @@ class RydbergEITScheme(Scheme):
     def _local_density_from_temperature_state(state):
         """Sealed-cell density at the illuminated effective temperature.
 
-        The cold spot fixes the saturated pressure.  At the beam location the
-        ideal-gas density is therefore n = n_cold*T_cold/T_effective.  Linked
-        mode reduces exactly to the previous saturated-density calculation.
+        The cold spot fixes the saturated pressure, so at the beam the ideal gas
+        has n = n_cold*T_cold/T_effective (vapor_cell.cold_spot_limited_density).
+        Linked mode reduces to the saturated density.
         """
-        cold_k = state.cold_spot_temp_c + 273.15
-        effective_k = state.effective_vapor_temp_c + 273.15
-        return state.saturated_cold_spot_density_m3() * cold_k / effective_k
+        return state.beam_path_density_m3()
 
     def _transit_rate_mhz(self, params):
         """Transit-time broadening of the 5S–40D coherence /2π [MHz]: an atom
