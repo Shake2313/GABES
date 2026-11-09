@@ -38,6 +38,25 @@
     4. 기존 저장소의 webhook 제거 → 이름을 바꾸고 비공개로 전환.
     - 기존 앱이 남아 있는 상태에서 저장소 이름을 먼저 바꾸면 앱 관리 권한을 잃음.
   - ⟦AI⟧ **링크 매핑 초안:** 참조 2,134개 중 인용 1,969개는 유지, 링크 162개는 수정, `docs/papers`로 3개.
+- 2026-11-09: **S3 결정** (사용자, 질문 응답).
+
+  | ID | 결정 |
+  |---|---|
+  | R9 | 아카이브 저장소 이름 `GABES-archive` 확정. 아카이브 링크 형식: `https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/<path>` |
+  | R10 | **현재 폴더**(`G:\내 드라이브\Coding\GABES - Generic Atomic Bloch Equation Solver`)를 main 작업본으로 씀. 아카이브 작업본은 새 폴더로 옮김. 지금 경로에 묶인 Claude 메모리·Codex 설정·launch 설정은 main 쪽에 그대로 남음. |
+  | R11 | Streamlit 앱 주소를 **새 주소로** 바꿈. 후보는 `gabes`(사용 가능할 때). 옛 자동 주소 링크는 끊기므로 User Guide·README를 새 주소로 고침. |
+
+  - ⟦AI⟧ R10 로컬 전환 계획(S3-L). S3에서 push하기 전에 실행함.
+    1. 아카이브 작업본: 현재 `.git`(전체 히스토리)에서 새 폴더(예: `G:\내 드라이브\Coding\GABES-archive`)로 `git clone --no-local`. remote는 `GABES-archive`.
+    2. ignore·미추적 로컬 파일 이동(2026-11-09 조사, 총 8.6 GB, 18,134개):
+       - 아카이브 쪽 6.84 GB → 아카이브 폴더로. 단 아래 검증용 사본은 별도로 결정.
+       - main 쪽 172 MB는 남김: references 원문 PDF, `__pycache__`, UI 스크린샷.
+       - 분류되지 않은 1.62 GB(`tmp/`, `.playwright-cli`, `.pytest_cache`)는 남기거나 지움.
+       - **검증용 저장소 사본**(`output/ui_caption_commit_20261030` 2.19 GB, `output/ui_release_20261030` 2.18 GB, `output/commit_ui_20261022` 2.14 GB, `tmp/fwm-tpd-commit-20261002-55375359` 0.86 GB, `tmp/gain-hotfix-commit-check`, `tmp/checkpoint-validation-20260914` 등)은 지울지 옮길지 **사용자 결정 필요**.
+    3. 현재 폴더의 `.git`을 filter-repo로 만든 main 저장소로 교체함. 이때 아카이브 쪽 추적 파일(이미 아카이브 작업본에 있음)을 지움.
+       - 지우기 전에 아카이브 작업본의 HEAD가 같은 커밋이고 파일이 모두 있는지 확인함.
+       - 교체는 되돌릴 수 있게 함: 옛 `.git`은 아카이브 폴더 clone이 끝날 때까지 보존.
+    4. 새로 연결해야 하는 것: Codex weekly-review 자동화와 GC 작업 세션은 아카이브 폴더로. Claude 메모리는 main 경로에 남음.
 - 2026-11-09: S2 진행 기록 (사용자 "S2 시작").
   - ⟦AI⟧ 경계 도구 [`tools/split_boundary.py`](../../tools/split_boundary.py)를 만듦.
     - 규칙은 순서대로 적용하고, 처음 맞는 규칙이 이김. 정적 참조 검사와 main 전용 sparse checkout도 함께 함.

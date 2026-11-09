@@ -5,6 +5,12 @@
     "s2_result": "Main-only checkout of 36b56bd: 2,275 passed / 0 failed; original checkout at 0ad777d: 3,734 passed / 3 skipped / 0 failed. filter-repo rehearsal: 195 commits, 4.60 MiB, HEAD tree identical to the main side. Record: analysis/repo_split_s2_20261109/.",
     "s1_baseline": "Tag pre-split-2026-11-09. HEAD 87243e9 (after R2 2460c6c and C3 87243e9), clean tree: full pytest 3,733 passed / 3 skipped / 0 failed in 1,297 s at the original checkout path. Record: analysis/repo_split_s1_20261109/baseline.json.",
     "hub": "docs/repo_restructure/README.md",
+    "weekly_review_archive_migration": {
+      "status": "planned; activation pending S3 archive checkout and S4 pinned engine",
+      "schedule": "Keep the existing 05:00 Asia/Seoul schedule, model settings, and weekday routing.",
+      "execution": "After S3, select the archive project for the existing automation. Before activation, validate the S4 engine/ gitlink, archive write access, and read paths. Write reports, evidence and review_state.json in the archive. Read product code and the pinned product checklist from engine/. Follow the archive GC registry policy for GC findings.",
+      "cutover": "Update the existing automation once, keep one scheduler, and verify the first report, evidence hashes, and review-state links in the archive. Record the archive revision and pinned engine commit used by the review."
+    },
     "decisions": {
       "R1": "Current repo Shake2313/fwm-squeezing-app becomes the private archive by rename; full history, paths and hashes preserved. Name GABES-archive is an ⟦AI⟧ proposal, not yet confirmed.",
       "R2": "Light main history via git filter-repo on main paths; new hashes; old-to-new commit-map goes into the Split Manifest.",
@@ -13,7 +19,10 @@
       "R5": "UI package keeps the name gabes_ui; assets/ -> gabes_ui/assets/, SABES UI (sabes/components, sabes/layout/render.py, sabes_page.py) -> gabes_ui/sabes/; streamlit_app.py, .streamlit/ and static/ stay at the root.",
       "R6": "Development package gabes_lab (blocks + pipelines) absorbs tools/; tests/ stays at the root.",
       "R7": "Tests run through pytest only; root pytest config/conftest resolves imports and per-file sys.path.insert is removed; README updated.",
-      "R8": "Revise the Grand Challenge rule 'Preserve historical evidence bytes and paths' at split time: pre-split evidence is re-verified at the archive split tag; post-split evidence records {repo, commit, path}. Wording draft in the hub."
+      "R8": "Revise the Grand Challenge rule 'Preserve historical evidence bytes and paths' at split time: pre-split evidence is re-verified at the archive split tag; post-split evidence records {repo, commit, path}. Wording draft in the hub.",
+      "R9": "Archive repository name GABES-archive (user 2026-11-09).",
+      "R10": "The current folder stays the main working copy; the archive working copy moves to a new folder (user 2026-11-09). Local conversion plan S3-L in the hub; deleting or moving the verification checkout copies under output/ and tmp/ (about 7.8 GB) needs a user decision.",
+      "R11": "Redeploy the Streamlit app under a new subdomain (candidate gabes, if available); update the User Guide and README links (user 2026-11-09)."
     },
     "steps": "S0 decisions (done 2026-11-09); S1 freeze and baseline; S2 cut main dependencies on records and add gitignore/size guard, then full pytest; S3 split and Streamlit re-link; S4 archive engine submodule and GC re-verification at split tag; S5 main consolidation; S6 validation.",
     "next": "S3 decisions: confirm the archive name, the local folder layout after the split and the app URL; then the documentation pass (docs/papers, README/AGENTS links), the Split Manifest generator, filter-repo on the current main, new GABES repository, Streamlit redeploy, then rename and privatize the archive.",
@@ -8530,7 +8539,13 @@
       "effort": "small",
       "status": "needs_decision",
       "adoption_status": "user_approved_registration_only",
-      "problem": "User decision 2026-11-09 (repository split S2): tests/test_fwm_gain_hotfix.py and tests/test_fwm_tpd_gain_hotfix.py move to the archive with the dated analysis/fwm_gain_hotfix records, and this retirement question is registered. ⟦AI⟧ Until it is decided, the legacy replay code (24 references in gabes) stays in main without tests there.",
+      "problem": "User decision 2026-11-09 (repository split S2): tests/test_fwm_gain_hotfix.py and tests/test_fwm_tpd_gain_hotfix.py move to the archive with the dated analysis/fwm_gain_hotfix records, and this retirement question is registered. ⟦AI⟧ Until the user decides, main retains the legacy replay code. The two end-to-end replay test files move to the archive. Main retains helper and compatibility tests, including tests/test_fwm_gain_reference_planes.py.",
+      "recommendation_2026_11_09": "⟦AI⟧ Recommend retiring only the opt-in affine gain replay from public main after the split and user decision. Keep the pre-split archive replay, receipts, and tests. Accept old inactive settings. For an explicit dual-flag replay request, report retirement and point to the archive tag. Preserve the separate legacy_mean_field_fixture and supported empirical/noise models. If replay stays, add an archive-independent end-to-end regression.",
+      "call_sites": [
+        "gabes/schemes/fwm.py: compute_spectrum, focused scheme compute, full scan, full_spectrum, and raw/readout export (23 matching lines).",
+        "gabes/fwm_measured_gain.py: rejects composing historical fixture flags with the measured reference (one matching line).",
+        "README.md: documents the direct API and its two opt-in replay flags. This is a compatibility decision."
+      ],
       "decision_required": [
         "Remove the legacy replay path from main (its records and tests stay in the archive), or keep it with a main-side regression test."
       ],
@@ -8544,18 +8559,19 @@
     },
     {
       "id": "gc-absolute-path-ledger-reader",
-      "area": "analysis/grand_challenge/variance_reduction_pilot_shadow.py (archive) + docs/grand_challenge/variance_reduction_2026_10_13",
+      "area": "analysis/grand_challenge/variance_reduction_ledger_reader.py (archive) + tests/quantum/test_variance_reduction_pilot_shadow.py",
       "title": "Read absolute-path GC input ledgers relative to the repository before S4",
       "origin": "ai_review_of_changed_implementation",
       "priority": "P2",
       "effort": "small",
-      "status": "ready",
-      "adoption_status": "user_approved_registration_only",
+      "status": "done",
+      "adoption_status": "user_requested_implementation",
       "problem": "⟦AI⟧ review.json (488 entries) and pilot-shadow-review.json (248 entries) key input_byte_ledger by absolute G:\\ paths, so tests/quantum/test_variance_reduction_pilot_shadow.py::test_preregistration_does_not_touch_future_grid passes only at the original checkout path. The archive repository will be cloned elsewhere.",
       "acceptance_criteria": [
         "⟦AI⟧ The reader maps recorded absolute keys to repository-relative paths; the sealed records keep their bytes.",
         "⟦AI⟧ The test passes in a checkout at another path."
       ],
+      "validation_2026_11_09": "⟦AI⟧ Reproduced the original failure in a relocated Windows sparse checkout. The portable reader verifies the pinned review and all three input hashes without the future grid. The maintained pilot-shadow suite passed 7 tests in that checkout. The original checkout passed 29 related tests. The historical runner, helper, records, and S1 tag remain pinned. S4 archive integration validation is separate.",
       "source_documents": [
         "docs/repo_restructure/README.md",
         "analysis/repo_split_s1_20261109/README.md"
