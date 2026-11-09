@@ -72,9 +72,15 @@ def test_current_publications_preserve_conditional_claim_boundaries():
     quotient = _flat(publications["quotient_structure"]["artifact"])
     assert "$0.74$ remains an assumed residual" in physics
     assert "not a microscopic squeezing prediction" in physics
-    assert "not certificates of an experimental squeezing value" in physics
+    assert (
+        "Internal QRT and complete-positivity tests constrain the chosen model; "
+        "they do not validate an experimental squeezing value."
+    ) in physics
     assert "The reported thermal ensemble is not converged" in physics
     assert "원자 입력의 독립 예측 아님" in report
-    assert "전체 thermal 수렴 미인증" in report
-    assert "가정, 정확한 동치, 정보의 손실, 수치 근사와 실험 검증을 구별" in quotient
-    assert "실제 장치 예측 미인증" in quotient
+    assert "전체 thermal 수렴 미검증" in report
+    assert (
+        "출력값 하나의 일치, 작은 방정식 잔차, 양의 공분산만으로 "
+        "두 물리 모델의 동치를 판단하지 않는다"
+    ) in quotient
+    assert "절대 squeezing 예측은 성립하지 않았다" in quotient
