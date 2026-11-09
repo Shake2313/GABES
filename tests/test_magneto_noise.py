@@ -377,29 +377,55 @@ def test_overlay_uses_axis_units_and_exports_the_displayed_trace(magneto_result,
 def test_noise_controls_render_toggle_and_advanced_settings():
     from streamlit.testing.v1 import AppTest
 
-    app = AppTest.from_string(
-        "import streamlit as st\n"
-        "from gabes import schemes\n"
-        "from gabes_ui.controls import render_rail\n"
-        "scheme = schemes.get('magneto')\n"
-        "for name, value in scheme.defaults().items():\n"
-        "    st.session_state.setdefault(f'magneto__{name}', value)\n"
-        "names = {'show_shot_noise', 'beam_diameter_mm', 'detection_efficiency', 'noise_bandwidth_hz'}\n"
-        "specs = [sp for sp in scheme.param_schema() if sp.name in names]\n"
-        "params = render_rail(st, scheme, specs)\n"
-        "st.session_state['noise_controls'] = params\n"
-    ).run()
-    assert not app.exception
-    assert app.checkbox(key="magneto__show_shot_noise").value is True
-    app.checkbox(key="magneto__show_shot_noise").uncheck().run()
-    assert app.session_state["noise_controls"]["show_shot_noise"] is False
-    app.button(key="magneto___advanced_toggle").click().run()
-    assert not app.exception
+    app = AppTest.from_string("""
+import matplotlib.pyplot as plt
+import streamlit as st
+from gabes import schemes
+from gabes_ui.conditions import render_conditions
+
+scheme = schemes.get("magneto")
+defaults = dict(scheme.defaults(), doppler="off", scan_points=11)
+for name, value in defaults.items():
+    st.session_state.setdefault(f"magneto__{name}", value)
+params = render_conditions(scheme, scheme.param_schema())
+if "noise_raw" not in st.session_state:
+    st.session_state["noise_raw"] = scheme.compute(params)
+view = scheme.observables(st.session_state["noise_raw"], params)
+figure = view["figure"]
+st.session_state["noise_readout"] = view["magneto_readout"]["shot_noise"]
+st.session_state["noise_trace_labels"] = [line.get_label() for line in figure.axes[0].lines]
+st.session_state["noise_metric_labels"] = [metric["label"] for metric in view["metrics"]]
+plt.close(figure)
+""").run()
+
+    def advanced():
+        return next(popup for popup in app.get("popover")
+                    if popup.proto.popover.label == "Advanced")
+
+    toggle_key = "conditions-magneto-show_shot_noise"
+
+    def assert_noise_shown(enabled):
+        assert not app.exception
+        assert app.session_state["magneto__show_shot_noise"] is enabled
+        assert app.session_state["noise_readout"]["enabled"] is enabled
+        assert ("Shot noise (simulated)" in app.session_state["noise_trace_labels"]) is enabled
+        labels = app.session_state["noise_metric_labels"]
+        assert ("PSN magnetic sensitivity" in labels) is enabled
+        assert ("Signal linearity" in labels) is enabled
+
+    assert advanced().checkbox(key=toggle_key).value is True
+    assert_noise_shown(True)
     for name in ("beam_diameter_mm", "detection_efficiency", "noise_bandwidth_hz"):
-        assert app.slider(key=f"magneto__{name}").value == schemes.get("magneto").defaults()[name]
-    app.slider(key="magneto__noise_bandwidth_hz").set_value(4000.0).run()
+        widget = advanced().text_input(key=f"conditions-magneto-{name}")
+        assert float(widget.value) == schemes.get("magneto").defaults()[name]
+    advanced().checkbox(key=toggle_key).uncheck().run()
+    assert_noise_shown(False)
+    advanced().checkbox(key=toggle_key).check().run()
+    assert_noise_shown(True)
+    advanced().text_input(key="conditions-magneto-noise_bandwidth_hz").set_value("4000").run()
     assert not app.exception
-    assert app.session_state["noise_controls"]["noise_bandwidth_hz"] == 4000.0
+    assert app.session_state["magneto__noise_bandwidth_hz"] == 4000.0
+    assert app.session_state["noise_readout"]["bandwidth_hz"] == 4000.0
 
 
 def test_readout_controls_reuse_atomic_scan_and_toggle_preserves_signal(magneto_result):
