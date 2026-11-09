@@ -38,7 +38,8 @@ calculator (pump-off 85Rb D1 absolute scale).
 """
 import numpy as np
 
-from .. import atoms, constants, doppler, kernels, observables, probe_saturation, species
+from .. import (atoms, constants, doppler, kernels, observables, probe_saturation, species,
+               vapor_cell)
 from ..constants import GAMMA, K_VEC
 from .. import core
 from ..lineshape import MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature
@@ -64,13 +65,15 @@ _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))   # numpy ≥2.0 r
 
 
 def _temperatures(params):
-    """(density T, Doppler T) in kelvin, plus whether the two are tied.
+    """(cold-spot T, Doppler T) in kelvin, plus whether the two are tied.
 
-    ``temp_c`` is the **vapor-density** temperature (cold spot / reservoir): it
-    fixes the number density, hence the absorption scale and the density-
-    dependent self-broadening. The **Doppler-width** temperature sets the
-    thermal velocity distribution (Doppler width and velocity classes) and
-    follows the cell temperature unless ``constrain_doppler_temp`` is released.
+    ``temp_c`` is the **cold-spot** (reservoir) temperature: it fixes the
+    saturated vapor pressure. The **Doppler-width** temperature is that of the
+    atoms crossing the beam: it sets the thermal velocity distribution (Doppler
+    width and velocity classes) and, at the cold-spot pressure, the ideal-gas
+    density n = n_sat(T_cold)·T_cold/T_Doppler that sets the absorption scale
+    and the self-broadening (vapor_cell.cold_spot_limited_density). It follows
+    the cell temperature unless ``constrain_doppler_temp`` is released.
     Buffer-gas broadening is pressure-only here (no temperature enters), and the
     transit rate stays a user knob; see `collisional-coefficient-provenance-and-
     pressure-shift` in docs/checklist.json.
@@ -292,10 +295,10 @@ class SASScheme(Scheme):
                       "use a clearly labelled closed-two-level generalization."),
             ParamSpec("temp_c", "Cell temperature", "Cell & beams", 40.0, 20.0, 200.0,
                       1.0, "°C",
-                      help="Vapor-density temperature: it fixes the number density "
-                      "(absorption scale) and the density-dependent self-broadening. "
-                      "It also sets the Doppler width unless the Advanced "
-                      "Doppler-width temperature is released."),
+                      help="Cold-spot temperature: it fixes the saturated vapor pressure, "
+                      "hence the number density (absorption scale) and the density-"
+                      "dependent self-broadening. It also sets the Doppler width unless "
+                      "the Advanced Doppler-width temperature is released."),
             ParamSpec("cell_mm", "Cell length", "Cell & beams", 75.0, 0.5, 200.0, 0.5, "mm",
                       recompute=False),
             ParamSpec(
@@ -303,9 +306,10 @@ class SASScheme(Scheme):
                 "Cell & beams", True, advanced=True, control="checkbox",
                 advanced_group="Cell temperatures",
                 help="On (default): one temperature sets both the vapor density and "
-                     "the Doppler width. Off: the cell temperature keeps setting the "
-                     "density (cold spot / reservoir) while the Doppler-width "
-                     "temperature below sets the thermal velocity distribution.",
+                     "the Doppler width. Off: the cell temperature is the cold spot that "
+                     "fixes the vapor pressure, and the Doppler-width temperature below "
+                     "is the beam-path temperature: it sets the thermal velocity "
+                     "distribution and the density n_sat(T_cold)·T_cold/T_Doppler.",
             ),
             ParamSpec("doppler_temp_c", "Doppler-width temperature", "Cell & beams",
                       40.0, 20.0, 300.0, 1.0, "°C", advanced=True,
@@ -313,8 +317,8 @@ class SASScheme(Scheme):
                       visible_if={"constrain_doppler_temp": False},
                       help="Temperature of the atoms crossing the beam: it sets the "
                       "thermal velocity distribution (Doppler width, velocity "
-                      "classes) only. The vapor density still follows the cell "
-                      "temperature. Ignored while the tie above is on."),
+                      "classes) and, at the cold-spot vapor pressure, the density "
+                      "n_sat(T_cold)·T_cold/T_Doppler. Ignored while the tie above is on."),
             ParamSpec(
                 "paraffin_coated", "Cell type", "Cell & beams", False,
                 advanced=True, choices=(False, True),
@@ -480,7 +484,8 @@ class SASScheme(Scheme):
             offset = 2 * np.pi * (man.nu0 - nu_ref)
             sigma_v = np.sqrt(constants.KB * T_doppler / iso.mass)
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
-            N = species.number_density(iso, T_density) * weight
+            N = vapor_cell.cold_spot_limited_density(
+                species.number_density(iso, T_density), T_density, T_doppler) * weight
             Op = species.pump_rabi_from_power(power, waist, man.gamma)
             gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
             saturation_intensity = (
@@ -747,7 +752,8 @@ class SASScheme(Scheme):
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
         v, wt = doppler.velocity_grid(T_doppler, dv=3.0, cutoff_sigma=3.5)
         kv = K_VEC * v
-        N = species.rb85_steck_density(T_density)
+        N = vapor_cell.cold_spot_limited_density(
+            species.rb85_steck_density(T_density), T_density, T_doppler)
 
         off_span = float(np.abs(offsets).max())
         half = max(3.5 * dopp_fwhm, off_span + 0.4 * dopp_fwhm, 10 * gamma_eff)
@@ -1399,9 +1405,9 @@ def _temperature_metrics(raw):
         label="Doppler-width temperature",
         value=f"{float(raw['doppler_temp_c']):.0f} °C",
         help="Released from the cell temperature: it sets the thermal velocity "
-             "distribution only. The vapor density (absorption scale) and the "
-             f"self-broadening still follow the cell temperature "
-             f"{float(raw['density_temp_c']):.0f} °C.",
+             "distribution, and the beam-path density is the ideal gas at the "
+             f"cold-spot vapor pressure of {float(raw['density_temp_c']):.0f} °C, "
+             "n_sat(T_cold)·T_cold/T_Doppler.",
     )]
 
 

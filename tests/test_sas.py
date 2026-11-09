@@ -728,7 +728,7 @@ def test_doppler_temperature_is_tied_by_default():
     assert not released_same["doppler_temp_tied"]
 
 
-def test_released_doppler_temperature_moves_width_not_density():
+def test_released_doppler_temperature_sets_width_and_ideal_gas_density():
     common = dict(species=RB85_KEY, line="D1", pump_power_mw=0.0, temp_c=60.0,
                   constrain_doppler_temp=False, scan_points=2001)
     cold = SAS.compute(_params(**common, doppler_temp_c=60.0))
@@ -737,10 +737,12 @@ def test_released_doppler_temperature_moves_width_not_density():
     # Doppler width follows only the released temperature ...
     expected = np.sqrt((140.0 + 273.15) / (60.0 + 273.15))
     assert abs(hot["dopp_fwhm"] / cold["dopp_fwhm"] - expected) < 1e-6
-    # ... while the integrated absorption (the density scale) is untouched.
+    # ... and the cold spot fixes the pressure, so the beam-path density (the
+    # integrated absorption) is the ideal gas n_sat(T_cold)*T_cold/T_Doppler.
     area_cold = _tz(cold["alpha_unit"], cold["scan"])
     area_hot = _tz(hot["alpha_unit"], hot["scan"])
-    assert abs(area_hot / area_cold - 1.0) < 2e-3
+    ideal_gas = (60.0 + 273.15) / (140.0 + 273.15)
+    assert abs(area_hot / area_cold / ideal_gas - 1.0) < 2e-3
     assert hot["alpha_unit"].max() < cold["alpha_unit"].max()
 
     # The mirror case: density temperature alone moves the area, not the width.
