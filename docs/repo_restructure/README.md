@@ -16,7 +16,29 @@
     - 태그 커밋과 87243e9의 차이는 이 기록 파일·허브·checklist뿐이고, 코드 변경은 없음.
     - 절대경로 GC 테스트는 원래 경로라서 통과함. 다른 경로에 clone하면 실패하므로 S4 전 해결 대상으로 유지.
   - 다음: S2 (main의 결과물 의존 끊기).
-- 2026-11-09: **S2 진행 중** (사용자 "S2 시작").
+- 2026-11-09: **S2 완료.**
+  - ⟦AI⟧ main 전용 checkout(36b56bd, 624개 파일): 2,275 통과 / 0 실패.
+  - ⟦AI⟧ 원래 checkout 전체(0ad777d): 3,734 통과 / 3 skip / 0 실패, 1,264 s.
+  - 기록: [S2 record](../../analysis/repo_split_s2_20261109/README.md).
+- 2026-11-09: **S3 준비** (사용자 "준비 작업 시작"). 비파괴 작업만 함.
+  - ⟦AI⟧ **filter-repo 리허설** (C:의 bare clone, push 없음):
+    - 경로 647개: 규칙 627 + rename 계보 20. 결과는 커밋 195개, **압축 4.60 MiB**(현재 GitHub 375,174 KB 대비 약 80분의 1).
+    - HEAD 트리는 0ad777d의 main 쪽 624개 파일과 blob 단위로 동일함.
+    - 커밋 메시지 안의 해시 참조 4개는 걸러진 커밋을 가리켜서 그대로 남음.
+  - ⟦AI⟧ **GitHub 현황:** fork 0, issue 0, Actions·Release·deployment 0. `share.streamlit.io` push webhook 1개. `Shake2313/GABES`는 현재 저장소로 redirect됨(옛 이름). 새 `GABES`를 만들면 이 redirect는 사라지고, 문서에서 이 URL을 쓰는 곳은 0건.
+  - ⟦AI⟧ **Streamlit 공식 문서:**
+    - 앱은 GitHub owner·repo·branch·entrypoint로 식별됨. 미리 준비하지 않고 바꾸면 관리 권한을 잃음.
+    - 저장소를 바꾸는 방법은 삭제 → GitHub 변경 → 재배포.
+    - 앱을 지운 직후에는 subdomain을 다시 쓸 수 있음.
+    - 현재 앱 주소는 `fwm-squeezing-app-bedekxcpwge62hjdkvelw8.streamlit.app`이고, User Guide 두 파일이 이 주소를 씀.
+  - ⟦AI⟧ **S3 순서안:**
+    1. 새 `GABES` 저장소 생성, filter-repo 결과 push.
+    2. 새 저장소로 앱을 임시 주소에 배포하고 확인.
+    3. 기존 앱 삭제 → 새 앱 subdomain을 기존 주소(또는 새 주소)로 변경.
+    4. 기존 저장소의 webhook 제거 → 이름을 바꾸고 비공개로 전환.
+    - 기존 앱이 남아 있는 상태에서 저장소 이름을 먼저 바꾸면 앱 관리 권한을 잃음.
+  - ⟦AI⟧ **링크 매핑 초안:** 참조 2,134개 중 인용 1,969개는 유지, 링크 162개는 수정, `docs/papers`로 3개.
+- 2026-11-09: S2 진행 기록 (사용자 "S2 시작").
   - ⟦AI⟧ 경계 도구 [`tools/split_boundary.py`](../../tools/split_boundary.py)를 만듦.
     - 규칙은 순서대로 적용하고, 처음 맞는 규칙이 이김. 정적 참조 검사와 main 전용 sparse checkout도 함께 함.
     - HEAD 기준 main 608개 파일(12.2 MB), 아카이브 4,753개(2.48 GB).
