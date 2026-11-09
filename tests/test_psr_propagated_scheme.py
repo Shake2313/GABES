@@ -26,7 +26,7 @@ def propagated_case():
     return scheme, params, raw
 
 
-def test_propagated_noise_profile_figures_and_export_agree(propagated_case):
+def test_propagated_noise_profile_figures_export_and_comparison_agree(propagated_case):
     import matplotlib.pyplot as plt
 
     scheme, params, raw = propagated_case
@@ -66,6 +66,10 @@ def test_propagated_noise_profile_figures_and_export_agree(propagated_case):
             assert applied["obe_azimuth_deg"] == 18. and applied["obe_ellipticity_deg"] == 10.
             assert export["saved_control_state"]["obe_velocity_m_s"] == 500.
             assert export["view"]["psr_readout"]["output_polarization"]["polarization_phase_chart"] == "x"
+            comparison = scheme.model_comparison(p, resolve_raw=scheme.compute, current_raw=raw, current_view=view)
+            assert comparison["source"]["propagation_convergence"]["passed"]
+            assert "Longitudinal" in comparison["source"]["optical_scope"]
+            json.dumps(comparison, allow_nan=False)
         finally:
             for entry in view["figure_views"]:
                 plt.close(entry["figure"])

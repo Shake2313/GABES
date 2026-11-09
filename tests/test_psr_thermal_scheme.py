@@ -30,7 +30,7 @@ def thermal_case():
         psr_rf._thermal.cache_clear()
 
 
-def test_thermal_selected_noise_figures_and_export(thermal_case):
+def test_thermal_selected_noise_figures_export_and_comparison(thermal_case):
     import matplotlib.pyplot as plt
 
     scheme, params, raw = thermal_case
@@ -63,6 +63,9 @@ def test_thermal_selected_noise_figures_and_export(thermal_case):
             assert payload["raw"]["thermal_performance"]["class_evaluations"] > 1
             assert len(payload["raw"]["velocity_quadrature"]["history"]) >= 3
             assert "Initial integration time" in view["tables"][0]["markdown"]
+            comparison = scheme.model_comparison(p, resolve_raw=scheme.compute, current_raw=raw, current_view=view)
+            assert comparison["source"]["thermal_convergence"]["passed"]
+            assert "Maxwell" in comparison["source"]["optical_scope"]
         finally:
             plt.close(view["figure"])
 
