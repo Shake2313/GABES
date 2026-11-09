@@ -117,7 +117,8 @@ def test_current_a_b_nf_follow_ideal_photon_statistics_without_mutating_cache(se
         assert view["metrics"][0]["value"] == f"{10*np.log10(nf[1]):.2f} dB"
         axis = view["figure"].axes[1]
         np.testing.assert_allclose(axis.lines[0].get_ydata(), 10*np.log10(nf))
-        assert axis.get_ylabel() == "Squeezing [dB]"
+        assert axis.get_ylabel() == "Intensity-difference noise [dB]"
+        assert "0 dB (shot noise)" in {label.get_text() for label in axis.texts}
         headless = scheme.headless_observables(seeded_spectrum, params)
         assert headless["metrics"] == view["metrics"]
         b_slider = view["sidebar_readouts"]["seed_shot_noise_b"]["value"]
@@ -170,7 +171,9 @@ def test_full_scan_current_seed_noise_uses_each_branch_input_power(seeded_spectr
             _, nf = _ideal_expected(full[branch], params)
             np.testing.assert_allclose(figure.axes[1].lines[index].get_ydata(),
                                        10*np.log10(nf), atol=1e-13)
-        assert figure.axes[1].get_ylabel() == "Squeezing [dB]"
+        noise_axis = figure.axes[1]
+        assert noise_axis.get_ylabel() == "Intensity-difference noise [dB]"
+        assert "0 dB (shot noise)" in {label.get_text() for label in noise_axis.texts}
     finally:
         plt.close(figure)
 

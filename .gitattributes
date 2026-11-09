@@ -60,6 +60,25 @@ tools/thermal_campaign_*.py -text whitespace=blank-at-eol,blank-at-eof,space-bef
 "docs/squeezing_report/squeezing_report_v6.tex" -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 
 # Preserve literature evidence hashes and the archived CSV byte for byte.
+references/fwm_experiments/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 references/psr_experiments/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 archive/fwm_squeezing_paper_parameters.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 analysis/rydberg_gold_optimization_20261104/** -text
+
+# Preserve the practical FWM calibration receipts and their archived inputs.
+analysis/fwm_chi_calibration_20261023/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+analysis/fwm_literature_calibration_20261023/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+analysis/fwm_stark_calibration_20261023/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+analysis/fwm_zeeman_calibration_20261030/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/data/fwm_*_gain_v1.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_chi_gain.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_literature_gain.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_stark_gain.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_zeeman_gain.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_gain_calibration.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_stark_response.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+gabes/fwm_zeeman_response.py -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# Matplotlib SVGs contain significant archived bytes and generator whitespace.
+analysis/fwm_chi_calibration_20261023/*.svg whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+analysis/fwm_literature_calibration_20261023/*.svg whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

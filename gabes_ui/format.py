@@ -1,9 +1,27 @@
 """Number-display rules for controls and readouts (docs/ui_redesign/decisions.md D4)."""
+import math
 import re
 
 _MAX_DECIMALS = 6
 _DEFAULT_EXTRA = 2
 _NUMERIC_TEXT = re.compile(r"^\s*[+\-−]?(?:\d|\.\d)")
+
+
+def power_gain_text(value, digits):
+    """Significant figures for a dimensionless gain, including weak outputs."""
+    if value is None or not math.isfinite(value):
+        return "unavailable"
+    if value == 0:
+        return "0"
+    if abs(value) < 0.001:
+        text = f"{value:.{digits - 1}e}"
+    else:
+        text = f"{value:.{digits}g}"
+    if "e" not in text:
+        return text
+    mantissa, exponent = text.split("e")
+    superscripts = str.maketrans("-0123456789", "⁻⁰¹²³⁴⁵⁶⁷⁸⁹")
+    return f"{mantissa} × 10{str(int(exponent)).translate(superscripts)}"
 
 
 def decimals(value):

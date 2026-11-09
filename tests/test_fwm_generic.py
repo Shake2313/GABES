@@ -922,7 +922,9 @@ def test_full_scan_plot_uses_display_solver_detail():
     fig = fwm.FWMScheme().extra_views()[0].render(full)
     assert fig.axes[0].get_title().startswith("Solver detail: Fast")
     assert "seed RIN a = 0 /Hz" in fig.axes[0].get_title()
-    assert fig.axes[1].get_ylabel() == "Squeezing [dB]"
+    noise_axis = fig.axes[1]
+    assert noise_axis.get_ylabel() == "Gain-referred noise diagnostic [dB]"
+    assert "0 dB (diagnostic reference)" in {label.get_text() for label in noise_axis.texts}
     assert "internal propagation token" not in fig.axes[0].get_title()
 
     import matplotlib.pyplot as plt

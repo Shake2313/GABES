@@ -1,0 +1,173 @@
+{
+  "model_id": "fwm_literature_coupled_generation_v1",
+  "candidate": "M3",
+  "regularization": 0.3,
+  "coefficients": [
+    -0.2740426322757306,
+    -0.3915136436306977,
+    -0.2022972340285634
+  ],
+  "formula": "r=asinh(sqrt(Gc)); R=Gs/(1+Gc); Gc'=sinh(a*r)^2; Gs'=R*(1+Gc')",
+  "scale_formula": "a=exp(clip(beta[0]+beta[1]*x_density+beta[2]*x_intensity,-ln(20),ln(20)))",
+  "feature_order": [
+    "intercept",
+    "log_number_density_ratio",
+    "log_pump_P_over_waist_squared_ratio"
+  ],
+  "normalization": {
+    "temperature_K": 386.15,
+    "pump_power_W": 0.3,
+    "pump_waist_m": 0.00053
+  },
+  "feature_clipping": [
+    -3.0,
+    3.0
+  ],
+  "coefficient_bounds": [
+    -3.0,
+    3.0
+  ],
+  "generation_scale_bounds": [
+    0.05,
+    20.0
+  ],
+  "pump_budget": "max(Gs'-1,0)+Gc' <= pump_power/seed_power where original R admits a feasible pair; a=1 remains identity",
+  "training_domain_definition": "Nominal axis-aligned input/delta bounding box, minus Raman branch only; not an accuracy region",
+  "domain_is_validation_claim": false,
+  "gain_quantity": "effective optical output/input gain; literature reference planes remain conditional",
+  "references_database": "references/fwm_experiments/database.json",
+  "validation_status": "GROUPED_PREDICTION_NOT_ESTABLISHED",
+  "predictive_gate_passed": false,
+  "raw_training_bounds": {
+    "D_GHz": [
+      -1.13258,
+      1.2
+    ],
+    "temperature_K": [
+      362.15,
+      401.15
+    ],
+    "input_pump_power_W": [
+      0.21,
+      1.0
+    ],
+    "input_seed_power_W": [
+      9e-07,
+      9.999999999999999e-05
+    ],
+    "cell_length_m": [
+      0.009000000000000001,
+      0.0125
+    ],
+    "w_pump_m": [
+      0.00053,
+      0.00095
+    ],
+    "w_probe_m": [
+      0.00027499999999999996,
+      0.00039
+    ],
+    "pump_probe_angle_deg": [
+      0.3,
+      0.75
+    ]
+  },
+  "training_delta_bounds_mhz": [
+    -16,
+    26
+  ],
+  "training_case_ids": [
+    "mccormick_2007_ol__red_seed_fig2",
+    "mccormick_2008_pra__nominal_gain9",
+    "liu_2011_ol__main_400mw",
+    "qin_2012_ol__unbalanced_best",
+    "qin_2014_prl__cell1_single",
+    "sim_2025_scirep__fig3a_rb85_best_ids",
+    "wu_2019_oe__fig2_high_seed",
+    "wu_2019_oe__fig2_low_seed",
+    "kim_2018_oe__probe_resonant",
+    "kim_2018_oe__conjugate_resonant",
+    "kim_2018_oe__doubly_resonant",
+    "allen_2026_oe__fig3_optimum"
+  ],
+  "training_papers": [
+    "allen_2026_oe",
+    "kim_2018_oe",
+    "liu_2011_ol",
+    "mccormick_2007_ol",
+    "mccormick_2008_pra",
+    "qin_2012_ol",
+    "qin_2014_prl",
+    "sim_2025_scirep",
+    "wu_2019_oe"
+  ],
+  "apparatus_groups": [
+    "ecnu_jing",
+    "nist_lett",
+    "oklahoma_marino",
+    "ornl_jila_allen_ma",
+    "pusan_moon"
+  ],
+  "cohort_sha256": "4099e5e927c69cfd11dc6a71a8c395cb576027115eb3915f86242b15af48b8cc",
+  "protocol_sha256": "519c677075351c6a036661da88d2c841e0ff183a082f2d0035468ae7e7b17901",
+  "atomic_source_hash": "705d7033481372353d96d6eb0100d74d39e5ae168b39300ca63f03e2c7f8aa32",
+  "group_validation": {
+    "corrected": {
+      "log_mae": 1.2567230662101347,
+      "factor_error": 3.513887822419099,
+      "factor2_fraction": 0.0,
+      "arm_targets": 16
+    },
+    "raw": {
+      "log_mae": 1.98335190339012,
+      "factor_error": 7.267060692461542,
+      "factor2_fraction": 0.13333333333333333,
+      "arm_targets": 16
+    },
+    "constant": {
+      "log_mae": 0.7898106106880829,
+      "factor_error": 2.2029791660364477,
+      "factor2_fraction": 0.43333333333333335,
+      "arm_targets": 16
+    }
+  },
+  "scores_by_group": {
+    "ecnu_jing": {
+      "log_mae": 1.0665245061776047,
+      "factor_error": 2.9052647036723562,
+      "factor2_fraction": 0.0,
+      "arm_targets": 6
+    },
+    "nist_lett": {
+      "log_mae": 1.6911201988735136,
+      "factor_error": 5.425555002887683,
+      "factor2_fraction": 0.0,
+      "arm_targets": 4
+    },
+    "oklahoma_marino": {
+      "log_mae": 1.2679060112278828,
+      "factor_error": 3.5534039784180553,
+      "factor2_fraction": 0.0,
+      "arm_targets": 3
+    },
+    "ornl_jila_allen_ma": {
+      "log_mae": 1.1162390396905175,
+      "factor_error": 3.053349057040789,
+      "factor2_fraction": 0.0,
+      "arm_targets": 1
+    },
+    "pusan_moon": {
+      "log_mae": 1.141825575081155,
+      "factor_error": 3.132481729098822,
+      "factor2_fraction": 0.0,
+      "arm_targets": 2
+    }
+  },
+  "implementation_sha256": {
+    "gabes/fwm_literature_gain.py": "89150bb0d8b056bd06ef27c113c054261dc7f54dc2919f42445a1fd58d8a2c23",
+    "analysis/fwm_literature_calibration_20261023/evaluate.py": "9c3c961eaf841dd1618268ccd788b2851fa3b8e7600d9fd9990f9ae8d293febb"
+  },
+  "conditional_input_assumptions": true,
+  "untouched_external_validation": false,
+  "evaluation_record": "analysis/fwm_literature_calibration_20261023/evaluation.json"
+}

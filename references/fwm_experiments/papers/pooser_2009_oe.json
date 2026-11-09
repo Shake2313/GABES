@@ -1,0 +1,507 @@
+{
+  "schema_version": 1,
+  "paper_id": "pooser_2009_oe",
+  "title": "Quantum correlated light beams from non-degenerate four-wave mixing in an atomic vapor: the D1 and D2 lines of 85Rb and 87Rb",
+  "authors": [
+    "R. C. Pooser",
+    "A. M. Marino",
+    "V. Boyer",
+    "K. M. Jones",
+    "P. D. Lett"
+  ],
+  "year": 2009,
+  "publication": {
+    "journal": "Optics Express",
+    "volume": "17",
+    "issue": "",
+    "pages": "16722-16730",
+    "doi": "10.1364/OE.17.016722",
+    "arxiv_id": "",
+    "status": "published"
+  },
+  "legacy_column": null,
+  "apparatus_group": "nist_lett_rb85",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb D1 double-lambda FWM with experimental intensity-difference noise measurements.",
+    "isotope_composition": "not_reported"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://pdfs.semanticscholar.org/bdcd/59d7f5e71388ea71afdea84f2d297ff85291.pdf",
+      "path": "sources/pooser_2009_oe.pdf",
+      "access": "full_text",
+      "version": "published",
+      "sha256": "cf60f9ac72f82b2384406e551170dbb43c8eb3d8fc66343baeab6f8ccc13ec27",
+      "pages": 9,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "rb85_d1_best",
+      "label": "85Rb D1 optimum along Fig.2 detuning cut",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 110,
+          "unit": "°C",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "deg",
+          "value_type": "upper_bound",
+          "basis": "theta<1deg",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 400,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.1",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.1",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.1",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1000,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 94,
+          "unit": "%",
+          "value_type": "approximate",
+          "basis": "nominal photodiode efficiency",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detection_efficiency",
+          "value": 90,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 3,
+            "unit": "percentage_point",
+            "kind": "combined_statistical_and_systematic_1sigma",
+            "confidence": "1sigma"
+          }
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "reported",
+          "basis": "blue detuning",
+          "reference": "Doppler broadened peak from85RbF=2 ground state",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §3.1",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §3.1",
+          "evidence": "",
+          "notes": "Excited hyperfine structure unresolved; peak origin is not identified with F′=3."
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.4-5, §2",
+          "evidence": "",
+          "notes": "Two-photon detuning optimized then held fixed; numeric optimum not given."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.3-6",
+          "evidence": "",
+          "notes": "Not specified for this operating point in the inspected source."
+        },
+        {
+          "quantity": "seed_radius",
+          "value": null,
+          "unit": "µm",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.3-6",
+          "evidence": "",
+          "notes": "Not specified for this operating point in the inspected source."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": 5,
+          "unit": "1",
+          "value_type": "approximate",
+          "basis": "measured probe output / probe input; explicitly distinguished from inferredG",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.3 comparison",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_background_subtracted",
+          "value": -8,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "electronics and scattered-pump noise subtracted",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §3.1; subtraction stated p.4 §2",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.2,
+            "unit": "dB",
+            "kind": "combined_statistical_and_systematic_1sigma",
+            "confidence": "1sigma"
+          }
+        }
+      ],
+      "notes": [
+        "Other85RbD2/87RbD1/87RbD2 measurements are outside the requested calibration system and not imported as85RbD1 observations.",
+        "TheG andT curves in Fig.3 are model-inferred distributed gain/absorption parameters; do not substitute them for measured probe/conjugate gains."
+      ]
+    },
+    {
+      "experiment_id": "detuning_cut",
+      "label": "Fig.2 85RbD1 noise vs pump detuning",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 110,
+          "unit": "°C",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "deg",
+          "value_type": "upper_bound",
+          "basis": "theta<1deg",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 400,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.1",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.1",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.1",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1000,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 94,
+          "unit": "%",
+          "value_type": "approximate",
+          "basis": "nominal photodiode efficiency",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detection_efficiency",
+          "value": 90,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §2",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 3,
+            "unit": "percentage_point",
+            "kind": "combined_statistical_and_systematic_1sigma",
+            "confidence": "1sigma"
+          }
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §3.1",
+          "evidence": "",
+          "notes": "Excited hyperfine structure unresolved; peak origin is not identified with F′=3."
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.4-5, §2",
+          "evidence": "",
+          "notes": "Two-photon detuning optimized then held fixed; numeric optimum not given."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.3-6",
+          "evidence": "",
+          "notes": "Not specified for this operating point in the inspected source."
+        },
+        {
+          "quantity": "seed_radius",
+          "value": null,
+          "unit": "µm",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.3-6",
+          "evidence": "",
+          "notes": "Not specified for this operating point in the inspected source."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.3",
+          "evidence": "",
+          "notes": "Underlying measured arm powers were used to inferG andT, but exact arm-gain nodes are not tabulated."
+        },
+        {
+          "quantity": "squeezing_background_subtracted",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.2",
+          "evidence": "",
+          "notes": "Curve retained as a source for future documented digitization."
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧The D1/85Rb subset is selected explicitly; this mixed-isotope/mixed-line article is not treated as four equivalent training records."
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "model_id": "fwm_literature_chi_propagation_v1",
+  "coefficients": [
+    -0.27811315562891026,
+    -0.2243415446973617,
+    -0.30556112439783456,
+    -0.06741939530787257
+  ],
+  "candidate": "C4",
+  "regularization": 0.3,
+  "method": "Complex susceptibility correction and segmented repropagation",
+  "formula": "chi_offdiag'=kappa*chi_offdiag; chi_diag'=d*chi_diag; vacuum mismatch unchanged",
+  "scale_formula": "kappa=exp(clip(beta0+beta_n*x_n+beta_I*x_I,-ln20,ln20)); d=exp(clip(gamma,-ln20,ln20))",
+  "gain_quantity": "effective optical output/input gain; literature reference planes remain conditional",
+  "noise_covariance_calibrated": false,
+  "susceptibility_identified": false,
+  "corrected_transfer_truncation_audit": "not separately certified; raw atomic Floquet audit retained",
+  "training_domain_definition": "Nominal axis-aligned input/delta bounds, not an accuracy region",
+  "references_database": "references/fwm_experiments/database.json",
+  "validation_status": "GROUPED_PREDICTION_NOT_ESTABLISHED",
+  "predictive_gate_passed": false,
+  "raw_training_bounds": {
+    "D_GHz": [
+      -1.13258,
+      1.2
+    ],
+    "temperature_K": [
+      362.15,
+      401.15
+    ],
+    "input_pump_power_W": [
+      0.21,
+      1.0
+    ],
+    "input_seed_power_W": [
+      9e-07,
+      9.999999999999999e-05
+    ],
+    "cell_length_m": [
+      0.009000000000000001,
+      0.0125
+    ],
+    "w_pump_m": [
+      0.00053,
+      0.00095
+    ],
+    "w_probe_m": [
+      0.00027499999999999996,
+      0.00039
+    ],
+    "pump_probe_angle_deg": [
+      0.3,
+      0.75
+    ]
+  },
+  "training_delta_bounds_mhz": [
+    -16,
+    26
+  ],
+  "apparatus_groups": [
+    "ecnu_jing",
+    "nist_lett",
+    "oklahoma_marino",
+    "ornl_jila_allen_ma",
+    "pusan_moon"
+  ],
+  "training_papers": [
+    "allen_2026_oe",
+    "kim_2018_oe",
+    "liu_2011_ol",
+    "mccormick_2007_ol",
+    "mccormick_2008_pra",
+    "qin_2012_ol",
+    "qin_2014_prl",
+    "sim_2025_scirep",
+    "wu_2019_oe"
+  ],
+  "repeated_grouped_development_validation": true,
+  "untouched_external_validation": false,
+  "group_validation": {
+    "corrected": {
+      "log_mae": 1.1659784453318354,
+      "factor_error": 3.2090612385863193,
+      "factor2_fraction": 0.3333333333333333,
+      "arm_targets": 16
+    },
+    "raw": {
+      "log_mae": 1.980858806952246,
+      "factor_error": 7.2489657748950735,
+      "factor2_fraction": 0.13333333333333333,
+      "arm_targets": 16
+    },
+    "constant": {
+      "log_mae": 0.7898106106880829,
+      "factor_error": 2.2029791660364477,
+      "factor2_fraction": 0.43333333333333335,
+      "arm_targets": 16
+    },
+    "old_output": {
+      "log_mae": 1.2567230662101347,
+      "factor_error": 3.513887822419099,
+      "factor2_fraction": 0.0,
+      "arm_targets": 16
+    }
+  },
+  "source_sha256": {
+    "analysis/fwm_literature_calibration_20261023/cohort.json": "4099e5e927c69cfd11dc6a71a8c395cb576027115eb3915f86242b15af48b8cc",
+    "analysis/fwm_chi_calibration_20261023/PROTOCOL.md": "86646b03666db2897e9d37b3b7074cc3e7afc917f73acd5de0a6fee4dd2dcd31",
+    "gabes/fwm_chi_gain.py": "930e17a818eae332dc072624bcde5591e3ba9409043fc7afaf546fa360dd687c",
+    "analysis/fwm_chi_calibration_20261023/evaluate.py": "91bdf855ab8f7a317c625583b07f8451e4a3dac16787a5bd51083b1194f5f876",
+    "analysis/fwm_literature_calibration_20261023/evaluate.py": "9c3c961eaf841dd1618268ccd788b2851fa3b8e7600d9fd9990f9ae8d293febb",
+    "gabes/fwm_literature_gain.py": "89150bb0d8b056bd06ef27c113c054261dc7f54dc2919f42445a1fd58d8a2c23",
+    "gabes/fwm_experiment_gain.py": "9af62af3df51ea61a0e44d3616ec25809bbf1fb7708e83cceca71d88d095fa0b",
+    "analysis/fwm_literature_calibration_20261023/predictions_by_apparatus.csv": "05e5d0f9f908c16013a89ff07510a6db87f524e561dbf3eeefe808c6f399cc0f",
+    "analysis/fwm_literature_calibration_20261023/predictions_by_paper.csv": "4b2981ea8cffdb164324bfc384e6c79fde6025ca01ea97dd588de92936e1c6db"
+  },
+  "atomic_source_hash": "dd7000231937605cc86c26a09638ac938e5fc3d845d0ecd87524f460411d73dd",
+  "normalization": {
+    "temperature_K": 386.15,
+    "pump_power_W": 0.3,
+    "pump_waist_m": 0.00053
+  },
+  "feature_order": [
+    "intercept",
+    "log_number_density_ratio",
+    "log_pump_P_over_waist_squared_ratio",
+    "log_diagonal_susceptibility_scale"
+  ],
+  "coefficient_bounds": [
+    -3,
+    3
+  ],
+  "feature_clipping": [
+    -3,
+    3
+  ],
+  "scale_bounds": [
+    0.05,
+    20
+  ],
+  "conditional_input_assumptions": true,
+  "evaluation_record": "analysis/fwm_chi_calibration_20261023/evaluation.json"
+}

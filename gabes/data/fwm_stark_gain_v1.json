@@ -1,0 +1,165 @@
+{
+  "model_id": "fwm_literature_stark_response_v1",
+  "coefficients": [
+    -0.5050104370259406,
+    -0.4876976581568013,
+    0.0,
+    0.0
+  ],
+  "pump_stark_fraction": 0.75,
+  "candidate": "C2",
+  "regularization": 0.3,
+  "method": "Pump Hamiltonian self-energy, recomputed susceptibility and segmented propagation",
+  "formula": "H'=H+(1-s)*S0*|g2><g2|; chi_offdiag'=kappa*chi_offdiag; chi_diag'=d*chi_diag; vacuum mismatch unchanged",
+  "scale_formula": "kappa=exp(clip(beta0+beta_n*x_n+beta_I*x_I,-ln20,ln20)); d=exp(clip(gamma,-ln20,ln20))",
+  "gain_quantity": "effective optical output/input gain; literature reference planes remain conditional",
+  "validation_status": "GROUPED_PREDICTION_NOT_ESTABLISHED",
+  "predictive_gate_passed": false,
+  "gain_gate_passed": false,
+  "numerical_validation_passed": true,
+  "allen_peak_gate_passed": true,
+  "noise_covariance_calibrated": false,
+  "susceptibility_identified": false,
+  "raw_training_bounds": {
+    "D_GHz": [
+      -1.13258,
+      1.2
+    ],
+    "temperature_K": [
+      362.15,
+      401.15
+    ],
+    "input_pump_power_W": [
+      0.21,
+      1.0
+    ],
+    "input_seed_power_W": [
+      9e-07,
+      9.999999999999999e-05
+    ],
+    "cell_length_m": [
+      0.009000000000000001,
+      0.0125
+    ],
+    "w_pump_m": [
+      0.00053,
+      0.00095
+    ],
+    "w_probe_m": [
+      0.00027499999999999996,
+      0.00039
+    ],
+    "pump_probe_angle_deg": [
+      0.3,
+      0.75
+    ]
+  },
+  "training_delta_bounds_mhz": [
+    -16,
+    26
+  ],
+  "training_papers": [
+    "allen_2026_oe",
+    "kim_2018_oe",
+    "liu_2011_ol",
+    "mccormick_2007_ol",
+    "mccormick_2008_pra",
+    "qin_2012_ol",
+    "qin_2014_prl",
+    "sim_2025_scirep",
+    "wu_2019_oe"
+  ],
+  "apparatus_groups": [
+    "ecnu_jing",
+    "nist_lett",
+    "oklahoma_marino",
+    "ornl_jila_allen_ma",
+    "pusan_moon"
+  ],
+  "group_validation": {
+    "corrected": {
+      "log_mae": 0.6887874967390712,
+      "factor_error": 1.9912996116100734,
+      "factor2_fraction": 0.6666666666666667,
+      "arm_targets": 16
+    },
+    "raw": {
+      "log_mae": 1.9808588069521536,
+      "factor_error": 7.248965774894405,
+      "factor2_fraction": 0.13333333333333333,
+      "arm_targets": 16
+    },
+    "constant": {
+      "log_mae": 0.7898106106880829,
+      "factor_error": 2.2029791660364477,
+      "factor2_fraction": 0.43333333333333335,
+      "arm_targets": 16
+    },
+    "old_output": {
+      "log_mae": 1.2567230662101347,
+      "factor_error": 3.513887822419099,
+      "factor2_fraction": 0.0,
+      "arm_targets": 16
+    },
+    "old_chi": {
+      "log_mae": 1.1659784453318354,
+      "factor_error": 3.2090612385863193,
+      "factor2_fraction": 0.3333333333333333,
+      "arm_targets": 16
+    }
+  },
+  "repeated_grouped_development_validation": true,
+  "untouched_external_validation": false,
+  "conditional_input_assumptions": true,
+  "source_sha256": {
+    "analysis/fwm_literature_calibration_20261023/cohort.json": "4099e5e927c69cfd11dc6a71a8c395cb576027115eb3915f86242b15af48b8cc",
+    "analysis/fwm_stark_calibration_20261023/PROTOCOL.md": "beaea925c86dd3441e46ebaa236a404ba1b3e93303826add394a8a4c6ac175fb",
+    "analysis/fwm_stark_calibration_20261023/evaluate.py": "0106e301f1a15a8518f0219f8ac8c9412a31f15e47dd6479c64fc93eb01d214f",
+    "gabes/fwm_chi_gain.py": "930e17a818eae332dc072624bcde5591e3ba9409043fc7afaf546fa360dd687c",
+    "gabes/fwm_stark_gain.py": "bf1fec5433bb93a442c9c7ec895794e5bddb2c4736ab3d4acbe5f78eccaf3096",
+    "analysis/fwm_literature_calibration_20261023/evaluate.py": "9c3c961eaf841dd1618268ccd788b2851fa3b8e7600d9fd9990f9ae8d293febb",
+    "gabes/fwm_literature_gain.py": "89150bb0d8b056bd06ef27c113c054261dc7f54dc2919f42445a1fd58d8a2c23",
+    "gabes/fwm_experiment_gain.py": "9af62af3df51ea61a0e44d3616ec25809bbf1fb7708e83cceca71d88d095fa0b",
+    "analysis/fwm_stark_calibration_20261023/RESONANCE_TARGET_AUDIT.json": "d9fbc9db49f8eed16d2398ad87c914cd35f56580637b561bd2ee1185b9947adf",
+    "analysis/fwm_stark_calibration_20261023/numerical_audit.py": "891dbe0eaeff1db5669f00a81c7da21b5a99294e448f3db7cb0d9f060af6e38e",
+    "analysis/fwm_literature_calibration_20261023/predictions_by_apparatus.csv": "05e5d0f9f908c16013a89ff07510a6db87f524e561dbf3eeefe808c6f399cc0f",
+    "analysis/fwm_literature_calibration_20261023/predictions_by_paper.csv": "4b2981ea8cffdb164324bfc384e6c79fde6025ca01ea97dd588de92936e1c6db",
+    "analysis/fwm_chi_calibration_20261023/predictions_by_apparatus.csv": "6600f6cf3bf978cff247e9884666a971f46726925384d15d7d5191706292ab74",
+    "analysis/fwm_chi_calibration_20261023/predictions_by_paper.csv": "fa24d999e18bf7ca5a85986047c8aa94a083c9cba61d8e7906c0a8d0db4dc9e1"
+  },
+  "numeric_atomic_source_hash": "86189ca7324d224daf79d2a7fcd8feaee0dadd31768e4ce9d1cec7cabe795c57",
+  "normalization": {
+    "temperature_K": 386.15,
+    "pump_power_W": 0.3,
+    "pump_waist_m": 0.00053
+  },
+  "independent_numerical_audit_sha256": "74f5c9b19302327e39a49fa06bcd8919248b5d23374b08acc7a2f246deaa6368",
+  "feature_order": [
+    "intercept",
+    "log_number_density_ratio",
+    "log_pump_P_over_waist_squared_ratio",
+    "log_diagonal_susceptibility_scale"
+  ],
+  "coefficient_bounds": [
+    -3,
+    3
+  ],
+  "feature_clipping": [
+    -3,
+    3
+  ],
+  "scale_bounds": [
+    0.05,
+    20
+  ],
+  "fraction_candidates": [
+    0.0,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "references_database": "references/fwm_experiments/database.json",
+  "evaluation_record": "analysis/fwm_stark_calibration_20261023/evaluation.json"
+}

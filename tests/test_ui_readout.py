@@ -10,6 +10,7 @@ from gabes_ui.readout import (
     metrics_table_markdown,
     magneto_status_summary,
     partition_readout,
+    present_metrics,
     status_tone,
     strip_html,
 )
@@ -122,6 +123,34 @@ def test_status_tone_reads_caveats():
     assert status_tone("resolution-limited") == "warn"
     assert status_tone("external validation required") == "warn"
     assert status_tone("resolved") == "neutral"
+
+
+@pytest.mark.parametrize("noise, expected, direction", [
+    (0.0, "0.00 dB", "at shot noise"),
+    (0.00042, "+0.00042 dB", "above shot noise"),
+    (-0.00042, "-0.00042 dB", "below shot noise"),
+    (float("nan"), "unavailable", None),
+])
+def test_noise_rounding_preserves_side_of_reference_and_missing_values(noise, expected, direction):
+    metric = dict(label="Squeezing [dB]", value="0.00 dB", numeric_value=noise,
+                  quantity="intensity_difference_noise_db", delta="effective Jasperse model")
+    shown, = present_metrics([metric], scheme_name="fwm")
+    assert shown["label"] == "Intensity-difference noise [dB]"
+    assert shown["value"] == expected
+    if direction is None:
+        assert "shot noise" not in shown["delta"]
+    else:
+        assert shown["delta"] == f"{direction} · effective Jasperse model"
+
+
+def test_legacy_gain_heuristic_uses_a_diagnostic_reference():
+    metric = dict(label="Squeezing [dB]", numeric_value=-1.0, value="-1.00 dB",
+                  quantity="intensity_difference_noise_db",
+                  delta="legacy data; physical squeezing unavailable")
+    shown, = present_metrics([metric], scheme_name="fwm")
+    assert shown["label"] == "Gain-referred noise diagnostic [dB]"
+    assert shown["delta"] == "below diagnostic 0 dB reference"
+    assert "physical squeezing unavailable" in shown["status"]["value"]
 
 
 def test_delta_becomes_a_subline():

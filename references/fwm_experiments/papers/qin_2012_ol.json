@@ -1,0 +1,1254 @@
+{
+  "schema_version": 1,
+  "paper_id": "qin_2012_ol",
+  "title": "Compact diode-laser-pumped quantum light source based on four-wave mixing in hot rubidium vapor",
+  "authors": [
+    "Zhongzhong Qin",
+    "Jietai Jing",
+    "Jun Zhou",
+    "Cunjin Liu",
+    "Raphael C. Pooser",
+    "Zhifan Zhou",
+    "Weiping Zhang"
+  ],
+  "year": 2012,
+  "publication": {
+    "journal": "Optics Letters",
+    "volume": "37",
+    "issue": "",
+    "pages": "3141-3143",
+    "doi": "10.1364/OL.37.003141",
+    "arxiv_id": "",
+    "status": "published"
+  },
+  "legacy_column": null,
+  "apparatus_group": "ecnu_jing_diode_rb85",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb D1 double-lambda FWM with experimental intensity-difference noise measurements.",
+    "isotope_composition": "pure85"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://zhifanzhou.com/files/Compact%20diode-laser-pumped%20quantum%20light%20source%20based.pdf",
+      "path": "sources/qin_2012_ol.pdf",
+      "access": "full_text",
+      "version": "published",
+      "sha256": "8746a1511f154d615eb49e0a51b81c87aee42bbdf41448bc6f4eb0f5cdaa7501",
+      "pages": 3,
+      "accessed_on": "2026-10-23"
+    },
+    {
+      "source_id": "atomic_reference",
+      "url": "https://steck.us/alkalidata/rubidium85numbers.pdf",
+      "path": "../Rubidium 85 D Line Data.pdf",
+      "access": "full_text",
+      "version": "local_Steck_reference",
+      "sha256": "aefb10f0de86da7da7e6bed44385f4d2dbc6a295238d624448b126d325e855f3",
+      "pages": 31,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "unbalanced_best",
+      "label": "Fig.2(c) unattenuated twin-beam output",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": "Excited hyperfine reference is unspecified."
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "probe red of pump; nominal rounded offset",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.1-2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.1-2, setup",
+          "evidence": "",
+          "notes": "Rounded3.04GHz offset; not a MHz-accurate optimized detuning.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 280,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 15,
+          "unit": "µW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 850,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.2 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "output_probe_power",
+          "value": 123,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "output_measurement_not_fully_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_conjugate_power",
+          "value": 111,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "output_measurement_not_fully_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "probe_gain",
+          "value": 8.2,
+          "unit": "1",
+          "value_type": "derived",
+          "basis": "ratio of reported approximate optical powers; planes not fully specified",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "output_probe_power / seed_power",
+            "inputs": [
+              "output_probe_power",
+              "seed_power"
+            ]
+          }
+        },
+        {
+          "quantity": "conjugate_gain",
+          "value": 7.4,
+          "unit": "1",
+          "value_type": "derived",
+          "basis": "ratio of reported approximate optical powers; planes not fully specified",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "output_conjugate_power / seed_power",
+            "inputs": [
+              "output_conjugate_power",
+              "seed_power"
+            ]
+          }
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": -7,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.2(c) discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "bandwidth",
+          "value": 6,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "squeezing frequency range",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.2(c) discussion",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": []
+    },
+    {
+      "experiment_id": "balanced_output",
+      "label": "Fig.2(b) probe attenuation to balance detector powers",
+      "kind": "comparison",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": "Excited hyperfine reference is unspecified."
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "probe red of pump; nominal rounded offset",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.1-2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.1-2, setup",
+          "evidence": "",
+          "notes": "Rounded3.04GHz offset; not a MHz-accurate optimized detuning.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 280,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 15,
+          "unit": "µW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 850,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.2 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "squeezing_measured",
+          "value": -5.7,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.2(b) discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "bandwidth",
+          "value": 6.7,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.2(b) discussion",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Probe attenuated after generation; source powers/gains must not be replaced by the balanced detector powers."
+      ]
+    },
+    {
+      "experiment_id": "noise_slope",
+      "label": "Fig.3 seed-power sweep and noise slope",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": "Excited hyperfine reference is unspecified."
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "probe red of pump; nominal rounded offset",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.1-2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.1-2, setup",
+          "evidence": "",
+          "notes": "Rounded3.04GHz offset; not a MHz-accurate optimized detuning.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 280,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.2, operating-point paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 635,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "noise_ratio",
+          "value": 0.213,
+          "unit": "1",
+          "value_type": "reported",
+          "basis": "FWM/SQL fitted slope ratio",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_slope",
+          "value": -6.7,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.3",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": []
+    },
+    {
+      "experiment_id": "low_frequency",
+      "label": "Fig.4 lower Fourier-frequency configuration",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.1, setup",
+          "evidence": "",
+          "notes": "Excited hyperfine reference is unspecified."
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": 14,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "paperδ; formal sign not specified",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, low-frequency paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 200,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, low-frequency paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": null,
+          "unit": "mW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-3, low-frequency measurement",
+          "evidence": "",
+          "notes": "The low-frequency paragraph does not restate pump power;280mW is not silently copied."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-3, low-frequency measurement",
+          "evidence": "",
+          "notes": "Not specified for this operating point in the inspected source."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "output_probe_power",
+          "value": 70,
+          "unit": "µW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, low-frequency paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_conjugate_power",
+          "value": 64,
+          "unit": "µW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, low-frequency paragraph",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": -5,
+          "unit": "dB",
+          "value_type": "approximate",
+          "basis": "nearly flat noise above23kHz excluding technical peaks",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, low-frequency discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "lowest_squeezed_frequency",
+          "value": 8,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, low-frequency discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "flat_squeezing_frequency_start",
+          "value": 23,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, low-frequency discussion",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧400mW is available tapered-amplifier power, not the280mW used for the quoted123/111µW operating point. Low-frequencyδ14MHz is a separate configuration."
+  ]
+}

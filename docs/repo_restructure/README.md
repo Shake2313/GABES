@@ -24,15 +24,9 @@
     | 04cff7d | C10 daily report |
     | (이 커밋) | C11 README·checklist·허브 |
 
-  - **보류 (C3 FWM 묶음, Codex R1):**
-    - FWM 4종 코드·데이터·테스트·기록
-    - `gabes/schemes/fwm.py`
-    - `gabes_ui/{format,readout,liveplot}.py`, `assets/ui/liveplot.js`, `tests/test_ui_readout.py`
-    - `analysis/fwm_lite/DEVLOG.md`
-    - README 다중 논문 문단
-    - User Guide 두 파일. 강도차 잡음 라벨 설명이 들어 있어서 C3과 함께 보류함.
-  - **남은 차단:** 7896f59 magneto 회귀 2개 (Codex R2).
-  - 태그와 기준선 재실행은 C3과 R2 착지 뒤에.
+  - **C3 로컬 착지.** 사용자 S1 동결 해제 및 C3 범위 확대. FWM 보정 4종, [문헌 DB](../../references/fwm_experiments/README.md), 10-23·10-30 분석 기록, [FWM 개발 로그](../../analysis/fwm_lite/DEVLOG.md), 잡음 라벨을 반영한 [User Guide 원본](../Userguide/GABES_User_Guide_v2.html)·[배포본](../../static/GABES_User_Guide.html)을 포함.
+  - **⟦AI⟧ C3 검증:** 기존 실패 10/10 통과. FWM·UI·문서·기존 수치 기준선 742건과 Stark·Zeeman 검증 10건 통과(54개 파일). [과거/현재 AST 대조](../../analysis/fwm_stark_calibration_20261023/source_drift_c3.json). DB 원문 검증 18건 통과. 다운로드한 원문은 기존 정책대로 로컬 보관.
+  - Magneto 회귀 2건은 별도 R2 커밋 `2460c6c`. 분리 태그와 전체 기준선 검증은 대기.
   - **깨끗한 checkout 확인 (8989a09):** 착지 영향 테스트 12개 파일 → 235 통과 / 1 실패.
     - 실패: `tests/quantum/test_variance_reduction_pilot_shadow.py::test_preregistration_does_not_touch_future_grid`.
     - 착지와는 무관함. `variance_reduction_2026_10_13/review.json`(488건)과 `pilot-shadow-review.json`(248건)의 `input_byte_ledger` 키가 `G:\내 드라이브\Coding\GABES …` **절대경로**라서, 원래 위치에서만 통과함.
@@ -77,7 +71,7 @@ Codex가 GABES 채팅과 git 상태를 대조해 보낸 메시지를 확인·반
 |---|---|---|
 | C1 | `.gitignore` | — |
 | C2 | Rydberg 11-04 재최적화 | `.gitattributes`에 `analysis/rydberg_gold_optimization_20261104/** -text`. 복원 가능한 소스 19개를 `provenance/frozen_sources/`에 바이트 그대로 보관하고 `provenance/source_restoration.json`에 복원 범위 기록. lineshape는 복원 불가로 표기. 현 엔진 재실행은 별도 폴더. Gold 절대 실험 교정은 미완료 유지. |
-| C3 | FWM 다중 논문 보정 4종 | **보류.** 위 10개 실패 해결 뒤 한 묶음으로 커밋. 실험용 상태 유지, Kim 음수 OPD gain 재현 실패 유지. README의 FWM 문단도 이 묶음에 포함. |
+| C3 | FWM 다중 논문 보정 4종 | **로컬 착지.** 실패 10건 해결. README, 문헌 DB, 날짜별 분석, 개발 로그, User Guide 원본·배포본 포함. 실험용 상태와 Kim 음수 OPD gain 재현 실패 기록 유지. |
 | C4a | cold-spot: vapor_cell 비율 우선 계산 + Rydberg 공용 함수 연결 + `test_vapor_cell` | Rydberg 결과가 마지막 자리에서 바뀔 수 있음(`n·Tc/Te` → `n·(Tc/Te)`). 상대 1e-12 이하이고 표시값이 동일하면 착지, 차이는 커밋에 기록. |
 | C4b | cold-spot: SAS 값 변경 + `test_sas` | 11-04 사용자 결정의 값 단계. 분리 온도에서의 SAS 변화량을 커밋에 정량화하고 checklist 항목 갱신. |
 | C5 | PSR 테스트 2개 | — |

@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-23",
+  "origin": "AI browser verification of local generated HTML",
+  "status": "PASS",
+  "checks": {
+    "initial_papers": 17,
+    "context_filter_papers": 2,
+    "gain_filter_papers_including_ranges": 11,
+    "unique_title_search_papers": 1,
+    "empty_search_papers": 0,
+    "empty_search_message": true,
+    "expand_conditions_results": true,
+    "source_pdf_page_links_visible": true,
+    "console_errors": 0,
+    "desktop_layout_review": "PASS",
+    "table_layout_review": "PASS"
+  },
+  "scope": "Local HTML viewer only; no hosted-site publication or simulation check"
+}

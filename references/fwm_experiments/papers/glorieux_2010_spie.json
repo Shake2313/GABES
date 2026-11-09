@@ -1,0 +1,1424 @@
+{
+  "schema_version": 1,
+  "paper_id": "glorieux_2010_spie",
+  "title": "Strong quantum correlations in four wave mixing in 85Rb vapor",
+  "authors": [
+    "Quentin Glorieux",
+    "Luca Guidoni",
+    "Samuel Guibal",
+    "Jean-Pierre Likforman",
+    "Thomas Coudreau"
+  ],
+  "year": 2010,
+  "publication": {
+    "journal": "Proceedings of SPIE",
+    "volume": "7727",
+    "issue": "",
+    "pages": "772703",
+    "doi": "10.1117/12.854953",
+    "arxiv_id": "1004.3950v1",
+    "status": "published"
+  },
+  "legacy_column": null,
+  "apparatus_group": "paris_mpq_glorieux",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb D1 double-lambda FWM with experimental intensity-difference noise measurements.",
+    "isotope_composition": "pure85"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://arxiv.org/pdf/1004.3950",
+      "path": "sources/glorieux_2010_spie.pdf",
+      "access": "full_text",
+      "version": "arxiv_v1",
+      "sha256": "9b2a0d5104951f15864520f03f516e6f181956205e31386aeb28e78f56d08629",
+      "pages": 8,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "best_improved_detector",
+      "label": "Fig.7 optimized IDS with opened S3883 detectors",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "mrad",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.0572957795,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "Underlying angle is approximate; extra decimals are conversion only.",
+          "derivation": {
+            "formula": "1 mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 100,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 10,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-6",
+          "evidence": "",
+          "notes": "Probe availability0–300µW is an apparatus envelope; the optimum-point input power is not specified."
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §3.2",
+          "evidence": "",
+          "notes": "§3.2 labels the detuning from F=3→5P1/2 while the unresolved-excited-state scheme does not establish a unique F′=3 origin; do not guess an offset."
+        },
+        {
+          "quantity": "temperature",
+          "value": 118,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 1200,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 750,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper Δ; see conflicting F=3→5P1/2 description in§3.2",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": 6,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "paper δ sign; formal frequency equation not supplied",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1000,
+          "unit": "kHz",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_output_window_loss",
+          "value": 1.5,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.5",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.5,
+            "unit": "percentage_point",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "downstream_optical_loss",
+          "value": 3,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "PBS, iris, mirrors combined",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.5",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 1,
+            "unit": "percentage_point",
+            "kind": "estimated",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "detector_qe",
+          "value": null,
+          "unit": "%",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §3.5",
+          "evidence": "",
+          "notes": "The paper explicitly says photodiode QE cannot be accurately determined because detector gain is unknown."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "squeezing_electronic_noise_subtracted",
+          "value": -9.2,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.5,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "squeezing_loss_corrected",
+          "value": -11.0,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "corrected only for propagation/cell losses, assuming perfect photodiode QE",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.7, §3.5",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.7,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7",
+          "evidence": "",
+          "notes": "No numeric gain given for the1200-mW best-noise setting; Fig.6 is a different sweep."
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7",
+          "evidence": "",
+          "notes": "The shown−9.2dB has electronic noise removed; an uncorrected number is not provided."
+        }
+      ],
+      "notes": [
+        "Improved opened HamamatsuS3883 detectors replace the earlier commercial balanced receiver."
+      ]
+    },
+    {
+      "experiment_id": "temperature_sweep",
+      "label": "Fig.3 temperature sweep",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "mrad",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.0572957795,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "Underlying angle is approximate; extra decimals are conversion only.",
+          "derivation": {
+            "formula": "1 mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 100,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 10,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-6",
+          "evidence": "",
+          "notes": "Probe availability0–300µW is an apparatus envelope; the optimum-point input power is not specified."
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §3.2",
+          "evidence": "",
+          "notes": "§3.2 labels the detuning from F=3→5P1/2 while the unresolved-excited-state scheme does not establish a unique F′=3 origin; do not guess an offset."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1500,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 500,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 800,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper Δ with unresolved excited state",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": 10,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": null,
+          "unit": "°C",
+          "value_type": "range",
+          "basis": "reported scan range",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, §3.1",
+          "evidence": "",
+          "notes": "",
+          "lower": 110,
+          "upper": 126
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        }
+      ],
+      "notes": [
+        "Sweep variable:temperature; fixed controls retained at this figure's values. Do not borrow the Fig.7 optimum."
+      ]
+    },
+    {
+      "experiment_id": "opd_sweep",
+      "label": "Fig.4 one-photon-detuning sweep",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "mrad",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.0572957795,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "Underlying angle is approximate; extra decimals are conversion only.",
+          "derivation": {
+            "formula": "1 mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 100,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 10,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-6",
+          "evidence": "",
+          "notes": "Probe availability0–300µW is an apparatus envelope; the optimum-point input power is not specified."
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §3.2",
+          "evidence": "",
+          "notes": "§3.2 labels the detuning from F=3→5P1/2 while the unresolved-excited-state scheme does not establish a unique F′=3 origin; do not guess an offset."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1500,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.4 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 800,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.4 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 114,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.4 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": 10,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.4 caption",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.4 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.4 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        }
+      ],
+      "notes": [
+        "Sweep variable:opd_reported; fixed controls retained at this figure's values. Do not borrow the Fig.7 optimum."
+      ]
+    },
+    {
+      "experiment_id": "tpd_sweep",
+      "label": "Fig.5 two-photon-detuning sweep",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "mrad",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.0572957795,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "Underlying angle is approximate; extra decimals are conversion only.",
+          "derivation": {
+            "formula": "1 mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 100,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 10,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-6",
+          "evidence": "",
+          "notes": "Probe availability0–300µW is an apparatus envelope; the optimum-point input power is not specified."
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §3.2",
+          "evidence": "",
+          "notes": "§3.2 labels the detuning from F=3→5P1/2 while the unresolved-excited-state scheme does not establish a unique F′=3 origin; do not guess an offset."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1500,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.5 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 800,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.5 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 114,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.5 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 800,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper Δ with unresolved excited state",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.5 caption",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.5 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, Fig.5 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        }
+      ],
+      "notes": [
+        "Sweep variable:tpd_reported; fixed controls retained at this figure's values. Do not borrow the Fig.7 optimum."
+      ]
+    },
+    {
+      "experiment_id": "pump_sweep",
+      "label": "Fig.6 pump-power and probe-gain sweep",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "radius at1/e²",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 650,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 350,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity: explicit radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 1,
+          "unit": "mrad",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.0572957795,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": "Underlying angle is approximate; extra decimals are conversion only.",
+          "derivation": {
+            "formula": "1 mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 100,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 10,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, §2",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-6",
+          "evidence": "",
+          "notes": "Probe availability0–300µW is an apparatus envelope; the optimum-point input power is not specified."
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, §3.2",
+          "evidence": "",
+          "notes": "§3.2 labels the detuning from F=3→5P1/2 while the unresolved-excited-state scheme does not establish a unique F′=3 origin; do not guess an offset."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1500,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.6 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 114,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.6 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 800,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper Δ with unresolved excited state",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.6 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": 10,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.6 caption",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.6 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.6 caption",
+          "evidence": "",
+          "notes": "Curve only; no exact nodes digitized."
+        }
+      ],
+      "notes": [
+        "Sweep variable:pump_power; fixed controls retained at this figure's values. Do not borrow the Fig.7 optimum."
+      ]
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧ Article has an unresolved/possibly inconsistent OPD reference. Numeric original Δ values are preserved; no canonical F′=3 detuning guessed.",
+    "⟦AI⟧−9.2dB is electronic-noise-subtracted;−11dB is an authors' loss correction with a perfect-QE assumption."
+  ]
+}

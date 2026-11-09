@@ -1,0 +1,793 @@
+{
+  "schema_version": 1,
+  "paper_id": "jain_2025_ol",
+  "title": "Compact fiber-coupled narrowband two-mode squeezed light source",
+  "authors": [
+    "Umang Jain",
+    "Jae Choi",
+    "Christopher Hull",
+    "Alberto M. Marino"
+  ],
+  "year": 2025,
+  "publication": {
+    "journal": "Optics Letters",
+    "volume": "50",
+    "issue": "16",
+    "pages": "5165–5168",
+    "doi": "10.1364/OL.564233",
+    "arxiv_id": "2507.03755",
+    "status": "published"
+  },
+  "legacy_column": "Jain_2025_OL",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb D1 double-lambda direct intensity-difference measurements.",
+    "isotope_composition": "isotopically_pure_85Rb"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://arxiv.org/pdf/2507.03755",
+      "path": "sources/jain_2025_ol.pdf",
+      "access": "full_text",
+      "version": "arxiv_v1_prepublication_manuscript",
+      "sha256": "3e7424f54775ee1cb754043e80c1d97711ffafd2f193fb5966160affa28f4f0f",
+      "pages": 5,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "apparatus_group": "oklahoma_marino_fwm",
+  "experiments": [
+    {
+      "experiment_id": "before_fiber",
+      "label": "Twin beams before output fibers",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 99,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports temperature.",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports cell length.",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.4,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports crossing angle.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 600,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "1/e2 intensity waist diameter",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports pump beam size using 1/e2 intensity waist diameter.",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 600,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "1/e2 intensity waist diameter",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports seed beam size using 1/e2 intensity waist diameter.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 300,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports pump radius using 1/e2 intensity radius.",
+          "notes": "",
+          "derivation": {
+            "formula": "diameter / 2",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 300,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports seed radius using 1/e2 intensity radius.",
+          "notes": "",
+          "derivation": {
+            "formula": "diameter / 2",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_power",
+          "value": 135,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.3, first paragraph",
+          "evidence": "The cited run reports pump power.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3.04,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "probe downshift from pump",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1, Sec.II",
+          "evidence": "The cited run reports pump probe spacing using probe downshift from pump.",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.27,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "nominal downshift conversion",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1, Sec.II",
+          "evidence": "The cited run reports tpd gabes using nominal downshift conversion.",
+          "notes": "3.04 GHz is rounded and not an independently specified optimal Raman detuning.",
+          "derivation": {
+            "formula": "3035.732439 - 3040 MHz",
+            "inputs": [
+              "pump_probe_spacing"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.1(a) energy-level diagram",
+          "evidence": "Fig.1(a) labels approximately0.8GHz from an unresolved Fprime manifold; no specific excited hyperfine origin is established.",
+          "notes": "Fig.1(a) labels approximately0.8GHz from an unresolved Fprime manifold; no specific excited hyperfine origin is established."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "uW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "Input seed power not numerically specified.",
+          "notes": "Input seed power not numerically specified."
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "No experimental seeded gain is numerically specified.",
+          "notes": "No experimental seeded gain is numerically specified."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, Sec.III",
+          "evidence": "The cited run reports analysis frequency.",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "energy-level diagram pump blue detuning",
+          "reference": "85Rb F=2 to unresolved Fprime manifold",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.1(a), visually reviewed diagram",
+          "evidence": "The energy-level diagram labels the blue detuning approximately0.8GHz.",
+          "notes": "Numeric label is embedded in a figure and absent from extracted text; exact Fprime origin is not given."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "squeezing_measured",
+          "value": -7.2,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, Sec.III",
+          "evidence": "The cited run reports squeezing measured.",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_plateau_frequency",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "range",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, Sec.III",
+          "evidence": "The cited run reports squeezing plateau frequency.",
+          "notes": "",
+          "lower": 0.3,
+          "upper": 1
+        },
+        {
+          "quantity": "output_probe_power",
+          "value": 200,
+          "unit": "uW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "generated bright beam; caption does not specify pre/post fiber",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4 caption",
+          "evidence": "The cited run reports output probe power.",
+          "notes": ""
+        },
+        {
+          "quantity": "output_conjugate_power",
+          "value": 200,
+          "unit": "uW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "generated bright beam; caption does not specify pre/post fiber",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4 caption",
+          "evidence": "The cited run reports output conjugate power.",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Flip mirrors bypass the output fibers. Electronic-noise subtraction is not specified."
+      ]
+    },
+    {
+      "experiment_id": "after_fiber",
+      "label": "Twin beams after single-mode PM fibers",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 99,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports temperature.",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports cell length.",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.4,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports crossing angle.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 600,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "1/e2 intensity waist diameter",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports pump beam size using 1/e2 intensity waist diameter.",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 600,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "1/e2 intensity waist diameter",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports seed beam size using 1/e2 intensity waist diameter.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 300,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports pump radius using 1/e2 intensity radius.",
+          "notes": "",
+          "derivation": {
+            "formula": "diameter / 2",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 300,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports seed radius using 1/e2 intensity radius.",
+          "notes": "",
+          "derivation": {
+            "formula": "diameter / 2",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_power",
+          "value": 135,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.3, first paragraph",
+          "evidence": "The cited run reports pump power.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3.04,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "probe downshift from pump",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1, Sec.II",
+          "evidence": "The cited run reports pump probe spacing using probe downshift from pump.",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.27,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "nominal downshift conversion",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1, Sec.II",
+          "evidence": "The cited run reports tpd gabes using nominal downshift conversion.",
+          "notes": "3.04 GHz is rounded and not an independently specified optimal Raman detuning.",
+          "derivation": {
+            "formula": "3035.732439 - 3040 MHz",
+            "inputs": [
+              "pump_probe_spacing"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.1(a) energy-level diagram",
+          "evidence": "Fig.1(a) labels approximately0.8GHz from an unresolved Fprime manifold; no specific excited hyperfine origin is established.",
+          "notes": "Fig.1(a) labels approximately0.8GHz from an unresolved Fprime manifold; no specific excited hyperfine origin is established."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "uW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "Input seed power not numerically specified.",
+          "notes": "Input seed power not numerically specified."
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "No experimental seeded gain is numerically specified.",
+          "notes": "No experimental seeded gain is numerically specified."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, Sec.III",
+          "evidence": "The cited run reports analysis frequency.",
+          "notes": ""
+        },
+        {
+          "quantity": "fiber_coupling_efficiency",
+          "value": 90,
+          "unit": "%",
+          "value_type": "lower_bound",
+          "basis": "both output arms",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, Sec.II–III",
+          "evidence": "The cited run reports fiber coupling efficiency using both output arms.",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "energy-level diagram pump blue detuning",
+          "reference": "85Rb F=2 to unresolved Fprime manifold",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.1(a), visually reviewed diagram",
+          "evidence": "The energy-level diagram labels the blue detuning approximately0.8GHz.",
+          "notes": "Numeric label is embedded in a figure and absent from extracted text; exact Fprime origin is not given."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "squeezing_measured",
+          "value": -4.4,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, Sec.III",
+          "evidence": "The cited run reports squeezing measured.",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Output fiber ends are not AR coated. Actual extra noise includes uncorrelated spatial modes; cannot represent the entire change as ordinary vacuum loss."
+      ]
+    },
+    {
+      "experiment_id": "pump_optimum_range",
+      "label": "Reported pump-power optimization interval",
+      "kind": "summary",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 99,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports temperature.",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports cell length.",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.4,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "The cited run reports crossing angle.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 600,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "1/e2 intensity waist diameter",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports pump beam size using 1/e2 intensity waist diameter.",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 600,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "1/e2 intensity waist diameter",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports seed beam size using 1/e2 intensity waist diameter.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 300,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports pump radius using 1/e2 intensity radius.",
+          "notes": "",
+          "derivation": {
+            "formula": "diameter / 2",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 300,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, last paragraph",
+          "evidence": "The cited run reports seed radius using 1/e2 intensity radius.",
+          "notes": "",
+          "derivation": {
+            "formula": "diameter / 2",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3.04,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "probe downshift from pump",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1, Sec.II",
+          "evidence": "The cited run reports pump probe spacing using probe downshift from pump.",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.27,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "nominal downshift conversion",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1, Sec.II",
+          "evidence": "The cited run reports tpd gabes using nominal downshift conversion.",
+          "notes": "3.04 GHz is rounded and not an independently specified optimal Raman detuning.",
+          "derivation": {
+            "formula": "3035.732439 - 3040 MHz",
+            "inputs": [
+              "pump_probe_spacing"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.1(a) energy-level diagram",
+          "evidence": "Fig.1(a) labels approximately0.8GHz from an unresolved Fprime manifold; no specific excited hyperfine origin is established.",
+          "notes": "Fig.1(a) labels approximately0.8GHz from an unresolved Fprime manifold; no specific excited hyperfine origin is established."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "uW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "Input seed power not numerically specified.",
+          "notes": "Input seed power not numerically specified."
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Sec.II setup",
+          "evidence": "No experimental seeded gain is numerically specified.",
+          "notes": "No experimental seeded gain is numerically specified."
+        },
+        {
+          "quantity": "pump_power_optimization_interval",
+          "value": null,
+          "unit": "mW",
+          "value_type": "range",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.3, first paragraph",
+          "evidence": "The cited run reports pump power optimization interval.",
+          "notes": "Reported range of maximum squeezing; no tabulated individual gain points.",
+          "lower": 135,
+          "upper": 250
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "energy-level diagram pump blue detuning",
+          "reference": "85Rb F=2 to unresolved Fprime manifold",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.2, Fig.1(a), visually reviewed diagram",
+          "evidence": "The energy-level diagram labels the blue detuning approximately0.8GHz.",
+          "notes": "Numeric label is embedded in a figure and absent from extracted text; exact Fprime origin is not given."
+        }
+      ],
+      "results": [],
+      "notes": []
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧ Source version is the full arXiv manuscript; publication citation verified against publisher DOI.",
+    "⟦AI⟧ 550mW and 1.0/0.7mm diameters describe earlier work Ref.31, not this135mW fiber source; omitted from new experimental rows to avoid duplicate external observations.",
+    "⟦AI⟧ DiagramFig.1(a) supplies approximately0.8GHz OPD, correcting the old CSV blank, but itsFprime reference is unresolved. No input seed power is available, so output~200uW cannot establish a gain target."
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "paper_id": "turnbull_2013_pra",
+  "title": "Role of the phase-matching condition in nondegenerate four-wave mixing in hot vapors for the generation of squeezed states of light",
+  "authors": [
+    "M. T. Turnbull",
+    "P. G. Petrov",
+    "C. S. Embrey",
+    "A. M. Marino",
+    "V. Boyer"
+  ],
+  "year": 2013,
+  "publication": {
+    "journal": "Physical Review A",
+    "volume": "88",
+    "issue": "",
+    "pages": "033845",
+    "doi": "10.1103/PhysRevA.88.033845",
+    "arxiv_id": "1303.7187v1",
+    "status": "published"
+  },
+  "legacy_column": null,
+  "apparatus_group": "birmingham_boyer_rb85",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "two_arm_gain_map",
+    "seed_mode": "single_seed",
+    "inclusion": "context_only",
+    "reason": "85RbD1 double-lambda direct two-arm gain experiment useful for futuregain correction; this paper's new experiment does not report an IDS measurement.",
+    "isotope_composition": "not_reported"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://arxiv.org/pdf/1303.7187",
+      "path": "sources/turnbull_2013_pra.pdf",
+      "access": "full_text",
+      "version": "arxiv_v1",
+      "sha256": "6b207d55d4f91e1c19810f517a8cf943d14ce7e0d7f4267de1bd9b017a1cc851",
+      "pages": 10,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "angle_tpd_gain_map",
+      "label": "Fig.7 measured probe/conjugate gain vs angle and detuning",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 110,
+          "unit": "°C",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 750,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 900,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "beam waist; intensity-radius definition not explicitly specified",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 400,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "beam waist; intensity-radius definition not explicitly specified",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "range",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": "",
+          "lower": 10,
+          "upper": 20
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": null,
+          "unit": "deg",
+          "value_type": "range",
+          "basis": "experimental angular sweep",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": "",
+          "lower": 0,
+          "upper": 1
+        },
+        {
+          "quantity": "tpd_scan_span",
+          "value": 60,
+          "unit": "MHz",
+          "value_type": "approximate",
+          "basis": "typical two-photon scan width",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.5, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 140,
+          "unit": "Gamma",
+          "value_type": "reported",
+          "basis": "spectroscopy-calibrated pump detuning",
+          "reference": "Δ1 in unresolved-excited-state model;γ=2π×6MHz",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, §III",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_frequency",
+          "value": 840,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "paperΔ1 unresolved excited manifold",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2,6, §II/III",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "140 *6MHz",
+            "inputs": [
+              "opd_reported"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2,6",
+          "evidence": "",
+          "notes": "Unresolved excited-state reference is not a uniquely specified85RbF′=3 transition."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7(a)",
+          "evidence": "",
+          "notes": "Measured color-map nodes not tabulated; digitization needed."
+        },
+        {
+          "quantity": "conjugate_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.7(b)",
+          "evidence": "",
+          "notes": "Measured color-map nodes not tabulated; digitization needed."
+        }
+      ],
+      "notes": [
+        "Definitions are explicit:gp=Pprobe,out/Pseed,in;gc=Pconjugate,out/Pseed,in.",
+        "FittedΩ=60γ,N=2.8e12cm−3,γc=0.2γ,epsilon=6.5e−6 are model-inferred parameters, not independent apparatus measurements.",
+        "Theoretical gains350/1100 in Fig.7 caption are not experimental extrema."
+      ]
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧Retained as gain-only context. Do not count theoretical noise predictions as measured squeezing. Published title uses'nondegenerate'; arXiv title uses'non-degenerate'."
+  ]
+}

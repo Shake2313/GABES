@@ -37,6 +37,37 @@ The gain toggle corrects peak position, width and both arm gains using the 23
 measured points. It continues the current model outside the measured interval
 and after changing operating conditions; extrapolation is labelled.
 Both probe and conjugate gain curves are shown with calibration on or off.
+The [FWM literature database](references/fwm_experiments/README.md) records the
+published operating conditions and their sources.
+For the new multi-paper model, enable **Empirical gain calibration**, then select
+**Gain calibration model → Multi-paper literature (experimental)**. It uses a
+shared generation-strength correction at the same detuning for both arms.
+Nested validation across nine papers and five lab/apparatus groups reduced the
+geometric factor error from 7.27 to 3.51, but the training-only constant baseline
+scored 2.20: independent predictive accuracy is **not established**. The UI and
+JSON export retain this status and identify condition extrapolation.
+[Data, frozen protocol and held-out predictions](analysis/fwm_literature_calibration_20261023/README.md).
+**Multi-paper χ propagation (experimental)** instead corrects the complex
+susceptibility couplings and diagonals before segmented optical propagation.
+Lab-group validation gives a factor error of 3.21 versus 2.20 for the constant
+baseline; red-detuned gain remains unresolved. Its experimental status, κ/d
+scales and extrapolation scope are shown in the readout and JSON.
+[Mechanism diagnosis, implementation and grouped validation](analysis/fwm_chi_calibration_20261023/README.md).
+**Multi-paper pump/Stark + χ (experimental)** adds an effective pump Hamiltonian
+self-energy and recomputes the atomic response before susceptibility correction
+and propagation. Repeated lab-group validation gives a factor error of 1.99
+versus 2.20 for the constant baseline; the held-out Allen power-peak error falls
+from 23.56 to 1.39 MHz. The red-detuned Kim group still fails the per-group gate,
+so overall predictive validation remains incomplete. Original atomic and noise
+results are retained separately.
+[Pump/Stark diagnosis, source-supported targets and validation](analysis/fwm_stark_calibration_20261023/README.md).
+**Multi-paper Zeeman pump + χ (experimental)** is a separate diagnostic model
+with 24 actual sublevels, polarization-dependent optical pumping and the pump's
+consistent refractive phase. It does **not** resolve the red-detuned Kim gains:
+held-out predictions are 0.890 / 0.972 / 0.699 versus 5.6 / 3.8 / 1.9.
+Grouped prediction error is 5.74 versus the constant baseline's 2.20, so this
+mode is not a validated improvement over the previous Stark model.
+[Zeeman diagnosis, preserved failures and validation](analysis/fwm_zeeman_calibration_20261030/README.md).
 **Experimental Jasperse** includes both distributed vacuum-loss reservoirs with
 an explicit common-loss assumption. **Passive L1** remains selectable.
 These practical approximations are separate from Grand Challenge acceptance.

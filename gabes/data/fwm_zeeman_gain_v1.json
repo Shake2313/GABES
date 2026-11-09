@@ -1,0 +1,205 @@
+{
+  "model_id": "fwm_literature_zeeman_response_v1",
+  "candidate": "Z0",
+  "regularization": 0.0,
+  "coefficients": [
+    0.0,
+    0.0
+  ],
+  "method": "Resolved24 pump optical pumping and phase-consistent propagation",
+  "formula": "chi_cross'=kappa*chi_cross; chi_diagonal unchanged; delta_k_effective=delta_k_vacuum+kp*Re(chi_pump)",
+  "scale_formula": "kappa=exp(clip(beta0+beta_n*clip(log(n(T)/n(386.15K)),-3,3),-ln20,ln20))",
+  "normalization": {
+    "temperature_K": 386.15,
+    "physical_line_factor": 0.3333333333333333,
+    "inherited_common_residual": 0.74,
+    "external_population_factor": 1.0
+  },
+  "feature_order": [
+    "intercept",
+    "log_number_density_ratio"
+  ],
+  "coefficient_bounds": [
+    -3,
+    3
+  ],
+  "feature_clipping": [
+    -3,
+    3
+  ],
+  "scale_bounds": [
+    0.05,
+    20
+  ],
+  "velocity_step_m_s": 2.0,
+  "velocity_cutoff_sigma": 6.0,
+  "offline_response_method": "direct",
+  "runtime_response_method": "poles",
+  "runtime_method_guard": "Pole estimates checked against direct resolvents by velocity chunk; explicit direct fallback on guard failure",
+  "validation_status": "GROUPED_PREDICTION_NOT_ESTABLISHED",
+  "predictive_gate_passed": false,
+  "gain_gate_passed": false,
+  "numerical_validation_passed": true,
+  "noise_covariance_calibrated": false,
+  "susceptibility_identified": false,
+  "gain_quantity": "effective optical output/input gain; literature reference planes remain conditional",
+  "raw_training_bounds": {
+    "D_GHz": [
+      -1.13258,
+      1.2
+    ],
+    "temperature_K": [
+      362.15,
+      401.15
+    ],
+    "input_pump_power_W": [
+      0.21,
+      1.0
+    ],
+    "input_seed_power_W": [
+      9e-07,
+      9.999999999999999e-05
+    ],
+    "w_pump_m": [
+      0.00053,
+      0.00095
+    ],
+    "w_probe_m": [
+      0.00027499999999999996,
+      0.00039
+    ],
+    "cell_length_m": [
+      0.009000000000000001,
+      0.0125
+    ],
+    "pump_probe_angle_deg": [
+      0.3,
+      0.75
+    ]
+  },
+  "training_delta_bounds_mhz": [
+    -16,
+    26
+  ],
+  "training_case_ids": [
+    "allen_2026_oe__fig3_optimum",
+    "kim_2018_oe__conjugate_resonant",
+    "kim_2018_oe__doubly_resonant",
+    "kim_2018_oe__probe_resonant",
+    "liu_2011_ol__main_400mw",
+    "mccormick_2007_ol__red_seed_fig2",
+    "mccormick_2008_pra__nominal_gain9",
+    "qin_2012_ol__unbalanced_best",
+    "qin_2014_prl__cell1_single",
+    "sim_2025_scirep__fig3a_rb85_best_ids",
+    "wu_2019_oe__fig2_high_seed",
+    "wu_2019_oe__fig2_low_seed"
+  ],
+  "training_papers": [
+    "allen_2026_oe",
+    "kim_2018_oe",
+    "liu_2011_ol",
+    "mccormick_2007_ol",
+    "mccormick_2008_pra",
+    "qin_2012_ol",
+    "qin_2014_prl",
+    "sim_2025_scirep",
+    "wu_2019_oe"
+  ],
+  "apparatus_groups": [
+    "ecnu_jing",
+    "nist_lett",
+    "oklahoma_marino",
+    "ornl_jila_allen_ma",
+    "pusan_moon"
+  ],
+  "group_validation": {
+    "corrected": {
+      "log_mae": 1.7482593657577197,
+      "factor_error": 5.744594730150628,
+      "factor2_fraction": 0.13333333333333333,
+      "arm_targets": 16
+    },
+    "raw": {
+      "log_mae": 1.9808588069521536,
+      "factor_error": 7.248965774894405,
+      "factor2_fraction": 0.13333333333333333,
+      "arm_targets": 16
+    },
+    "raw24": {
+      "log_mae": 1.4697869058017372,
+      "factor_error": 4.348308443027794,
+      "factor2_fraction": 0.3333333333333333,
+      "arm_targets": 16
+    },
+    "constant": {
+      "log_mae": 0.7898106106880829,
+      "factor_error": 2.2029791660364477,
+      "factor2_fraction": 0.43333333333333335,
+      "arm_targets": 16
+    },
+    "old_stark": {
+      "log_mae": 0.6887874967390712,
+      "factor_error": 1.9912996116100734,
+      "factor2_fraction": 0.6666666666666667,
+      "arm_targets": 16
+    }
+  },
+  "scores_by_group": {
+    "ecnu_jing": {
+      "log_mae": 1.7746992157378199,
+      "factor_error": 5.898506691486691,
+      "factor2_fraction": 0.3333333333333333,
+      "arm_targets": 6
+    },
+    "nist_lett": {
+      "log_mae": 2.0072047631054692,
+      "factor_error": 7.442484736919345,
+      "factor2_fraction": 0.3333333333333333,
+      "arm_targets": 4
+    },
+    "oklahoma_marino": {
+      "log_mae": 1.4008407942251122,
+      "factor_error": 4.058610989341534,
+      "factor2_fraction": 0.0,
+      "arm_targets": 3
+    },
+    "ornl_jila_allen_ma": {
+      "log_mae": 1.708963257483418,
+      "factor_error": 5.523232338521809,
+      "factor2_fraction": 0.0,
+      "arm_targets": 1
+    },
+    "pusan_moon": {
+      "log_mae": 1.84958879823678,
+      "factor_error": 6.357204891207738,
+      "factor2_fraction": 0.0,
+      "arm_targets": 2
+    }
+  },
+  "repeated_grouped_development_validation": true,
+  "untouched_external_validation": false,
+  "conditional_input_assumptions": true,
+  "source_sha256": {
+    "analysis/fwm_zeeman_calibration_20261030/evaluate_phase_consistent.py": "96d7c44ddbc22447c4c0bdbeabe5911939e47c7e095513e0329b3ab57ae5bb21",
+    "analysis/fwm_zeeman_calibration_20261030/evaluate.py": "fbd38404247db5ba26784afea63302b7413598321b95b66be79be80c967fb8c3",
+    "analysis/fwm_literature_calibration_20261023/cohort.json": "4099e5e927c69cfd11dc6a71a8c395cb576027115eb3915f86242b15af48b8cc",
+    "analysis/fwm_zeeman_calibration_20261030/PROTOCOL_PHASE_CONSISTENT.md": "b4ae270cb0e8baf2343fd68e2623769df843e8924e86b5a00e87685eecb1cbd7",
+    "analysis/fwm_zeeman_calibration_20261030/evaluation.json": "69f2e2d4c47dc9231b71a48f3c37f0b3450817df85e510001e871448f276bb1a",
+    "analysis/fwm_zeeman_calibration_20261030/profile_stage1.json": "ec5172ef9aab270829943dcdc79076f9534d3a2c8dcdd17b751a0e3a810386e2",
+    "analysis/fwm_zeeman_calibration_20261030/fwm_zeeman_gain_stage1.py": "b8670ef15f449f4cf9ed8b4ee1e92fd64d8b26c96db666282b5fed0f1405acb7",
+    "analysis/fwm_zeeman_calibration_20261030/pump_phase_diagnostic.py": "190dac55ec9e51b8a4a6995e67ae5bd9408cf1cfc694b38da88f67b17fcb4fa2",
+    "analysis/fwm_zeeman_calibration_20261030/pump_phase_diagnostic.json": "faa3a3c0540211d19eed46976e1e2f047a07db686117fd79cc60206799096a4b",
+    "gabes/fwm_zeeman_gain.py": "b0238abd83e111e0ddb526ccd09e5ba9b91f8b29fe05736bddfb68eb520f3f87",
+    "analysis/fwm_literature_calibration_20261023/evaluate.py": "9c3c961eaf841dd1618268ccd788b2851fa3b8e7600d9fd9990f9ae8d293febb",
+    "analysis/fwm_stark_calibration_20261023/predictions_by_apparatus.csv": "33a26b603d05b574097add09da60f74ade7112940136be1a0a855ff77ee2c400",
+    "analysis/fwm_stark_calibration_20261023/predictions_by_paper.csv": "7d5a60c76d1ee62e227de3cd4060c79f77765d5a4ed0487febb700d9222b0d7d"
+  },
+  "numeric_atomic_source_hash": "9888fbdd79d71b88521874e5eefda0c79db39cf1c211b1d72718447ddb7395eb",
+  "references_database": "references/fwm_experiments/database.json",
+  "evaluation_record": "analysis/fwm_zeeman_calibration_20261030/evaluation_phase_consistent.json",
+  "stage": "STAGE2_PHYSICAL_PUMP_PHASE_CONSISTENT",
+  "fixed_pump_phase_coefficient": 1.0,
+  "pump_phase_coefficient_fitted": false,
+  "original_atomic_source_hash": "40ac892e2f009110074ba7970fc3710db0c7487f943c466a08d7928f63f8575f"
+}

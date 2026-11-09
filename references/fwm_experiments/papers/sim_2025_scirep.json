@@ -1,0 +1,1610 @@
+{
+  "schema_version": 1,
+  "paper_id": "sim_2025_scirep",
+  "title": "Intensity-difference squeezing from four-wave mixing in hot 85Rb and 87Rb atoms in single diode laser pumping system",
+  "authors": [
+    "Gisung Sim",
+    "Heewoo Kim",
+    "Han Seb Moon"
+  ],
+  "year": 2025,
+  "publication": {
+    "journal": "Scientific Reports",
+    "volume": "15",
+    "issue": "",
+    "pages": "7727",
+    "doi": "10.1038/s41598-025-86479-w",
+    "arxiv_id": "",
+    "status": "published"
+  },
+  "legacy_column": "Sim_2025_gold_final",
+  "apparatus_group": "pusan_moon_eom",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb measurements retained; the same paper also reports87Rb, which is outside this DB scope.",
+    "isotope_composition": "isotopically_pure_85Rb"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://www.nature.com/articles/s41598-025-86479-w",
+      "path": "../Intensity-difference squeezing from four-wave mixing in hot 85Rb and 87Rb atoms in electro-optic-modulation-based single diode laser pumping system.pdf",
+      "access": "full_text",
+      "version": "published",
+      "sha256": "c57abf04df8b9704433643f80f220f1d7e34bbfeb2d867b61f031a4ca9c8b209",
+      "pages": 9,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "fig2_rb85_gain_scan",
+      "label": "85Rb gain spectra, Fig. 2",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 600,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 3 and p. 4 Fig. 3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 10,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.32,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, FWM geometry",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": "pump blue of 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; pump minus F=2 to Fprime=3",
+            "inputs": [
+              "opd_reported"
+            ]
+          }
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": -8,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper delta; no algebraic frequency definition printed",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 / Fig. 1",
+          "evidence": "",
+          "notes": "Reported delta is -8MHz but its algebraic sign is not defined. The 3.036GHz sideband label is rounded and cannot establish exact delta."
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": null,
+          "unit": "percent",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "8.0(2)% is system loss, not an explicitly measured detector QE."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": 16,
+          "unit": "1",
+          "value_type": "approximate",
+          "basis": "output probe power / input probe-seed power",
+          "reference": null,
+          "plane": "input/output planes not further resolved",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": "About16 peak gain is described for scanning seed near both Raman branches. It is not an exact measurement at the Fig.3 noise operating point."
+        }
+      ],
+      "notes": [
+        "Seed scans near both plus/minus 3.036GHz offsets from the pump. Individual gain-curve points are not tabulated; no visual digitization performed.",
+        "General setup states10uW seed; noise spectrum below explicitly uses8uW. Keep these separate."
+      ]
+    },
+    {
+      "experiment_id": "fig3a_rb85_best_ids",
+      "label": "85Rb best direct IDS, Fig. 3(a)",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 600,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 3 and p. 4 Fig. 3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 8,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.32,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, FWM geometry",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": "pump blue of 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; pump minus F=2 to Fprime=3",
+            "inputs": [
+              "opd_reported"
+            ]
+          }
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": -8,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper delta; no algebraic frequency definition printed",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 / Fig. 1",
+          "evidence": "",
+          "notes": "Reported delta is -8MHz but its algebraic sign is not defined. The 3.036GHz sideband label is rounded and cannot establish exact delta."
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": null,
+          "unit": "percent",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "8.0(2)% is system loss, not an explicitly measured detector QE."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": 15,
+          "unit": "1",
+          "value_type": "approximate",
+          "basis": "paper reported FWM gain",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": "The paper also reports111uW output and8uW seed; their ratio is13.875, not15. Preserve both rather than overwrite."
+        },
+        {
+          "quantity": "output_probe_power",
+          "value": 111,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "output, exact window/detector reference unspecified",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_conjugate_power",
+          "value": 109,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "output, exact window/detector reference unspecified",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "total_output_power",
+          "value": 220,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "output",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "probe_output_seed_ratio",
+          "value": 13.875,
+          "unit": "1",
+          "value_type": "derived",
+          "basis": "reported power ratio, reference-plane uncertainty retained",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "111 uW / 8 uW",
+            "inputs": [
+              "output_probe_power",
+              "seed_power"
+            ]
+          }
+        },
+        {
+          "quantity": "conjugate_output_seed_ratio",
+          "value": 13.625,
+          "unit": "1",
+          "value_type": "derived",
+          "basis": "reported power ratio, not a new microscopic gain measurement",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "109 uW / 8 uW",
+            "inputs": [
+              "output_conjugate_power",
+              "seed_power"
+            ]
+          }
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": -7.8,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "intensity-difference noise relative to SQL; direct spectrum",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(a)",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_frequency_interval",
+          "value": null,
+          "unit": "kHz",
+          "value_type": "range",
+          "basis": "low-frequency region described for best IDS",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(a)",
+          "evidence": "",
+          "notes": "",
+          "lower": 40,
+          "upper": 500
+        },
+        {
+          "quantity": "bandwidth",
+          "value": 3.5,
+          "unit": "MHz",
+          "value_type": "approximate",
+          "basis": "squeezing bandwidth",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4, Squeezing in 85Rb",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "optical_loss",
+          "value": 5.5,
+          "unit": "percent",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "Original notation5.5(2)%; not detector QE.",
+          "uncertainty": {
+            "value": 0.2,
+            "unit": "percentage_point",
+            "kind": "parenthetical last-digit uncertainty",
+            "confidence": "not_reported"
+          }
+        },
+        {
+          "quantity": "system_loss",
+          "value": 8,
+          "unit": "percent",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.2,
+            "unit": "percentage_point",
+            "kind": "parenthetical last-digit uncertainty",
+            "confidence": "not_reported"
+          }
+        },
+        {
+          "quantity": "total_detection_loss",
+          "value": 13.5,
+          "unit": "percent",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.2,
+            "unit": "percentage_point",
+            "kind": "parenthetical last-digit uncertainty",
+            "confidence": "not_reported"
+          }
+        },
+        {
+          "quantity": "detection_efficiency",
+          "value": 86.5,
+          "unit": "percent",
+          "value_type": "derived",
+          "basis": "complement of author-reported total loss; not product of independent factors",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "100 - total_detection_loss",
+            "inputs": [
+              "total_detection_loss"
+            ]
+          }
+        }
+      ],
+      "notes": [
+        "The original paper reports approximate gain15 while the two stated powers give13.875; this unresolved discrepancy is not measurement uncertainty.",
+        "The database does not replace the reported total loss with a QE92% assumption from GABES defaults."
+      ]
+    },
+    {
+      "experiment_id": "fig3b_power_slope",
+      "label": "85Rb noise-power slope measurement, Fig. 3(b)",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 600,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 3 and p. 4 Fig. 3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.32,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, FWM geometry",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": "pump blue of 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; pump minus F=2 to Fprime=3",
+            "inputs": [
+              "opd_reported"
+            ]
+          }
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": -8,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper delta; no algebraic frequency definition printed",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 / Fig. 1",
+          "evidence": "",
+          "notes": "Reported delta is -8MHz but its algebraic sign is not defined. The 3.036GHz sideband label is rounded and cannot establish exact delta."
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": null,
+          "unit": "percent",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "8.0(2)% is system loss, not an explicitly measured detector QE."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "uW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(b)",
+          "evidence": "",
+          "notes": "Seed is varied; numerical individual values not tabulated."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 150,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(b) caption",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "noise_ratio",
+          "value": 0.134,
+          "unit": "1",
+          "value_type": "reported",
+          "basis": "FWM slope / SQL slope",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, slope analysis",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_slope",
+          "value": -8.7,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "10log10 of measured slope ratio",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(b) caption; p. 5",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Slope-derived IDS; it is not a loss-corrected squeezing measurement. Do not merge it with direct-7.8dB or call it detector-loss correction."
+      ]
+    },
+    {
+      "experiment_id": "fig6_carrier_12p5",
+      "label": "Residual carrier 12.5% noise-power sweep, Fig. 6",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 600,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 3 and p. 4 Fig. 3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.32,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, FWM geometry",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": "pump blue of 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; pump minus F=2 to Fprime=3",
+            "inputs": [
+              "opd_reported"
+            ]
+          }
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": -8,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper delta; no algebraic frequency definition printed",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 / Fig. 1",
+          "evidence": "",
+          "notes": "Reported delta is -8MHz but its algebraic sign is not defined. The 3.036GHz sideband label is rounded and cannot establish exact delta."
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": null,
+          "unit": "percent",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "8.0(2)% is system loss, not an explicitly measured detector QE."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "uW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(b)",
+          "evidence": "",
+          "notes": "Seed is varied; numerical individual values not tabulated."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 150,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 7 Fig. 6 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "residual_carrier_seed_ratio",
+          "value": 12.5,
+          "unit": "percent",
+          "value_type": "reported",
+          "basis": "residual carrier power / desired probe-seed power",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 6, multimode effects",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "noise_ratio",
+          "value": 0.589,
+          "unit": "1",
+          "value_type": "reported",
+          "basis": "FWM slope / SQL slope",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 6, multimode effects",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_slope",
+          "value": -2.3,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "slope-derived IDS",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 6, multimode effects",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Operating controls follow the best-squeezing configuration; seed power is swept. Individual optical-power points remain in the figure only."
+      ]
+    },
+    {
+      "experiment_id": "fig6_carrier_25",
+      "label": "Residual carrier 25% noise-power sweep, Fig. 6",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 121,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 600,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "p. 3 and p. 4 Fig. 3",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 530,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 330,
+          "unit": "um",
+          "value_type": "reported",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 530,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 330,
+          "unit": "um",
+          "value_type": "derived",
+          "basis": "1/e2 intensity radius",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, experimental schematic",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; original is explicitly 1/e2 intensity radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.32,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, FWM geometry",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": "pump blue of 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": 0.9,
+          "unit": "GHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 Fig. 2 caption",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "identity; pump minus F=2 to Fprime=3",
+            "inputs": [
+              "opd_reported"
+            ]
+          }
+        },
+        {
+          "quantity": "tpd_reported",
+          "value": -8,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": "paper delta; no algebraic frequency definition printed",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, gain spectra",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3 / Fig. 1",
+          "evidence": "",
+          "notes": "Reported delta is -8MHz but its algebraic sign is not defined. The 3.036GHz sideband label is rounded and cannot establish exact delta."
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detector_qe",
+          "value": null,
+          "unit": "percent",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 5, losses",
+          "evidence": "",
+          "notes": "8.0(2)% is system loss, not an explicitly measured detector QE."
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "uW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 4 Fig. 3(b)",
+          "evidence": "",
+          "notes": "Seed is varied; numerical individual values not tabulated."
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 150,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 7 Fig. 6 caption",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "residual_carrier_seed_ratio",
+          "value": 25,
+          "unit": "percent",
+          "value_type": "reported",
+          "basis": "residual carrier power / desired probe-seed power",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 6, multimode effects",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "noise_ratio",
+          "value": 0.964,
+          "unit": "1",
+          "value_type": "reported",
+          "basis": "FWM slope / SQL slope",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 6, multimode effects",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_slope",
+          "value": -0.16,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "slope-derived IDS",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "p. 6, multimode effects",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Operating controls follow the best-squeezing configuration; seed power is swept. Individual optical-power points remain in the figure only."
+      ]
+    }
+  ],
+  "ai_notes": [
+    "Original title does not contain the old CSV/filename phrase electro-optic-modulation-based. Verified against the first page and publisher title.",
+    "Legacy15.5 gain, detector QE92%, and loss-corrected-8.7dB are not preserved as reported observations: use approximate15/16 in their own contexts, unknown QE, and slope-derived-8.7dB.",
+    "Reported delta-8MHz has no printed algebraic sign definition; retain it without assuming a standardized delta.",
+    "The p.6 statement that bandwidth decreases0.8GHz conflicts with the MHz-scale spectra. Do not silently use0.8GHz as a quantitative calibration target.",
+    "All records have been inspected; this paper is not an untouched future holdout."
+  ]
+}

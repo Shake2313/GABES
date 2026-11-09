@@ -8,7 +8,7 @@ import math
 from html import escape
 
 from gabes.ui_metrics import partition_metrics, split_metric_value
-from gabes_ui.format import looks_numeric
+from gabes_ui.format import looks_numeric, power_gain_text
 
 MAX_SECONDARY = 4
 
@@ -39,17 +39,48 @@ def present_metrics(metrics, *, scheme_name, raw=None):
                                         value=f"{scope} · physical squeezing unavailable", help=note)
             else:
                 metric["delta"] = note
-        if not gain_supported and metric.get("label") in {
-                "Seed gain G_s", "Conjugate gain G_c", "Atomic probe gain G_s", "Atomic conjugate gain G_c"}:
+        atomic_gain = metric.get("label") in {
+            "Seed gain G_s", "Conjugate gain G_c", "Atomic probe gain G_s", "Atomic conjugate gain G_c"}
+        if not gain_supported and atomic_gain:
+            metric["approximate"] = True
+            metric["help"] = "Qualitative model estimate; quantitative gain claim unsupported. " + str(metric.get("help") or "")
+        if metric.get("quantity") == "power_gain":
+            metric["value"] = power_gain_text(metric["numeric_value"], 3 if metric.get("approximate") else 6)
+            if metric["value"] == "unavailable":
+                metric.pop("approximate", None)
+        elif metric.get("quantity") == "intensity_difference_noise_db":
+            _present_noise(metric)
+        elif not gain_supported and atomic_gain:
+            # Older metric descriptors only carry their original rounded text.
             try:
                 number = float(metric["value"])
                 if math.isfinite(number):
                     metric["value"] = f"{number:.3g}"
-                    metric["approximate"] = True
-                    metric["help"] = "Qualitative model estimate; quantitative gain claim unsupported. " + str(metric.get("help") or "")
             except (ValueError, TypeError):
                 pass
     return items
+
+
+def _present_noise(metric):
+    label = "Intensity-difference noise [dB]"
+    reference = "shot noise"
+    if metric.get("status", {}).get("value", "").startswith("Legacy diagnostic"):
+        label = "Gain-referred noise diagnostic [dB]"
+        reference = "diagnostic 0 dB reference"
+    metric["label"] = label
+    noise = metric["numeric_value"]
+    if noise is None or not math.isfinite(noise):
+        metric["value"] = "unavailable"
+        return
+    if noise == 0:
+        level, reading = "0.00", "at"
+    else:
+        level = f"{noise:+.2g}" if abs(noise) < .005 else f"{noise:+.2f}"
+        reading = "above" if noise > 0 else "below"
+    metric["value"] = level + " dB"
+    scope = metric.get("delta")
+    reading = f"{reading} {reference}"
+    metric["delta"] = f"{reading} · {scope}" if scope else reading
 
 # Status values that read as a caveat get the warning tone. P4 lets a scheme
 # state the tone explicitly; until then the wording decides.

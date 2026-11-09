@@ -134,7 +134,8 @@ export default function(component) {
         c.point.setAttribute('cx',x);c.point.setAttribute('cy',Number.isFinite(y)?y:0);
         c.point.style.display=Number.isFinite(y)?'':'none';
       });
-      text=`δ ${fmt(values.tpd)} MHz · Gain ${d.gain_digits===3?'≈ ':''}${fmt(ys[0],d.gain_digits||6)} · Squeezing ${fmt(ys[1])} dB`;
+      const noise=Number.isFinite(ys[1])?`${ys[1]>0?'+':''}${fmt(ys[1])} dB`:'unavailable';
+      text=`δ ${fmt(values.tpd)} MHz · Probe gain ${d.gain_digits===3?'≈ ':''}${fmt(ys[0],d.gain_digits||6)} · ${d.noise_label} ${noise}`;
     }
     const prefix=phase==='preview'?'Preview · ':phase==='syncing'?'Updating · ':'';
     status.textContent=d.kind==='cursor'&&phase==='ready'?'':

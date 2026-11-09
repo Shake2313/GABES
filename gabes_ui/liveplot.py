@@ -111,6 +111,7 @@ def preview_data(fig, scheme_name, comparison=None, *, canonical_noise=False):
             moving.extend([axis.lines[1], axis.collections[0]])
         value = float(fig.axes[0].lines[1].get_xdata()[0])
         data = dict(kind="cursor", curves=curves, linear_noise=canonical_noise,
+                    noise_label=fig.axes[1].get_ylabel().removesuffix(" [dB]"),
                     original=dict(tpd=value), controls=[], axis_indices=[0, 1],
                     event_key="fwm__tpd")
     else:

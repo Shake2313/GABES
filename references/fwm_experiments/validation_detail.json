@@ -1,0 +1,136 @@
+{
+  "date": "2026-10-23",
+  "origin": "AI focused data verification",
+  "status": "PASS",
+  "checks": [
+    {
+      "id": "canonical_structure_sources_and_legacy",
+      "status": "PASS",
+      "detail": {
+        "schema_version": 1,
+        "status": "PASS",
+        "validation_date": "2026-10-23",
+        "paper_count": 17,
+        "experiment_count": 61,
+        "quantity_count": 1104,
+        "source_count": 22,
+        "legacy_papers_expected": 10,
+        "legacy_papers_retained": 10,
+        "inclusion_counts": {
+          "primary": 15,
+          "context_only": 2
+        },
+        "errors": [],
+        "warnings": [],
+        "scope": "Structure, references, source bytes and legacy coverage; scientific spot checks recorded separately."
+      }
+    },
+    {
+      "id": "formal_json_schema",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "id": "independent_pdf_open_and_page_counts",
+      "status": "PASS",
+      "detail": {
+        "unique_source_files": 19,
+        "errors": []
+      }
+    },
+    {
+      "id": "combined_json_lossless",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "papers.csv_row_count",
+      "status": "PASS",
+      "detail": {
+        "expected": 17,
+        "actual": 17
+      }
+    },
+    {
+      "id": "experiments.csv_row_count",
+      "status": "PASS",
+      "detail": {
+        "expected": 61,
+        "actual": 61
+      }
+    },
+    {
+      "id": "observations.csv_row_count",
+      "status": "PASS",
+      "detail": {
+        "expected": 1104,
+        "actual": 1104
+      }
+    },
+    {
+      "id": "observations_numeric_and_unit_roundtrip",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "id": "generated_manifest_fresh",
+      "status": "PASS",
+      "detail": []
+    },
+    {
+      "id": "duplicate_ids_rejected",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "source_checksum_rejected",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "unknown_source_rejected",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "missing_numeric_value_rejected",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "zero_is_not_missing",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "derived_formula_required",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "reversed_interval_rejected",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "no_fit_or_untouched_holdout_claims",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "single_and_dual_seed_not_merged",
+      "status": "PASS",
+      "detail": null
+    }
+  ],
+  "value_type_counts": {
+    "approximate": 185,
+    "reported": 602,
+    "derived": 119,
+    "not_reported": 156,
+    "range": 26,
+    "lower_bound": 8,
+    "upper_bound": 8
+  },
+  "limits": "No simulation, fit, untouched prediction or exhaustive numerical digitization is tested."
+}

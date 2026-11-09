@@ -12,6 +12,7 @@ standard minus Raman branch; it is not silently substituted into production.
 ``compute_spectrum`` / ``operating_point`` retain compatibility keys for older
 callers.  ``FWMScheme`` wraps them for the generic Streamlit front-end.
 """
+import copy
 import functools
 import math
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .. import (adaptive_scan, atoms, beam, constants, doppler, fwm_gain_closure,
+               fwm_stark_response,
                fwm_measured_gain,
                gain_reference,
                hyperfine, kernels, observables, pole_doppler, species)
@@ -39,8 +41,12 @@ from ..lineshape import fwhm_interp
 from ..biphoton_evidence import biphoton_output_evidence
 from ..passive_readout import passive_l1_from_spectrum
 from ..jasperse import seed_noise_components
-from ..fwm_experiment_gain import calibrate_spectrum as calibrate_experimental_gain
-from ..fwm_experiment_gain import evaluate as evaluate_experimental_gain
+from ..fwm_gain_calibration import (
+    MODEL_LAB, MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN,
+    MODELS as GAIN_CALIBRATION_MODELS,
+    calibrate_spectrum as calibrate_experimental_gain,
+    evaluate as evaluate_experimental_gain,
+)
 from ..fwm_experiment_noise import experimental_jasperse_readout
 from ..fwm_quadrature import experimental_quadrature_phase_scan
 from ..fwm_efficiency import dressed_cell_transmission
@@ -2888,6 +2894,7 @@ def compute_spectrum(D_GHz, *,
                      scan_tolerance_log10_gain=SCAN_TOLERANCE_LOG10_GAIN,
                      scan_start_stride=SCAN_START_STRIDE,
                      transit_rate=constants.GAMMA_GG,
+                     pump_stark_fraction=1.0,
                      eom_residual_carrier_power=0.0,
                      eom_other_sidebands_power=0.0,
                      eom_seed_spectrum_provenance="not supplied",
@@ -2911,6 +2918,8 @@ def compute_spectrum(D_GHz, *,
     boundaries; entrance/exit windows and detector optics are not in that map.
     An enabled laboratory output fit instead displays empirical output ratios.
     """
+    stark_recompute_context = copy.deepcopy({
+        key: value for key, value in locals().items() if key != "pump_stark_fraction"})
     branch = _single_branch(branch, branches)
     floquet_order = int(floquet_order)
     if floquet_order < 1:
@@ -3003,6 +3012,9 @@ def compute_spectrum(D_GHz, *,
     # Density-dependent collisions plus trace-preserving transit replenishment.
     atom_T = collisional_atom(T, N_atoms, transit_rate=transit_rate)
     transit_rate = atom_T.transit_reset_rate
+    atom_T, pump_stark_response = fwm_stark_response.apply(
+        atom_T, pump_hamiltonian_at_Deff_zero(Op_A, Op_B), Delta,
+        fraction=pump_stark_fraction, pump_power_W=P_pump)
 
     probe_axis_GHz = probe_scan_axis_GHz(
         D_GHz, coarse_points, fine_points, window_mhz, scan_min, scan_max,
@@ -3448,7 +3460,23 @@ def compute_spectrum(D_GHz, *,
         coupling_ls, delta_k_z=delta_k_z)
     cell_transmission = dressed_cell_transmission(cell_drift, L)
     spectrum = {
+        # Reusable input to the optical propagator. Empirical propagation
+        # readouts operate on a copy; the raw response and audits stay intact.
+        "propagation_snapshot": {
+            "version": "fwm-chi-propagation-v1",
+            "drift_per_m": cell_drift.copy(),
+            "chi": np.stack((chi_ss_avg, chi_sc_avg, chi_cs_avg, chi_cc_avg), axis=-1).reshape(-1, 2, 2),
+            "segment_profile": (
+                np.asarray(segment_profile) * np.asarray(spatial_profile)
+                if phase_detail == PHASE_ULTRA else
+                np.ones(propagation_segments) if segment_profile is None else np.asarray(segment_profile).copy()),
+            "dynamic_depletion": phase_detail == PHASE_ULTRA,
+            "conjugate_power_ratio": float(area_conj / area_probe),
+            "source": "Doppler-averaged response before empirical literature correction",
+        },
         "dressed_cell_transmission": cell_transmission,
+        "pump_stark_response": pump_stark_response,
+        "stark_recompute_context": stark_recompute_context,
         "D_GHz": D_GHz,
         "probe_axis_GHz": probe_axis_GHz,
         "G_s": G_s,
@@ -3902,6 +3930,12 @@ SQUEEZING_INTENSITY_DIFFERENCE = "Intensity difference"
 SQUEEZING_QUADRATURE_PHASE = "Quadrature phase scan"
 
 
+def _power_gain_metric(label, gain, **context):
+    """Keep the unrounded operating value beside the legacy export text."""
+    return dict(label=label, value=f"{gain:.2f}", numeric_value=float(gain) if np.isfinite(gain) else None,
+                quantity="power_gain", **context)
+
+
 def _experimental_noise_selected(readout, raw, delta_mhz):
     """Interpolate the linear NF; the metric and plotted marker share this value."""
     axis = readout.get("internal_delta_mhz")
@@ -3924,11 +3958,27 @@ def _experimental_noise_selected(readout, raw, delta_mhz):
     return point
 
 
+def _plot_reference(axis, value, label):
+    """Label the physical reference on the plot without adding a data trace."""
+    axis.axhline(value, color="#47555a", lw=.8, ls=":")
+    axis.annotate(label, xy=(.99, value), xycoords=axis.get_yaxis_transform(),
+                  xytext=(0, 2), textcoords="offset points", ha="right",
+                  va="bottom", fontsize=8, color="#34464b", clip_on=True,
+                  bbox=dict(facecolor="white", edgecolor="none", alpha=.85, pad=.7))
+
+
+def _label_noise_axis(axis, modeled):
+    reference = "shot noise" if modeled else "diagnostic reference"
+    _plot_reference(axis, 0.0, f"0 dB ({reference})")
+    axis.set_ylabel("Intensity-difference noise [dB]" if modeled
+                    else "Gain-referred noise diagnostic [dB]")
+
+
 class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v23-quadrature-phase"
+    cache_version = "fwm-experimental-jasperse-gain-v25-quadrature-phase"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -4039,8 +4089,19 @@ class FWMScheme(Scheme):
             ParamSpec("experimental_gain_calibration", "Empirical gain calibration",
                       "Detection & scaling", False, control="checkbox", recompute=False,
                       visible_if=seeded,
-                      help="Correct the model's peak position, width and arm gains using the 10/13 measurements. "
-                           "Continues outside the measured interval and after changing operating conditions."),
+                      help="Apply the selected empirical gain model. Correction continues "
+                           "outside its data range and after changing operating conditions."),
+            ParamSpec("gain_calibration_model", "Gain calibration model",
+                      "Detection & scaling", MODEL_LAB,
+                      choices=GAIN_CALIBRATION_MODELS, recompute=False,
+                      visible_if=dict(seeded, experimental_gain_calibration=True),
+                      help="The 10/13 model follows the laboratory gain measurements. "
+                           "Literature options correct gains or complex susceptibility; "
+                           "pump/Stark also recomputes the atomic response before propagation. "
+                           "Zeeman pump uses a cached 24-state response with optical pumping, "
+                           "conditional on zero field and orthogonal linear polarizations. "
+                           "These options report grouped gain "
+                           "validation separately from noise."),
             ParamSpec("noise_model", "Noise model", "Detection & scaling", NOISE_EXPERIMENTAL_JASPERSE,
                       choices=(NOISE_EXPERIMENTAL_JASPERSE, NOISE_PASSIVE_L1), recompute=False,
                       visible_if=dict(seeded, squeezing_view=SQUEEZING_INTENSITY_DIFFERENCE),
@@ -4251,6 +4312,7 @@ class FWMScheme(Scheme):
             seed_input_assumption=fwm_measured_gain.SEED_INPUT_ASSUMPTION,
         )
         practical = dict(values, experimental_gain_calibration=True,
+                         gain_calibration_model=MODEL_LAB,
                          noise_model=NOISE_EXPERIMENTAL_JASPERSE, jasperse_loss_pct=0.0)
         return [
             Preset("2026-10-13 experiment", practical,
@@ -4276,6 +4338,7 @@ class FWMScheme(Scheme):
                     seed_classical_rin_scaled=0.0,
                     measured_gain_calibration=False, seed_input_assumption="",
                     experimental_gain_calibration=False,
+                    gain_calibration_model=MODEL_LAB,
                     noise_model=NOISE_EXPERIMENTAL_JASPERSE, jasperse_loss_pct=0.0,
                     loss_pct=SEEDED_POST_CELL_LOSS_PCT,
                     transit_rate_khz=100.0,
@@ -4494,20 +4557,29 @@ class FWMScheme(Scheme):
             raw, enabled=params.get("measured_gain_calibration", False),
             seed_input_assumption=params.get("seed_input_assumption", ""),
             selected_delta_mhz=tpd)
+        gain_model = params.get("gain_calibration_model", MODEL_LAB)
+        literature_gain = gain_model in (MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
+        chi_gain = gain_model in (MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
+        stark_gain = gain_model == MODEL_STARK
+        zeeman_gain = gain_model == MODEL_ZEEMAN
         experimental_gain = calibrate_experimental_gain(
             raw, enabled=params.get("experimental_gain_calibration", False),
-            selected_delta_mhz=tpd)
+            selected_delta_mhz=tpd, model=gain_model)
         gain_active = experimental_gain["applied"]
         gain_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
         displayed_gain = experimental_gain
         noise_raw = raw
         if gain_active:
-            # Refine the empirical feature without repeating the atomic solve.
-            # The original 2.75 MHz grid undersamples the measured 1 MHz nodes.
-            support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
-                np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
-            gain_axis = np.unique(np.r_[gain_axis, np.linspace(*support, 221), tpd])
-            displayed_gain = evaluate_experimental_gain(raw, gain_axis, enabled=True)
+            # Include the committed point for curve/metric agreement. Only the
+            # lab profile has the measured 1-MHz feature needing a denser grid.
+            if literature_gain:
+                gain_axis = np.unique(np.r_[gain_axis, tpd])
+            else:
+                support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
+                    np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
+                gain_axis = np.unique(np.r_[gain_axis, np.linspace(*support, 221), tpd])
+            displayed_gain = evaluate_experimental_gain(
+                raw, gain_axis, enabled=True, model=gain_model)
             noise_raw = dict(raw, probe_axis_GHz=raw["raman_center_minus_GHz"]+gain_axis*1e-3)
             omega = np.asarray(raw.get("omega_probe_rad_s", constants.OMEGA_D1))
             if omega.ndim:
@@ -4562,6 +4634,8 @@ class FWMScheme(Scheme):
             noise_delta = "effective Jasperse model"
             if gain_active:
                 noise_delta += "; calibrated-gain approximation"
+                if literature_gain:
+                    noise_delta += "; gain validation does not validate noise"
             if noise_point["inference_approximate"]:
                 noise_delta += "; approximate gain match"
             if not sidebar_readouts:
@@ -4616,18 +4690,23 @@ class FWMScheme(Scheme):
             axG.plot(gain_axis, displayed_gs, color="#1f77b4", lw=1.8,
                      label="Calibrated probe" if gain_active else "Probe")
             axG.axvline(tpd, color="crimson", ls="--", lw=1.2)
-            axG.axhline(1.0, color="black", lw=0.6)
+            _plot_reference(axG, 1.0, "G = 1 (unity gain)")
             axG.plot(gain_axis, displayed_gc, color="#ff7f0e", lw=1.4,
                      ls="-" if gain_active else "--",
                      label="Calibrated conjugate" if gain_active else "Conjugate")
-            if gain_active:
+            if gain_active and not literature_gain:
                 bounds = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
                     np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
-                for ax in (axG, axS):
-                    ax.axvspan(*bounds, color="#ffbf47", alpha=.12)
+                axG.axvspan(*bounds, facecolor=(1.0, .75, .28, .12),
+                            edgecolor="#8a5d21", linestyle="--", linewidth=.9,
+                            label="Measured RF interval; outside: gain extrapolation")
             axG.legend(fontsize=8)
             axG.scatter([tpd], [displayed_point["G_s"]], color="crimson", zorder=5)
-            axG.set_ylabel("Calibrated pump-off-reference gain" if gain_active else
+            axG.set_ylabel("Zeeman pump + chi propagation gain" if gain_active and zeeman_gain else
+                           "Stark + chi propagation gain" if gain_active and stark_gain else
+                           "Chi-corrected propagation gain" if gain_active and chi_gain else
+                           "Literature-corrected power gain" if gain_active and literature_gain else
+                           "Calibrated pump-off-reference gain" if gain_active else
                            "Atomic probe / conjugate gain" if measured_reference["requested"] else
                            "Gain")
             if max(np.nanmax(displayed_gs), np.nanmax(displayed_gc)) > 50:
@@ -4643,10 +4722,9 @@ class FWMScheme(Scheme):
                     plot_noise = np.insert(noise_db, idx, selected_noise_db)
             axS.plot(noise_axis, plot_noise, color="#2ca02c", lw=1.8)
             axS.axvline(tpd, color="crimson", ls="--", lw=1.2)
-            axS.axhline(0.0, color="black", lw=0.6)
+            _label_noise_axis(axS, noise_point is not None)
             axS.scatter([tpd], [selected_noise_db],
                         color="crimson", zorder=5)
-            axS.set_ylabel("Squeezing [dB]")
             axS.set_xlabel("Two-photon Detuning [MHz]")
             axS.set_xlim(-TPD_LIMIT_MHZ, TPD_LIMIT_MHZ)
             fig.tight_layout()
@@ -4655,14 +4733,16 @@ class FWMScheme(Scheme):
             dict(label=noise_label,
                  value=(f"{selected_noise_db:.2f} dB" if np.isfinite(selected_noise_db)
                         else "unavailable"),
+                 numeric_value=float(selected_noise_db) if np.isfinite(selected_noise_db) else None,
+                 quantity="intensity_difference_noise_db",
                  delta=noise_delta, help=noise_help, tier="hero"),
-            dict(label="Seed gain G_s", value=f"{op['G_s']:.2f}",
+            _power_gain_metric("Seed gain G_s", op["G_s"],
                  delta=("semi-empirical estimate" if raw.get(
                      "gain_closure", {}).get("applied") else None),
                  help="Probe power at the atomic-medium exit / seed power at its entrance. "
                       "The retired empirical gain correction is disabled in current runs.",
                  tier="hero"),
-            dict(label="Conjugate gain G_c", value=f"{op['G_c']:.2f}",
+            _power_gain_metric("Conjugate gain G_c", op["G_c"],
                  help="Generated conjugate power gain at the selected detuning."),
         ]
         measured_rows = ""
@@ -4670,23 +4750,21 @@ class FWMScheme(Scheme):
             point = measured_reference["selected_point"]
             profile = measured_reference["profile"]
             if point["available"]:
-                metrics[1] = dict(
-                    label="Probe gain, pump-off reference",
-                    value=f"{point['measured_gain_probe']:.2f}", tier="hero",
+                metrics[1] = _power_gain_metric(
+                    "Probe gain, pump-off reference", point["measured_gain_probe"], tier="hero",
                     delta="conditional measured-data interpolation",
                     help="Interpolated pump-on probe output / measured pump-off seed detector output. "
                          "Distinct from the atomic input/output gain and from NF.")
-                metrics[2] = dict(
-                    label="Conjugate gain, pump-off reference",
-                    value=f"{point['measured_gain_conjugate']:.2f}",
+                metrics[2] = _power_gain_metric(
+                    "Conjugate gain, pump-off reference", point["measured_gain_conjugate"],
                     help="Interpolated conjugate output / the same pump-off seed detector output.")
             else:
                 metrics.append(dict(label="Measured gain reference", value="unavailable",
                                     delta=point["status"], kind="status"))
             metrics.extend([
-                dict(label="Atomic probe gain G_s", value=f"{op['G_s']:.2f}",
+                _power_gain_metric("Atomic probe gain G_s", op["G_s"],
                      help="Unchanged mean-field power gain at the atomic-medium boundaries."),
-                dict(label="Atomic conjugate gain G_c", value=f"{op['G_c']:.2f}",
+                _power_gain_metric("Atomic conjugate gain G_c", op["G_c"],
                      help="Unchanged mean-field conjugate power gain at the atomic-medium boundaries."),
             ])
             probe_text = f"{point['measured_gain_probe']:.6g}" if point["available"] else "unavailable"
@@ -4712,29 +4790,110 @@ class FWMScheme(Scheme):
                 measured_rows += "| Reference context mismatch | " + "; ".join(measured_reference["reasons"]) + " |\n"
         if gain_active:
             point = experimental_gain["selected_point"]
-            status_label = ("Measured RF range" if point["within_measured_support"] else "RF extrapolation")
-            if point["context_changed"]:
-                status_label += " · changed conditions"
+            gain_profile = experimental_gain.get("profile", {})
+            if literature_gain:
+                status_label = experimental_gain.get(
+                    "validation_label", gain_profile.get(
+                        "validation_label", "Experimental · grouped prediction not established"))
+                if not point.get("within_training_domain", experimental_gain.get(
+                        "within_training_domain", False)):
+                    status_label += " · condition extrapolation"
+                gain_help = (
+                    "The conditional zero-field, orthogonal-linear 24-state response includes "
+                    "pump optical pumping and is recomputed before propagation; "
+                    if zeeman_gain else
+                    "The pump Hamiltonian self-energy is corrected and the atomic response recomputed; "
+                    if stark_gain else "") + (
+                    "The full Zeeman diagonal response is retained while both off-diagonal "
+                    "components share one residual scale before segmented propagation; "
+                    "vacuum geometry and the pump refractive phase are kept separate. "
+                    if zeeman_gain else
+                    "Complex off-diagonal and full diagonal susceptibility are corrected "
+                    "before segmented propagation; vacuum phase mismatch is retained. "
+                    if chi_gain else "Power gain corrected using multiple experimental papers. ") + (
+                    "Grouped prediction results apply to gain only; noise still uses "
+                    "the assumed effective Jasperse closure.")
+            else:
+                status_label = ("Measured RF range" if point["within_measured_support"] else "RF extrapolation")
+                if point["context_changed"]:
+                    status_label += " · changed conditions"
+                gain_help = (
+                    "Empirically corrected pump-on output / pump-off seed reference. "
+                    "The model continues beyond the 10/13 measured interval.")
             for index, key, arm in ((1, "G_s", "probe"), (2, "G_c", "conjugate")):
-                metrics[index] = dict(
-                    label=f"Calibrated {arm} gain", value=f"{point[key]:.2f}",
+                metrics[index] = _power_gain_metric(
+                    (f"Zeeman pump + χ {arm} gain" if zeeman_gain else
+                           f"Stark + χ {arm} gain" if stark_gain else
+                           f"χ-propagated {arm} gain" if chi_gain else
+                           f"Literature-corrected {arm} gain" if literature_gain else
+                           f"Calibrated {arm} gain"), point[key],
                     approximate=True, tier="hero" if index == 1 else "secondary",
-                    delta=status_label,
-                    help="Empirically corrected pump-on output / pump-off seed reference. "
-                         "The model continues beyond the 10/13 measured interval.")
+                    delta=status_label, help=gain_help)
             if not measured_reference["requested"]:
                 metrics.extend([
-                    dict(label="Atomic probe gain G_s", value=f"{op['G_s']:.2f}"),
-                    dict(label="Atomic conjugate gain G_c", value=f"{op['G_c']:.2f}"),
+                    _power_gain_metric("Atomic probe gain G_s", op["G_s"]),
+                    _power_gain_metric("Atomic conjugate gain G_c", op["G_c"]),
                 ])
-            measured_rows += (
-                f"| Experimental gain calibration | {point['status']} |\n"
-                "| Calibration data | 2026-10-13 measurements, 23 points, RF 3022–3044 MHz |\n"
-                "| Correction | Frozen peak/width and gain correction applied to the current model |\n"
-                f"| Calibrated probe / conjugate gain | {point['G_s']:.6g} / {point['G_c']:.6g} |\n"
-                "| Calibrated gain basis | Pump-on arm output / measured pump-off seed output |\n"
-                "| Continuation | Applied outside measurement support and across changed operating conditions |\n"
-            )
+            if literature_gain:
+                measured_rows += (
+                    f"| Experimental gain calibration | {point['status']} |\n"
+                    "| Calibration data | Multiple 85Rb D1 experimental papers |\n"
+                    f"| Gain model | {experimental_gain.get('display_name', gain_model)} |\n"
+                    f"| Grouped gain validation | {experimental_gain.get('validation_status', gain_profile.get('validation_status', 'not established'))} |\n"
+                    f"| Correction | {gain_profile.get('method', 'Shared literature gain correction')} |\n"
+                    f"| Correction formula | {gain_profile.get('formula', 'not supplied')} |\n"
+                    f"| Calibrated probe / conjugate gain | {point['G_s']:.6g} / {point['G_c']:.6g} |\n"
+                    f"| Calibrated gain basis | {experimental_gain.get('gain_quantity', 'Effective source power gain')} |\n"
+                    "| Continuation | Applied across changed conditions; training-domain extrapolation is identified |\n"
+                    "| Noise scope | Grouped gain validation does not validate a noise covariance or squeezing prediction |\n"
+                )
+                if chi_gain:
+                    measured_rows += (
+                        f"| χ off-diagonal scale κ | {point['offdiagonal_scale']:.6g} |\n"
+                        f"| χ diagonal scale d (absorption and dispersion) | {point['diagonal_susceptibility_scale']:.6g} |\n"
+                        "| Propagation | Corrected complex susceptibility; segmented overlap and pump depletion |\n"
+                        "| Geometric phase mismatch | Retained independently of susceptibility scales |\n"
+                    )
+                if stark_gain:
+                    stark_response = experimental_gain.get("pump_stark_response", {})
+                    stark_response = stark_response if isinstance(stark_response, dict) else {}
+                    measured_rows += (
+                        f"| Pump/Stark self-energy fraction | {experimental_gain.get('pump_stark_fraction', point.get('pump_stark_fraction', 'not supplied'))} |\n"
+                        f"| Pump self-energy counterterm [MHz] | {stark_response.get('counterterm_mhz', 'not supplied')} |\n"
+                        f"| Corrected pump-dressed gap shift [MHz] | {stark_response.get('corrected_gap_shift_mhz', 'not supplied')} |\n"
+                        f"| Corrected atomic Floquet status | {experimental_gain.get('corrected_atomic_floquet_status', 'not supplied')} |\n"
+                        "| Canonical/noise scope | Raw canonical transfer and noise certification retained separately |\n"
+                    )
+                if zeeman_gain:
+                    zeeman_populations = experimental_gain.get("zeeman_pump_populations", {})
+                    zeeman_populations = zeeman_populations if isinstance(zeeman_populations, dict) else {}
+                    zeeman_diagnostics = experimental_gain.get("corrected_atomic_response_diagnostics", {})
+                    zeeman_diagnostics = zeeman_diagnostics if isinstance(zeeman_diagnostics, dict) else {}
+                    zeeman_provenance = experimental_gain.get("zeeman_response_provenance", {})
+                    zeeman_provenance = zeeman_provenance if isinstance(zeeman_provenance, dict) else {}
+                    pump_phase = zeeman_provenance.get("pump_phase", {})
+                    pump_phase = pump_phase if isinstance(pump_phase, dict) else {}
+                    measured_rows += (
+                        "| Zeeman atomic response | 24-state D1 with pump optical pumping |\n"
+                        "| Polarization / magnetic field | Conditional zero field; orthogonal linear pump and seed |\n"
+                        f"| Pump populations Fg2 / Fg3 | {zeeman_populations.get('ground_F2', 'not supplied')} / {zeeman_populations.get('ground_F3', 'not supplied')} |\n"
+                        f"| Pump excited-state population | {zeeman_populations.get('excited_total', 'not supplied')} |\n"
+                        f"| Pump density-matrix trace | {zeeman_populations.get('trace', 'not supplied')} |\n"
+                        f"| Zeeman response finite | {zeeman_diagnostics.get('finite', 'not supplied')} |\n"
+                        "| Effective phase mismatch | Vacuum geometry plus pump refractive phase from the same steady state |\n"
+                        f"| Pump-index mismatch contribution [1/m] | {pump_phase.get('pump_index_added_mismatch_per_m', 'not supplied')} |\n"
+                        "| Pump phase coefficient | Fixed physical coefficient 1; not fitted |\n"
+                        "| Canonical/noise scope | Raw canonical transfer and noise certification retained separately |\n"
+                    )
+            else:
+                measured_rows += (
+                    f"| Experimental gain calibration | {point['status']} |\n"
+                    "| Calibration data | 2026-10-13 measurements, 23 points, RF 3022–3044 MHz |\n"
+                    "| Correction | Frozen peak/width and gain correction applied to the current model |\n"
+                    f"| Calibrated probe / conjugate gain | {point['G_s']:.6g} / {point['G_c']:.6g} |\n"
+                    "| Calibrated gain basis | Pump-on arm output / measured pump-off seed output |\n"
+                    "| Continuation | Applied outside measurement support and across changed operating conditions |\n"
+                )
         if phase_view:
             def quadrature_metric(label, key):
                 value = phase_scan[key]
@@ -4751,6 +4910,7 @@ class FWMScheme(Scheme):
             gain_metrics = [dict(metric, tier="secondary") for metric in metrics[1:3]]
             for metric, key, arm in zip(gain_metrics, ("G_s", "G_c"), ("Probe", "Conjugate")):
                 value = gain_point[key]
+                metric["numeric_value"] = float(value) if np.isfinite(value) else None
                 metric["value"] = f"{value:.2f}" if np.isfinite(value) else "unavailable"
                 if measured_reference["requested"] and not gain_active:
                     metric.update(label=f"{arm} gain {key}",
@@ -5486,6 +5646,11 @@ class FWMScheme(Scheme):
         def _render_full(full, params=None):
             import matplotlib.pyplot as plt
             params = params or {}
+            gain_model = params.get("gain_calibration_model", MODEL_LAB)
+            literature_gain = gain_model in (MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
+            chi_gain = gain_model in (MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
+            stark_gain = gain_model == MODEL_STARK
+            zeeman_gain = gain_model == MODEL_ZEEMAN
             figF, (aG, aS) = plt.subplots(2, 1, figsize=(8.5, 6.4), sharex=True)
             for ax in (aG, aS):
                 ax.grid(alpha=0.3)
@@ -5505,7 +5670,8 @@ class FWMScheme(Scheme):
                         seed_input_assumption=params.get("seed_input_assumption", ""))
                 calibration = None
                 if params.get("experimental_gain_calibration", False):
-                    calibration = calibrate_experimental_gain(spec, enabled=True)
+                    calibration = calibrate_experimental_gain(
+                        spec, enabled=True, model=gain_model)
                     experimental_gains[key] = calibration
                 displayed = calibration["G_s"] if calibration is not None else spec["G_s"]
                 aG.plot(spec["probe_axis_GHz"], displayed, lw=1.4, **style)
@@ -5518,17 +5684,29 @@ class FWMScheme(Scheme):
                 else:
                     noise_db = spec["gain_referred_noise_dB"]
                 aS.plot(spec["probe_axis_GHz"], noise_db, lw=1.4, **style)
-            aG.axhline(1.0, color="black", lw=0.6)
-            aG.set_ylabel("Calibrated pump-off-reference gain" if experimental_gains else
+            _plot_reference(aG, 1.0, "G = 1 (unity gain)")
+            aG.set_ylabel("Zeeman pump + chi propagation gain" if experimental_gains and zeeman_gain else
+                           "Stark + chi propagation gain" if experimental_gains and stark_gain else
+                           "Chi-corrected propagation gain" if experimental_gains and chi_gain else
+                           "Literature-corrected power gain" if experimental_gains and literature_gain else
+                           "Calibrated pump-off-reference gain" if experimental_gains else
                            "Atomic probe gain G_s" if measured_readouts else "Seed gain G_s")
             stored_detail = full["minus"].get("model_fidelity", "unknown")
             title = f"Solver detail: {FIDELITY_LABELS.get(stored_detail, stored_detail)}"
             title += f",  {_seeded_noise_caption(params)}"
+            if experimental_gains and literature_gain:
+                literature_metadata = experimental_gains["minus"]
+                title += (",  experimental Zeeman pump + chi propagation\n" if zeeman_gain else
+                          ",  experimental Stark + chi propagation\n" if stark_gain else
+                          ",  experimental chi propagation\n" if chi_gain else
+                          ",  experimental literature gain\n") + literature_metadata.get(
+                    "validation_label", "Experimental · grouped prediction not established")
             aG.set_title(title)
             if max(np.nanmax(full[key]["G_s"]) for key in styles) > 50:
                 aG.set_yscale("log")
-            aS.axhline(0.0, color="black", lw=0.6)
-            aS.set_ylabel("Squeezing [dB]")
+            _label_noise_axis(aS, bool(experimental_noises) or has_passive_readout)
+            if experimental_gains and literature_gain and experimental_noises:
+                aS.set_title("Gain validation does not validate noise; effective Jasperse model", fontsize=8)
             aS.set_xlabel("Probe detuning from F=2 -> F'=3 [GHz]")
             for a in (aG, aS):
                 a.axvline(full["D_GHz"], color="gray", ls=":", lw=0.8)
@@ -5539,6 +5717,7 @@ class FWMScheme(Scheme):
             # the atomic gain curve in this view. Keep their separate provenance.
             figF._gabes_measured_gain_reference = measured_readouts
             figF._gabes_experimental_gain_calibration = experimental_gains
+            figF._gabes_gain_calibration_model = gain_model
             figF._gabes_experimental_jasperse_readout = experimental_noises
             return figF
 

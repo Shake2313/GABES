@@ -1,0 +1,508 @@
+{
+  "schema_version": 1,
+  "paper_id": "dearaujo_2024_oe",
+  "title": "Characterizing two-mode-squeezed light from four-wave mixing in rubidium vapor for quantum sensing and information processing",
+  "authors": [
+    "Luís E. E. de Araujo",
+    "Zhifan Zhou",
+    "Matt DiMario",
+    "B. E. Anderson",
+    "Jie Zhao",
+    "Kevin M. Jones",
+    "Paul D. Lett"
+  ],
+  "year": 2024,
+  "publication": {
+    "journal": "Optics Express",
+    "volume": "32",
+    "issue": "2",
+    "pages": "1305–1313",
+    "doi": "10.1364/OE.507727",
+    "arxiv_id": "",
+    "status": "published"
+  },
+  "legacy_column": "de_Araujo_2024_OE",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "quadrature_homodyne",
+    "seed_mode": "vacuum_seed",
+    "inclusion": "context_only",
+    "reason": "Legacy source retained; it measures vacuum-seeded homodyne quadratures rather than bright-beam direct intensity difference.",
+    "isotope_composition": "not_reported"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://inspirehep.net/files/25e20174f5e87133854a80beee2fff1a",
+      "path": "sources/dearaujo_2024_oe.pdf",
+      "access": "full_text",
+      "version": "published_version_of_record",
+      "sha256": "0be3e63099a5b20e1483be0b13438266051135ea21c822ae6fa42ae003c1b923",
+      "pages": 9,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "apparatus_group": "nist_lett_warm_rb",
+  "experiments": [
+    {
+      "experiment_id": "optimum_delay_homodyne",
+      "label": "Vacuum quadrature spectra with delay compensation",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 120,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports temperature.",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports cell length.",
+          "notes": ""
+        },
+        {
+          "quantity": "total_pump_power_before_split",
+          "value": 800,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "pump before 50/50 division into signal and local-oscillator regions",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports total pump power before split using pump before 50/50 division into signal and local-oscillator regions.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 400,
+          "unit": "mW",
+          "value_type": "derived",
+          "basis": "nominal power per pumped region",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports pump power using nominal power per pumped region.",
+          "notes": "Approximate; splitter/output path losses not quantified.",
+          "derivation": {
+            "formula": "800 mW / 2",
+            "inputs": [
+              "total_pump_power_before_split"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "beam diameter; intensity convention not specified",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports pump beam size using beam diameter; intensity convention not specified.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": null,
+          "unit": "um",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "Cannot identify 1/e2 radius from an unspecified beam-diameter definition.",
+          "notes": "Cannot identify 1/e2 radius from an unspecified beam-diameter definition."
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports crossing angle.",
+          "notes": "Stated for seed/pump generation of the LO; signal alignment uses the same procedure."
+        },
+        {
+          "quantity": "local_oscillator_power",
+          "value": 500,
+          "unit": "uW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports local oscillator power.",
+          "notes": ""
+        },
+        {
+          "quantity": "homodyne_visibility",
+          "value": 98,
+          "unit": "%",
+          "value_type": "lower_bound",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports homodyne visibility.",
+          "notes": ""
+        },
+        {
+          "quantity": "signal_seed_power",
+          "value": 0,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "alignment seed blocked for squeezed-vacuum measurements",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports signal seed power using alignment seed blocked for squeezed-vacuum measurements.",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "One-photon detuning is not numerically reported.",
+          "notes": "One-photon detuning is not numerically reported."
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "Only approximate 3 GHz AOM downshift is given, not an optimized detuning.",
+          "notes": "Only approximate 3 GHz AOM downshift is given, not an optimized detuning."
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "No comparable seeded probe gain value reported.",
+          "notes": "No comparable seeded probe gain value reported."
+        },
+        {
+          "quantity": "conjugate_electrical_delay",
+          "value": 10.4,
+          "unit": "ns",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.2 caption",
+          "evidence": "The cited run reports conjugate electrical delay.",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "bandwidth",
+          "value": 20,
+          "unit": "MHz",
+          "value_type": "approximate",
+          "basis": "shot-noise crossing bandwidth",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.4, Sec.2 below Fig.2",
+          "evidence": "The cited run reports bandwidth using shot-noise crossing bandwidth.",
+          "notes": ""
+        },
+        {
+          "quantity": "bandwidth",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "range",
+          "basis": "different homodyne spectra; not one hard cutoff",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF pp.4–5, Figs.2–3",
+          "evidence": "The cited run reports bandwidth using different homodyne spectra; not one hard cutoff.",
+          "notes": "",
+          "lower": 15,
+          "upper": 20
+        }
+      ],
+      "notes": [
+        "Dual balanced homodyne detection measures amplitude-difference and phase-sum quadratures. Spectra have electronic noise subtracted."
+      ]
+    },
+    {
+      "experiment_id": "sub_hz_homodyne",
+      "label": "Vacuum quadrature squeezing below 1 Hz",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "temperature",
+          "value": 120,
+          "unit": "degC",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports temperature.",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 12,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports cell length.",
+          "notes": ""
+        },
+        {
+          "quantity": "total_pump_power_before_split",
+          "value": 800,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "pump before 50/50 division into signal and local-oscillator regions",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports total pump power before split using pump before 50/50 division into signal and local-oscillator regions.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 400,
+          "unit": "mW",
+          "value_type": "derived",
+          "basis": "nominal power per pumped region",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports pump power using nominal power per pumped region.",
+          "notes": "Approximate; splitter/output path losses not quantified.",
+          "derivation": {
+            "formula": "800 mW / 2",
+            "inputs": [
+              "total_pump_power_before_split"
+            ]
+          }
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 650,
+          "unit": "um",
+          "value_type": "approximate",
+          "basis": "beam diameter; intensity convention not specified",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports pump beam size using beam diameter; intensity convention not specified.",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": null,
+          "unit": "um",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "Cannot identify 1/e2 radius from an unspecified beam-diameter definition.",
+          "notes": "Cannot identify 1/e2 radius from an unspecified beam-diameter definition."
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports crossing angle.",
+          "notes": "Stated for seed/pump generation of the LO; signal alignment uses the same procedure."
+        },
+        {
+          "quantity": "local_oscillator_power",
+          "value": 500,
+          "unit": "uW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports local oscillator power.",
+          "notes": ""
+        },
+        {
+          "quantity": "homodyne_visibility",
+          "value": 98,
+          "unit": "%",
+          "value_type": "lower_bound",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports homodyne visibility.",
+          "notes": ""
+        },
+        {
+          "quantity": "signal_seed_power",
+          "value": 0,
+          "unit": "uW",
+          "value_type": "reported",
+          "basis": "alignment seed blocked for squeezed-vacuum measurements",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "The cited run reports signal seed power using alignment seed blocked for squeezed-vacuum measurements.",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "pump minus 85Rb F=2 to Fprime=3",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "One-photon detuning is not numerically reported.",
+          "notes": "One-photon detuning is not numerically reported."
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": null,
+          "unit": "MHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": "seed=pump-3035.732439 MHz+delta",
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "Only approximate 3 GHz AOM downshift is given, not an optimized detuning.",
+          "notes": "Only approximate 3 GHz AOM downshift is given, not an optimized detuning."
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p. 3, Sec. 2 Experiment",
+          "evidence": "No comparable seeded probe gain value reported.",
+          "notes": "No comparable seeded probe gain value reported."
+        },
+        {
+          "quantity": "record_duration",
+          "value": 10,
+          "unit": "s",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.4 caption",
+          "evidence": "The cited run reports record duration.",
+          "notes": ""
+        }
+      ],
+      "results": [
+        {
+          "quantity": "squeezing_electronic_noise_subtracted",
+          "value": -4,
+          "unit": "dB",
+          "value_type": "upper_bound",
+          "basis": "vacuum-seeded two-mode quadrature noise",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.1 Introduction and p.6 Fig.4",
+          "evidence": "The cited run reports squeezing electronic noise subtracted using vacuum-seeded two-mode quadrature noise.",
+          "notes": ""
+        },
+        {
+          "quantity": "lowest_subshot_frequency",
+          "value": 1,
+          "unit": "Hz",
+          "value_type": "upper_bound",
+          "basis": "",
+          "reference": null,
+          "plane": "",
+          "source_id": "main",
+          "locator": "PDF p.6, Fig.4 discussion",
+          "evidence": "The cited run reports lowest subshot frequency.",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "BNC tees replace RF splitters to remove instrumental low-frequency cutoff."
+      ]
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧ The historical -4 dB entry is a quadrature/homodyne result and cannot be mixed with direct IDS labels.",
+    "⟦AI⟧ 800 mW is split across two regions; 400 mW is a nominal derived per-region value, not a directly measured independent input. Beam diameter650um does not identify 1/e2 radius325um without a profile convention."
+  ]
+}

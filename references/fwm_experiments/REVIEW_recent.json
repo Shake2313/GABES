@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-10-23",
+  "reviewer": "literature_legacy_recent; cross-author review",
+  "origin": "AI independent source and integrity audit",
+  "scope": "Early-agent4paper records plus rootSim scientific spot checks; builder/schema integrity; no simulation-model or physical prediction certification",
+  "status": "PASS",
+  "checks": [
+    {
+      "id": "MC2007-PUBLISHED-LENGTH",
+      "status": "PASS",
+      "paper_id": "mccormick_2007_ol",
+      "source_locator": "Published PDF p.178 (PDF p.1), experimental setup right column; visually reviewed",
+      "finding": "Printed path length is approximately9mm at Brewster angle. New record9mm is correct; old CSV19mm is not. Earlier arXiv source is kept as a distinct version."
+    },
+    {
+      "id": "MC2008-GAIN-IDENTITY",
+      "status": "PASS",
+      "paper_id": "mccormick_2008_pra",
+      "source_locator": "PDF p.2 setup and p.3 distributed-medium discussion",
+      "finding": "Measured Geff is output/input corrected for cell windows. IntrinsicG9–15 is inferred using the distributed gain/loss model. New records keep measured probe_gain9 and intrinsic_gain range separate."
+    },
+    {
+      "id": "MC2008-POWER-ASSOCIATION",
+      "status": "PASS",
+      "paper_id": "mccormick_2008_pra",
+      "source_locator": "PDF p.3 low-frequency spectrum paragraph; PDF p.4 Fig.4",
+      "finding": "305/290uW are low-frequency output powers; the exact input seed for this run is not supplied. New record does not divide by the nominal100uW apparatus seed."
+    },
+    {
+      "id": "VOGL-BRANCH-CONFLICT",
+      "status": "PASS",
+      "paper_id": "vogl_2012_spie",
+      "source_locator": "PDF p.1 Sec.2 body; PDF p.2 Fig.1; PDF p.3 Sec.4",
+      "finding": "Body states blue-shifted injected probe and spectral discussion also describes the high-frequency injected peak, while Fig.1 schematic depicts the probe on the red branch. New record correctly preserves source inconsistency and does not invent canonical minus-branchdelta."
+    },
+    {
+      "id": "VOGL-RANGE-AND-FREQUENCY",
+      "status": "PASS",
+      "paper_id": "vogl_2012_spie",
+      "source_locator": "PDF p.2 Sec.3; PDF p.3 Fig.2 caption",
+      "finding": "Probe gain is a typical4–10 range, not an independently measured scalar7. Figure caption establishes800kHz analysis frequency despite body typo800MHz. New records preserve both facts."
+    },
+    {
+      "id": "LIU-PUMP-BANDWIDTH",
+      "status": "PASS",
+      "paper_id": "liu_2011_ol",
+      "source_locator": "Published PDF p.2981 (PDF p.3), bandwidth paragraph and Fig.4",
+      "finding": "Explicit endpoint associations are100mW→about5.5MHz and700mW→about16.5MHz. New endpoint records and overall sweep agree. Neither endpoint is assigned to the400mW optimum."
+    },
+    {
+      "id": "LIU-SIGN-AND-GAIN",
+      "status": "PASS",
+      "paper_id": "liu_2011_ol",
+      "source_locator": "Published PDF p.2980 (PDF p.2), definition and operating-point paragraphs",
+      "finding": "Paper definesdelta=pump−probe−HF; canonical sign is therefore−4MHz. Gain8/7 are derived80/10 and70/10 ratios, explicitly not separately measured intrinsic gains."
+    },
+    {
+      "id": "SIM-TITLE-GEOMETRY",
+      "status": "PASS",
+      "paper_id": "sim_2025_scirep",
+      "source_locator": "PDF p.1 title; PDF p.3 apparatus paragraph",
+      "finding": "Original title excludes the old filename phrase electro-optic-modulation-based.530/330um are explicitly1/e2 radii, unlike several other papers. Current title and dimensions agree."
+    },
+    {
+      "id": "SIM-NUMERIC-SCOPES",
+      "status": "PASS",
+      "paper_id": "sim_2025_scirep",
+      "source_locator": "PDF pp.3–5, Fig.2/3 and losses paragraph; PDF p.4 visually reviewed",
+      "finding": "Scan gain≈16, noise-point gain≈15,111/8=13.875 power ratio,5.5%optical/8%system/13.5%total detection loss, and0.134/−8.7dB slope remain correctly separated. No detector QE92% or loss-corrected−8.7dB claim is introduced."
+    },
+    {
+      "id": "SIM-TPD-DEFINITION",
+      "status": "PASS",
+      "paper_id": "sim_2025_scirep",
+      "source_locator": "PDF p.3 operating conditions and Fig.1; p.3 Fig.2 rounded sideband label",
+      "finding": "Reported−8MHz does not establish an algebraic sign convention and rounded3.036GHz label cannot fix it; canonical null is justified."
+    },
+    {
+      "id": "FORMAL-JSON-SCHEMA",
+      "status": "PASS",
+      "finding": "Independent Draft202012Validator applied to every current paper record; zero schema errors."
+    },
+    {
+      "id": "SEED-MODE-OVERRIDE",
+      "status": "PASS",
+      "finding": "readiness recognizes Wu Fig.2 single-seed experiments as compatible and Fig.3 dual-seed experiments as incompatible; experiment-level override now works."
+    },
+    {
+      "id": "FIT-HOLDOUT-CLAIMS",
+      "status": "PASS",
+      "finding": "Every current experiment returns fit_accepted=false and holdout_status=inspected_literature_pool. No raw literature row is silently accepted as a training point or untouched holdout."
+    }
+  ],
+  "findings": [
+    {
+      "id": "MC2008-SYSTEM-NOISE-KEY",
+      "severity": "P2",
+      "status": "resolved_and_verified",
+      "source_locator": "McCormick2008 PDF p.2 system-noise decomposition and p.3 Fig.3 caption",
+      "finding": "Result quantity key says electronic-noise-subtracted, although source correction includes electronic noise and pump scattering. Basis text already explains both, but a machine filtering on quantity key would misclassify the observable.",
+      "requested_change": "Rename quantity to squeezing_system_noise_subtracted; keep slope and loss-corrected quantities separate.",
+      "resolution": "Record author renamed quantity to squeezing_system_noise_subtracted and clarified evidence; numeric-8.8 and independent slope entry retained."
+    }
+  ],
+  "source_record_sha256": {
+    "papers/mccormick_2007_ol.json": "b2e9b39f2f54fa08145921156760ee3caede0e42f43d2cceee90b6bc4318c010",
+    "papers/mccormick_2008_pra.json": "f228161782a1c77960907142a2198f6967f45e04fc18cdd539b71b60ce957b97",
+    "papers/vogl_2012_spie.json": "adec013318e10d1fb7b92992828496d75ada1df228aec1ebf1cb96fe1c782d62",
+    "papers/liu_2011_ol.json": "d6c65aa88f596c59e0fb946c00e32f185b1b9f3bffc2b76db615330efe7a55af",
+    "papers/sim_2025_scirep.json": "f320892ba1f15df722936bc4846caa3a99b81c512bc957f674815a27f717a892"
+  },
+  "validation_snapshot": {
+    "paper_count": 17,
+    "experiment_count": 61,
+    "quantity_count": 1104,
+    "source_count": 22,
+    "legacy_retained": 10,
+    "build_db_check_errors": 0,
+    "build_db_check_warnings": 0
+  },
+  "limits": [
+    "Scientific source audit is selective, not independent verification of every quantity.",
+    "Repeated setup quantities and apparatus summaries are not independent measurements.",
+    "Viewer/table conveniences do not identify a fully specified atomic calibration input.",
+    "No curve digitization, fitting, simulation or holdout prediction was performed."
+  ]
+}

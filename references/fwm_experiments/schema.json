@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gabes.local/schemas/fwm-literature-paper-v1.json",
+  "title": "GABES FWM literature paper evidence record",
+  "type": "object",
+  "required": ["schema_version", "paper_id", "title", "authors", "year", "publication", "scope", "sources", "experiments"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "paper_id": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+    "title": {"type": "string", "minLength": 1},
+    "authors": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "year": {"type": "integer", "minimum": 1900, "maximum": 2026},
+    "legacy_column": {"type": ["string", "null"]},
+    "publication": {
+      "type": "object", "required": ["status"],
+      "properties": {"status": {"type": "string"}, "doi": {"type": ["string", "null"]}, "arxiv_id": {"type": ["string", "null"]}}
+    },
+    "scope": {
+      "type": "object", "required": ["species", "line", "configuration", "measurement", "seed_mode", "inclusion", "reason"],
+      "properties": {"inclusion": {"enum": ["primary", "context_only", "excluded"]}}
+    },
+    "sources": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+    "experiments": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "required": ["experiment_id", "label", "kind", "conditions", "results"],
+        "properties": {
+          "experiment_id": {"type": "string", "minLength": 1},
+          "label": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "conditions": {"type": "array", "items": {"$ref": "#/$defs/quantity"}},
+          "results": {"type": "array", "items": {"$ref": "#/$defs/quantity"}}
+        }
+      }
+    },
+    "ai_notes": {"type": "array"}
+  },
+  "$defs": {
+    "source": {
+      "type": "object", "required": ["source_id", "url", "access", "version"],
+      "properties": {
+        "source_id": {"type": "string", "minLength": 1},
+        "url": {"type": "string", "pattern": "^https?://"},
+        "path": {"type": ["string", "null"]},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "access": {"type": "string"},
+        "version": {"type": "string"},
+        "pages": {"type": "integer", "minimum": 1}
+      }
+    },
+    "quantity": {
+      "type": "object", "required": ["quantity", "value", "unit", "value_type"],
+      "properties": {
+        "quantity": {"type": "string", "minLength": 1},
+        "value": {"type": ["number", "string", "boolean", "null"]},
+        "lower": {"type": "number"}, "upper": {"type": "number"},
+        "unit": {"type": "string"},
+        "value_type": {"enum": ["reported", "approximate", "range", "lower_bound", "upper_bound", "derived", "digitized", "not_reported"]},
+        "basis": {"type": ["string", "null"]},
+        "reference": {"type": ["string", "null"]},
+        "plane": {"type": ["string", "null"]},
+        "source_id": {"type": "string"}, "locator": {"type": "string"},
+        "derivation": {"type": "object", "required": ["formula"], "properties": {"formula": {"type": "string", "minLength": 1}}}
+      },
+      "allOf": [
+        {"if": {"properties": {"value_type": {"const": "not_reported"}}}, "then": {"properties": {"value": {"type": "null"}}}, "else": {"required": ["source_id", "locator"]}},
+        {"if": {"properties": {"value_type": {"const": "range"}}}, "then": {"required": ["lower", "upper"]}},
+        {"if": {"properties": {"value_type": {"const": "derived"}}}, "then": {"required": ["derivation"]}}
+      ]
+    }
+  }
+}

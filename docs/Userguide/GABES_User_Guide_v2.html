@@ -574,7 +574,7 @@ streamlit run streamlit_app.py</pre>
     <thead><tr><th>Scheme</th><th>주요 물리</th><th>주요 출력</th><th>먼저 만질 노브</th></tr></thead>
     <tbody>
       <tr><td><b>OD / SAS</b></td>
-        <td>프로브 흡수, Doppler 넓힘 OD, 포화흡수, hyperfine optical pumping, 천연 Rb D2 유한 프로브 포화</td>
+        <td>프로브 흡수, Doppler 넓힘 OD, 포화흡수, hyperfine optical pumping, 유한 프로브 포화</td>
         <td>투과, OD, 계산된 Gaussian Doppler FWHM, resolution-aware sub-Doppler FWHM, hyperfine 선 표</td>
         <td>펌프/프로브 세기, isotope, D1/D2, 온도, 셀 길이</td></tr>
       <tr><td><b>Λ 결맞음</b><br>EIT / AT / CPT</td>
@@ -591,7 +591,7 @@ streamlit run streamlit_app.py</pre>
         <td>스캔축, 셀 종류, 전이선, 세기, QWP 각도, Compare</td></tr>
       <tr><td><b>FWM</b><br>Squeezing / Biphoton</td>
         <td>⁸⁵Rb D1 double-Λ 씨앗형 mean-field 전달, 범용 SFWM 짝광자 추정</td>
-        <td>씨앗·켤레 이득, Squeezing Degree,
+        <td>씨앗·켤레 이득, 강도차 잡음,
           g²<sub>SI</sub>, CAR, 발생률</td>
         <td>모드, 1·2광자 detuning, 온도, 펌프/씨앗 세기, 검출 효율, 위상정합 각도</td></tr>
       <tr><td><a href="#psr"><b>Polarization squeezing (PSR)</b></a></td>
@@ -607,8 +607,7 @@ streamlit run streamlit_app.py</pre>
     <div class="head"><span class="cl a">A · Absorption</span><h3>흡수 분광 (OD / SAS)</h3></div>
     <p class="out">역행 펌프가 있는 프로브 흡수입니다. 펌프를 0으로 내리면 Doppler 넓힘 OD가 되고,
       펌프를 올리면 Doppler-free Lamb dip과 crossover가 같은 스펙트럼 위에 나타납니다.
-      ⁸⁵Rb/⁸⁷Rb/¹³³Cs · D1/D2 또는 천연 Rb를 지원하며, 천연 Rb D2에서는 유한 프로브
-      포화와 Gaussian 셀 전파 모델도 사용할 수 있습니다.</p>
+      천연 Rb, ⁸⁵Rb, ⁸⁷Rb, ¹³³Cs의 D1·D2선 모두에서 프로브 출력을 바꿀 수 있습니다.</p>
   </div>
   <div class="fig-2">
     <figure>
@@ -623,16 +622,15 @@ streamlit run streamlit_app.py</pre>
     </figure>
   </div>
   <p style="color:var(--muted);font-size:0.92rem;margin-top:2px">
-    펌프 세기 슬라이더로 OD와 SAS 사이를 연속적으로 오갈 수 있습니다. 프로브 파워의 기본값
-    0&nbsp;mW는 기존 weak-probe 결과를 정확히 보존합니다. 천연 Rb D2를 고르면 프로브 파워 노브가
-    나타나며, 전이별 2-level power broadening 뒤에
+    펌프 세기 슬라이더로 OD와 SAS 사이를 연속적으로 오갈 수 있습니다.
+    <b>Probe beam power</b>는 0–100&nbsp;µW 범위에서 조절합니다. 기본값 <b>0&nbsp;µW</b>에서는
+    약한 프로브의 투과율을 계산합니다. 출력을 높이면 각 전이의 포화와 파워 넓어짐을 계산한 뒤
     <span class="var">dI/dz</span> = −<span class="var">α(I)I</span>를 셀 길이 방향으로 풀고
     전체 Gaussian 단면의 출력 파워를 평균합니다. 1/e² probe waist는 Advanced에 있습니다.
     유한 펌프와 유한 프로브를 함께 쓸 때는 pump-prepared population을 고정한 정성적 순차
     근사이며, probe-induced hyperfine repumping은 포함하지 않습니다. 이 분리 근사가 음의 흡수를
     만들 경우 pump residual을 수동성 범위로 줄이고 결과에
-    <i>Passivity-limited</i>라고 표시합니다. 레퍼런스의 pump-off·무버퍼·단일온도 경로와 수치적으로
-    맞췄지만 신뢰할 유한파워 실험 CSV가 없으므로 실험 검증으로 해석하면 안 됩니다. 또한 셀 안에서
+    <i>Passivity-limited</i>라고 표시합니다. 유한 프로브의 <a href="#od-probe-scope">소프트웨어 기준 비교 범위</a>는 원자와 D선에 따라 다릅니다. 셀 안에서
     waist가 일정하고 출력 빔 전체를 수집한다고 가정하므로, 작은 waist와 긴 셀에서는 Rayleigh range를
     확인해야 합니다(diffraction, clipping, transverse atomic transport 미포함). 유한 프로브에서는
     공간적으로 달라지는 위상에 대한 레퍼런스 정의가 없어 Dispersion 보기를 숨깁니다.
@@ -839,15 +837,16 @@ streamlit run streamlit_app.py</pre>
   <!-- D: FWM -->
   <div class="scheme" style="margin-top:30px">
     <div class="head"><span class="cl d">D · Wave mixing</span><h3>4파 혼합 (FWM) · 짝광자</h3></div>
-    <p class="out">⁸⁵Rb D1 double-Λ의 씨앗형 Squeezing Degree(Sim et al. 장치 조건)와,
+    <p class="out">⁸⁵Rb D1 double-Λ에서 씨앗광과 켤레광의 강도차 잡음(Sim et al. 장치 조건)과,
       범용 SFWM 짝광자원 추정(<span class="var">g</span><sup>(2)</sup><sub>SI</sub>(<span class="var">τ</span>),
       CAR, 발생률, 위상정합)을 제공합니다. <a href="#fwm-limits">씨앗형 FWM 해석 범위</a></p>
   </div>
   <figure>
     <img src="userguide_assets/fwm.png" alt="FWM 씨앗 이득과 Squeezing Degree">
     <figcaption><b>씨앗형 mean-field 진단.</b> 2광자 detuning에 따른 씨앗 이득
-      <span class="var">G<sub>s</sub></span>(위)와 Squeezing Degree(아래)입니다.
-      빨간 점선이 동작점입니다. 아래 곡선은 <a href="#fwm-limits">조건부 NF 진단</a>입니다.
+      <span class="var">G<sub>s</sub></span>(위)와 강도차 잡음(아래)입니다. 이 그림에는 이전 라벨인
+      <b>Squeezing Degree</b>가 남아 있습니다. 빨간 점선이 동작점입니다.
+      아래 곡선은 <a href="#fwm-limits">조건부 NF 진단</a>입니다.
       원자 Floquet 응답은
       N<sub>F</sub>=3 전체 스캔을 N<sub>F</sub>=2와 비교하며, 복소 응답·전달계수·이득·위상·
       이득 최적점 중 하나라도 기준을 넘으면 결과에 <b>UNCONVERGED</b>가 표시됩니다.</figcaption>
@@ -962,7 +961,7 @@ streamlit run streamlit_app.py</pre>
     <div class="it"><h4>무거운 풀이와 가벼운 읽기를 나눕니다</h4>
       <p>UI에서 모든 슬라이더가 같은 비용을 갖지 않습니다. 실제로 OBE를 다시 풀어야 하는 노브만
         캐시 키로 들어가고, 이미 계산된 곡선에서 값을 읽는 노브는 즉시 갱신됩니다. 덕분에 2광자
-        detuning 동작점을 옮기며 이득과 Squeezing Degree 변화를 거의 실시간으로 볼 수 있습니다.</p></div>
+        detuning 동작점을 옮기며 이득과 강도차 잡음의 변화를 볼 수 있습니다.</p></div>
   </div>
 
   <h3>핵심 식</h3>
@@ -1048,8 +1047,8 @@ streamlit run streamlit_app.py</pre>
       <b>FWM → Squeezing</b>입니다.</li>
     <li>Default를 먼저 적용합니다. 이 단계에서는 숫자 하나하나를 믿기보다 line shape과 scale을 봅니다.</li>
     <li>온도·셀 길이·detuning·세기처럼 실험에서 실제로 움직일 수 있는 노브만 먼저 조정합니다.</li>
-    <li>metric과 플롯을 함께 봅니다. FWM은 값에 붙은 조건부 NF 표식과
-      <a href="#fwm-limits">해석 범위</a>를 확인합니다.</li>
+    <li>FWM에서 이득은 <b>G = 1</b>, 강도차 잡음은 <b>0 dB</b>를 기준으로 읽습니다.
+      운전점에 표시된 보정·외삽 조건과 <a href="#fwm-limits">잡음 모형의 범위</a>를 확인합니다.</li>
     <li>마지막으로 Advanced / numerics를 열어 scan resolution, velocity step, 완화율 민감도를 확인합니다.</li>
   </ol>
 
@@ -1081,8 +1080,9 @@ streamlit run streamlit_app.py</pre>
     <tbody>
       <tr id="od-probe-scope"><td>OD / SAS</td>
         <td>hyperfine 다양체, CG 분기 붕괴, transit relaxation을 포함한 OBE 기반 모델</td>
-        <td>유한 프로브의 pump-off·무버퍼·단일온도 천연 Rb D2 경로는 제공된 계산기와 회귀
-          일치하지만 실험 검증 자료는 없습니다. 동시 유한 pump/probe는 passivity 제한을 포함한
+        <td>유한 프로브에서 천연 Rb와 순수 ⁸⁵Rb·⁸⁷Rb의 D2선은 펌프 꺼짐, 무버퍼, 단일 온도, 기본 선세기 조건에서
+          AutoOD 소프트웨어 기준과 대조했습니다. 이 조건 밖의 Rb D2 값은 외삽이고, Rb D1과 Cs D1·D2는
+          일반화한 정성적 추정입니다. 유한 출력에서의 실험 검증은 별도입니다. 동시 유한 pump/probe는 passivity 제한을 포함한
           정성적 근사입니다. 일정 waist·전출력 수집을 가정하며 diffraction, clipping, transverse
           transport, Ne 압력 이동, Dicke 좁힘 등은 포함하지 않습니다.</td></tr>
       <tr><td>Λ 결맞음</td>
@@ -1093,7 +1093,7 @@ streamlit run streamlit_app.py</pre>
         <td>균일한 약한 광학 여기에서 계산합니다. 셀 길이 방향의 자기일관 광전파,
           buffer-gas 압력 넓힘과 확산은 포함하지 않습니다. 타원·원형편광의 회전은 미지원입니다.</td></tr>
       <tr><td>씨앗형 FWM</td>
-        <td>⁸⁵Rb D1 double-Λ mean-field 이득과 Squeezing Degree</td>
+        <td>⁸⁵Rb D1 double-Λ mean-field 이득과 모형에서 계산한 강도차 잡음</td>
         <td><a href="#fwm-limits">씨앗형 FWM 해석 범위</a>: 절대 이득, 조건부 NF, production 1-D와
           별도 2-D 기준 경로의 차이.</td></tr>
       <tr><td>짝광자 SFWM</td>
@@ -1111,10 +1111,16 @@ streamlit run streamlit_app.py</pre>
     <span class="tag">씨앗형 FWM 해석 범위</span>
     <p>기본 모델의 절대 이득은 정량 미지원입니다. production은 1-D finite-seed Floquet 경로이고,
       2-D non-collinear Doppler는 별도의 느린 기준 계산에만 있습니다.</p>
-    <p><b>Squeezing Degree</b>는 <b>10 log₁₀(NF)</b>로 표시하는 조건부 진단값입니다.
-      seed classical RIN <span class="var">a</span>와 계산된 shot RIN <span class="var">b</span>는
+    <p><b>Intensity-difference noise [dB]</b>는 두 빔의 강도차 잡음을 샷 노이즈에 대해
+      <b>10 log₁₀(NF)</b>로 표시합니다. 0 dB는 샷 노이즈, 음수는 그보다 낮은 잡음, 양수는 높은 잡음입니다.
+      정준 전달 행렬이 없는 이전 데이터를 <b>Passive L1</b>으로 읽으면
+      <b>Gain-referred noise diagnostic [dB]</b>가 표시됩니다. 이때 0 dB는 이득으로 계산한 진단 기준이며,
+      스퀴징을 판정하는 데 쓸 수 없습니다.</p>
+    <p><b>Experimental Jasperse</b>는 두 빔의 이득과 가정한 셀 내 공통 손실로 분포 이득·손실 모형의 잡음을 계산합니다.
+      실험 보정을 적용한 이득은 측정 범위 밖에서 외삽됩니다. 이득 보정의 검증과 잡음 모형의 검증은 별개입니다.</p>
+    <p><b>Passive L1</b>을 선택하면 seed classical RIN <span class="var">a</span>와 계산된 shot RIN <span class="var">b</span>는
       입력 Fano factor <b>1 + a/b</b>에 들어갑니다(a, b는 one-sided RIN PSD이며 UI 표시 단위는 10⁻¹⁴ Hz⁻¹). 셀 전파 뒤에는 after-cell transmission과
-      detector QE를 적용합니다. 현재 NF는 annihilation-only vacuum completion을 가정합니다.
+      detector QE를 적용합니다. 이 진단은 annihilation-only vacuum completion을 가정합니다.
       주파수 의존 원자 Langevin 확산과 full covariance, 보정된 pump scattering을 포함한
       physical squeezing 예측은 제공하지 않습니다. 실험의 IDS −7.8&nbsp;dB 재현값으로 해석할 수 없습니다.</p>
   </div>

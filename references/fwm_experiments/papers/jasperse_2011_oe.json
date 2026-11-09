@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "paper_id": "jasperse_2011_oe",
+  "title": "Relative intensity squeezing by four-wave mixing with loss: an analytic model and experimental diagnostic",
+  "authors": [
+    "M. Jasperse",
+    "L. D. Turner",
+    "R. E. Scholten"
+  ],
+  "year": 2011,
+  "publication": {
+    "journal": "Optics Express",
+    "volume": "19",
+    "issue": "",
+    "pages": "3765-3774",
+    "doi": "10.1364/OE.19.003765",
+    "arxiv_id": "1012.3482v2",
+    "status": "published"
+  },
+  "legacy_column": null,
+  "apparatus_group": "melbourne_monash_scholten",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb D1 double-lambda FWM with experimental intensity-difference noise measurements.",
+    "isotope_composition": "pure85"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://arxiv.org/pdf/1012.3482",
+      "path": "sources/jasperse_2011_oe.pdf",
+      "access": "full_text",
+      "version": "arxiv_v2",
+      "sha256": "21cc5a599053020da8f9463f691c3c0556d5ec480c3f220c9e5e63cea98a53fe",
+      "pages": 10,
+      "accessed_on": "2026-10-23"
+    },
+    {
+      "source_id": "atomic_reference",
+      "url": "https://steck.us/alkalidata/rubidium85numbers.pdf",
+      "path": "../Rubidium 85 D Line Data.pdf",
+      "access": "full_text",
+      "version": "local_Steck_reference",
+      "sha256": "aefb10f0de86da7da7e6bed44385f4d2dbc6a295238d624448b126d325e855f3",
+      "pages": 31,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "pump_detuning_sweep",
+      "label": "Fig.5 measured two-arm gain and squeezing sweep",
+      "kind": "sweep",
+      "conditions": [
+        {
+          "quantity": "pump_power",
+          "value": 400,
+          "unit": "mW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 100,
+          "unit": "µW",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "cell_input",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 630,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² beam waist",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 375,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "1/e² beam waist",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_radius",
+          "value": 630,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "reported1/e² waist interpreted as radius",
+            "inputs": [
+              "pump_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "seed_radius",
+          "value": 375,
+          "unit": "µm",
+          "value_type": "derived",
+          "basis": "1/e² intensity radius",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "reported1/e² waist interpreted as radius",
+            "inputs": [
+              "seed_beam_size"
+            ]
+          }
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 0.3,
+          "unit": "deg",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "cell_length",
+          "value": 7,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "internal cell length",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 130,
+          "unit": "°C",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "probe below pump",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": "Precision reflects the conversion constant, not the rounded3040-MHz experimental setting.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 95,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "net photodiode efficiency",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "detection_efficiency",
+          "value": 85,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 1,
+            "unit": "percentage_point",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "analysis_frequency",
+          "value": 1000,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.8, §5",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.9, Fig.5 caption",
+          "evidence": "",
+          "notes": "Pump frequency is referenced to the centre of the Doppler-broadened F=2→5P1/2 manifold, not an identified F′=3 line."
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.9, Fig.5(A)",
+          "evidence": "",
+          "notes": "Measured curve exists; exact numerical nodes are not tabulated and were not digitized."
+        },
+        {
+          "quantity": "conjugate_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.9, Fig.5(A)",
+          "evidence": "",
+          "notes": "Measured curve exists; exact numerical nodes are not tabulated and were not digitized."
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": null,
+          "unit": "dB",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.9, Fig.5(C)",
+          "evidence": "",
+          "notes": "Measured curve exists; exact minimum not stated numerically in the text."
+        },
+        {
+          "quantity": "squeezing_pump_background_subtracted",
+          "value": -4.1,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "author estimate after removal of cross-detected pump background; not a raw measured best",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.9, §5",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Intrinsic gainG and probe transmissionTa in Fig.5(B) are fitted distributed-medium parameters, not directly measured arm gains.",
+        "Detuning-axis origin: centre of85Rb5S1/2(F=2)→5P1/2 manifold. Curve digitization required before pointwise fitting."
+      ]
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧ Experimental gain curves can constrain a future correction after documented digitization; no plot-axis values have been promoted to measurements."
+  ]
+}

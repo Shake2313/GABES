@@ -1,0 +1,1031 @@
+{
+  "schema_version": 1,
+  "paper_id": "qin_2014_prl",
+  "title": "Experimental Generation of Multiple Quantum Correlated Beams from Hot Rubidium Vapor",
+  "authors": [
+    "Zhongzhong Qin",
+    "Leiming Cao",
+    "Hailong Wang",
+    "A. M. Marino",
+    "Weiping Zhang",
+    "Jietai Jing"
+  ],
+  "year": 2014,
+  "publication": {
+    "journal": "Physical Review Letters",
+    "volume": "113",
+    "issue": "",
+    "pages": "023602",
+    "doi": "10.1103/PhysRevLett.113.023602",
+    "arxiv_id": "1407.3863v1",
+    "status": "published"
+  },
+  "legacy_column": null,
+  "apparatus_group": "ecnu_jing_diode_rb85",
+  "scope": {
+    "species": "85Rb",
+    "line": "D1",
+    "configuration": "double_lambda",
+    "measurement": "intensity_difference",
+    "seed_mode": "single_seed",
+    "inclusion": "primary",
+    "reason": "85Rb D1 double-lambda FWM with experimental intensity-difference noise measurements.",
+    "isotope_composition": "not_reported"
+  },
+  "sources": [
+    {
+      "source_id": "main",
+      "url": "https://arxiv.org/pdf/1407.3863",
+      "path": "sources/qin_2014_prl.pdf",
+      "access": "full_text",
+      "version": "arxiv_v1",
+      "sha256": "87768dca25caad1d8343a3e26df1b8e0ea82235728adf7d7349726235ea1238f",
+      "pages": 5,
+      "accessed_on": "2026-10-23"
+    },
+    {
+      "source_id": "atomic_reference",
+      "url": "https://steck.us/alkalidata/rubidium85numbers.pdf",
+      "path": "../Rubidium 85 D Line Data.pdf",
+      "access": "full_text",
+      "version": "local_Steck_reference",
+      "sha256": "aefb10f0de86da7da7e6bed44385f4d2dbc6a295238d624448b126d325e855f3",
+      "pages": 31,
+      "accessed_on": "2026-10-23"
+    }
+  ],
+  "experiments": [
+    {
+      "experiment_id": "cell1_single",
+      "label": "Cell1 single-FWM twin-beam control",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 210,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "approximate",
+          "basis": "beam waist;1/e² convention not explicitly restated",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 280,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "beam waist;1/e² convention not explicitly restated",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 6,
+          "unit": "mrad",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.3437746771,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "6mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "F′ reference is not resolved."
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "nominal probe red offset",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "Nominal3.04GHz offset, not a precisely reported Raman detuning.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, Fig.3 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, Fig.3 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 110,
+          "unit": "°C",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 20,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": 2.9,
+          "unit": "1",
+          "value_type": "approximate",
+          "basis": "first-cell gainG1",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_probe_power",
+          "value": 58,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_conjugate_power",
+          "value": 41,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "squeezing_measured",
+          "value": -5.4,
+          "unit": "dB",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3(b) discussion",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.4,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "squeezing_slope",
+          "value": -5.5,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "electronics/background-subtracted fitted slope at1MHz",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.1,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "noise_ratio",
+          "value": 0.282,
+          "unit": "1",
+          "value_type": "reported",
+          "basis": "background-subtracted slope ratio",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.003,
+            "unit": "1",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        }
+      ],
+      "notes": []
+    },
+    {
+      "experiment_id": "cell2_single",
+      "label": "Cell2 single-FWM twin-beam control",
+      "kind": "operating_point",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 210,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "approximate",
+          "basis": "beam waist;1/e² convention not explicitly restated",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 280,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "beam waist;1/e² convention not explicitly restated",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 6,
+          "unit": "mrad",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.3437746771,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "6mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "F′ reference is not resolved."
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "nominal probe red offset",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "Nominal3.04GHz offset, not a precisely reported Raman detuning.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, Fig.3 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, Fig.3 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 108,
+          "unit": "°C",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": null,
+          "unit": "µW",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-4",
+          "evidence": "",
+          "notes": "Single-cell Cell2 control seed power is not restated; the cascaded seed is amplified/noisy and is a separate configuration."
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "squeezing_measured",
+          "value": -4.4,
+          "unit": "dB",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3(c) discussion",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.4,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "squeezing_slope",
+          "value": -4.5,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "electronics/background-subtracted fitted slope at1MHz",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.1,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "noise_ratio",
+          "value": 0.356,
+          "unit": "1",
+          "value_type": "reported",
+          "basis": "background-subtracted slope ratio",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.003,
+            "unit": "1",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "probe_gain",
+          "value": null,
+          "unit": "1",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-4",
+          "evidence": "",
+          "notes": "G2≈2.1 is reported for the second stage seeded byPr1; not automatically assigned to its independent coherent-seed control."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "experiment_id": "cascaded_cell2",
+      "label": "Second stage seeded by amplified first-stage probe",
+      "kind": "comparison",
+      "conditions": [
+        {
+          "quantity": "cell_length",
+          "value": 12.5,
+          "unit": "mm",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_power",
+          "value": 210,
+          "unit": "mW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "pump_beam_size",
+          "value": 550,
+          "unit": "µm",
+          "value_type": "approximate",
+          "basis": "beam waist;1/e² convention not explicitly restated",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_beam_size",
+          "value": 280,
+          "unit": "µm",
+          "value_type": "reported",
+          "basis": "beam waist;1/e² convention not explicitly restated",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle",
+          "value": 6,
+          "unit": "mrad",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "crossing_angle_deg",
+          "value": 0.3437746771,
+          "unit": "deg",
+          "value_type": "derived",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "",
+          "derivation": {
+            "formula": "6mrad *180/(1000*pi)",
+            "inputs": [
+              "crossing_angle"
+            ]
+          }
+        },
+        {
+          "quantity": "opd_reported",
+          "value": 0.8,
+          "unit": "GHz",
+          "value_type": "approximate",
+          "basis": "blue detuning",
+          "reference": "85Rb F=2→5P1/2 unresolvedF′",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "opd_gabes",
+          "value": null,
+          "unit": "GHz",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "F′ reference is not resolved."
+        },
+        {
+          "quantity": "pump_probe_spacing",
+          "value": 3040,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "nominal probe red offset",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "tpd_gabes",
+          "value": -4.267561,
+          "unit": "MHz",
+          "value_type": "derived",
+          "basis": "",
+          "reference": "seed=pump-3035.732439MHz+delta (red Raman branch)",
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": "Nominal3.04GHz offset, not a precisely reported Raman detuning.",
+          "derivation": {
+            "formula": "3035.732439 - pump_probe_spacing",
+            "inputs": [
+              "pump_probe_spacing",
+              "reference_ground_hyperfine_splitting"
+            ]
+          }
+        },
+        {
+          "quantity": "detector_qe",
+          "value": 96,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, detection",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "resolution_bandwidth",
+          "value": 30,
+          "unit": "kHz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, Fig.3 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "video_bandwidth",
+          "value": 300,
+          "unit": "Hz",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, Fig.3 discussion",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "temperature",
+          "value": 108,
+          "unit": "°C",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "interstage_optical_transmission",
+          "value": 93,
+          "unit": "%",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "seed_power",
+          "value": 53.94,
+          "unit": "µW",
+          "value_type": "derived",
+          "basis": "derived incident second-stage probe",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF pp.2-3, setup",
+          "evidence": "",
+          "notes": "Seed is not a coherent-state input; first-stage excess noise/correlations matter.",
+          "derivation": {
+            "formula": "58µW *0.93",
+            "inputs": [
+              "cell1_single.output_probe_power",
+              "interstage_optical_transmission"
+            ]
+          }
+        },
+        {
+          "quantity": "reference_ground_hyperfine_splitting",
+          "value": 3035.732439,
+          "unit": "MHz",
+          "value_type": "reported",
+          "basis": "atomic reference, not an apparatus setting",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "atomic_reference",
+          "locator": "PDF p.26, Fig.3",
+          "evidence": "",
+          "notes": "Steck85RbD1 ground-state interval; conversion precision does not improve the paper's frequency setting."
+        }
+      ],
+      "results": [
+        {
+          "quantity": "probe_gain",
+          "value": 2.1,
+          "unit": "1",
+          "value_type": "approximate",
+          "basis": "second-stageG2 relative to transmittedPr1",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.2, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_probe_power",
+          "value": 115,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, setup",
+          "evidence": "",
+          "notes": ""
+        },
+        {
+          "quantity": "output_conjugate_power",
+          "value": 71,
+          "unit": "µW",
+          "value_type": "approximate",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.3, setup",
+          "evidence": "",
+          "notes": ""
+        }
+      ],
+      "notes": [
+        "Do not use as a single-stage coherent-seed noise observation; seed has first-stage correlations."
+      ]
+    },
+    {
+      "experiment_id": "three_beam_cascade",
+      "label": "Two cascaded cells: three-beam intensity difference",
+      "kind": "comparison",
+      "conditions": [],
+      "results": [
+        {
+          "quantity": "three_beam_squeezing_measured",
+          "value": -6.5,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.3(a) discussion",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.4,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        },
+        {
+          "quantity": "three_beam_squeezing_slope",
+          "value": -7,
+          "unit": "dB",
+          "value_type": "reported",
+          "basis": "electronic/background-subtracted three-beam slope",
+          "reference": null,
+          "plane": "not_specified",
+          "source_id": "main",
+          "locator": "PDF p.4, Fig.4",
+          "evidence": "",
+          "notes": "",
+          "uncertainty": {
+            "value": 0.1,
+            "unit": "dB",
+            "kind": "reported",
+            "confidence": "not_specified"
+          }
+        }
+      ],
+      "notes": [
+        "Three-beam observablePr2−C2−C1, not the single-cell two-arm IDS target."
+      ]
+    }
+  ],
+  "ai_notes": [
+    "⟦AI⟧Single-cell controls and cascaded amplified-seed measurements are distinct records. The headline−7dB concerns three beams and cannot serve as a single-cell IDS target."
+  ]
+}

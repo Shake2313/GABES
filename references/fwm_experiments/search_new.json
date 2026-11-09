@@ -1,0 +1,63 @@
+{
+  "searched_on": "2026-10-23",
+  "origin": "ai_research_for_user_requested_database",
+  "queries": [
+    "85Rb four wave mixing intensity difference squeezing Jasperse2011 near resonance",
+    "85Rb four wave mixing Qin2012/2014 intensity difference squeezing",
+    "Turnbull2013 phase matching hot vapors squeezed states",
+    "Pooser2009 D1 D2 85Rb87Rb",
+    "Strong quantum correlations in four wave mixing Glorieux2010",
+    "Measurement of intensity difference squeezing Yu Meng Zhang2013"
+  ],
+  "added_ids": [
+    "kim_2018_oe",
+    "jasperse_2011_oe",
+    "glorieux_2010_spie",
+    "qin_2012_ol",
+    "pooser_2009_oe",
+    "qin_2014_prl",
+    "turnbull_2013_pra"
+  ],
+  "screened": [
+    {
+      "title": "Measurement of intensity difference squeezing via non-degenerate four-wave mixing process in an atomic vapor",
+      "url": "https://doi.org/10.1088/1674-1056/22/9/094204",
+      "decision": "candidate_full_text_access_gap",
+      "reason": "Relevant85RbD1 experiment. PublisherPDF endpoint redirected to an empty response; institutionalPDF returned403. Browser fallback on2026-10-23: official article showed abstract/references, upper and sidebarPDF buttons did not open a document, ArticleText expanded without a body; direct author-institutionPDF rendered only an empty dark canvas. Abstract alone reports−3.7dB with noisy seed but is insufficient to build the full operating-point record."
+    },
+    {
+      "title": "Generating quantum correlated twin beams by four-wave mixing in hot cesium vapor",
+      "url": "https://doi.org/10.1103/PhysRevA.96.043843",
+      "decision": "excluded",
+      "reason": "Cesium, not85RbD1."
+    },
+    {
+      "title": "Compact sub-kilohertz low-frequency quantum light source based on four-wave mixing in cesium vapor",
+      "url": "https://doi.org/10.1364/OL.43.001243",
+      "decision": "excluded",
+      "reason": "Cesium, not85RbD1."
+    },
+    {
+      "title": "Time-resolved detection of relative-intensity squeezed nanosecond pulses in an87Rb vapor",
+      "url": "https://doi.org/10.1088/1367-2630/13/4/043030",
+      "decision": "excluded",
+      "reason": "FWM medium87Rb, not85Rb."
+    },
+    {
+      "title": "Quantum correlations by four-wave mixing in an atomic vapor in a nonamplifying regime: Quantum beam splitter for photons",
+      "url": "https://doi.org/10.1103/PhysRevA.84.053826",
+      "decision": "future_extension",
+      "reason": "Relevant2011 full paper from the sameParis apparatus asGlorieux2010; avoid treating its9.2-dB headline as an independent laboratory holdout. Not extracted in this pass."
+    },
+    {
+      "title": "Degenerate four-wave-mixing as a low-power source of squeezed light",
+      "url": "https://doi.org/10.1364/OE.411562",
+      "decision": "excluded",
+      "reason": "Degenerate/theoretical configuration differs from the requested nondegenerate double-lambda IDS source."
+    }
+  ],
+  "notes": [
+    "Source availability and values were checked on the recorded date; this is a bounded literature extension, not an exhaustive systematic review.",
+    "All inspected papers are a development literature pool, not an untouched future external validation set."
+  ]
+}
