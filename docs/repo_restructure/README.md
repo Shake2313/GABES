@@ -57,6 +57,42 @@
        - 지우기 전에 아카이브 작업본의 HEAD가 같은 커밋이고 파일이 모두 있는지 확인함.
        - 교체는 되돌릴 수 있게 함: 옛 `.git`은 아카이브 폴더 clone이 끝날 때까지 보존.
     4. 새로 연결해야 하는 것: Codex weekly-review 자동화와 GC 작업 세션은 아카이브 폴더로. Claude 메모리는 main 경로에 남음.
+- 2026-11-09: **S3 문서 준비** (사용자 "문서 정리 시작").
+  - [`docs/papers/`](../papers/README.md): 세 문서 최신본을 바이트 그대로 복사(1.63 MB). README 출판 표는 여기로 연결함.
+    - 아카이브 쪽 `test_publication_records`는 main 사본과 원본의 바이트 일치를 확인하도록 바꿈.
+    - main 쪽 `tests/test_papers.py` 추가.
+  - ⟦AI⟧ `tools/split_boundary.py` 확장:
+    - `links [--apply]`: main 문서에서 아카이브를 가리키는 링크를 `GABES-archive/blob|tree/pre-split-2026-11-09/…`로 바꿈. 미리보기 기준 8개 파일 55개. 추적되지 않은 로컬 출력 링크 22개는 그대로 둠. 인용 목적 문서(이 허브, fixtures, papers)는 대상에서 뺌.
+    - `history-paths`: filter-repo 경로 목록을 만듦. 리허설과 같은 647개.
+    - `manifest`: Split Manifest. 리허설 commit-map으로 확인함(재작성 195, 제외 11).
+  - ⟦AI⟧ AGENTS.md 초안 두 벌. 분리 전 GC 세션이 지금 AGENTS.md를 쓰므로 S3·S4에서 교체함.
+    - [`AGENTS.main.md`](AGENTS.main.md): GC 절을 빼고 아카이브 안내, fixture 규칙, 크기 감시를 넣음.
+    - [`AGENTS.archive.md`](AGENTS.archive.md): GC 절, engine submodule, R8, docs/papers 갱신 절차. Codex 검토 필요.
+  - ⟦AI⟧ **S3 실행 순서 (runbook):**
+    0. 선행 조건: Codex GC 작업 착지, 작업트리 깨끗, 검증용 사본 7.8 GB 처리 결정.
+    1. 마지막 문서 커밋:
+       - `links --apply` 실행.
+       - `AGENTS.main.md` → `AGENTS.md`.
+       - README Deploy 절을 새 저장소 주소로 바꾸고 `test_docs_consistency`의 공개 문구도 함께 고침.
+       - main 전용 checkout과 원래 저장소 양쪽에서 전체 테스트.
+    2. 그 커밋에 태그 `split-source-<date>`.
+    3. 아카이브 작업본: `git clone --no-local <현재 폴더> <G:\…\GABES-archive>`.
+    4. 필터링:
+       - 새 bare clone에서 main 외의 ref를 지움.
+       - `history-paths` → `git filter-repo --paths-from-file` → `manifest`.
+       - 필터링 결과로 main 전용 테스트.
+    5. GitHub에 `Shake2313/GABES`(공개)를 만들고 push.
+    6. Streamlit:
+       - 새 앱을 임시 주소에 배포하고 확인.
+       - 기존 앱 삭제 → 새 앱 subdomain 지정(R11, 후보 `gabes`).
+    7. 기존 저장소:
+       - webhook 제거 → 이름을 `GABES-archive`로 바꾸고 비공개로 전환.
+       - 아카이브 작업본에서 로컬 커밋과 태그(`pre-split-2026-11-09`, `split-source-…`)를 push.
+    8. 로컬 전환(R10, S3-L):
+       - 현재 폴더의 `.git`을 필터링된 main으로 교체(옛 `.git`은 보관).
+       - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
+    9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
+    10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
 - 2026-11-09: S2 진행 기록 (사용자 "S2 시작").
   - ⟦AI⟧ 경계 도구 [`tools/split_boundary.py`](../../tools/split_boundary.py)를 만듦.
     - 규칙은 순서대로 적용하고, 처음 맞는 규칙이 이김. 정적 참조 검사와 main 전용 sparse checkout도 함께 함.

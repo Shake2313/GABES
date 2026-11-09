@@ -419,12 +419,13 @@ P2/seed811의24/24경로 통과, 새120계산. Seed11·211·811의72고유 경�
 ## Scientific documents
 
 Each current publication is self-contained; earlier editions are archives.
+The current editions are in [`docs/papers/`](docs/papers/README.md).
 
 | Document | Purpose |
 |---|---|
-| [Squeezing report](docs/squeezing_report/squeezing_report_v8.pdf) | Simulation–experiment agreement, parameter/frontier exploration, uncertainty and applicability |
-| [Analytic reconstruction](docs/FWM%20physics%20and%20analytic%20reconstruction/squeezing_analytic_reconstruction_v3.pdf) | Definitions, derivations, physical assumptions and theoretical precision |
-| [Quotient structure](docs/FWM%20physics%20and%20analytic%20reconstruction/fwm_quotient_structure_v3.2.html) | Logical dependencies, equivalences, partial orders and the conditions for each claim |
+| [Squeezing report](docs/papers/squeezing_report_v8.pdf) | Simulation–experiment agreement, parameter/frontier exploration, uncertainty and applicability |
+| [Analytic reconstruction](docs/papers/squeezing_analytic_reconstruction_v3.pdf) | Definitions, derivations, physical assumptions and theoretical precision |
+| [Quotient structure](docs/papers/fwm_quotient_structure_v3.2.html) | Logical dependencies, equivalences, partial orders and the conditions for each claim |
 
 [Publication policy](docs/grand_challenge/publication_policy.md) requires content
 preservation and keeps development/version records in Grand Challenge, including
