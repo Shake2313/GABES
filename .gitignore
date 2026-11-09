@@ -17,8 +17,16 @@ st.log
 .venv/
 .claude/
 references/*
+!references/fwm_experiments/
 !references/psr_experiments/
+!references/rydberg_experiments/
+# Curated data/views are reviewable; downloaded reference media stay local.
+references/fwm_experiments/sources/
 references/psr_experiments/sources/
+references/rydberg_experiments/sources/
+
+# Retired reference application; preserve its former references/ ignore policy.
+archive/AutoOD/
 
 # Local reversible backups created by scoped repository cleanups.
 archive/.cleanup/
@@ -51,3 +59,13 @@ docs/Rydberg cell-heating analysis/$out/
 /.playwright-cli/sabes-session-2026-10-16.json
 /docs/ui_redesign/audit/sabes_asterisk_20261022/running.json
 /docs/ui_redesign/audit/sabes_table_20261022/running.json
+
+# Browser-automation scratch and tool caches (2026-11-09 freeze before the repository split).
+/.playwright-cli/
+mpl_cache/
+numba_cache/
+__pycache__/
+
+# Exceeds GitHub's 100 MB file limit; kept outside git and published as an
+# archive Release asset. Identity: coarse.jsonl.external.json beside it.
+/analysis/squeezing/operating_point_20261014/coarse.jsonl
