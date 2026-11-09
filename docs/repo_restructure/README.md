@@ -33,6 +33,10 @@
     - User Guide 두 파일. 강도차 잡음 라벨 설명이 들어 있어서 C3과 함께 보류함.
   - **남은 차단:** 7896f59 magneto 회귀 2개 (Codex R2).
   - 태그와 기준선 재실행은 C3과 R2 착지 뒤에.
+  - **깨끗한 checkout 확인 (8989a09):** 착지 영향 테스트 12개 파일 → 235 통과 / 1 실패.
+    - 실패: `tests/quantum/test_variance_reduction_pilot_shadow.py::test_preregistration_does_not_touch_future_grid`.
+    - 착지와는 무관함. `variance_reduction_2026_10_13/review.json`(488건)과 `pilot-shadow-review.json`(248건)의 `input_byte_ledger` 키가 `G:\내 드라이브\Coding\GABES …` **절대경로**라서, 원래 위치에서만 통과함.
+    - **분리 위험:** 아카이브를 다른 경로에 clone하면 이 검증기가 깨짐. S4 전에 경로를 상대경로로 바꿔 읽는 방식이 필요함. 봉인 기록은 수정하지 않음.
   - stale `.git/index.lock`(11-07 05:01, 0 B, git 프로세스 없음)을 지움.
 
 ## S1 진행 기록 (2026-11-09)
