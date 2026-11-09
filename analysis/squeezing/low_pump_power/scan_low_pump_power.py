@@ -157,6 +157,9 @@ def gain_for_xi(xi_db, eta=ETA_EXT):
 FID = {"legacy": dict(phase_detail=fwm.PHASE_LEGACY),
        "ultra": dict(phase_detail=fwm.PHASE_ULTRA,
                      model_fidelity=fwm.FIDELITY_ULTRA)}
+# Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
+# (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
+RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
 
 
 def spectrum(D_GHz, *, T, P_pump, P_probe, w_pump, w_probe, L, angle,
@@ -171,7 +174,8 @@ def spectrum(D_GHz, *, T, P_pump, P_probe, w_pump, w_probe, L, angle,
             line_strength=ls, loss_frac=0.055, qe=fwm.QE_DETECTOR,
             coarse_points=npts, fine_points=0,
             scan_min=center + dmin * 1e-3, scan_max=center + dmax * 1e-3,
-            velocity_step=vstep, velocity_cutoff=vcut, branch=-1, **FID[fid])
+            velocity_step=vstep, velocity_cutoff=vcut, branch=-1,
+            response_method=RESPONSE_METHOD, **FID[fid])
     s["delta_mhz"] = (s["probe_axis_GHz"] - center) * 1e3
     return s
 

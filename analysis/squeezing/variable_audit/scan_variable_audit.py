@@ -156,6 +156,9 @@ GOLD = dict(D_GHz=0.9, T=394.15, P_pump=0.600, P_probe=8e-6,
             w_pump=530e-6, w_probe=330e-6, L=12.5e-3, angle=0.32,
             delta_mhz=-8.0)
 ULTRA = dict(phase_detail=fwm.PHASE_ULTRA, model_fidelity=fwm.FIDELITY_ULTRA)
+# Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
+# (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
+RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
 _GOLD_SCAN = None
 _GOLD_SCAN_LOCK = Lock()
 
@@ -210,7 +213,8 @@ def scan(cfg, *, window_mhz=350.0, **over):
                 coarse_points=npts, fine_points=0,
                 scan_min=center - window_mhz * 1e-3,
                 scan_max=center + window_mhz * 1e-3,
-                velocity_step=5.0, velocity_cutoff=3.0, branch=-1, **ULTRA)
+                velocity_step=5.0, velocity_cutoff=3.0, branch=-1,
+                response_method=RESPONSE_METHOD, **ULTRA)
         result["delta_mhz"] = (result["probe_axis_GHz"] - center) * 1e3
         if is_gold:
             _GOLD_SCAN = result
@@ -290,7 +294,8 @@ def sec_tpd(quick=False):
                 coarse_points=121, fine_points=0,
                 scan_min=center + (d0 - 15.0) * 1e-3,
                 scan_max=center + (d0 + 15.0) * 1e-3,
-                velocity_step=5.0, velocity_cutoff=3.0, branch=-1, **ULTRA)
+                velocity_step=5.0, velocity_cutoff=3.0, branch=-1,
+                response_method=RESPONSE_METHOD, **ULTRA)
         d = (s["probe_axis_GHz"] - center) * 1e3
         k = int(np.nanargmax(s["G_s"]))
         r0["delta_peak"] = float(d[k])

@@ -31,6 +31,10 @@ from gabes.schemes import fwm                       # noqa: E402
 from gabes.core import blas_single_thread           # noqa: E402
 from gabes import observables as ob                 # noqa: E402
 
+# Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
+# (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
+RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
+
 # ---- Fixed reference values (Sim et al.), EXCEPT loss=0 ---------------------
 P_PUMP = 0.6
 P_SEED = 8e-6
@@ -64,7 +68,8 @@ def deepest_point(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP,
             line_strength=ls, loss_frac=0.0, qe=QE,
             coarse_points=coarse, fine_points=0,
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
-            velocity_step=vstep, velocity_cutoff=3.0, branch=BRANCH)
+            velocity_step=vstep, velocity_cutoff=3.0, branch=BRANCH,
+            response_method=RESPONSE_METHOD)
     Gs, Gc = spec["G_s"], spec["G_c"]
     # The η=1 diagnostic selects one operating point on the δ axis.
     s_ideal_dB = ob.intensity_difference_squeezing_dB(Gs, Gc, 1.0)

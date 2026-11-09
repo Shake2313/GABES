@@ -43,6 +43,10 @@ from gabes import atoms, constants, doppler, hyperfine, kernels, observables  # 
 from gabes.schemes import fwm  # noqa: E402
 from gabes.core import blas_single_thread  # noqa: E402
 
+# Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
+# (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
+RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
+
 # ---- Fixed Sim et al. reference values (everything except Δ, T) -------------
 P_PUMP = 0.6        # W   (600 mW)  -- adjustable, gain saturates anyway
 P_SEED = 8e-6       # W   (8 uW)
@@ -84,7 +88,8 @@ def best_squeezing(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP):
             line_strength=LINE_STRENGTH, loss_frac=LOSS_FRAC, qe=QE,
             coarse_points=coarse, fine_points=0,
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
-            velocity_step=vstep, velocity_cutoff=3.0, branch=BRANCH)
+            velocity_step=vstep, velocity_cutoff=3.0, branch=BRANCH,
+            response_method=RESPONSE_METHOD)
     S = spec["S_dB"]
     i = int(np.nanargmin(S))
     delta_mhz = (spec["probe_axis_GHz"][i] - center) * 1e3
@@ -106,7 +111,10 @@ def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP):
     all-temperature table is no longer valid — the table is rebuilt per T with
     `fwm.collisional_atom(T)`. The (δ × Δ_eff) grid is still shared across all Δ
     at this temperature: Δ_eff = Δ − k·v is unioned over the whole Δ range.
-    Returns (tables, v_grid, weights, master_delta_eff).
+    With the pole method the response is `fwm.ChiPoleRows` (one eigendecomposition
+    per δ, every row guarded against the table at the median Δ_eff); the grid
+    method, or a failed guard, builds the (δ × Δ_eff) table.
+    Returns (response, v_grid, weights, master_delta_eff).
     """
     atom_T = fwm.collisional_atom(T_K)
     v_grid, weights = doppler.velocity_grid(T_K, dv=vstep, cutoff_sigma=3.0)
@@ -116,22 +124,33 @@ def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP):
     Op = fwm.rabi_freq(P_PUMP, fwm.W_PUMP)
     Os = fwm.rabi_freq(P_SEED, fwm.W_PROBE)
     with blas_single_thread():
+        if RESPONSE_METHOD != fwm.RESPONSE_GRID:
+            rows = fwm.chi_pole_rows(
+                Op, Op, Os, Os, delta_axis, BRANCH, atom=atom_T,
+                guard_delta_eff=float(np.median(master_delta_eff)))
+            if rows is not None:
+                return rows, v_grid, weights, master_delta_eff
         tables = fwm.chi_matrix_table(
             Op, Op, Os, Os, delta_axis, master_delta_eff, BRANCH, atom=atom_T)
     return tables, v_grid, weights, master_delta_eff
 
 
-def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
-                      D_GHz, T_K):
+def _averaged_chi(tables, master_delta_eff, v_grid, weights, D_GHz):
+    """Maxwell-averaged (chi_ss, chi_cs, chi_sc, chi_cc) at one Δ on exact velocity samples."""
     Delta = 2.0 * np.pi * float(D_GHz) * 1e9
     delta_eff = Delta - constants.K_VEC * v_grid
+    if isinstance(tables, fwm.ChiPoleRows):
+        return tables.mean(delta_eff, weights)
     idx = np.searchsorted(master_delta_eff, delta_eff)
     if not np.array_equal(master_delta_eff[idx], delta_eff):
         raise RuntimeError("master Delta_eff axis lost an exact velocity sample")
-    chi_ss_avg = tables[0][:, idx] @ weights
-    chi_cs_avg = tables[1][:, idx] @ weights
-    chi_sc_avg = tables[2][:, idx] @ weights
-    chi_cc_avg = tables[3][:, idx] @ weights
+    return tuple(table[:, idx] @ weights for table in tables)
+
+
+def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
+                      D_GHz, T_K):
+    chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = _averaged_chi(
+        tables, master_delta_eff, v_grid, weights, D_GHz)
 
     # Mirror compute_spectrum: pure-85Rb CRC density + first-principles coupling
     # normalization p_F/[2(2I+1)] on top of the residual LINE_STRENGTH.

@@ -58,6 +58,10 @@ from gabes.core import blas_single_thread  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402
 from gabes import observables  # noqa: E402
 
+# Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
+# (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
+RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
+
 OUT = ROOT / "analysis" / "squeezing" / "squeezing_v6_tolerance"
 DOC_OUT = ROOT / "docs" / "squeezing_report" / "squeezing_v6_tolerance.png"
 
@@ -105,7 +109,8 @@ def _solve(D_GHz, T_C, P_probe, coarse=COARSE):
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
             velocity_step=VELOCITY_STEP, velocity_cutoff=VELOCITY_CUTOFF,
             branch=BRANCH,
-            phase_detail=fwm.PHASE_ULTRA, model_fidelity=fwm.FIDELITY_ULTRA)
+            phase_detail=fwm.PHASE_ULTRA, model_fidelity=fwm.FIDELITY_ULTRA,
+            response_method=RESPONSE_METHOD)
     tpd_mhz = (spec["probe_axis_GHz"] - center) * 1e3
     hn = spec.get("hardened_noise") or {}
     n = tpd_mhz.size

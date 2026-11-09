@@ -41,6 +41,10 @@ from gabes import constants, observables, species  # noqa: E402
 from gabes.schemes import fwm, magneto  # noqa: E402
 from gabes.core import blas_single_thread  # noqa: E402
 
+# Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
+# (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
+RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
+
 
 OUT_STEM = "resonant_hanle_squeezing_reference"
 RB85_REF = (species.RB85, 2, 3)       # GABES FWM frequency origin
@@ -297,6 +301,7 @@ def compute_source(cfg: SourceConfig, settings: dict) -> dict:
             phase_detail=settings["phase_detail"],
             pump_probe_angle_deg=cfg.angle_deg,
             model_fidelity=settings["phase_detail"],
+            response_method=RESPONSE_METHOD,
         )
     op = fwm.operating_point(spec, cfg.delta_code_mhz, branch=-1)
     rb87_probe = offset_from_fwm_origin_ghz(*RB87_PROBE)
