@@ -10,7 +10,7 @@ from gabes import fwm_experiment_gain as practical
 from gabes import fwm_measured_gain as measured
 
 
-RECORD = Path(__file__).resolve().parents[1]/"analysis/fwm_experiment_20261022/gain_profile.json"
+RECORD = Path(__file__).resolve().parent/"fixtures/fwm_experiment_20261022/gain_profile.json"
 
 
 @pytest.fixture(scope="module")

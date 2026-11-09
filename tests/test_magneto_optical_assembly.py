@@ -14,7 +14,7 @@ from gabes import magneto_optical as optical
 
 @lru_cache(maxsize=1)
 def _reference():
-    path = (Path(__file__).resolve().parents[1]/"analysis"/
+    path = (Path(__file__).resolve().parent/"fixtures"/
             "magneto_optical_assembly_20261030"/"before_magneto_multilevel.py")
     name = "gabes._optical_assembly_reference"
     spec = importlib.util.spec_from_file_location(name, path)

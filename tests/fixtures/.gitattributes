@@ -1,0 +1,2 @@
+# Keep fixture copies byte-identical to their recorded hashes.
+* -text

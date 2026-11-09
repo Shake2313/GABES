@@ -1,8 +1,6 @@
 """Measured-reference units, support and explicit apparatus-context controls."""
 
-import hashlib
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -10,25 +8,6 @@ from scipy.interpolate import PchipInterpolator
 
 from gabes import fwm_measured_gain as measured
 from gabes_ui.export import to_json_primitive
-
-
-ROOT = Path(__file__).resolve().parents[1]
-EVIDENCE = ROOT/"docs/grand_challenge/gain_calibration_2026_10_16"
-
-
-def test_observations_are_raw_workbook_voltages_with_common_pump_off_denominator():
-    document = json.loads((EVIDENCE/"workbook_ooxml.json").read_text(encoding="utf-8"))
-    cells = {cell["cell"]: cell["value"] for row in document["sheets"][0]["rows"] for cell in row}
-    actual = measured.observations()
-    np.testing.assert_array_equal(actual["eom_MHz"], [cells[f"A{row}"] for row in range(5, 28)])
-    for arm, column in (("probe", "C"), ("conjugate", "D")):
-        voltages = np.array([cells[f"{column}{row}"] for row in range(5, 28)])
-        np.testing.assert_array_equal(actual[f"{arm}_voltage_mV"], voltages)
-        np.testing.assert_array_equal(actual[f"{arm}_ratio"], voltages/cells["B1"])
-    assert actual["probe_ratio"][-1] == .86/35.
-    assert actual["probe_ratio"][-1] != .8046*.86/35.
-    actual["probe_ratio"][:] = -1
-    assert np.all(measured.observations()["probe_ratio"] > 0)
 
 
 def test_frequency_sign_and_unrounded_hyperfine_origin():
@@ -95,22 +74,6 @@ def test_probe_measured_peak_plateau_and_conjugate_peak_are_preserved():
     assert np.max(actual["measured_gain_conjugate"]) == pytest.approx(890./35., rel=5e-15)
     assert measured.reference_curve(3033.)["measured_gain_conjugate"] > (
         measured.reference_curve(3034.)["measured_gain_conjugate"])
-
-
-def test_reference_record_identity_and_observation_contract_are_preserved():
-    profile = measured.profile()
-    body = (ROOT/profile["reference_record"]).read_bytes()
-    assert hashlib.sha256(body).hexdigest() == measured.REFERENCE_RECORD_SHA256
-    record = json.loads(body)
-    assert record["source_workbook_sha256"] == measured.SOURCE_WORKBOOK_SHA256
-    assert record["model_id"] == measured.MODEL_ID
-    data = measured.observations()
-    for key in ("eom_MHz", "probe_ratio", "conjugate_ratio"):
-        np.testing.assert_array_equal(record["source_points"][key], data[key][::-1])
-    assert record["quality"]["sampled_interpolation_validation_passed"]
-    assert not record["quality"]["development_acceptance_passed"]
-    assert profile["sampled_interpolation_validation_passed"]
-    assert not profile["predictive_calibration_accepted"]
 
 
 def test_fixed_alternating_diagnostic_is_distinct_from_exact_node_agreement():

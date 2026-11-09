@@ -1,7 +1,5 @@
 """Cross-document claims that must change together."""
-import json
 from pathlib import Path
-from urllib.parse import quote
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -24,17 +22,6 @@ def test_repository_visibility_wording_is_consistently_public():
     assert "소스 (private)" not in guide
 
 
-def test_archived_paper_preserves_reproducibility_and_zeeman_caveats():
-    paper_flat = _flat("docs/squeezing_report/squeezing_paper.tex")
-    assert "openly available in the GitHub repository" in paper_flat
-    assert "retained raw scan archives" in paper_flat
-    assert "available only in their archived rendered form" in paper_flat
-    assert "archived scan data underlying every figure" not in paper_flat
-    assert "scripts that regenerate every figure" not in paper_flat
-    assert paper_flat.count("24-level Zeeman CG-sum diagnostic") >= 2
-    assert "CG-weighted Zeeman corrections" not in paper_flat
-
-
 def test_readme_preserves_biphoton_compatibility_and_coupling_limits():
     # Generic biphoton/API claims belong to the active project documentation;
     # the current analytic publication covers seeded double-Lambda theory.
@@ -54,33 +41,3 @@ def test_readme_preserves_biphoton_compatibility_and_coupling_limits():
     assert "separate from Ultra's normalized axial crossing-angle profile" in (
         readme_flat
     )
-
-
-def test_current_publications_preserve_conditional_claim_boundaries():
-    # Publication policy makes the manifest authoritative; retired editions
-    # must not become prerequisites for checking the current scientific claims.
-    publications = json.loads(
-        _read("docs/grand_challenge/current_publications.json"))["publications"]
-    readme = _read("README.md")
-    for publication in publications.values():
-        assert (ROOT / publication["source"]).is_file()
-        assert (ROOT / publication["artifact"]).is_file()
-        assert f'({quote(publication["artifact"])})' in readme
-
-    physics = _flat(publications["analytic_reconstruction"]["source"])
-    report = _flat(publications["squeezing_report"]["source"])
-    quotient = _flat(publications["quotient_structure"]["artifact"])
-    assert "$0.74$ remains an assumed residual" in physics
-    assert "not a microscopic squeezing prediction" in physics
-    assert (
-        "Internal QRT and complete-positivity tests constrain the chosen model; "
-        "they do not validate an experimental squeezing value."
-    ) in physics
-    assert "The reported thermal ensemble is not converged" in physics
-    assert "원자 입력의 독립 예측 아님" in report
-    assert "전체 thermal 수렴 미검증" in report
-    assert (
-        "출력값 하나의 일치, 작은 방정식 잔차, 양의 공분산만으로 "
-        "두 물리 모델의 동치를 판단하지 않는다"
-    ) in quotient
-    assert "절대 squeezing 예측은 성립하지 않았다" in quotient

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from scipy.integrate import solve_ivp
 
-from analysis.grand_challenge.reference.atomic_qrt import qrt_ordered_spectrum
+from fixtures.atomic_qrt import qrt_ordered_spectrum
 from gabes import constants, core, species
 from gabes.psr_full_obe import solve_psr_pump
 from gabes.psr_homodyne import psr_homodyne_readout

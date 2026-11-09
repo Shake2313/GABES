@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from gabes import magneto_multilevel as current
-from analysis.magneto_speed_20261030.validation import (
+from fixtures.magneto_speed_20261030.validation import (
     _json, array_check, branch_cases, compare_backend, compare_scheme_case,
     load_baselines, small_scheme_cases,
 )

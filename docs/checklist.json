@@ -8519,6 +8519,47 @@
       ],
       "review_source": "docs/checklist.json#_external_code_review_2026_10_30",
       "last_reviewed_at": "2026-10-30"
+    },
+    {
+      "id": "fwm-legacy-gain-replay-retirement",
+      "area": "gabes/fwm_gain_closure.py + gabes/schemes/fwm.py (legacy_gain_calibration_fixture, gain_closure_enabled)",
+      "title": "Decide whether main keeps the retired FWM gain-hotfix replay path",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P3",
+      "effort": "small",
+      "status": "needs_decision",
+      "adoption_status": "user_approved_registration_only",
+      "problem": "User decision 2026-11-09 (repository split S2): tests/test_fwm_gain_hotfix.py and tests/test_fwm_tpd_gain_hotfix.py move to the archive with the dated analysis/fwm_gain_hotfix records, and this retirement question is registered. ⟦AI⟧ Until it is decided, the legacy replay code (24 references in gabes) stays in main without tests there.",
+      "decision_required": [
+        "Remove the legacy replay path from main (its records and tests stay in the archive), or keep it with a main-side regression test."
+      ],
+      "acceptance_criteria": [
+        "⟦AI⟧ Either the replay path is gone from main with no remaining callers, or main has a test that exercises it without archive records."
+      ],
+      "source_documents": [
+        "docs/repo_restructure/README.md"
+      ],
+      "last_reviewed_at": "2026-11-09"
+    },
+    {
+      "id": "gc-absolute-path-ledger-reader",
+      "area": "analysis/grand_challenge/variance_reduction_pilot_shadow.py (archive) + docs/grand_challenge/variance_reduction_2026_10_13",
+      "title": "Read absolute-path GC input ledgers relative to the repository before S4",
+      "origin": "ai_review_of_changed_implementation",
+      "priority": "P2",
+      "effort": "small",
+      "status": "ready",
+      "adoption_status": "user_approved_registration_only",
+      "problem": "⟦AI⟧ review.json (488 entries) and pilot-shadow-review.json (248 entries) key input_byte_ledger by absolute G:\\ paths, so tests/quantum/test_variance_reduction_pilot_shadow.py::test_preregistration_does_not_touch_future_grid passes only at the original checkout path. The archive repository will be cloned elsewhere.",
+      "acceptance_criteria": [
+        "⟦AI⟧ The reader maps recorded absolute keys to repository-relative paths; the sealed records keep their bytes.",
+        "⟦AI⟧ The test passes in a checkout at another path."
+      ],
+      "source_documents": [
+        "docs/repo_restructure/README.md",
+        "analysis/repo_split_s1_20261109/README.md"
+      ],
+      "last_reviewed_at": "2026-11-09"
     }
   ],
   "_daily_report_sync_history": [

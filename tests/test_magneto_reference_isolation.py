@@ -6,8 +6,8 @@ from types import ModuleType
 
 import pytest
 
-from analysis.magneto_speed_20261030 import validation as speed
-from analysis.magneto_optical_assembly_20261030 import validation as optical
+from fixtures.magneto_speed_20261030 import validation as speed
+from fixtures.magneto_optical_assembly_20261030 import validation as optical
 
 
 ALIASES = (

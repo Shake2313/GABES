@@ -16,6 +16,24 @@
     - 태그 커밋과 87243e9의 차이는 이 기록 파일·허브·checklist뿐이고, 코드 변경은 없음.
     - 절대경로 GC 테스트는 원래 경로라서 통과함. 다른 경로에 clone하면 실패하므로 S4 전 해결 대상으로 유지.
   - 다음: S2 (main의 결과물 의존 끊기).
+- 2026-11-09: **S2 진행 중** (사용자 "S2 시작").
+  - ⟦AI⟧ 경계 도구 [`tools/split_boundary.py`](../../tools/split_boundary.py)를 만듦.
+    - 규칙은 순서대로 적용하고, 처음 맞는 규칙이 이김. 정적 참조 검사와 main 전용 sparse checkout도 함께 함.
+    - HEAD 기준 main 608개 파일(12.2 MB), 아카이브 4,753개(2.48 GB).
+  - ⟦AI⟧ main 전용 checkout 첫 실행: 2,154 통과, 46 실패, 21 오류. 원인 테스트 파일은 9개.
+  - 사용자 결정 2026-11-09:
+    - magneto 동결 기준 비교 96개는 기준 코드를 fixture로 복사해 main에 남김.
+    - 퇴역한 FWM gain hotfix 테스트 50개는 아카이브로 보냄. legacy replay 코드를 정리할지는 checklist `fwm-legacy-gain-replay-retirement`로 따로 결정.
+  - ⟦AI⟧ 처리:
+    - [`tests/fixtures/`](../../tests/fixtures/README.md): atomic_qrt, gain_profile, magneto 기준 코드 6개. 바이트 복사이고, optical 검증 모듈만 import 한 줄을 고침.
+    - 아카이브로 보내는 테스트: FWM 보정 검증 6개, gain hotfix 2개, `test_fwm_docs_consistency`, 새로 떼어낸 `test_publication_records`·`test_fwm_measured_gain_records`.
+    - `tests/test_repo_size_guard.py`: main 쪽 파일당 1.5 MB(static 5 MB), 전체 50 MB.
+    - `.claude/skills`와 `launch.json`을 추적함.
+    - checklist `gc-absolute-path-ledger-reader`(S4 전에 해결) 등록.
+  - ⟦AI⟧ 출처 경로 규칙: main의 코드·`gabes/data`가 인용하는 `analysis/…`, `docs/grand_challenge/…` 경로는 바꾸지 않음.
+    - 바이트와 해시를 유지하기 위해서임.
+    - 이 경로들은 아카이브 저장소의 `pre-split-2026-11-09`(또는 그 이후 커밋)에서 해석함. README 안내는 S3에서 함.
+  - ⟦AI⟧ S3로 미룬 것: main 문서(README 80개, ui_redesign log 31개 등)가 아카이브 경로를 가리키는 링크 정리, R4의 `docs/papers/`, 두 저장소용 AGENTS.md 분리. 링크 대상이 아카이브 저장소의 최종 URL에 따라 정해지기 때문임.
 - 2026-11-09: S1 진행 기록.
   - 미커밋 분류, Drive 중복 객체 정리, 전체 pytest 1회 실행 완료. 결과는 아래 **S1 진행 기록**.
   - 2026-11-09 사용자 "착지 진행" → 통과 묶음 로컬 커밋 완료. push 없음.

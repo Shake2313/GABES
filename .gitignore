@@ -15,7 +15,11 @@ __pycache__/
 .streamlit/secrets.toml
 st.log
 .venv/
-.claude/
+# Claude Code: share project skills and the preview launch config; keep
+# personal settings and temporary files local.
+.claude/*
+!.claude/skills/
+!.claude/launch.json
 references/*
 !references/fwm_experiments/
 !references/psr_experiments/
