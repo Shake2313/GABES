@@ -124,6 +124,7 @@ SAS ready = 첫 페이지 로드 포함 (다른 scheme은 전환 후).
 ## 추가 후보
 - [x] FWM plot의 δ 마커 직접 드래그 — 2026-10-21 사용자 요청, D11 반영.
 - [x] scheme deep link (`?scheme=`) — 2026-10-21 웹 디자인 피드백 패치 요청으로 반영.
+
 ## SABES · 광학 테이블 마감 — 2026-10-22
 
 직접 사용자 요청: [SABES 디자인 규칙](../SABES/design_rules.md)을 실제 화면에 적용.

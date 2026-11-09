@@ -193,7 +193,6 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 - 다른 미커밋 gain 모델을 제외한 HEAD 기반 후보에서 focused **313 passed**, 50.06s. 후속 defaults 렌더 순서 수정 후 해당 **70 passed**, 4.27s. 기존 `datetime.utcnow()` 경고만 남음. 공유 물리 엔진 무변경으로 전체 수치 회귀·GC 생략.
 - 독립 PSR 수치/캐시 리뷰, UI 상태·저장 순서 재리뷰, 커밋 범위 리뷰 모두 추가 조치 항목 없음. 다른 staged 변경은 별도 인덱스로 보존.
 
-
 ## 2026-10-30 · PSR polarization squeezing 별도 스킴
 
 직접 사용자 요청: 기존 원자·편광 계산을 재사용하여 PSR 편광 스퀴징을 별도 스킴으로 구현하고 근사·유효 범위를 명시.
@@ -203,30 +202,6 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 - `psr` 등록: Rb85/87 D1/D2 다준위 PSR 기울기 + 조건부 Gaussian shear/분포 손실. 위상/광학 디튜닝 전환, 직교 Stokes 잡음·0 dB, 흡수·검출 효율·가정한 원자 초과잡음 조절.
 - 원자 초과잡음 기본값 0은 생략으로 표시. 근사 범위 밖 구간 음영·운전점 상태, 실패값 비표시, 모델/유효 범위 JSON 포함. [수식·범위·검증](../psr/README.md).
 - focused 184 passed; 마지막 음영 경계 수정 후 해당 스킴 18 passed. Edge 두 모드·초과잡음 조절·범위 경고 확인, 콘솔 오류 0. 공유 물리 엔진 수정 없음; 전체 회귀·GC 생략.
-
-
-## 2026-10-30 · FWM quadrature phase scan
-
-직접 사용자 요청: Intensity difference / Quadrature phase scan 전환, 운전점 gain 수치,
-직교 quadrature 교차 곡선·0 dB 기준선 구현. PSR은 후속 작업.
-
-### ⟦AI⟧ 구현·검증
-
-- 표시 전환·detuning 선택은 원자 결과 재사용. phase view는 실수 위상정합 Jasperse의
-  4×4 공분산, 기존 amplitude RIN, shot-noise seed phase·입력 XP 상관 0 가정.
-  두 LO 공동 회전 0–180°, B=A+90°. 외부 손실 1회, 공분산 선형 보간, 범위 밖 unavailable.
-  Gain은 운전점 수치로 표시. 기존 IDS noise model 선택 복원. JSON에 공분산·정의·가정 보존.
-- 위상축의 detuning 확대·늦은 그래프 드래그 차단. 검수에서 발견한 MHz 경계 roundoff는
-  기존 IDS와 같은 1e−9 MHz 허용오차로 수정. phase curve·범례에 동일 팔레트 사용.
-- `python -m pytest -q tests/test_fwm_quadrature.py tests/test_fwm_phase_integration.py tests/test_fwm_phase_ui.py tests/test_fwm_measured_gain_integration.py tests/test_fwm_passive_l1_integration.py tests/test_fwm_experiment_integration.py tests/test_jasperse_integration.py tests/test_plot_focus.py tests/test_liveplot.py --durations=10`: **116 통과**, 25.83s.
-  기존 `datetime.utcnow` 경고 7건. 초기 AppTest segmented-control 직렬화 실패는 기존 우회 범위를
-  새 선택기까지 확장해 해결; 실제 선택기 전환은 브라우저 검수.
-- 실제 Edge: phase/IDS 왕복·Passive L1 복원, −8→−10 MHz 운전점 변경,
-  gain·extrema 갱신, 교차 곡선·0 dB·범례 확인. 브라우저 오류 0.
-  [화면](../../output/playwright/fwm_quadrature_phase_20261030.png).
-- 원자 solver·공유 quantum engine 무변경. 전체 suite·GC campaign은 범위 밖으로 생략.
-  유효모델 확장이며 미시적·유한 RF squeezing 인증 아님. 필수 검증 이월 없음.
-
 
 ## 2026-10-30 · Atomic 표시 통일 (D16)
 
@@ -249,6 +224,28 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 - 공통 이름 스타일: 12→14.4px, 굵기600, 본문색, 줄바꿈 허용. 계산·결과·표시 항목 목록 무변경.
 - readout/design 관련 pytest **29 통과**, 1.46s. 실제 FWM 데스크톱/모바일 및 23개 표시줄·102개 이름 모음의 두 화면 폭 검수: 잘림0·가로 overflow0. 전체 수치 회귀·GC 생략.
 - 커밋 직전 이번 변경만 포함한 후보 디렉터리 검증: 기존 93개 표시·상호작용 검사 + Magneto/Rydberg readout-render 2개, **95 통과**, 17.13s. 다른 작업의 원자 모델·UI 확장 없이 통과.
+
+## 2026-10-30 · FWM quadrature phase scan
+
+직접 사용자 요청: Intensity difference / Quadrature phase scan 전환, 운전점 gain 수치,
+직교 quadrature 교차 곡선·0 dB 기준선 구현. PSR은 후속 작업.
+
+### ⟦AI⟧ 구현·검증
+
+- 표시 전환·detuning 선택은 원자 결과 재사용. phase view는 실수 위상정합 Jasperse의
+  4×4 공분산, 기존 amplitude RIN, shot-noise seed phase·입력 XP 상관 0 가정.
+  두 LO 공동 회전 0–180°, B=A+90°. 외부 손실 1회, 공분산 선형 보간, 범위 밖 unavailable.
+  Gain은 운전점 수치로 표시. 기존 IDS noise model 선택 복원. JSON에 공분산·정의·가정 보존.
+- 위상축의 detuning 확대·늦은 그래프 드래그 차단. 검수에서 발견한 MHz 경계 roundoff는
+  기존 IDS와 같은 1e−9 MHz 허용오차로 수정. phase curve·범례에 동일 팔레트 사용.
+- `python -m pytest -q tests/test_fwm_quadrature.py tests/test_fwm_phase_integration.py tests/test_fwm_phase_ui.py tests/test_fwm_measured_gain_integration.py tests/test_fwm_passive_l1_integration.py tests/test_fwm_experiment_integration.py tests/test_jasperse_integration.py tests/test_plot_focus.py tests/test_liveplot.py --durations=10`: **116 통과**, 25.83s.
+  기존 `datetime.utcnow` 경고 7건. 초기 AppTest segmented-control 직렬화 실패는 기존 우회 범위를
+  새 선택기까지 확장해 해결; 실제 선택기 전환은 브라우저 검수.
+- 실제 Edge: phase/IDS 왕복·Passive L1 복원, −8→−10 MHz 운전점 변경,
+  gain·extrema 갱신, 교차 곡선·0 dB·범례 확인. 브라우저 오류 0.
+  [화면](../../output/playwright/fwm_quadrature_phase_20261030.png).
+- 원자 solver·공유 quantum engine 무변경. 전체 suite·GC campaign은 범위 밖으로 생략.
+  유효모델 확장이며 미시적·유한 RF squeezing 인증 아님. 필수 검증 이월 없음.
 
 ## 2026-10-30 · 다른 스킴 상단 중복 문구 제거
 
@@ -273,7 +270,6 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 - 표시·상호작용 관련 pytest **93 통과**, 12.49s: `test_fwm_excess_noise`, `test_ui_design_feedback`, `test_ui_readout`, `test_plotcard_alignment`, `test_liveplot`, `test_update_status` 및 `test_fwm_generic`의 short-label/info/full-scan-render 3개. 최초 검사에서 새 라벨의 상태 안내 누락 발견·수정 후 통과.
 - Chrome 1440×1000: 새 축/입력/readout 라벨·상단 캡션0·드래그 preview→ready 확인. 확정 후 요약문 공백, 앱 예외0·브라우저 오류0. 기존 Streamlit theme 경고 존재. [화면](../../output/playwright/fwm_labels_20261030.png).
 - 계산식·엔진 무변경. 전체 수치 회귀·GC campaign 생략. 다른 스킴 감량 후보는 미수정.
-
 
 ## 2026-10-30 · UI 배포 후보 검수
 
@@ -540,6 +536,20 @@ OD 정렬·FWM TPD 드래그 중 즉시 미리보기. 반영 완료.
   [FWM 드래그](../../output/playwright/live_patch_20261021/fwm_gesture.json),
   [OD desktop](../../output/playwright/live_patch_20261021/od_desktop.png),
   [OD mobile](../../output/playwright/live_patch_20261021/od_mobile.png).
+
+## ⟦AI⟧ 2026-10-16 · Jasperse NF·계산값 슬라이더
+
+- 직접 사용자 요청: 고정N/기존 gain-linear a 제거, seed고전a/계산shotb,
+  after-cell/QE 조절 및 양팔 계산total효율, Squeezing Degree [dB]=10log10NF.
+- Derived slider는 입력/default/cache key에서 제외하고 계산 후 동일 schema 위치에 채운다.
+  b는 a 바로 아래, total효율은 after-cell/QE 아래에 표시한다. export/SABES도 현재NF 사용.
+- 실제 Edge1440×1000: b와total2개의 disabled속성·tabfocus제거·클릭/방향키 무반응 확인.
+  QE92→80%에서 total74.7454/84.6991→64.9960/73.6514%, b와gain불변.
+  [화면](../../output/playwright/jasperse_20261016_qe80.png),
+  [검증](../grand_challenge/jasperse_2026_10_16/ui_validation.json).
+- 물리량·단위·추출범위와 전체검증은 [검수 기록](../grand_challenge/jasperse_2026_10_16/README.md)에 둔다.
+- 최종 전체2392통과·4skip·0실패, Python263개 불변. 최초8실패는 폐기 UI/검출계약 검사로,
+  두 테스트 파일 이관 후 재실행 PASS. 역사 허용오차·봉인 자료 유지.
 
 ## 2026-10-07 · AutoOD 기반 OD 비교·조정 개선
 
