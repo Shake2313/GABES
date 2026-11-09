@@ -1,7 +1,8 @@
 {
   "_repo_restructure_2026_11_09": {
     "provenance": "Explicit user request: split heavy results and Grand Challenge records into a private archive repository, keep a light GABES main, and consolidate [tests+tools+analysis] and [gabes_ui+assets+SABES UI] with reusable blocks and a Migration Manifest. R1-R8 are user decisions 2026-11-09, each choosing the ⟦AI⟧-recommended option; boundary, step and gitignore details are ⟦AI⟧ design with direction approved by the user.",
-    "status": "S0-decided-S1-pending",
+    "status": "S1-complete-S2-pending",
+    "s1_baseline": "Tag pre-split-2026-11-09. HEAD 87243e9 (after R2 2460c6c and C3 87243e9), clean tree: full pytest 3,733 passed / 3 skipped / 0 failed in 1,297 s at the original checkout path. Record: analysis/repo_split_s1_20261109/baseline.json.",
     "hub": "docs/repo_restructure/README.md",
     "decisions": {
       "R1": "Current repo Shake2313/fwm-squeezing-app becomes the private archive by rename; full history, paths and hashes preserved. Name GABES-archive is an ⟦AI⟧ proposal, not yet confirmed.",
@@ -14,7 +15,7 @@
       "R8": "Revise the Grand Challenge rule 'Preserve historical evidence bytes and paths' at split time: pre-split evidence is re-verified at the archive split tag; post-split evidence records {repo, commit, path}. Wording draft in the hub."
     },
     "steps": "S0 decisions (done 2026-11-09); S1 freeze and baseline; S2 cut main dependencies on records and add gitignore/size guard, then full pytest; S3 split and Streamlit re-link; S4 archive engine submodule and GC re-verification at split tag; S5 main consolidation; S6 validation.",
-    "next": "S1: land other sessions' work, triage the untracked analysis files, tag pre-split, store baseline full pytest + tests/quantum + GC validator results.",
+    "next": "S2: cut main dependencies on records (16 tests, 4 runtime provenance citations, gabes/data), split the FWM validation tests, add the size guard, resolve the absolute-path GC ledger reader before S4; then full pytest.",
     "unverified": [
       "Whether the Streamlit Community Cloud app URL survives re-linking to the new repository.",
       "Exact packed size of the filtered main (estimate: about 21 MB zlib of blobs).",

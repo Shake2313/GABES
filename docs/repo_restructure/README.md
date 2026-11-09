@@ -6,7 +6,17 @@
 ## 현재 상태
 
 - 2026-11-09: S0 결정 완료 (R1–R8). 파일 이동·코드 수정 없음.
-- 2026-11-09: S1 진행 중.
+- 2026-11-09: **S1 완료.** 기준선 확정, 태그 `pre-split-2026-11-09`(이 기록 커밋), push 없음.
+  - 사용자 요청: R2 `2460c6c`·C3 `87243e9` 포함 확인 후 S1 전체 테스트로 기준선 확정.
+  - ⟦AI⟧ 두 커밋 모두 HEAD 조상 확인. 실행 전후 작업트리 미커밋 0건.
+  - ⟦AI⟧ HEAD `87243e9`, 원래 경로에서 `python -m pytest -q --durations=20 -p no:cacheprovider` → **3,733 통과 / 3 skip / 0 실패, 1,297 s**, Python 3.14.2.
+    - 기록: [baseline.json](../../analysis/repo_split_s1_20261109/baseline.json), 로그 `pytest_baseline_87243e9.txt`.
+    - 포함: `tests/quantum` 전체.
+    - 제외: 봉인 캠페인 재실행과 외부 GC 검증기 (AGENTS 범위 규칙).
+    - 태그 커밋과 87243e9의 차이는 이 기록 파일·허브·checklist뿐이고, 코드 변경은 없음.
+    - 절대경로 GC 테스트는 원래 경로라서 통과함. 다른 경로에 clone하면 실패하므로 S4 전 해결 대상으로 유지.
+  - 다음: S2 (main의 결과물 의존 끊기).
+- 2026-11-09: S1 진행 기록.
   - 미커밋 분류, Drive 중복 객체 정리, 전체 pytest 1회 실행 완료. 결과는 아래 **S1 진행 기록**.
   - 2026-11-09 사용자 "착지 진행" → 통과 묶음 로컬 커밋 완료. push 없음.
 
@@ -199,7 +209,7 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | 단계 | 내용 | 상태 |
 |---|---|---|
 | S0 | 결정 R1–R8 | 완료 2026-11-09 |
-| S1 | 동결: 다른 세션 작업 착지. untracked analysis 1,499개 분류(아카이브 커밋/삭제). `(1)` 사본 정리. 태그 `pre-split-<date>`. 기준선 저장: full pytest, `tests/quantum`, GC 검증기. | 진행 중 (위 S1 진행 기록) |
+| S1 | 동결: 다른 세션 작업 착지. untracked analysis 1,499개 분류(아카이브 커밋/삭제). `(1)` 사본 정리. 태그 `pre-split-<date>`. 기준선 저장: full pytest, `tests/quantum`, GC 검증기. | 완료 2026-11-09 (`pre-split-2026-11-09`, 3,733 통과 / 0 실패) |
 | S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 대기 |
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 대기 |
 | S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 대기 |
