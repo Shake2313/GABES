@@ -6,7 +6,7 @@ is its machine-readable boundary (S2). Rules are ordered; the first match wins.
 
     python tools/split_boundary.py report              # counts + violations
     python tools/split_boundary.py report --json out.json
-    python tools/split_boundary.py checkout DIR        # main-only worktree at HEAD
+    python tools/split_boundary.py checkout DIR        # main-only shared clone at HEAD
 
 A pattern ending in "/**" matches everything below that folder; "*" never
 crosses a "/".
@@ -211,13 +211,17 @@ def checkout(args) -> int:
     files = tracked()
     main_files = [p for p in files if classify(p)[0] == MAIN]
     target = Path(args.dir).resolve()
-    subprocess.run(["git", "worktree", "add", "--detach", "--no-checkout", str(target), "HEAD"],
-                   cwd=ROOT, check=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                          check=True).stdout.strip()
+    # A shared clone borrows this repository's objects without touching its
+    # .git/worktrees (which a synced drive can hold locked).
+    subprocess.run(["git", "clone", "--shared", "--no-checkout", "--quiet", str(ROOT), str(target)],
+                   check=True)
     patterns = "\n".join("/" + p.replace("\\", "/") for p in main_files) + "\n"
     subprocess.run(["git", "sparse-checkout", "set", "--no-cone", "--stdin"], cwd=target,
                    input=patterns.encode("utf-8"), check=True)
-    subprocess.run(["git", "checkout", "--detach", "HEAD"], cwd=target, check=True)
-    print(f"main-only worktree: {target} ({len(main_files)} files)")
+    subprocess.run(["git", "checkout", "--quiet", "--detach", head], cwd=target, check=True)
+    print(f"main-only checkout: {target} at {head[:7]} ({len(main_files)} files)")
     return 0
 
 
