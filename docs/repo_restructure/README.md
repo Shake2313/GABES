@@ -115,7 +115,19 @@
     - R8에 따르면 옛 증거 재현은 `pre-split-2026-11-09`에서 함. 아카이브 HEAD 테스트는 `engine/` 경로로 고치거나, 옛 배치 전용으로 표시하고 사유와 함께 건너뛰어야 함. Codex 담당이며, 작업본에서 수정이 진행 중임(미커밋).
   - ⟦AI⟧ 아카이브 작업본에서 `engine/` index가 비어 있었음. Drive가 남긴 `.git/modules/engine/index.lock`(19:47)을 git 프로세스가 없는 것을 확인한 뒤 지우고, HEAD에서 index를 다시 만듦. 파일은 바꾸지 않았고 상태는 깨끗함.
   - ⟦AI⟧ 사용자 승인 후 `GABES-archive` main에 d1a74d8을 push함(3da3b58 → d1a74d8). push 시점에 있던 Codex의 미커밋 수정은 보내지 않음.
-  - 다음: Codex가 아카이브 HEAD 테스트를 통과 상태로 만들면 같은 사본에서 다시 확인함. 그다음 S5(main 통합).
+  - Codex f9d1130 (아카이브, `test(archive): verify split engine layout`): 위 64개 실패를 수정함.
+    - 바뀐 것은 테스트, fixture 1개, GC 기록 문서뿐임. 봉인 실행기·증거 파일, 엔진 고정 커밋 f333a50, 태그 `pre-split-2026-11-09`는 그대로임.
+    - 엔진 소스를 확인하는 감사와 FWM 영수증 검사는 실제 `engine/` 소스를 읽음. 영수증의 소스 이름은 그대로 `gabes/…`임.
+    - 합성 thermal campaign 테스트는 입력 소스 목록에 `engine/gabes` 경로를 넣어 기존 해시 검사와 실패 조건 검사를 그대로 실행함.
+    - 원래 소스 배치가 필요한 새 하위 프로세스 검사 8개에는 `pre_split_layout`을 붙여, 재현 위치(`pre-split-2026-11-09`)를 사유로 적고 건너뜀. 그중 compare 검사 1개는 d1a74d8에서 `gabes` import 오류를 의도한 거부로 잘못 받아들여 통과하던 검사임.
+    - Zeeman Kim 고정점 검사용으로 Stage-1 캐시 1개(6,058 B)를 `tests/fixtures/fwm_zeeman_stage1/`에 복사함. 이 캐시는 git에서 추적하지 않던 파일이라 새 clone에서 실패했음.
+  - ⟦AI⟧ f9d1130 독립 재검증 (같은 다른 경로 사본, Python 3.14.2, `python -B -m pytest -q -rs --durations=20 -p no:cacheprovider`): **1,373 통과 / 11 skip / 0 실패, 491 s**. 실행 후 상태는 깨끗함.
+    - skip 11개 = `pre_split_layout` 8 + Windows 심볼릭 링크 권한이 필요한 기존 검사 3.
+    - ledger reader의 봉인 입력 3개 해시가 다시 일치함.
+    - fixture는 아카이브 로컬 캐시 원본과 sha256이 같음(7ef597f7…). 테스트가 이 해시와 캐시 키를 확인함.
+    - 테스트 수정으로 약해진 assertion은 없음. 엔진 소스 해시를 기록값과 대조하는 검사가 새로 붙음.
+  - ⟦AI⟧ 사용자 승인("둘 다 push") 후 `GABES-archive` main에 f9d1130을 push함(d1a74d8 → f9d1130). 검증용 사본(2.9 GB)은 미push 내용이 없는 것을 확인한 뒤 지움.
+  - 다음: S5(main 통합).
 - 2026-11-11: **Codex S4 인계 반영** (사용자가 Codex 답장 전달).
   - 473017f(ledger reader)·0fab129(GC 아카이브 재현 규칙) 확인.
     - 원래 경로에서 `python -m analysis.grand_challenge.variance_reduction_ledger_reader` 통과(입력 3개 해시 일치).
@@ -384,7 +396,7 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | S1 | 동결: 다른 세션 작업 착지. untracked analysis 1,499개 분류(아카이브 커밋/삭제). `(1)` 사본 정리. 태그 `pre-split-<date>`. 기준선 저장: full pytest, `tests/quantum`, GC 검증기. | 완료 2026-11-09 (`pre-split-2026-11-09`, 3,733 통과 / 0 실패) |
 | S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 완료 2026-11-09 |
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
-| S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8 push). 아카이브 HEAD 테스트 64개 실패 수정은 Codex 진행 중 |
+| S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8, f9d1130: 아카이브 HEAD 1,373 통과 / 0 실패, 옛 배치 검사 8개는 분리 태그에서 재현) |
 | S5 | main 통합 (이전 P2–P5) | 대기 |
 | S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 대기 |
 
