@@ -53,6 +53,8 @@
        - main 쪽 172 MB는 남김: references 원문 PDF, `__pycache__`, UI 스크린샷.
        - 분류되지 않은 1.62 GB(`tmp/`, `.playwright-cli`, `.pytest_cache`)는 남기거나 지움.
        - **검증용 저장소 사본**(`output/ui_caption_commit_20261030` 2.19 GB, `output/ui_release_20261030` 2.18 GB, `output/commit_ui_20261022` 2.14 GB, `tmp/fwm-tpd-commit-20261002-55375359` 0.86 GB, `tmp/gain-hotfix-commit-check`, `tmp/checkpoint-validation-20260914` 등)은 지울지 옮길지 **사용자 결정 필요**.
+         - **2026-11-11 사용자 결정: 삭제.** ⟦AI⟧ 저장소 스냅샷(`candidate/`, `.snapshot/`, `baseline/`, `parent/`)과 zip·tar, 전체 사본 2곳을 지움: 30개 항목, 7.94 GB, 파일 10,295개, 실패 0. 추적 파일 중 이 폴더들을 참조한 것은 이 허브와, 검증 위치를 적은 기록 두 곳(`output/rydberg_opacity_20261023/mirror_parity.json`, `analysis/pole_reuse/GATE.md`)뿐이었음.
+         - ⟦AI⟧ 남긴 것: 커밋 준비 폴더 4곳의 작은 기록(메타데이터·patch·pytest 로그·스크립트, 약 5.4 MB)과 `tmp/gain-hotfix-commit-check`의 로그 2개. S3-L에서 아카이브 폴더로 옮김. Drive 휴지통에서 30일간 복구 가능.
     3. 현재 폴더의 `.git`을 filter-repo로 만든 main 저장소로 교체함. 이때 아카이브 쪽 추적 파일(이미 아카이브 작업본에 있음)을 지움.
        - 지우기 전에 아카이브 작업본의 HEAD가 같은 커밋이고 파일이 모두 있는지 확인함.
        - 교체는 되돌릴 수 있게 함: 옛 `.git`은 아카이브 폴더 clone이 끝날 때까지 보존.
@@ -69,7 +71,7 @@
     - [`AGENTS.main.md`](AGENTS.main.md): GC 절을 빼고 아카이브 안내, fixture 규칙, 크기 감시를 넣음.
     - [`AGENTS.archive.md`](AGENTS.archive.md): GC 절, engine submodule, R8, docs/papers 갱신 절차. Codex 검토 필요.
   - ⟦AI⟧ **S3 실행 순서 (runbook):**
-    0. 선행 조건: Codex GC 작업 착지, 작업트리 깨끗, 검증용 사본 7.8 GB 처리 결정.
+    0. 선행 조건: Codex GC 작업 착지(473017f·0fab129 완료), 작업트리 깨끗, 검증용 사본 정리(2026-11-11 삭제 완료), `AGENTS.archive.md` Codex 검토.
     1. 마지막 문서 커밋:
        - `links --apply` 실행.
        - `AGENTS.main.md` → `AGENTS.md`.
