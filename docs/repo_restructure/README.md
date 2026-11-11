@@ -95,6 +95,27 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-11: **S4 완료 (Codex d1a74d8), 독립 검증, 아카이브 push** (사용자 "S4 진행", push 승인 "지금 push").
+  - Codex d1a74d8 (아카이브):
+    - main 경로 626개를 제거함.
+    - `engine/` submodule을 GABES f333a50에 고정함.
+    - 아카이브 루트에 `AGENTS.md`를 설치함.
+    - 근거 기록은 아카이브 `docs/grand_challenge/archive_s4_2026_11_11.md`.
+    - weekly-review 자동화를 아카이브 작업본으로 옮김(05:00 Asia/Seoul). 사용자가 노트북의 자동화를 원격으로 옮김.
+  - ⟦AI⟧ 고정된 엔진 f333a50과 Split Manifest `main_head` f89c7a2는 코드가 같음. 차이는 문서, User Guide, 분리 기록, `test_docs_consistency`뿐임.
+  - ⟦AI⟧ 다른 경로에 clone한 사본(`core.longpaths=true`)에서 S4 확인 4개가 모두 통과함.
+    - `gabes.core`가 `engine/gabes/core.py`에서 읽힘.
+    - ledger reader의 봉인 입력 3개 해시가 일치함: plan 749f6f66…, sources.zip db9e039c…, grid-p3-s11 5f6075bf….
+    - `tests/quantum/test_variance_reduction_pilot_shadow.py` 7개 통과.
+    - GC 등록부는 아카이브 루트에 있음(`grand_challenges` 1, 항목 1). 제품 등록부는 `engine/docs/checklist.json`(항목 115, `grand_challenges` 없음). 분리 허브는 `engine/docs/repo_restructure/`.
+  - ⟦AI⟧ 같은 사본에서 아카이브 HEAD 전체 테스트: **1,317 통과 / 64 실패 / 3 skip, 495 s**. 실행 후 상태는 깨끗함.
+    - 데이터·봉인 기록 손상은 없음. 실패는 모두 엔진이 `gabes/`에서 `engine/gabes/`로 옮겨진 데서 생김.
+    - 봉인 thermal campaign의 고정 소스 목록 검사 41개: ensemble 24, extend 14, grid·diagnose·cross_compare 각 1. `engine/gabes/__init__.py`를 목록 밖 소스로 거부함.
+    - 엔진 소스를 `ROOT/gabes/…`에서 직접 읽는 테스트 23개: spatial_uncertainty_audit 11, FWM zeeman 검증 3, stark 검증 1, `tests/quantum` 감사 8개 파일 각 1. 대부분 FileNotFoundError로 실패함.
+    - R8에 따르면 옛 증거 재현은 `pre-split-2026-11-09`에서 함. 아카이브 HEAD 테스트는 `engine/` 경로로 고치거나, 옛 배치 전용으로 표시하고 사유와 함께 건너뛰어야 함. Codex 담당이며, 작업본에서 수정이 진행 중임(미커밋).
+  - ⟦AI⟧ 아카이브 작업본에서 `engine/` index가 비어 있었음. Drive가 남긴 `.git/modules/engine/index.lock`(19:47)을 git 프로세스가 없는 것을 확인한 뒤 지우고, HEAD에서 index를 다시 만듦. 파일은 바꾸지 않았고 상태는 깨끗함.
+  - ⟦AI⟧ 사용자 승인 후 `GABES-archive` main에 d1a74d8을 push함(3da3b58 → d1a74d8). push 시점에 있던 Codex의 미커밋 수정은 보내지 않음.
+  - 다음: Codex가 아카이브 HEAD 테스트를 통과 상태로 만들면 같은 사본에서 다시 확인함. 그다음 S5(main 통합).
 - 2026-11-11: **Codex S4 인계 반영** (사용자가 Codex 답장 전달).
   - 473017f(ledger reader)·0fab129(GC 아카이브 재현 규칙) 확인.
     - 원래 경로에서 `python -m analysis.grand_challenge.variance_reduction_ledger_reader` 통과(입력 3개 해시 일치).
@@ -361,9 +382,9 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 |---|---|---|
 | S0 | 결정 R1–R8 | 완료 2026-11-09 |
 | S1 | 동결: 다른 세션 작업 착지. untracked analysis 1,499개 분류(아카이브 커밋/삭제). `(1)` 사본 정리. 태그 `pre-split-<date>`. 기준선 저장: full pytest, `tests/quantum`, GC 검증기. | 완료 2026-11-09 (`pre-split-2026-11-09`, 3,733 통과 / 0 실패) |
-| S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 대기 |
-| S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 대기 |
-| S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 대기 |
+| S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 완료 2026-11-09 |
+| S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
+| S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8 push). 아카이브 HEAD 테스트 64개 실패 수정은 Codex 진행 중 |
 | S5 | main 통합 (이전 P2–P5) | 대기 |
 | S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 대기 |
 
