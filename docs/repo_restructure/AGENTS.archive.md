@@ -1,9 +1,8 @@
 # AGENTS.md (GABES-archive)
 
 ⟦AI⟧ Draft for the archive repository root, to install at S4 of the repository
-split (docs/repo_restructure/README.md); the Grand Challenge parts need Codex
-review. Instructions for every coding agent here (Codex, Claude Code, others);
-`CLAUDE.md` only imports it; `docs/grand_challenge/AGENTS.md` adds GC rules.
+split. Instructions for coding agents in the archive. `CLAUDE.md` imports
+these rules. `docs/grand_challenge/AGENTS.md` adds GC rules.
 
 ## What this repository is
 
@@ -12,14 +11,19 @@ dated analysis records, reports, daily reviews and generated outputs, with the
 full history of the project before the split. The engine, UI, product tests and
 user documentation live in the public repository `Shake2313/GABES` (main).
 
-- **Engine:** `engine/` is a git submodule pinned to one GABES main commit.
-  Pytest runs with `pythonpath = engine`, so `import gabes` resolves there.
-  Bump the pin in its own commit, name the main commit and why, and run the GC
-  checks the bump affects.
-- **Pre-split evidence:** everything recorded before the split resolves at tag
-  `pre-split-2026-11-09`, where the original paths and engine exist. Re-verify
-  sealed evidence there; archive HEAD need not run pre-split validators
-  unchanged (user decision R8, 2026-11-09).
+- **Engine.** `engine/` is a Git submodule pinned to the main commit
+  recorded in the Split Manifest at S4. The archive pytest configuration
+  sets `pythonpath = engine`. Check that `gabes` imports and validators
+  that hash live engine sources both resolve to this checkout. Record
+  the archive revision and engine commit with validation. Bump the pin
+  in its own commit and run the affected GC checks.
+- **Historical replay (R8).** `pre-split-2026-11-09` (`0c95124`) records the
+  S1 baseline. Use the revision and layout recorded for each historical
+  result. Some validators also require the original checkout path.
+- **Verification from a different checkout path.** Use the archive
+  revision that includes the portable reader (introduced in `473017f`)
+  to verify the same pinned pilot-shadow inputs. From the archive root,
+  run `python -m analysis.grand_challenge.variance_reduction_ledger_reader`.
 - **New evidence** records provenance as `{repo, commit, path}` for every
   source it depends on, main or archive.
 
@@ -32,6 +36,9 @@ user documentation live in the public repository `Shake2313/GABES` (main).
   `.agents/skills/grand-challenge-head-manager/SKILL.md` and its durable
   hypermemory, then `blueprint.md` for the living master design/current card and
   `NEXT_SESSION.md`. See **Grand Challenge Head Manager** below.
+- **GC registry (R12)** → `docs/grand_challenge/checklist.json` owns GC
+  milestones and tasks. Use `engine/docs/checklist.json` for product
+  items at the pinned main revision.
 - **Lean in Grand Challenge** → `docs/grand_challenge/lean_workflow.md`: an evolving
   working default for selected formalization tasks. Propose better equivalent
   methods to the user, revise the guide within the authorized scope, and append its
@@ -46,15 +53,19 @@ user documentation live in the public repository `Shake2313/GABES` (main).
   version differences belong only in `docs/grand_challenge/`, not the three
   scientific documents. This policy continues after Grand Challenge completion.
   After publishing a new edition here, replace its byte copy in main
-  `docs/papers/` in one main commit.
-- **Daily and weekly reviews** → `docs/daily_report/`, written by the
-  `gabes-weekly-review` automation (`.agents/skills/gabes-weekly-review/`), which
-  reviews the engine at the pinned main commit.
+  `docs/papers/` and update the edition, archive reference and hash in
+  `docs/papers/README.md` in the same main commit.
+- **Daily and weekly reviews** → `docs/daily_report/`. Move the existing
+  `gabes-weekly-review` automation after verifying the archive checkout
+  and pinned `engine/`. Preserve 05:00 Asia/Seoul, the weekday assignments
+  and model settings. The archive holds the review workflow at
+  `.agents/skills/gabes-weekly-review/`.
 - **Dated analysis records** → `analysis/<topic>_<date>/`; generated outputs →
   `output/`. Results too large for GitHub (over 100 MB) are Release assets with a
   sha256 record beside their path (example:
   `analysis/squeezing/operating_point_20261014/coarse.jsonl.external.json`).
-- **Repository split record** → `docs/repo_restructure/` and the Split Manifest.
+- **Repository split record** → the Split Manifest and the main split hub
+  at `engine/docs/repo_restructure/README.md`.
 
 ## Sealed records
 
