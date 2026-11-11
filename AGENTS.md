@@ -12,6 +12,8 @@ source. `CLAUDE.md` only imports it; `docs/grand_challenge/AGENTS.md` adds GC ru
 - **Deferred or planned work and user decisions** → `docs/checklist.json`.
   Anything intentionally left for later, and every pending or recorded value
   decision, lives there, not in code TODOs.
+  Grand Challenge registry entries (the `grand_challenges` section and GC items)
+  live in `docs/grand_challenge/checklist.json` (user decision R12, 2026-11-11).
 - **Grand Challenge research turns** → `docs/grand_challenge/AGENTS.md`, then
   `.agents/skills/grand-challenge-head-manager/SKILL.md` and its durable
   hypermemory, then `blueprint.md` for the living master design/current card and

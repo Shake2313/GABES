@@ -14,6 +14,8 @@ own `AGENTS.md`.
 - **Deferred or planned work and user decisions** → `docs/checklist.json`.
   Anything intentionally left for later, and every pending or recorded value
   decision, lives there, not in code TODOs.
+  It holds product items only; the Grand Challenge registry lives in
+  `GABES-archive` (`docs/grand_challenge/checklist.json`).
 - **Scientific documents** → `docs/papers/`: the current editions only, as byte
   copies. Sources, earlier editions, development records and the publication
   policy live in `GABES-archive`. When the archive publishes a new edition,

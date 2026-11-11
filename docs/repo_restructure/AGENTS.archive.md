@@ -25,6 +25,9 @@ user documentation live in the public repository `Shake2313/GABES` (main).
 
 ## Where things live
 
+- **Grand Challenge registry** → `docs/grand_challenge/checklist.json` (the
+  `grand_challenges` section and GC items; user decision R12). The product
+  registry is `engine/docs/checklist.json`, read-only here at the pinned commit.
 - **Grand Challenge research turns** → `docs/grand_challenge/AGENTS.md`, then
   `.agents/skills/grand-challenge-head-manager/SKILL.md` and its durable
   hypermemory, then `blueprint.md` for the living master design/current card and

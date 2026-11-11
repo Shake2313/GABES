@@ -109,6 +109,11 @@
     | R12 | **GC 등록부는 아카이브의 별도 파일.** `docs/checklist.json`의 `grand_challenges` 절(127 KB)과 GC 항목을 `docs/grand_challenge/checklist.json`으로 옮김. main checklist에는 제품 항목만 남음(옛 내용은 히스토리에 남음). GC 규칙·메모리 링크를 새 파일로 연결. |
     | R13 | **FWM legacy affine replay는 분리 후 main에서 퇴역**(Codex 권고안). 옛 설정값은 받아들이되, replay를 명시적으로 요청하면 퇴역 사실과 아카이브 태그를 알려 줌. 재현은 아카이브 `pre-split-2026-11-09`에서 유지. |
 
+  - ⟦AI⟧ **R12 실행 (2026-11-11, 사용자 "지금 분리"):**
+    - `grand_challenges` 절과 GC 항목 `gc-absolute-path-ledger-reader`를 [`docs/grand_challenge/checklist.json`](../grand_challenge/checklist.json)으로 옮김.
+    - main checklist는 해당 블록만 삭제함(635 KB → 472 KB, 항목 116 → 115). 다른 키와 항목은 그대로임.
+    - 옮긴 값은 원본과 동일함. `grand_challenges`를 읽는 실행 코드는 봉인 스크립트 `mean_gain_2026_10_15/close_session.py`뿐이며, pre-split 태그에서 재현하므로 고치지 않음.
+    - 현재 AGENTS.md와 두 초안에 새 위치를 적음. GC 규칙·head-manager 스킬·memory 링크는 Codex 담당.
   - ⟦AI⟧ **S4 확인 항목 (Codex 요청):**
     1. `engine/`이 Split Manifest의 main 커밋을 가리키는지, GC 테스트가 그 엔진을 import하는지, 소스를 해시하는 검증기가 실제 `engine/` 경로를 읽는지 확인.
     2. 다른 경로에 checkout한 아카이브 루트에서 ledger reader와 `tests/quantum/test_variance_reduction_pilot_shadow.py` 실행(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
