@@ -200,7 +200,7 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 ### ⟦AI⟧ 구현·검증
 
 - `psr` 등록: Rb85/87 D1/D2 다준위 PSR 기울기 + 조건부 Gaussian shear/분포 손실. 위상/광학 디튜닝 전환, 직교 Stokes 잡음·0 dB, 흡수·검출 효율·가정한 원자 초과잡음 조절.
-- 원자 초과잡음 기본값 0은 생략으로 표시. 근사 범위 밖 구간 음영·운전점 상태, 실패값 비표시, 모델/유효 범위 JSON 포함. [수식·범위·검증](../psr/README.md).
+- 원자 초과잡음 기본값 0은 생략으로 표시. 근사 범위 밖 구간 음영·운전점 상태, 실패값 비표시, 모델/유효 범위 JSON 포함. [수식·범위·검증](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/psr/README.md).
 - focused 184 passed; 마지막 음영 경계 수정 후 해당 스킴 18 passed. Edge 두 모드·초과잡음 조절·범위 경고 확인, 콘솔 오류 0. 공유 물리 엔진 수정 없음; 전체 회귀·GC 생략.
 
 ## 2026-10-30 · Atomic 표시 통일 (D16)
@@ -243,7 +243,7 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
   새 선택기까지 확장해 해결; 실제 선택기 전환은 브라우저 검수.
 - 실제 Edge: phase/IDS 왕복·Passive L1 복원, −8→−10 MHz 운전점 변경,
   gain·extrema 갱신, 교차 곡선·0 dB·범례 확인. 브라우저 오류 0.
-  [화면](../../output/playwright/fwm_quadrature_phase_20261030.png).
+  [화면](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/output/playwright/fwm_quadrature_phase_20261030.png).
 - 원자 solver·공유 quantum engine 무변경. 전체 suite·GC campaign은 범위 밖으로 생략.
   유효모델 확장이며 미시적·유한 RF squeezing 인증 아님. 필수 검증 이월 없음.
 
@@ -390,9 +390,9 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 - Advanced에서도 이전 토글 숨김. 내부 분석·저장 파일 호환용 입력은 유지.
 - Probe·conjugate와 범례 상시 표시. OFF conjugate는 주황색 점선. 기존 커서·선택점 순서 유지, gain·NF 계산식 보존.
 - 관련47개 통과. 전체 `python -m pytest -q`: **2707 통과·3 skip**, 1174.02s. 기존 UTC 경고13개.
-  작업 소스3개 전후SHA 동일. [검증 receipt](../../output/playwright/fwm_conjugate_20261022/validation.json).
+  작업 소스3개 전후SHA 동일. [검증 receipt](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/output/playwright/fwm_conjugate_20261022/validation.json).
 - [UI audit](audit/fwm_conjugate_20261022/summary.md): desktop/phone 정상, FWM Advanced 높이1652→1588px.
-  [Calibration OFF 화면](../../output/playwright/fwm_conjugate_20261022/calibration_off.png)에서 두 곡선·범례 확인, 실제 브라우저 오류0.
+  [Calibration OFF 화면](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/output/playwright/fwm_conjugate_20261022/calibration_off.png)에서 두 곡선·범례 확인, 실제 브라우저 오류0.
 
 ## 2026-10-22 · SABES 상단 요약 감량
 
@@ -415,14 +415,14 @@ Custom 분율만 표시하며 이름을 ⁸⁵Rb fraction (Natural 0.7217)로 �
 - `DEFAULTS`에 `2026-10-13 experiment`·`Sim Gold Reference`. 모드·숨김 입력까지 전체 복원.
 - `Save as default`: 이름 지정 → 브라우저 localStorage 또는 로컬 JSON 다운로드. `Import`: JSON 검증 후 복원.
 - 저장소 오류·잘못된 파일은 현재 설정 보존. 저장 응답 유실은 재전송, 이전 선택 응답은 새 드롭다운에 적용되지 않도록 분리.
-- 이전 비교는 [내부 분석 CLI](../../analysis/fwm_experiment_20261022/measured_reference_comparison.py)로 보존. 물리 계산식·GC 변경 없음.
+- 이전 비교는 [내부 분석 CLI](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_experiment_20261022/measured_reference_comparison.py)로 보존. 물리 계산식·GC 변경 없음.
 - [UI audit](audit/fwm_defaults_20261022/summary.md): 5개 스킴 desktop/phone 사이드바 왕복 정상, desktop 플롯 5/5 첫 화면 유지.
   FWM 플롯 상단 desktop 260→253px·phone 407→368px. 저장 메뉴 조건부 표시, 좁은 rail 줄바꿈 확인.
 - 전체 `python -m pytest -q`: **2704 통과·3 skip**, 1188.18s. 수집 후 최종 이름 선택 동기화 수정은 UI 두 파일에 한정;
   최종 관련 **97 통과**, 22.63s. 기존 UTC 경고. 다른 세션의 SABES 두 파일 변경은 receipt에 별도 기록.
   임시 검증 복사본 중복 수집은 `pytest.ini`의 output 제외로 해결.
 - 실제 브라우저: 저장·새로고침 후 목록 복원·선택·로컬 다운로드·가져오기·같은 수치의 사용자 이름 유지 확인.
-  [검증 receipt](../../output/playwright/fwm_defaults_20261022/validation.json), [저장 메뉴](../../output/playwright/fwm_defaults_20261022/save_options.png).
+  [검증 receipt](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/output/playwright/fwm_defaults_20261022/validation.json), [저장 메뉴](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/output/playwright/fwm_defaults_20261022/save_options.png).
 
 ## 2026-10-22 · SABES 광학 테이블 마감
 
@@ -545,9 +545,9 @@ OD 정렬·FWM TPD 드래그 중 즉시 미리보기. 반영 완료.
   b는 a 바로 아래, total효율은 after-cell/QE 아래에 표시한다. export/SABES도 현재NF 사용.
 - 실제 Edge1440×1000: b와total2개의 disabled속성·tabfocus제거·클릭/방향키 무반응 확인.
   QE92→80%에서 total74.7454/84.6991→64.9960/73.6514%, b와gain불변.
-  [화면](../../output/playwright/jasperse_20261016_qe80.png),
-  [검증](../grand_challenge/jasperse_2026_10_16/ui_validation.json).
-- 물리량·단위·추출범위와 전체검증은 [검수 기록](../grand_challenge/jasperse_2026_10_16/README.md)에 둔다.
+  [화면](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/output/playwright/jasperse_20261016_qe80.png),
+  [검증](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/jasperse_2026_10_16/ui_validation.json).
+- 물리량·단위·추출범위와 전체검증은 [검수 기록](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/jasperse_2026_10_16/README.md)에 둔다.
 - 최종 전체2392통과·4skip·0실패, Python263개 불변. 최초8실패는 폐기 UI/검출계약 검사로,
   두 테스트 파일 이관 후 재실행 PASS. 역사 허용오차·봉인 자료 유지.
 

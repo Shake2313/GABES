@@ -1,8 +1,8 @@
 # ⁸⁵Rb D1 FWM 실험 문헌 DB
 
-요청일: 2026-10-23. 범위: ⁸⁵Rb D1 double-Λ FWM의 intensity-difference squeezing 실험. 기존 [논문 CSV](../../archive/fwm_squeezing_paper_parameters.csv)의 10편 전부 추적, 원문 재검수·추가 문헌 조사. 이번 산출물은 DB. Gain 보정 패치·학습·성능 주장은 후속 작업.
+요청일: 2026-10-23. 범위: ⁸⁵Rb D1 double-Λ FWM의 intensity-difference squeezing 실험. 기존 [논문 CSV](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/archive/fwm_squeezing_paper_parameters.csv)의 10편 전부 추적, 원문 재검수·추가 문헌 조사. 이번 산출물은 DB. Gain 보정 패치·학습·성능 주장은 후속 작업.
 
-⟦AI⟧ 2026-10-30: 사용자 요청으로 레거시 CSV를 `archive/`에 원본 그대로 보관. 현재 문헌 DB는 이 폴더. CSV는 과거 분석 재현·10편 이관 확인에만 사용. [이동·복구 기록](../../archive/fwm_squeezing_csv_migration_2026-10-30.json).
+⟦AI⟧ 2026-10-30: 사용자 요청으로 레거시 CSV를 `archive/`에 원본 그대로 보관. 현재 문헌 DB는 이 폴더. CSV는 과거 분석 재현·10편 이관 확인에만 사용. [이동·복구 기록](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/archive/fwm_squeezing_csv_migration_2026-10-30.json).
 
 ## 열람
 

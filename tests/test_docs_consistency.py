@@ -16,9 +16,9 @@ def _flat(relative_path):
 def test_repository_visibility_wording_is_consistently_public():
     readme = _read("README.md")
     guide = _read("docs/Userguide/GABES_User_Guide_v2.html")
-    assert "github.com/Shake2313/fwm-squeezing-app` (public)" in readme
+    assert "github.com/Shake2313/GABES` (public)" in readme
     assert "로컬 설치용 공개 소스" in guide
-    assert "fwm-squeezing-app` (private)" not in readme
+    assert "Shake2313/GABES` (private)" not in readme
     assert "소스 (private)" not in guide
 
 

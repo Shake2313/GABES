@@ -190,7 +190,7 @@
 - 브라우저는 origin별 localStorage, 로컬은 버전·scheme 포함 JSON 다운로드. 파일시스템 직접 쓰기 권한 불필요.
 - 불러온 파일은 이름·스키마·타입·유한값·범위 검증 후 한 번에 적용. 다른 scheme·알 수 없는 입력은 거절.
 - 설정이 바뀌면 현재값과 일치하지 않는 프리셋 표시 해제. 같은 값의 사용자 기본값은 선택 이름 유지.
-- 이전 비교는 [내부 분석](../../analysis/fwm_experiment_20261022/README.md)에 보관. 현재 물리 계산식 변경 없음.
+- 이전 비교는 [내부 분석](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_experiment_20261022/README.md)에 보관. 현재 물리 계산식 변경 없음.
 
 ## D15 · Conjugate gain 기본 표시 — 2026-10-22
 

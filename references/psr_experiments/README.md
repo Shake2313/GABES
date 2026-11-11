@@ -26,7 +26,7 @@
 
 ## ⟦AI⟧ 현재 GABES 모델에 대한 개선 방향 — 제안, 미구현
 
-현재 구현은 [모델 문서](../../docs/psr/README.md)의 정적 회전 기울기, 일정한 shear·공통 흡수, 가정한 등방 excess noise에 기반. 아래는 문헌을 현재 근사와 대조한 우선순위이며 새로운 완료 기준이 아님.
+현재 구현은 [모델 문서](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/psr/README.md)의 정적 회전 기울기, 일정한 shear·공통 흡수, 가정한 등방 excess noise에 기반. 아래는 문헌을 현재 근사와 대조한 우선순위이며 새로운 완료 기준이 아님.
 
 | 순서 | 개선 대상 | 원문 근거 | 재사용·검증 방향 |
 |---|---|---|---|
@@ -50,4 +50,4 @@ python references/psr_experiments/verify_db.py
 
 원본 JSON 수정 후 생성. `--check`는 파일을 쓰지 않고 schema·출처·생성물 일치 확인. [validation.json](validation.json), [validation_detail.json](validation_detail.json), [manifest.json](manifest.json)에 결과·해시 기록. `_curate_foundations.py`는 초기 수작업 큐레이션 재현용이며 일상 갱신은 canonical JSON 편집 후 `build_db.py`만 사용.
 
-검증 범위는 문헌 DB·열람본·CSV 이전 경로. 물리 엔진 변경 없음. 수치 회귀·GC 캠페인은 실행 대상 아님. 레거시 FWM CSV는 [archive 원본](../../archive/fwm_squeezing_paper_parameters.csv)과 [복구 manifest](../../archive/fwm_squeezing_csv_migration_2026-10-30.json) 참조.
+검증 범위는 문헌 DB·열람본·CSV 이전 경로. 물리 엔진 변경 없음. 수치 회귀·GC 캠페인은 실행 대상 아님. 레거시 FWM CSV는 [archive 원본](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/archive/fwm_squeezing_paper_parameters.csv)과 [복구 manifest](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/archive/fwm_squeezing_csv_migration_2026-10-30.json) 참조.

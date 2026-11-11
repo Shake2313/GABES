@@ -46,7 +46,7 @@
 - 측정 감도·잡음 스펙트럼 기반 환산·광자 PSN·원자 SQL은 정의 보존. Cai 2022의 직접 응답 35.75와 잡음 평가 12.50 nV/cm/√Hz는 다른 기록.
 - 단위의 값·배율 보존. `uV/m/sqrt(Hz)`와 `nV/cm/sqrt(Hz)`는 같은 열에서 숫자만 비교하지 않음. CSV 별칭 정규화는 배율 환산을 수행하지 않음.
 - Cell input·detector·원자 위치장·외부 입사장 구분. 원문이 정의하지 않은 기준면은 `not_specified`. RF detuning과 optical probe detuning도 구분.
-- 빔 반경·직경·FWHM·spot size는 원문 정의 유지. 미지정은 `null`/`not_reported`. 다른 스캔·최적값을 하나의 가상 운전점으로 합치지 않음. Gold 그림 점 추출·모델 비교는 [별도 분석 보고서](../../analysis/rydberg_gold_validation_20261103/README.md)에 보관.
+- 빔 반경·직경·FWHM·spot size는 원문 정의 유지. 미지정은 `null`/`not_reported`. 다른 스캔·최적값을 하나의 가상 운전점으로 합치지 않음. Gold 그림 점 추출·모델 비교는 [별도 분석 보고서](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/rydberg_gold_validation_20261103/README.md)에 보관.
 - `apparatus_group`은 ⟦AI⟧ 잠정 연구실·장치 계열 태그. 독립 장치 여부 인증이 아님. `findings.claim`은 출처 재서술, `model_implication`은 향후 AI 해석을 구분하기 위한 열이며 현재 비워 둠.
 
 [스키마](SCHEMA.md) · [검색·접근 기록](SEARCH.md) · [검수](REVIEW.md) · [검증 결과](validation.json).

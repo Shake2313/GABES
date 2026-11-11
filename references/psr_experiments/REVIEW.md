@@ -32,6 +32,6 @@
 
 [viewer_validation.json](viewer_validation.json): 실제 브라우저의 검색·연구 유형·주제·포함 범위 필터, 근거 펼치기, 로컬 출처 링크 및 화면 점검 기록.
 
-레거시 FWM CSV 이동은 별도 [이동 검증](../../archive/fwm_squeezing_csv_migration_2026-10-30.validation.json) 참조. 원본 바이트 동일, 현재 reader·링크 수정, FWM DB 10편 legacy 보존 확인. 과거 시점의 source manifest·proofread snapshot·기존 PDF는 당시 경로를 유지하고 복구 manifest로 대응.
+레거시 FWM CSV 이동은 별도 [이동 검증](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/archive/fwm_squeezing_csv_migration_2026-10-30.validation.json) 참조. 원본 바이트 동일, 현재 reader·링크 수정, FWM DB 10편 legacy 보존 확인. 과거 시점의 source manifest·proofread snapshot·기존 PDF는 당시 경로를 유지하고 복구 manifest로 대응.
 
 검증 범위 밖: GABES 예측값·미시적 noise 모델 구현·보정 학습·GC 캠페인. 이번 작업은 문헌 DB와 파일 경로 이전.

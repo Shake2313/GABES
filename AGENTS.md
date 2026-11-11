@@ -1,7 +1,9 @@
 # AGENTS.md
 
 Instructions for every coding agent here (Codex, Claude Code, others); the single
-source. `CLAUDE.md` only imports it; `docs/grand_challenge/AGENTS.md` adds GC rules.
+source. `CLAUDE.md` only imports it. Grand Challenge work and dated research
+records live in the private archive repository `GABES-archive`, which has its
+own `AGENTS.md`.
 
 ## Where things live
 
@@ -12,25 +14,26 @@ source. `CLAUDE.md` only imports it; `docs/grand_challenge/AGENTS.md` adds GC ru
 - **Deferred or planned work and user decisions** → `docs/checklist.json`.
   Anything intentionally left for later, and every pending or recorded value
   decision, lives there, not in code TODOs.
-  Grand Challenge registry entries (the `grand_challenges` section and GC items)
-  live in `docs/grand_challenge/checklist.json` (user decision R12, 2026-11-11).
-- **Grand Challenge research turns** → `docs/grand_challenge/AGENTS.md`, then
-  `.agents/skills/grand-challenge-head-manager/SKILL.md` and its durable
-  hypermemory, then `blueprint.md` for the living master design/current card and
-  `NEXT_SESSION.md`. See **Grand Challenge Head Manager** below.
-- **Lean in Grand Challenge** → `docs/grand_challenge/lean_workflow.md`: an evolving
-  working default for selected formalization tasks. Propose better equivalent
-  methods to the user, revise the guide within the authorized scope, and append its
-  bottom revision history. Lean is not a blanket requirement for GC work.
-- **Scientific publication policy** → `docs/grand_challenge/publication_policy.md`;
-  current artifacts → `docs/grand_challenge/current_publications.json`.
-  Squeezing report owns experiment agreement/frontier exploration; analytic
-  reconstruction owns theory/precision; quotient structure owns the explicit
-  logical and order-theoretic organization. Each latest document must stand
-  alone. Preserve substantive content when revising; document every
-  omission/correction in Grand Challenge coverage records. Development logs and
-  version differences belong only in `docs/grand_challenge/`, not the three
-  scientific documents. This policy continues after Grand Challenge completion.
+  It holds product items only; the Grand Challenge registry lives in
+  `GABES-archive` (`docs/grand_challenge/checklist.json`).
+- **Scientific documents** → `docs/papers/`: the current editions only, as byte
+  copies. Sources, earlier editions, development records and the publication
+  policy live in `GABES-archive`. When the archive publishes a new edition,
+  replace the copy and the table in `docs/papers/README.md` in one main commit.
+- **Results, dated records and Grand Challenge** → `GABES-archive` (private).
+  Main keeps code, reusable pipelines, product tests, literature databases
+  (`references/*_experiments`) and user/developer docs.
+  - Paths under `analysis/`, `docs/grand_challenge/`, `docs/daily_report/` and
+    other archive folders that main code, data or docs cite resolve in
+    `GABES-archive` at tag `pre-split-2026-11-09` or later. Do not rewrite
+    those strings; they keep recorded bytes and hashes.
+  - Main tests never read archive records. When a test needs one, copy the
+    minimum into `tests/fixtures/` and record its source and hash in
+    `tests/fixtures/README.md`.
+  - `tests/test_repo_size_guard.py` keeps main light. New results, captures and
+    reports go to the archive, not main.
+- **Repository split** → `docs/repo_restructure/README.md`: plan, user
+  decisions and the boundary tool `tools/split_boundary.py`.
 
 ## Quick mental model
 
@@ -90,10 +93,10 @@ consistent. This is the main development direction. See
 ## Grand Challenge and practical FWM
 
 User policy, 2026-10-22: Grand Challenge and GABES FWM have distinct purposes.
-Source: [practical FWM implementation request](docs/fwm_experiment_2026_10_22/README.md).
+Source: [practical FWM implementation request](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/fwm_experiment_2026_10_22/README.md).
 
 - Grand Challenge pursues fundamental analytic squeezing and retains its own
-  registered acceptance criteria.
+  registered acceptance criteria, kept in `GABES-archive`.
 - Practical FWM serves the user's experiment. Approximate models, empirical
   coefficients, affine gain corrections and extrapolation are permitted tools.
   Grand Challenge no-fit or microscopic-completeness requirements must not block
@@ -133,12 +136,10 @@ This replaces the unconditional full-suite requirement in earlier instructions.
   trigger it. Reuse a passed run while relevant code, tests, data and environment
   remain unchanged; later localized edits need only affected checks unless they
   invalidate the broader result. State what each result covers.
-- GC suites/audits and expensive research campaigns are separate scopes. Omit
-  them when their model, shared engine, inputs, validators and evidence contracts
-  are unaffected. Changes to shared solvers may require GC checks even outside
-  GC folders. Do not treat all `tests/quantum` cases as unrelated by default.
-  Existing registered scientific acceptance criteria remain intact when claiming
-  their milestones; routine maintenance does not rerun sealed campaigns.
+- GC suites, audits and research campaigns run in `GABES-archive` against its
+  pinned engine. When a main change touches shared solvers or other engine code
+  that GC uses, say so in the handoff: the archive bumps its engine pin and runs
+  its affected GC checks. Main does not run them.
 - Report commands, outcomes and intentional omissions briefly. Focused success
   is not a full-suite PASS. Record deferred required validation before handoff.
   Do not restart a long run solely for unrelated prose edits or duplicate a run
@@ -165,7 +166,7 @@ An unmarked historical sentence does not establish human authorship.
 Keep essential mathematical assumptions, units and result scope with the claim.
 Consolidate repeated limitations once. This is an internal development convention;
 frontend, user guides and public Docs use ordinary reader-facing prose.
-Details: [internal provenance policy](docs/grand_challenge/internal_provenance.md).
+Details: [internal provenance policy](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/internal_provenance.md).
 
 ## Text encoding on Korean Windows
 
@@ -190,15 +191,8 @@ PowerShell's default code page here is CP949, not UTF-8, so non-ASCII text break
   scoped, commit or stash the work before leaving it, and close/delete the
   branch once the work is merged or no longer needed.
 
-## Grand Challenge Head Manager
+## Grand Challenge
 
-For every Grand Challenge session, including work outside its documentation
-folder, read and apply
-[Grand Challenge Head Manager](.agents/skills/grand-challenge-head-manager/SKILL.md)
-at start, relevant checkpoints and closure. Use its persistent linked memory
-to check long-term direction, closed work, failed approaches and repetition.
-Apply the latest user request; old AI proposals are working guidance, not new
-approval requirements. The same blueprint remains the master design. End every
-research turn with a principal-investigator review; update the same blueprint,
-close bounded work packages, and state the single next question. Sealed failures
-and official milestone criteria remain intact.
+Grand Challenge sessions run in the `GABES-archive` working copy, a separate
+folder from this one, and follow its `AGENTS.md` and its Grand Challenge Head
+Manager skill. Do not start GC research turns in this repository.

@@ -46,13 +46,13 @@ Nested validation across nine papers and five lab/apparatus groups reduced the
 geometric factor error from 7.27 to 3.51, but the training-only constant baseline
 scored 2.20: independent predictive accuracy is **not established**. The UI and
 JSON export retain this status and identify condition extrapolation.
-[Data, frozen protocol and held-out predictions](analysis/fwm_literature_calibration_20261023/README.md).
+[Data, frozen protocol and held-out predictions](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_literature_calibration_20261023/README.md).
 **Multi-paper χ propagation (experimental)** instead corrects the complex
 susceptibility couplings and diagonals before segmented optical propagation.
 Lab-group validation gives a factor error of 3.21 versus 2.20 for the constant
 baseline; red-detuned gain remains unresolved. Its experimental status, κ/d
 scales and extrapolation scope are shown in the readout and JSON.
-[Mechanism diagnosis, implementation and grouped validation](analysis/fwm_chi_calibration_20261023/README.md).
+[Mechanism diagnosis, implementation and grouped validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_chi_calibration_20261023/README.md).
 **Multi-paper pump/Stark + χ (experimental)** adds an effective pump Hamiltonian
 self-energy and recomputes the atomic response before susceptibility correction
 and propagation. Repeated lab-group validation gives a factor error of 1.99
@@ -60,18 +60,18 @@ versus 2.20 for the constant baseline; the held-out Allen power-peak error falls
 from 23.56 to 1.39 MHz. The red-detuned Kim group still fails the per-group gate,
 so overall predictive validation remains incomplete. Original atomic and noise
 results are retained separately.
-[Pump/Stark diagnosis, source-supported targets and validation](analysis/fwm_stark_calibration_20261023/README.md).
+[Pump/Stark diagnosis, source-supported targets and validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_stark_calibration_20261023/README.md).
 **Multi-paper Zeeman pump + χ (experimental)** is a separate diagnostic model
 with 24 actual sublevels, polarization-dependent optical pumping and the pump's
 consistent refractive phase. It does **not** resolve the red-detuned Kim gains:
 held-out predictions are 0.890 / 0.972 / 0.699 versus 5.6 / 3.8 / 1.9.
 Grouped prediction error is 5.74 versus the constant baseline's 2.20, so this
 mode is not a validated improvement over the previous Stark model.
-[Zeeman diagnosis, preserved failures and validation](analysis/fwm_zeeman_calibration_20261030/README.md).
+[Zeeman diagnosis, preserved failures and validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_zeeman_calibration_20261030/README.md).
 **Experimental Jasperse** includes both distributed vacuum-loss reservoirs with
 an explicit common-loss assumption. **Passive L1** remains selectable.
 These practical approximations are separate from Grand Challenge acceptance.
-[Implementation, calibration and validation](docs/fwm_experiment_2026_10_22/README.md).
+[Implementation, calibration and validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/fwm_experiment_2026_10_22/README.md).
 
 ## Schemes (current)
 
@@ -81,7 +81,7 @@ These practical approximations are separate from Grand Challenge acceptance.
 | A | **Lambda coherence (EIT / AT / CPT)** | one 3-level Lambda engine with regime-driven defaults, physical MHz/kHz controls, Rb/Cs D-line media, EIT transparency, AT splitting, and CPT dark resonance |
 | A | **Rydberg-EIT electrometry** | 85Rb cascade EIT / microwave AT spectrum for the 5S-5P-40D ladder and 37 GHz 40D-39F RF leg; first-order finite-IF weak-SIG response, AT→field calibration, balanced-detector PSN/RIN/electronics budget, temperature/cold-spot sweep, and conditional absolute sensitivity |
 | C — Magneto-optics | **Hanle / EIA / NMOR** | two distinct effects vs B: the **Hanle** effect (zero-field transmission dip/peak, EIA variant) from ground-state coherence, and **magneto-optical rotation** (MOR/NMOR, polarization-plane rotation) — both over the Zeeman manifold |
-| C | **Polarization squeezing (PSR)** | Rb85/Rb87 D1/D2 atomic self-rotation slope with conditional Gaussian polarization noise; phase and optical-detuning scans, distributed absorption, detector loss and explicit assumed atomic excess noise. [Model and applicability](docs/psr/README.md) |
+| C | **Polarization squeezing (PSR)** | Rb85/Rb87 D1/D2 atomic self-rotation slope with conditional Gaussian polarization noise; phase and optical-detuning scans, distributed absorption, detector loss and explicit assumed atomic excess noise. [Model and applicability](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/psr/README.md) |
 | D — Wave mixing | **FWM** | seeded 85Rb D1 double-Λ gains, optional 10/13 experimental peak/width/gain calibration, effective Jasperse two-arm noise, and a selectable passive L1 diagnostic; generic SFWM biphoton source estimates (`g²_SI(τ)`, CAR, rates, phase matching, velocity-class waveform) |
 
 Roadmap (parking lot): group-index / slow-light readout (OD/SAS now returns the
@@ -318,7 +318,7 @@ background, and technical/electronic/atomic noise require further validation.
 The UI identifies high optical depth and excitation outside the conservative
 weak-coupling range. The paper's sensitivity and optimum detuning are not
 calibration inputs.
-[References, implementation scope and checks](docs/magneto_budker_20261030/README.md).
+[References, implementation scope and checks](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/magneto_budker_20261030/README.md).
 
 ### Rydberg finite-IF electrometry and cell heating
 
@@ -379,42 +379,12 @@ python tests/test_schemes_render.py  # every registered scheme computes + render
 ```
 (or `pytest tests/`)
 
-Microscopic FWM 연구: `gabes/quantum/`, `gabes/fwm_quantum/`.
-독립 참조: `analysis/grand_challenge/`. [연구 기록](docs/grand_challenge/research_log.md).
-
-현행 연구 방향·작업 종결·매 턴 총책임자 검토: [총괄 설계](docs/grand_challenge/blueprint.md).
-[2026-10-02 감사](docs/grand_challenge/audit_2026_10_02/README.md): 실제 진전 확인, scoped 소과제 종결,
-실패한 v2 보존·다음 p3/seed811 pilot 제한. 감사 당시 회귀2091통과·3skip. [코드 리뷰](docs/grand_challenge/code_review_2026_10_02/README.md) 후보 회귀2044통과·4skip·실패0; 공식 milestone0/4 유지.
-
-과학 근거: [2026-09-28 점검·p3/seed11 완료](docs/grand_challenge/progress_2026_09_28/README.md).
-P3/seed11의48/48경로 통과, 기존120계산 재검증·새120계산 완료. 누적96고유 경로·480계산.
-4/9격자 원본 공동 감사 통과·5누락. P2→P3 변화3.68–36.17%, 여섯 metric 중 다섯 개가5% 초과.
-고정v2 `[2,3,4]`의 첫 필수 edge 실패. 실패 기록을 보존하고 더 미세한 창을 별도 선언해야 함.
-층별 진단·독립 행렬 검산·그림 대조 완료. 전체 thermal·절대 squeezing 미인증. 해당 실행의 코드 회귀2077통과·3skip·실패0.
-
-직전 완료: [p2 세 독립 seed 검증](docs/grand_challenge/thermal_campaign_p2_seed811_v2.md).
-P2/seed811의24/24경로 통과, 새120계산. Seed11·211·811의72고유 경로·360계산 확보.
-독립 seed 여섯 방향의 metric별 최대값 범위5.70–43.61%, 5% 기준 0/6방향 통과. 선언9격자 중3감사·6누락.
-전체 thermal·절대 squeezing 미인증. [이전 seed211 결과](docs/grand_challenge/thermal_campaign_p2_seed211_v2.md)와 실패 기록 보존.
-[고정 소스 계약](docs/grand_challenge/portable_thermal_campaign.md), [배치·재사용 실행](docs/grand_challenge/thermal_grid_execution.md).
-
-이전: [정확한 고유모드 적분·CF4 경로 가속](docs/grand_challenge/exponential_transport_derivation.md),
-[실제 thermal Rb 경로·재사용 계약](docs/grand_challenge/rb_thermal_ensemble.md).
-선택 경로·실제 thermal pilot6경로의 독립 오차 기준 통과.
-한 격자 진단까지 완료. 전체 thermal ensemble 인증은 후속.
-
-기준: [Rb 경로의 잡음원·응답 독립 검증](docs/grand_challenge/adjoint_transport_derivation.md),
-[상수 원자 앙상블 수렴 확장](docs/grand_challenge/transport_ensemble_refinement.md).
-실제 열적 Rb ensemble·nonlocal Maxwell·실험 squeezing 검증은 후속.
-
-기반: [연속 Gaussian 경로](docs/grand_challenge/smooth_transport_derivation.md),
-[엄격한 ensemble evidence 계약](docs/grand_challenge/transport_ensemble_derivation.md),
-[characteristic transport](docs/grand_challenge/transport_derivation.md).
-[정지 원자 공간 광장](docs/grand_challenge/spatial_field_derivation.md)·
-[공동 입력 불확도](docs/grand_challenge/spatial_uncertainty_derivation.md)·
-[RF 후처리](docs/grand_challenge/parallel_development.md)는 별도 조건부 검증.
-생산 scheme의 실험 검증된 squeezing 출력은 아직 비활성.
-전용 검사: `python -m pytest -q tests/quantum`.
+Microscopic FWM research code lives in `gabes/quantum/` and `gabes/fwm_quantum/`.
+Its Grand Challenge research — independent references, campaigns, audits, the
+research log and the master design — lives in the private research archive
+[`GABES-archive`](https://github.com/Shake2313/GABES-archive), which pins this engine
+and runs the GC test suite. Archive paths cited in this repository resolve there at
+tag `pre-split-2026-11-09`.
 
 ## Scientific documents
 
@@ -427,9 +397,9 @@ The current editions are in [`docs/papers/`](docs/papers/README.md).
 | [Analytic reconstruction](docs/papers/squeezing_analytic_reconstruction_v3.pdf) | Definitions, derivations, physical assumptions and theoretical precision |
 | [Quotient structure](docs/papers/fwm_quotient_structure_v3.2.html) | Logical dependencies, equivalences, partial orders and the conditions for each claim |
 
-[Publication policy](docs/grand_challenge/publication_policy.md) requires content
+[Publication policy](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/publication_policy.md) requires content
 preservation and keeps development/version records in Grand Challenge, including
-after its completion. [Current source and artifact paths](docs/grand_challenge/current_publications.json).
+after its completion. [Current source and artifact paths](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/current_publications.json).
 
 ## Adding a scheme
 
@@ -456,7 +426,7 @@ sidebar controls and the plots follow `param_schema()` and the observables dict.
   carriers use the F=2→F'=3 origin relative to the fine-structure centroid;
   atomic detuning is unchanged. `legacy_mean_field_fixture=True` restores the
   historical carrier/floor only for labelled snapshots.
-  [Independent light-shift and gain-plane review](docs/grand_challenge/mean_gain_2026_10_15/README.md).
+  [Independent light-shift and gain-plane review](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/mean_gain_2026_10_15/README.md).
 - Beam waists = **1/e² radius** (paper convention), not diameter. They are sidebar
   knobs (`pump_waist_um`, `probe_waist_um`) whose defaults are the paper geometry
   530 / 330 µm; `W_PUMP` / `W_PROBE` remain as those defaults. The pump waist sets
@@ -490,7 +460,7 @@ multiplier nor the local empirical output-gain fit. The correction control is
 removed. A historical API replay requires both
 `legacy_gain_calibration_fixture=True` and `gain_closure_enabled=True`;
 the old switch alone cannot enable calibration. The development method, data
-and labelled fixtures remain in [the historical development log](analysis/fwm_gain_hotfix/DEVLOG.md).
+and labelled fixtures remain in [the historical development log](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_gain_hotfix/DEVLOG.md).
 With **2026-10-13 lab** selected, the **Empirical gain calibration** toggle applies a frozen frequency shift/width
 and armwise gain correction to the current model. It remains active outside
 3022–3044 MHz and after changing temperature, powers, detuning or geometry;
@@ -498,9 +468,9 @@ the readout identifies extrapolation and changed conditions. The corrected
 quantity is the measured pump-on / pump-off detector-reference ratio.
 The **DEFAULTS → 2026-10-13 experiment** preset enables this path.
 The old bounded measured-data interpolation remains a separate Advanced reference.
-See [calibration method and reproducible fit](analysis/fwm_experiment_20261022/README.md).
-See the [measured-reference review](docs/grand_challenge/gain_calibration_2026_10_16/README.md)
-and [Jasperse equation, noise and efficiency review](docs/grand_challenge/jasperse_2026_10_16/README.md).
+See [calibration method and reproducible fit](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_experiment_20261022/README.md).
+See the [measured-reference review](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/gain_calibration_2026_10_16/README.md)
+and [Jasperse equation, noise and efficiency review](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/jasperse_2026_10_16/README.md).
 
 ### Generic SFWM / biphoton mode
 
@@ -713,7 +683,7 @@ as the default full-scan solver.
   finite cutoff, `Q_-h = R_h.conj()` and the zero-harmonic Schur complement is
   real: only one harmonic chain and a real trace-one solve are needed. The
   general two-chain fallback and full adjacent-order audit remain available.
-  See [the proof and performance validation](docs/ultra_performance.md) before
+  See [the proof and performance validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/ultra_performance.md) before
   reintroducing a redundant negative-chain solve for numerical rigor.
 - Squeezing **Fast/Balanced** solve the same finite-Floquet atomic model and Maxwell
   measure without a per-velocity solve, with the shared Ultra readout and no
@@ -763,7 +733,7 @@ require the microscopic covariance and sideband model. Experimentally validated
 microscopic squeezing remains open. The separate QRT absorption/emission readout uses the
 reduced, locally uniform four-level state and a truncated one-dimensional
 Maxwell average; it does not yet propagate the full microscopic covariance.
-[Jasperse verification and scope](docs/grand_challenge/jasperse_2026_10_16/README.md).
+[Jasperse verification and scope](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/jasperse_2026_10_16/README.md).
 
 - Every non-legacy seeded tier uses Option-A bare frequency-specific wavevectors
   and vacuum/geometric mismatch. Ultra adds 64-segment propagation, Gaussian
@@ -813,5 +783,7 @@ transfer is not applied again. The result remains a conditional diagnostic.
 
 - **Streamlit Community Cloud** (easiest), or Render/Railway/Fly/Cloud Run via Docker.
 - Free tier = weak CPU → 6 s recompute slower. Real bottleneck = CPU, not host.
-- Git remote: `github.com/Shake2313/fwm-squeezing-app` (public). gh acct `Shake2313`.
-  Repo name ≠ folder name.
+- Git remote: `github.com/Shake2313/GABES` (public). gh acct `Shake2313`.
+  Repo name ≠ folder name. Research records and Grand Challenge evidence:
+  `github.com/Shake2313/GABES-archive` (private), split from this repository on
+  2026-11-11 (`docs/repo_restructure/README.md`).

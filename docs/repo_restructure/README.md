@@ -119,6 +119,13 @@
     2. 다른 경로에 checkout한 아카이브 루트에서 ledger reader와 `tests/quantum/test_variance_reduction_pilot_shadow.py` 실행(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
     3. GC 등록부 위치(R12)에 맞춰 아카이브 규칙과 메모리 링크 연결.
     4. weekly-review 자동화 이전은 아카이브와 고정 `engine/` 검증 뒤에. 05:00 Asia/Seoul, 요일 배정, 모델 설정 유지.
+- 2026-11-11: **S3 로컬 단계 완료** (사용자 "로컬 단계 시작").
+  - ⟦AI⟧ source `c1b0777`에 태그 `split-source-2026-11-11`. source 폴더는 여기서 동결.
+  - ⟦AI⟧ 아카이브 작업본: `G:\내 드라이브\Coding\GABES-archive`(HEAD c1b0777, 태그 2개, 파일 5,415개). 내용은 `git diff`로 동일함을 확인. Drive에서 stat 불일치로 1,884개가 "수정됨"으로 보이는 표시는 별도 확인.
+  - ⟦AI⟧ filter-repo: 경로 655개(규칙 635 + rename 계보 20) → 커밋 203개(제외 14), 압축 5.72 MiB. HEAD 트리 = source main 쪽 632개 파일과 blob 단위로 동일.
+  - ⟦AI⟧ [Split Manifest](split_2026_11_11/split_manifest.json), 경로 목록, 공개 전 main 전체 테스트(2,277 통과 / 1 skip / 0 실패)를 `split_2026_11_11/`에 보관.
+  - ⟦AI⟧ main 전용 커밋: `AGENTS.md` ← `AGENTS.main.md`, 아카이브 링크 55개를 `GABES-archive` 고정 URL로 치환, README의 GC 블록을 아카이브 안내로 교체하고 Deploy 절 갱신, User Guide의 저장소 주소와 clone 명령을 `GABES`로 갱신.
+  - 다음 (사용자 승인 2026-11-11 "승인 받는 작업 진행합시다"): `GABES` 공개 저장소 생성·push → Streamlit 새 앱 → 기존 앱 삭제 → 기존 저장소 이름 변경·비공개 전환 → 아카이브 push·Release → 로컬 전환.
 - 2026-11-11: **S3 선행 조건 충족.**
   - Codex de03478: `AGENTS.archive.md` 초안 검토·수정, GC 규칙·head-manager 스킬·hypermemory·memory.json을 R12 등록부로 연결.
   - Codex가 대조한 결과: `grand_challenges` 절 일치, 항목 116 = 제품 115 + GC 1(누락·중복 없음), `docs/papers` 사본 3개가 원본과 바이트 일치.
