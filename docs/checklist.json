@@ -22,7 +22,9 @@
       "R8": "Revise the Grand Challenge rule 'Preserve historical evidence bytes and paths' at split time: pre-split evidence is re-verified at the archive split tag; post-split evidence records {repo, commit, path}. Wording draft in the hub.",
       "R9": "Archive repository name GABES-archive (user 2026-11-09).",
       "R10": "The current folder stays the main working copy; the archive working copy moves to a new folder (user 2026-11-09). Local conversion plan S3-L in the hub; deleting or moving the verification checkout copies under output/ and tmp/ (about 7.8 GB) needs a user decision.",
-      "R11": "Redeploy the Streamlit app under a new subdomain (candidate gabes, if available); update the User Guide and README links (user 2026-11-09)."
+      "R11": "Redeploy the Streamlit app under a new subdomain (candidate gabes, if available); update the User Guide and README links (user 2026-11-09).",
+      "R12": "GC registry moves to the archive file docs/grand_challenge/checklist.json (grand_challenges section and GC items); the main docs/checklist.json keeps product items only (user 2026-11-11).",
+      "R13": "Retire the opt-in FWM legacy affine gain replay from public main after the split; keep replay at the archive tag pre-split-2026-11-09 (user 2026-11-11, Codex recommendation)."
     },
     "steps": "S0 decisions (done 2026-11-09); S1 freeze and baseline; S2 cut main dependencies on records and add gitignore/size guard, then full pytest; S3 split and Streamlit re-link; S4 archive engine submodule and GC re-verification at split tag; S5 main consolidation; S6 validation.",
     "next": "S3 decisions: confirm the archive name, the local folder layout after the split and the app URL; then the documentation pass (docs/papers, README/AGENTS links), the Split Manifest generator, filter-repo on the current main, new GABES repository, Streamlit redeploy, then rename and privatize the archive.",
@@ -8537,7 +8539,8 @@
       "origin": "ai_execution_of_human_request",
       "priority": "P3",
       "effort": "small",
-      "status": "needs_decision",
+      "status": "ready",
+      "user_decision_2026_11_11": "Retire the opt-in affine replay from public main after the repository split; keep the archive replay, receipts and tests at pre-split-2026-11-09 (R13).",
       "adoption_status": "user_approved_registration_only",
       "problem": "User decision 2026-11-09 (repository split S2): tests/test_fwm_gain_hotfix.py and tests/test_fwm_tpd_gain_hotfix.py move to the archive with the dated analysis/fwm_gain_hotfix records, and this retirement question is registered. ⟦AI⟧ Until the user decides, main retains the legacy replay code. The two end-to-end replay test files move to the archive. Main retains helper and compatibility tests, including tests/test_fwm_gain_reference_planes.py.",
       "recommendation_2026_11_09": "⟦AI⟧ Recommend retiring only the opt-in affine gain replay from public main after the split and user decision. Keep the pre-split archive replay, receipts, and tests. Accept old inactive settings. For an explicit dual-flag replay request, report retirement and point to the archive tag. Preserve the separate legacy_mean_field_fixture and supported empirical/noise models. If replay stays, add an archive-independent end-to-end regression.",

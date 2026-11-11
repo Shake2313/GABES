@@ -95,6 +95,25 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-11: **Codex S4 인계 반영** (사용자가 Codex 답장 전달).
+  - 473017f(ledger reader)·0fab129(GC 아카이브 재현 규칙) 확인.
+    - 원래 경로에서 `python -m analysis.grand_challenge.variance_reduction_ledger_reader` 통과(입력 3개 해시 일치).
+    - GC 관련 테스트 54개 통과. 다른 경로 검증은 Codex가 보고한 결과이고, S4에서 다시 확인함.
+  - **출처 정정 (⟦AI⟧):** checklist의 `fwm-legacy-gain-replay-retirement.recommendation_2026_11_09`와 `gc-absolute-path-ledger-reader` done 표시는 Codex가 쓴 내용임.
+    - 다만 Claude 커밋 7977b22(18:05:20)에 같이 들어감. Claude가 작업 파일의 checklist를 수정할 때 Codex의 미커밋 수정이 이미 있었음.
+    - 내용은 바뀌지 않았음.
+  - 사용자 결정 (2026-11-11):
+
+    | ID | 결정 |
+    |---|---|
+    | R12 | **GC 등록부는 아카이브의 별도 파일.** `docs/checklist.json`의 `grand_challenges` 절(127 KB)과 GC 항목을 `docs/grand_challenge/checklist.json`으로 옮김. main checklist에는 제품 항목만 남음(옛 내용은 히스토리에 남음). GC 규칙·메모리 링크를 새 파일로 연결. |
+    | R13 | **FWM legacy affine replay는 분리 후 main에서 퇴역**(Codex 권고안). 옛 설정값은 받아들이되, replay를 명시적으로 요청하면 퇴역 사실과 아카이브 태그를 알려 줌. 재현은 아카이브 `pre-split-2026-11-09`에서 유지. |
+
+  - ⟦AI⟧ **S4 확인 항목 (Codex 요청):**
+    1. `engine/`이 Split Manifest의 main 커밋을 가리키는지, GC 테스트가 그 엔진을 import하는지, 소스를 해시하는 검증기가 실제 `engine/` 경로를 읽는지 확인.
+    2. 다른 경로에 checkout한 아카이브 루트에서 ledger reader와 `tests/quantum/test_variance_reduction_pilot_shadow.py` 실행(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
+    3. GC 등록부 위치(R12)에 맞춰 아카이브 규칙과 메모리 링크 연결.
+    4. weekly-review 자동화 이전은 아카이브와 고정 `engine/` 검증 뒤에. 05:00 Asia/Seoul, 요일 배정, 모델 설정 유지.
 - 2026-11-09: S2 진행 기록 (사용자 "S2 시작").
   - ⟦AI⟧ 경계 도구 [`tools/split_boundary.py`](../../tools/split_boundary.py)를 만듦.
     - 규칙은 순서대로 적용하고, 처음 맞는 규칙이 이김. 정적 참조 검사와 main 전용 sparse checkout도 함께 함.
