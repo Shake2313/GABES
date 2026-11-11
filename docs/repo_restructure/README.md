@@ -119,6 +119,16 @@
     2. 다른 경로에 checkout한 아카이브 루트에서 ledger reader와 `tests/quantum/test_variance_reduction_pilot_shadow.py` 실행(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
     3. GC 등록부 위치(R12)에 맞춰 아카이브 규칙과 메모리 링크 연결.
     4. weekly-review 자동화 이전은 아카이브와 고정 `engine/` 검증 뒤에. 05:00 Asia/Seoul, 요일 배정, 모델 설정 유지.
+- 2026-11-11: **S3 선행 조건 충족.**
+  - Codex de03478: `AGENTS.archive.md` 초안 검토·수정, GC 규칙·head-manager 스킬·hypermemory·memory.json을 R12 등록부로 연결.
+  - Codex가 대조한 결과: `grand_challenges` 절 일치, 항목 116 = 제품 115 + GC 1(누락·중복 없음), `docs/papers` 사본 3개가 원본과 바이트 일치.
+  - 선행 조건 상태: GC 작업 착지(473017f·0fab129·de03478), 검증용 사본 삭제, 초안 검토 모두 완료. 남은 미커밋은 weekly-review가 쓴 daily report뿐이며 S3 1단계에서 함께 커밋.
+  - ⟦AI⟧ **S4 확인 항목 (Codex 최신판으로 대체):**
+    1. 검토한 초안을 아카이브 루트 `AGENTS.md`로 설치. GC 등록부는 아카이브 루트에서, 제품 등록부(`engine/docs/checklist.json`)와 분리 허브(`engine/docs/repo_restructure/`)는 `engine/`에서 읽히는지 확인.
+    2. `engine/`이 Split Manifest의 main 커밋을 가리키는지, GC 테스트의 `gabes` import와 엔진 소스 해시 검증기가 모두 그 checkout을 쓰는지 확인.
+    3. 다른 경로에 checkout한 아카이브 루트에서 `python -m analysis.grand_challenge.variance_reduction_ledger_reader`와 `python -m pytest -q tests/quantum/test_variance_reduction_pilot_shadow.py`를 실행하고 결과를 기록(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
+    4. weekly-review 자동화 이전은 위 검증 뒤에 (05:00 Asia/Seoul, 요일 배정, 모델 설정 유지).
+  - R13(FWM affine replay 퇴역)은 분리 후 공개 main 작업.
 - 2026-11-09: S2 진행 기록 (사용자 "S2 시작").
   - ⟦AI⟧ 경계 도구 [`tools/split_boundary.py`](../../tools/split_boundary.py)를 만듦.
     - 규칙은 순서대로 적용하고, 처음 맞는 규칙이 이김. 정적 참조 검사와 main 전용 sparse checkout도 함께 함.
