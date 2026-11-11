@@ -782,6 +782,7 @@ transfer is not applied again. The result remains a conditional diagnostic.
 ## Deploy
 
 - **Streamlit Community Cloud** (easiest), or Render/Railway/Fly/Cloud Run via Docker.
+- Live app: https://gabes-app.streamlit.app (Streamlit Community Cloud, `Shake2313/GABES` `main`, `streamlit_app.py`, Python 3.14).
 - Free tier = weak CPU → 6 s recompute slower. Real bottleneck = CPU, not host.
 - Git remote: `github.com/Shake2313/GABES` (public). gh acct `Shake2313`.
   Repo name ≠ folder name. Research records and Grand Challenge evidence:

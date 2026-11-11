@@ -119,6 +119,11 @@
     2. 다른 경로에 checkout한 아카이브 루트에서 ledger reader와 `tests/quantum/test_variance_reduction_pilot_shadow.py` 실행(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
     3. GC 등록부 위치(R12)에 맞춰 아카이브 규칙과 메모리 링크 연결.
     4. weekly-review 자동화 이전은 아카이브와 고정 `engine/` 검증 뒤에. 05:00 Asia/Seoul, 요일 배정, 모델 설정 유지.
+- 2026-11-11: **S3 공개 단계 완료** (사용자 승인 "승인 받는 작업 진행합시다", Streamlit은 사용자가 패널에서 로그인).
+  - `Shake2313/GABES`(공개)를 만들고 main을 push. 공개 전 점검에서 새로 드러나는 개인 정보는 없었음.
+  - Streamlit: 새 앱 `gabes-app.streamlit.app`을 배포(`gabes`는 6자 미만이라 사용자가 `gabes-app` 선택, Python 3.14). SAS 스펙트럼과 FWM 이득·잡음 그래프가 그려지는 것을 확인한 뒤 옛 앱(`fwm-squeezing-app-bedekxcpwge62hjdkvelw8`) 삭제. 옛 저장소 webhook은 앱과 함께 제거됨.
+  - 옛 저장소를 `Shake2313/GABES-archive`로 이름 변경하고 비공개로 전환.
+  - User Guide 두 파일과 README의 앱 주소를 새 주소로 갱신.
 - 2026-11-11: **S3 로컬 단계 완료** (사용자 "로컬 단계 시작").
   - ⟦AI⟧ source `c1b0777`에 태그 `split-source-2026-11-11`. source 폴더는 여기서 동결.
   - ⟦AI⟧ 아카이브 작업본: `G:\내 드라이브\Coding\GABES-archive`(HEAD c1b0777, 태그 2개, 파일 5,415개). 내용은 `git diff`로 동일함을 확인. Drive에서 stat 불일치로 1,884개가 "수정됨"으로 보이는 표시는 별도 확인.
