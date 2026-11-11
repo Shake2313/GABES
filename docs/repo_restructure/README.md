@@ -119,6 +119,14 @@
     2. 다른 경로에 checkout한 아카이브 루트에서 ledger reader와 `tests/quantum/test_variance_reduction_pilot_shadow.py` 실행(봉인 입력 검증). 역사적 재현은 `pre-split-2026-11-09`(0c95124)의 당시 경로·실행기로.
     3. GC 등록부 위치(R12)에 맞춰 아카이브 규칙과 메모리 링크 연결.
     4. weekly-review 자동화 이전은 아카이브와 고정 `engine/` 검증 뒤에. 05:00 Asia/Seoul, 요일 배정, 모델 설정 유지.
+- 2026-11-11: **R10 로컬 전환 완료 → S3 종료** (사용자 "로컬 전환 진행").
+  - ⟦AI⟧ 원래 폴더(`G:\내 드라이브\Coding\GABES - Generic Atomic Bloch Equation Solver`)는 이제 **GABES main 작업본**(origin `Shake2313/GABES`, HEAD f333a50, 추적 파일 635개).
+  - ⟦AI⟧ ignore·미추적 아카이브 쪽 로컬 파일 788개 항목(파일 5,321개, 514.7 MB)을 `G:\내 드라이브\Coding\GABES-archive`의 같은 경로로 이동. main 쪽 142개와 `.pytest_cache`는 유지.
+  - ⟦AI⟧ 옛 `.git`(c1b0777)은 `G:\내 드라이브\Coding\GABES-pre-split-dotgit`에 보관.
+  - ⟦AI⟧ main `.git`은 폴더 안에서 `git init` + `GABES` fetch로 만듦. Drive가 옛 `.git/logs` 삭제를 끝내지 않아 `core.logAllRefUpdates=false`를 임시로 설정함(정리 후 다시 켬).
+  - ⟦AI⟧ 아카이브 쪽 추적 파일 4,783개(2.48 GB)는 아카이브 작업본과 sha256 일치(4,531개) 또는 c1b0777 git blob 일치(252개, 줄바꿈 형식만 다름)를 확인한 뒤 삭제. 남긴 파일 0개. 중첩 저장소 `fwm_quotient_site/.git`은 아카이브로 이동.
+  - ⟦AI⟧ main 폴더 전체 테스트: 2,355 통과 / 1 skip / 0 실패(360 s). 무시 처리된 로컬 참고 프로그램 `references/AutoOD-Rb/`의 테스트 78개 포함. 실행 후 상태 깨끗함.
+  - 다음: 아카이브 쪽 S4(main 경로 제거, `engine/` submodule을 GABES f333a50 이후로 고정, `AGENTS.archive.md` 설치, Codex의 S4 확인 4개). weekly-review 자동화는 아카이브 작업본으로 이전.
 - 2026-11-11: **S3 공개 단계 완료** (사용자 승인 "승인 받는 작업 진행합시다", Streamlit은 사용자가 패널에서 로그인).
   - `Shake2313/GABES`(공개)를 만들고 main을 push. 공개 전 점검에서 새로 드러나는 개인 정보는 없었음.
   - Streamlit: 새 앱 `gabes-app.streamlit.app`을 배포(`gabes`는 6자 미만이라 사용자가 `gabes-app` 선택, Python 3.14). SAS 스펙트럼과 FWM 이득·잡음 그래프가 그려지는 것을 확인한 뒤 옛 앱(`fwm-squeezing-app-bedekxcpwge62hjdkvelw8`) 삭제. 옛 저장소 webhook은 앱과 함께 제거됨.
