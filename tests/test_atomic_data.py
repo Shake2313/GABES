@@ -7,7 +7,7 @@ values whose deviations from the species record are pinned here, so changing
 either side is a visible decision (checklist
 `atomic-data-legacy-value-unification`).
 
-    python tests/test_atomic_data.py     # or: pytest tests/test_atomic_data.py
+    python -m pytest -q tests/test_atomic_data.py
 """
 import subprocess
 import sys
@@ -17,7 +17,6 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import angular, atoms, constants, hyperfine, species, zeeman  # noqa: E402
 

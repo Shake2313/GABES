@@ -1,13 +1,9 @@
 """Shared CSV text decoding and read-only array conversion."""
 
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import experimental_csv, rydberg_experiment, rydberg_experimental_csv  # noqa: E402
 from gabes import vapor_cell  # noqa: E402

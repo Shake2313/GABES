@@ -1,7 +1,7 @@
 """
 Virtual-instrument checks (Stage E of the optical-table plan).
 
-    python tests/test_sabes_instruments.py   # or: pytest tests/...
+    python -m pytest -q tests/test_sabes_instruments.py   # or: pytest tests/...
 
 Two things matter most here. First, the instruments must be honest about which
 of their output is the model's physics and which is a re-expression of a power
@@ -11,7 +11,6 @@ of layout and UI imports, because the point of putting it in its own folder was
 that it can be lifted out.
 """
 import ast
-import sys
 from dataclasses import replace
 from pathlib import Path
 
@@ -19,7 +18,6 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from sabes import detection, instruments as I, layout  # noqa: E402
 from sabes.beamline import SetupSettings, build_source_chain  # noqa: E402

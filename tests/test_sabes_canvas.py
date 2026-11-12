@@ -1,7 +1,7 @@
 """
 Canvas component checks (Stage B of the optical-table plan).
 
-    python tests/test_sabes_canvas.py   # or: pytest tests/test_sabes_canvas.py
+    python -m pytest -q tests/test_sabes_canvas.py
 
 What can be pinned here is the Python side and the shipped frontend contract:
 spec construction, package data being present, and the postMessage protocol the
@@ -10,13 +10,11 @@ behaviour and was verified interactively against the running app -- see
 docs/SABES/optical_table_ui_plan.md.
 """
 import re
-import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes_ui.sabes import components  # noqa: E402
 from gabes_ui.sabes.components import canvas as canvas_module  # noqa: E402

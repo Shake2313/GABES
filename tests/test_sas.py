@@ -15,17 +15,14 @@ Pump on → SAS:
 
 Generic Γ-unit hole-burning fallback: Voigt background, Lamb dip, crossover.
 
-    python tests/test_sas.py     # or: pytest tests/test_sas.py
+    python -m pytest -q tests/test_sas.py
 """
 import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import (  # noqa: E402
     atoms, core, schemes, constants, observables, species, hyperfine)

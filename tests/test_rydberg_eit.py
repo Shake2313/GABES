@@ -4,8 +4,6 @@ Physics and readout checks for the Rydberg-EIT electrometry scheme.
 The UI includes static spectra and conditional finite-IF sensitivity. Published
 values are metadata; agreement with Gold power curves is audited separately.
 """
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -13,8 +11,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import constants, doppler, schemes  # noqa: E402
 from gabes.schemes import rydberg as rydberg_scheme  # noqa: E402

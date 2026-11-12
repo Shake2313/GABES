@@ -1,12 +1,8 @@
 """Phenomenological EOM-sideband noise must be positive, explicit, and local."""
-import sys
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from sabes import detection  # noqa: E402
 from sabes.beamline import SetupSettings, build_source_chain  # noqa: E402

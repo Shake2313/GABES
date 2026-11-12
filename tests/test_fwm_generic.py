@@ -1,10 +1,8 @@
 """
 Generic SFWM / biphoton checks.
 
-    python tests/test_fwm_generic.py   # or: pytest tests/test_fwm_generic.py
+    python -m pytest -q tests/test_fwm_generic.py
 """
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import matplotlib
@@ -13,8 +11,6 @@ import pytest
 
 matplotlib.use("Agg")
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import hyperfine, observables, zeeman  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402

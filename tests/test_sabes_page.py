@@ -1,13 +1,12 @@
 """
 SABES page wiring: control coverage, the three compute tiers, and routing.
 
-    python tests/test_sabes_page.py   # or: pytest tests/test_sabes_page.py
+    python -m pytest -q tests/test_sabes_page.py
 
 The tier claim is tested through `bridge.solve_key`, not through wall-clock
 timing: a knob belongs to tier A or C exactly when it leaves the solve key alone,
 and that is a property of the code rather than of the machine it runs on.
 """
-import sys
 from dataclasses import fields, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +15,6 @@ import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes.schemes import fwm  # noqa: E402
 from sabes import bridge  # noqa: E402

@@ -8,16 +8,12 @@ Parameter-free / analytic checks (no frozen baseline needed):
   EIT      : strong transparency at two-photon resonance (cold).
   CPT      : sub-natural dark resonance.
 
-    python tests/test_absorption.py    # or: pytest tests/test_absorption.py
+    python -m pytest -q tests/test_absorption.py
 """
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import schemes, observables, constants  # noqa: E402
 from gabes.lineshape import window_fwhm  # noqa: E402

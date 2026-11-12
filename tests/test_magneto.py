@@ -7,16 +7,12 @@ Unregistered single-pair reference: Zeeman magneto-optics checks.
   Buffer cell       : single-region buffer mode keeps a broad Hanle feature.
   NMOR              : rotation remains antisymmetric around B = 0.
 
-    python tests/test_magneto.py    # or: pytest tests/test_magneto.py
+    python -m pytest -q tests/test_magneto.py
 """
-import sys
-from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import atoms, constants, core, observables, zeeman  # noqa: E402
 from gabes.constants import GAMMA  # noqa: E402

@@ -5,15 +5,11 @@ The normal render smoke test still proves each scheme can build a Matplotlib
 figure. This file proves the complementary path: headless_observables() must not
 call figure construction, while preserving metrics/tables for batch/report use.
 """
-import sys
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import schemes  # noqa: E402
 from gabes.schemes.absorption import ODScheme  # noqa: E402

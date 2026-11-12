@@ -1,7 +1,7 @@
 """
 Table-drawing checks (Stage C of the optical-table plan).
 
-    python tests/test_sabes_render.py   # or: pytest tests/test_sabes_render.py
+    python -m pytest -q tests/test_sabes_render.py
 
 The things worth pinning here are the ones where a drawing can quietly lie:
 that stroke width encodes power rather than beam size, that "clickable" and
@@ -9,14 +9,10 @@ that stroke width encodes power rather than beam size, that "clickable" and
 as plain JSON.
 """
 import json
-import sys
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from sabes import layout  # noqa: E402
 from sabes.beamline import SetupSettings, build_source_chain  # noqa: E402

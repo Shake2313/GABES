@@ -1,12 +1,8 @@
 """Focused checks for the weak-SIG Rydberg electrometry primitives."""
 
-import sys
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import atoms, constants, core  # noqa: E402
 from gabes.rydberg_electrometry import (  # noqa: E402

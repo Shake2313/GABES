@@ -1,7 +1,7 @@
 """
 SABES bridge and detection checks.
 
-    python tests/test_sabes_bridge.py   # or: pytest tests/test_sabes_bridge.py
+    python -m pytest -q tests/test_sabes_bridge.py
 
 The load-bearing test here is
 `test_reference_geometry_reproduces_the_gabes_default_diagnostic`: fed the paper's
@@ -10,16 +10,12 @@ GABES produces when driven by hand. Everything else in SABES is only meaningful 
 that holds.
 """
 import math
-import sys
 from copy import deepcopy
 from dataclasses import replace
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes.schemes import fwm  # noqa: E402
 from sabes import bridge, detection  # noqa: E402

@@ -1,13 +1,9 @@
 """Shared heated-cell layer: temperature state, cold-spot density, axial profile."""
 
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import constants, rydberg_experiment, species, vapor_cell  # noqa: E402
 from gabes.schemes.rydberg import RydbergEITScheme  # noqa: E402

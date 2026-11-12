@@ -1,7 +1,7 @@
 """
 SABES source-chain checks.
 
-    python tests/test_sabes_optics.py   # or: pytest tests/test_sabes_optics.py
+    python -m pytest -q tests/test_sabes_optics.py
 
 Three things are pinned here:
   1. device laws against closed-form values that do not depend on calibration;
@@ -11,14 +11,10 @@ Three things are pinned here:
      because a silently optimistic filter model would inflate every squeezing
      number downstream.
 """
-import sys
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import constants  # noqa: E402
 from sabes import beamstate, calibration as calib, devices  # noqa: E402

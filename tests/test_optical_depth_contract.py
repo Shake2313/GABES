@@ -5,8 +5,6 @@ from __future__ import annotations
 import csv
 from io import StringIO
 import pickle
-import sys
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
@@ -14,8 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
 
 from gabes import observables, probe_saturation, schemes, species  # noqa: E402
 from gabes.schemes.sas import GENERIC  # noqa: E402

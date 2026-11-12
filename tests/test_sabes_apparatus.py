@@ -1,13 +1,9 @@
 """The current apparatus inventory must preserve identity and evidence scope."""
 from copy import deepcopy
 import json
-from pathlib import Path
-import sys
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from sabes.apparatus import ApparatusSnapshot, default_apparatus  # noqa: E402
 from sabes.layout import parts  # noqa: E402

@@ -3,19 +3,15 @@ Smoke test for the scheme/UI contract: every registered scheme must compute and
 render (metrics + a matplotlib figure) without error. Catches rendering-layer
 regressions independent of the physics tests.
 
-    python tests/test_schemes_render.py   # or: pytest tests/test_schemes_render.py
+    python -m pytest -q tests/test_schemes_render.py
 """
 import re
-import sys
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import schemes  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402

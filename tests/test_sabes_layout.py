@@ -1,7 +1,7 @@
 """
 Layout-model checks (Stage A of the optical-table plan).
 
-    python tests/test_sabes_layout.py   # or: pytest tests/test_sabes_layout.py
+    python -m pytest -q tests/test_sabes_layout.py
 
 The load-bearing property is the separation of the two coordinate systems:
 `display` coordinates draw the table and `path_m` lengths do the physics, and
@@ -10,14 +10,10 @@ schematics, so a pixel distance is not a metre distance, and letting them mix
 would corrupt every beam size downstream without anything looking wrong.
 """
 import math
-import sys
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from sabes import detection, layout  # noqa: E402
 from sabes.beamline import SetupSettings, build_source_chain  # noqa: E402

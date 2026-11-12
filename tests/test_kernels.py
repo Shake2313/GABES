@@ -2,20 +2,16 @@
 Pin the numba fast path (kernels.floquet_chi_grid) to the NumPy reference
 implementation of the FWM χ̄ table.
 
-    python tests/test_kernels.py      # or: pytest tests/test_kernels.py
+    python -m pytest -q tests/test_kernels.py
 
 The compiled LU uses LAPACK's pivot rule, so agreement is expected at the
 ~1e-13 relative level — far inside the 1e-9 regression tolerance.
 Magneto cases exercise the unregistered single-pair reference, not the active
 multihyperfine scheme.
 """
-import sys
-from pathlib import Path
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import constants, doppler, kernels, schemes  # noqa: E402
 from gabes.constants import rabi_freq  # noqa: E402

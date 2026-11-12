@@ -6,20 +6,16 @@ and that face has no superscript digits — so a ⁸⁵Rb title silently lost it
 isotope number in any process that had imported it (a full `pytest` run does).
 `apply_gabes_plot_style` therefore pins its own family stack per figure.
 
-    python tests/test_plot_style.py     # or: pytest tests/test_plot_style.py
+    python -m pytest -q tests/test_plot_style.py
 """
-import sys
 import warnings
 from io import BytesIO
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.text import Text
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import schemes  # noqa: E402
 from gabes.plot_style import FONT_STACK, apply_gabes_plot_style  # noqa: E402

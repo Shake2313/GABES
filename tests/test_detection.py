@@ -1,14 +1,10 @@
 """Shared photodetection: photon energy/flux, responsivity, shot noise."""
 
 import math
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import constants, detection, jasperse, magneto_noise  # noqa: E402
 from gabes import rydberg_electrometry  # noqa: E402

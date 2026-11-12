@@ -1,13 +1,9 @@
 """Apparatus profiles reach the page's live controls and survive reruns."""
 from dataclasses import fields
 import math
-from pathlib import Path
-import sys
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes_ui.sabes import page  # noqa: E402
 from sabes.presets import (LAB_PROFILE, PAPER_PROFILE, power_targets,  # noqa: E402

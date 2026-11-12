@@ -2,16 +2,12 @@
 Ideal-canonical fixtures and explicitly unverified gain-only comparisons.
 Production mean-field gains alone do not establish physical nonclassicality.
 
-    python tests/test_coincidence.py   # or: pytest tests/test_coincidence.py
+    python -m pytest -q tests/test_coincidence.py
 """
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes import observables  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402

@@ -6,20 +6,17 @@ transit reset, and the production promotion from fixed N_F=1 to a full-scan-
 checked N_F=3/N_F=2 Floquet pair. Its manifest preserves the prior anchors and
 states which Option-A/quantum contracts it does not cover.
 
-    python tests/test_regression.py      # or: pytest tests/test_regression.py
+    python -m pytest -q tests/test_regression.py
 
 Baseline file: tests/baseline_focused.npz  (see capture_baseline.py).
 """
 import hashlib
 import json
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
 
 from gabes.schemes import fwm  # noqa: E402
 from gabes import constants, hyperfine  # noqa: E402

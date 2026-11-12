@@ -1,12 +1,9 @@
 """Physical regression gates for CP dephasing and independent optical scans."""
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 from scipy.linalg import expm
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gabes import atoms, core
 from gabes import rydberg_electrometry as electrometry
