@@ -165,11 +165,12 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
   `?app=sabes`). Package map and rules: `gabes_ui/DESIGN.md`.
 - `sabes/` — SABES apparatus model: beamline, instruments, detection and the
   optical-table layout geometry.
-- `archive/` — retired legacy entry points and artifacts. It preserves the
-  early `AutoOD/` calculator; the current Rb D1/D2 calculator with selectable
-  isotope composition lives in `references/AutoOD-Rb/`. It also keeps the
+- `archive/` — retired legacy entry points and artifacts, kept in GABES-archive
+  since the split (not in main): the early `AutoOD/` calculator, the
   `fwm_obe.py` compatibility shim and its generated
-  `fwm_double_lambda_gain_squeezing.png`; the active physics lives in `gabes/`.
+  `fwm_double_lambda_gain_squeezing.png`. The current Rb D1/D2 calculator with
+  selectable isotope composition lives in `references/AutoOD-Rb/`; the active
+  physics lives in `gabes/`.
 - `tests/` — regression + physics validation; `baseline_focused.npz` is an
   intentional compatibility snapshot documented by `baseline_focused_manifest.json`.
 - `gabes_lab/` — development package. `blocks/` holds helpers without physics:
@@ -181,9 +182,11 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
   reusable analyses that call `gabes`:
   `rydberg_cell_heating` (config-driven temperature sweep, clean CSV overlays,
   provenance manifest, figures, XeLaTeX report inputs) and the `squeezing`
-  scanners, which write to `runs/squeezing/<scan>/`; `tools/` holds `ui_audit`, the PSR benchmarks and repository
-  maintenance (`split_boundary`, `migration_manifest`). Run a module from the
-  repository root with `python -m gabes_lab.<area>.<module>`.
+  scanners, which write to `runs/squeezing/<scan>/`; `tools/` holds `ui_audit`,
+  the PSR benchmarks and repository maintenance (`split_boundary`,
+  `migration_manifest`). Run a module from the repository root with
+  `python -m gabes_lab.<area>.<module>`. Package map, block usage and rules:
+  [`gabes_lab/README.md`](gabes_lab/README.md).
 - `requirements.txt` — Streamlit, NumPy, SciPy, matplotlib and runtime helpers.
 - `references/` — Sim et al. 2025 paper PDF + Steck Rb85 data + OE stabilization paper. The Rydberg-EIT scheme cites arXiv:2606.04354 for its 85Rb reference defaults; the Biphoton defaults cite the Cs biphoton-temporal-waveform paper and the 87Rb telecom biphoton source paper from the app's Reference panel.
 - `references/rydberg_experiments/` — [Rydberg-EIT electrometry literature database](references/rydberg_experiments/README.md), using the FWM/PSR evidence structure. Ju et al. (2026) is the temporary Gold reference for experimental geometry and conditions, designated by the user on 2026-11-03.

@@ -95,6 +95,31 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-12: **S5 4단계 완료: AGENTS 규칙과 `gabes_lab/README.md` → S5 종료** (사용자 "4단계 진행").
+  - ⟦AI⟧ AGENTS.md에 `Development code (gabes_lab)` 절을 넣음.
+    - 사용자 요청 한 줄(2026-11-09, 철칙 아님) 아래에 ⟦AI⟧ 규칙 bullet 3개(8줄).
+    - 내용: 블록 지도. "블록 먼저 찾기 → import → 없으면 스크립트에 새로 작성, 두 번째 호출부가 생기고 물리가 없으면 블록으로 옮김". 지금 구조에 없는 분석은 새로 만들어도 됨. 결과는 `runner`로 `runs/`에 쓰고 main 밖으로는 `publish_to_archive`로만 나감. `gabes`·`gabes_ui`는 `gabes_lab`을 import하지 않음.
+  - ⟦AI⟧ [`gabes_lab/README.md`](../../gabes_lab/README.md) 신설. 형식은 `gabes_ui/DESIGN.md`와 맞춤.
+    - 패키지 지도, 블록 표(쓰는 때·주요 이름).
+    - 예시: 새 스캔 스크립트, 리팩터 전후 비교, 아카이브 반출.
+    - 규칙 8개, 새 블록·파이프라인·도구 추가 방법, 검증 순서.
+  - ⟦AI⟧ README 폴더 지도:
+    - `gabes_lab/` 항목에 README 링크를 붙임.
+    - `archive/` 항목은 main에 없는 폴더를 설명하고 있었음 → "분리 뒤 GABES-archive에 있음"으로 고침.
+    - `gabes_lab/__init__.py` docstring의 블록 목록도 갱신.
+  - ⟦AI⟧ 검증:
+    - 고친 문서의 상대 링크·앵커 확인.
+    - `test_docs_consistency`·`test_repo_size_guard`·`test_lab_blocks`·`test_papers` 25개 통과.
+    - 문서만 바뀌었으므로 수치 테스트는 돌리지 않음.
+  - ⟦AI⟧ S6 시작. 사용자가 결정이 필요 없는 무거운 일을 Codex에 병렬로 맡김(같은 작업본, 4단계 파일은 Claude 담당).
+    - 레인 1: 6eedf20을 고정한 worktree에서 전체 pytest.
+    - 레인 2: `theory_max`·`v6_tolerance`를 옛 코드와 새 코드로 실행해 결과 비교.
+    - 레인 3: frontier 스킬 스캐너를 블록으로 전환.
+    - 레인 4: 테스트의 `__main__` 블록 정리(R7).
+    - 레인 5: md 링크, User Guide 빌드 재현, 설정 파일의 옛 경로.
+    - 레인 6: push 뒤 아카이브 engine 고정 커밋 갱신과 GC 재검사.
+    - Claude 몫: 앱·SABES 화면 확인, 메모리 옛 경로, S6 기록.
+  - 다음: Codex 보고를 받아 S6 기록.
 - 2026-11-12: **S5 3단계 완료: `gabes_lab.blocks`** (사용자 "3단계 진행").
   - ⟦AI⟧ 블록 6개. 물리 없음. 새로 지어낸 것이 아니라 파이프라인·도구에 흩어져 있던 헬퍼를 모음:
     - `provenance`: `utc_now`, `sha256_file`·`sha256_bytes`, `portable_path`(rydberg `_serialized_path`), `file_record`, `git`, `git_state`(rydberg `_git_metadata`), `github_slug`, `runtime_info`.
@@ -454,8 +479,8 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 완료 2026-11-09 |
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
 | S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8, f9d1130: 아카이브 HEAD 1,373 통과 / 0 실패, 옛 배치 검사 8개는 분리 태그에서 재현) |
-| S5 | main 통합 (이전 P2–P5) | 진행 중: 1단계 UI 파일럿, 2단계 `gabes_lab`·pytest 전용, 3단계 블록 완료 2026-11-12 |
-| S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 대기 |
+| S5 | main 통합 (이전 P2–P5) | 완료 2026-11-12: 1단계 UI 파일럿, 2단계 `gabes_lab`·pytest 전용, 3단계 블록, 4단계 AGENTS 규칙·`gabes_lab/README.md` |
+| S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 진행 중: Codex 레인 1–5, 레인 6(아카이브 engine 고정)은 push 뒤 |
 
 S5 세부:
 

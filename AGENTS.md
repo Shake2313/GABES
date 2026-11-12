@@ -47,6 +47,22 @@ own `AGENTS.md`.
   instantly. Put a knob in the tier matching whether it enters the solve or only
   the post-processing.
 
+## Development code (`gabes_lab`)
+
+User request, 2026-11-09: document the consolidated layout and block usage here
+so agents stop rewriting the same helpers; a guide, not an iron rule.
+
+### ⟦AI⟧ Working rules (details: [`gabes_lab/README.md`](gabes_lab/README.md))
+
+- `gabes_lab/blocks`: helpers without physics (paths, hashes and git state,
+  JSON, figures, run folders, before/after snapshots, archive publishing).
+  `pipelines/`: reusable analyses that call `gabes`. `tools/`: developer tools.
+- Look for a block first and import it. If none fits, write the helper in your
+  script; when a second caller needs it and it has no physics, move it into
+  `blocks`. An analysis the current structure lacks may be built new.
+- New results go to `runs/` through `runner` and leave main only through
+  `publish_to_archive`. `gabes` and `gabes_ui` never import `gabes_lab`.
+
 ## Unified engine (development principle)
 
 User policy, 2026-11-04: GABES's original purpose is to develop the many
