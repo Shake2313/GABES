@@ -119,6 +119,10 @@ class Scheme(ABC):
         """Supported common Atom-popover fields and fixed model identity."""
         return {}
 
+    def migrate_default_params(self, params: dict) -> dict:
+        """Read a previously saved parameter snapshot before schema validation."""
+        return params
+
     def normalize_params(self, params: dict) -> dict:
         """Resolve declared dependent controls without changing solver inputs."""
         return params

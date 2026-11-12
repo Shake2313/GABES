@@ -159,28 +159,31 @@ def test_corrected_cap_retains_positive_gain_and_pump_budget_regression():
     assert np.all((actual[0] - 1.0 + actual[1]) * 3.92e-6 <= 0.2948)
 
 
-def test_active_gain_fit_preserves_absorbed_probe_without_changing_fit_domain():
-    calibration = fwm_gain_closure.laboratory_provenance(
-        enabled=True, eligible=True, D_GHz=1.06, branch=-1)
-    gs = np.array([0.01, 0.5, 1.0, 3.0, 9.0, 17.0])
-    gc = np.maximum(gs - 1.0, 0.0)
-    for pump in (0.0, 0.380):
-        corrected = fwm_gain_closure.apply_power_gain(
-            gs, gc, calibration=calibration, P_pump=pump, P_seed=3.7e-6)
-        legacy = fwm_gain_closure.apply_power_gain(
-            gs, gc, calibration=calibration, P_pump=pump, P_seed=3.7e-6,
-            legacy_probe_floor=True)
-        np.testing.assert_array_equal(corrected[0][:3], gs[:3])
-        np.testing.assert_array_equal(legacy[0][:3], 1.0)
-        np.testing.assert_array_equal(corrected[0][3:], legacy[0][3:])
-        np.testing.assert_array_equal(corrected[1], legacy[1])
+@pytest.mark.parametrize("switch, fixture", [(False, False), (True, False), (False, True)])
+def test_retired_gain_calibration_ledger_is_inactive(switch, fixture):
+    ledger = fwm_gain_closure.provenance(
+        w_pump=530e-6, w_probe=330e-6,
+        gain_closure_enabled=switch, legacy_gain_calibration_fixture=fixture,
+    )
+    assert ledger["requested"] is False
+    assert ledger["applied"] is False
+    assert ledger["coupling_multiplier"] == 1.0
+    assert ledger["retired_switch_requested"] is switch
+    assert ledger["historical_fixture_requested"] is fixture
 
-
-def test_calibration_distinguishes_simulation_seed_from_measured_reference():
-    provenance = fwm_gain_closure.laboratory_provenance(
-        enabled=True, eligible=True, D_GHz=1.06, branch=-1)
-    conditions = provenance["calibration_conditions"]
+    output = ledger["output_calibration"]
+    assert output["applied"] is False
+    assert output["blend_weight"] == 0.0
+    conditions = output["calibration_conditions"]
     assert conditions["cell_input_seed_W"] is None
     assert conditions["assumed_simulation_seed_W"] == 3.7e-6
     assert conditions["measured_pump_off_reference_seed_W"] == 3.7e-6
-    assert provenance["passive_cell_transmission"] is None
+    assert output["passive_cell_transmission"] is None
+
+
+def test_explicit_legacy_gain_replay_requires_archive():
+    with pytest.raises(ValueError, match=r"retired.*GABES-archive.*pre-split-2026-11-09"):
+        fwm_gain_closure.provenance(
+            w_pump=530e-6, w_probe=330e-6,
+            gain_closure_enabled=True, legacy_gain_calibration_fixture=True,
+        )

@@ -5,6 +5,7 @@ import pytest
 
 from gabes import schemes
 from gabes.schemes.base import ParamSpec
+from gabes.schemes.fwm import FWMScheme
 from gabes_ui.defaults_store import (
     MAX_PAYLOAD_BYTES,
     DefaultValidationError,
@@ -42,6 +43,33 @@ def test_registered_defaults_round_trip(scheme):
     assert record["params"] == inputs
     assert not any(spec.name in record["params"] for spec in scheme.param_schema()
                    if spec.control == "derived_slider")
+
+
+@pytest.mark.parametrize("legacy_params", [
+    {"legacy_gain_calibration_fixture": False, "gain_closure_enabled": False},
+    {"legacy_gain_calibration_fixture": True},
+    {"gain_closure_enabled": True},
+])
+def test_inactive_fwm_replay_flags_migrate_on_read_only(legacy_params):
+    scheme = FWMScheme()
+    expected = create_default(scheme, "Older settings", {"temp_c": 101.0})
+    raw = dict(expected, params=dict(expected["params"], **legacy_params))
+    before = copy.deepcopy(raw)
+    assert parse_default(scheme, raw) == expected
+    assert raw == before
+    with pytest.raises(DefaultValidationError, match="Unknown input parameters"):
+        create_default(scheme, raw["name"], raw["params"])
+
+
+def test_fwm_legacy_migration_does_not_accept_unknown_or_invalid_inputs():
+    scheme = FWMScheme()
+    record = create_default(scheme, "Older settings", {})
+    with pytest.raises(DefaultValidationError, match="Unknown input parameters: unknown"):
+        parse_default(scheme, dict(record, params={
+            "gain_closure_enabled": False, "unknown": True,
+        }))
+    with pytest.raises(DefaultValidationError):
+        parse_default(scheme, dict(record, params={"gain_closure_enabled": "false"}))
 
 
 def test_snapshot_preserves_hidden_metadata_and_fills_new_parameters(example):

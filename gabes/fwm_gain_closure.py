@@ -1,17 +1,13 @@
-"""Temporary calibrated coupling and power-gain closure for the fast FWM tiers.
+"""Provenance retained for the retired FWM gain-hotfix replay.
 
-This does not change the atomic state or turn a mean-field gain into a quantum
-noise prediction. The Gold fit changes two off-diagonal susceptibilities; a
-separate OPD-local laboratory fit changes the final power-gain readout only.
+The archived fit coefficients describe historical evidence only.
 See analysis/fwm_gain_hotfix/DEVLOG.md for calibration and comparison evidence.
 """
 import math
 
-import numpy as np
-
 
 MODEL_ID = "sim2025_effective_mixing_participation_v1"
-# One fitted number, conditional on the retained 0.74 historical residual.
+# Historical fit, conditional on the retained 0.74 residual.
 EFFECTIVE_PARTICIPATION = 0.5594938027
 
 LAB_MODEL_ID = "tpd_20261001_continuous_affine_v1"
@@ -28,19 +24,21 @@ LAB_OPD_GHZ = 1.06
 LAB_OPD_HALF_WIDTH_GHZ = 0.16
 
 
-def laboratory_provenance(*, enabled, eligible, D_GHz, branch):
-    """Internal ledger for the localized output calibration; no new UI knobs."""
-    weight = 0.0
-    if enabled and eligible and branch == -1 and D_GHz is not None:
-        opd = float(D_GHz)
-        distance = abs(opd - LAB_OPD_GHZ) / LAB_OPD_HALF_WIDTH_GHZ
-        if (LAB_OPD_GHZ - LAB_OPD_HALF_WIDTH_GHZ < opd
-                < LAB_OPD_GHZ + LAB_OPD_HALF_WIDTH_GHZ):
-            weight = (1.0 - distance**2)**2
+def reject_retired_replay(gain_closure_enabled, legacy_gain_calibration_fixture):
+    """Reject an explicit request for the archived calibrated replay."""
+    if gain_closure_enabled and legacy_gain_calibration_fixture:
+        raise ValueError(
+            "The legacy FWM gain calibration replay is retired. "
+            "Use GABES-archive at tag pre-split-2026-11-09 to reproduce it."
+        )
+
+
+def _laboratory_provenance():
+    """Inactive output-calibration ledger with historical fit metadata."""
     return {
         "model_id": LAB_MODEL_ID,
-        "applied": weight > 0.0,
-        "blend_weight": weight,
+        "applied": False,
+        "blend_weight": 0.0,
         "application": "power gains after mean-field propagation and saturation",
         "formula": "F(G)=a*G+b+c*max(G-k,0); output=(1-w)*G+w*F(G)",
         "probe_coefficients_a_b_c_k": list(LAB_PROBE_AFFINE),
@@ -76,38 +74,6 @@ def laboratory_provenance(*, enabled, eligible, D_GHz, branch):
     }
 
 
-def apply_power_gain(
-        G_s, G_c, *, calibration, P_pump, P_seed, legacy_probe_floor=False):
-    """Apply a monotone readout fit, preserving no-gain and pump-budget limits.
-
-    This does not calibrate the transfer matrix, microscopic covariance, or a
-    physical squeezing spectrum. Downstream algebraic noise remains a diagnostic.
-    Inactive contexts return the original arrays without numerical changes.
-    Passive probe transmission is retained outside the fitted gain domain.
-    ``legacy_probe_floor=True`` retains the historical unit display floor for
-    explicitly labelled numerical fixtures.
-    """
-    weight = calibration["blend_weight"]
-    if weight == 0.0:
-        return G_s, G_c
-
-    def mapped(gain, coefficients):
-        a, b, c, knot = coefficients
-        gain = np.asarray(gain, dtype=float)
-        fitted = a * gain + b + c * np.maximum(gain-knot, 0.0)
-        return gain + weight * (fitted-gain)
-
-    # The upstream soft saturation has already run. Do not saturate twice;
-    # enforce only its hard pump-energy envelope if this empirical map hits it.
-    cap = max(0.5 * float(P_pump), 0.0) / max(float(P_seed), 1e-30)
-    probe = np.asarray(G_s, dtype=float)
-    probe_mapped = np.clip(mapped(probe, LAB_PROBE_AFFINE), 1.0, 1.0 + cap)
-    if not legacy_probe_floor:
-        probe_mapped = np.where(probe <= 1.0, probe, probe_mapped)
-    return (probe_mapped,
-            np.clip(mapped(G_c, LAB_CONJUGATE_AFFINE), 0.0, cap))
-
-
 def transverse_participation(w_pump, w_probe, w_conjugate=None):
     """Unapplied diagnostic: project I_p/I_p(0) onto Gaussian collected modes.
 
@@ -126,21 +92,19 @@ def transverse_participation(w_pump, w_probe, w_conjugate=None):
     return a / (a + 2.0 / wp**2)
 
 
-def provenance(*, enabled, eligible, w_pump, w_probe, w_conjugate=None,
-               D_GHz=None, branch=-1):
-    """Fresh, JSON-serializable ledger; no user-adjustable hidden fit parameters."""
-    applied = bool(enabled and eligible)
+def provenance(*, w_pump, w_probe, w_conjugate=None, gain_closure_enabled=False,
+               legacy_gain_calibration_fixture=False):
+    """Return the inactive JSON-serializable gain calibration ledger."""
+    reject_retired_replay(gain_closure_enabled, legacy_gain_calibration_fixture)
     spatial = transverse_participation(w_pump, w_probe, w_conjugate)
     return {
         "model_id": MODEL_ID,
-        "requested": bool(enabled),
-        "applied": applied,
-        "status": ("semi-empirical estimate; absolute accuracy unknown" if applied
-                   else "disabled" if not enabled else "ineligible fidelity"),
+        "requested": False,
+        "applied": False,
+        "status": "disabled",
         "application": "chi_sc and chi_cs before Maxwell propagation",
-        "coupling_multiplier": EFFECTIVE_PARTICIPATION if applied else 1.0,
-        "output_calibration": laboratory_provenance(
-            enabled=enabled, eligible=eligible, D_GHz=D_GHz, branch=branch),
+        "coupling_multiplier": 1.0,
+        "output_calibration": _laboratory_provenance(),
         "transverse_participation": {
             "value": spatial, "unit": "1",
             "meaning": "Gaussian projected pump intensity / peak pump intensity",
@@ -197,12 +161,10 @@ def provenance(*, enabled, eligible, w_pump, w_probe, w_conjugate=None,
         "physical_squeezing_validated": False,
         "independently_calibrated": False,
         "detector_parameters_used_in_fit": False,
+        "historical_fixture_requested": bool(legacy_gain_calibration_fixture),
+        "retired_switch_requested": bool(gain_closure_enabled),
+        "runtime_policy": (
+            "historical calibration fixture only" if legacy_gain_calibration_fixture
+            else "retired: calibration data rejected by user; no empirical correction"
+        ),
     }
-
-
-def apply(chi4, multiplier):
-    """Scale cross couplings in (ss, cs, sc, cc) order; preserve diagonal drift."""
-    if multiplier == 1.0:
-        return chi4
-    ss, cs, sc, cc = chi4
-    return ss, cs * multiplier, sc * multiplier, cc

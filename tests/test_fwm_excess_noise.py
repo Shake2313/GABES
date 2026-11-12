@@ -81,6 +81,27 @@ def test_current_seed_noise_schema_replaces_retired_models_and_efficiency_overri
     assert reset["seed_classical_rin_scaled"] == 0.0
 
 
+@pytest.mark.parametrize("entrypoint", ("compute_spectrum", "full_spectrum", "scheme", "full_view"))
+def test_explicit_affine_replay_request_points_to_archive(entrypoint, monkeypatch):
+    scheme = fwm.FWMScheme()
+    flags = dict(gain_closure_enabled=True, legacy_gain_calibration_fixture=True)
+    params = dict(scheme.defaults(), **flags)
+
+    def unexpected_solve(*args, **kwargs):
+        pytest.fail("a retired replay request reached the atomic solver")
+
+    monkeypatch.setattr(fwm, "collisional_atom", unexpected_solve)
+    with pytest.raises(ValueError, match=r"retired.*pre-split-2026-11-09"):
+        if entrypoint == "compute_spectrum":
+            fwm.compute_spectrum(0.9, **flags)
+        elif entrypoint == "full_spectrum":
+            fwm.full_spectrum(0.9, 394.15, 600., 8., 0.74, 5.5, **flags)
+        elif entrypoint == "scheme":
+            scheme.compute(params)
+        else:
+            scheme.extra_views()[0].compute(params)
+
+
 def test_focused_and_full_heavy_solves_ignore_current_and_retired_noise_controls(monkeypatch):
     scheme = fwm.FWMScheme()
     params = scheme.defaults()

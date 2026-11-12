@@ -2907,17 +2907,19 @@ def compute_spectrum(D_GHz, *,
     the Maxwell drift; distributed loss vacuum and atomic diffusion are not
     supplied.  EOM residual carrier/sideband powers are carried as explicit input
     provenance but remain unapplied until a measured coupling model exists.
-    Current calls leave the retired empirical gain closure disabled; only an
-    explicit historical fixture can activate it. A separate, optional measured
-    pump-off-reference interpolation is returned under ``measured_gain_reference``. It
+    The former affine replay flags are accepted for compatibility. An explicit
+    replay request raises ValueError with the historical archive tag. A separate,
+    optional measured pump-off-reference interpolation is returned under
+    ``measured_gain_reference``. It
     never changes atomic gains, propagation, adaptive sampling, or noise NF.
     ``legacy_mean_field_fixture=True`` additionally restores the old optical
     carrier origin and unity floor on absorbed probe gains for frozen fixtures.
     Normal calls preserve absorption and use the transition-referenced carrier.
     Input seed power and small-signal gains refer to the atomic medium
     boundaries; entrance/exit windows and detector optics are not in that map.
-    An enabled laboratory output fit instead displays empirical output ratios.
     """
+    fwm_gain_closure.reject_retired_replay(
+        gain_closure_enabled, legacy_gain_calibration_fixture)
     stark_recompute_context = copy.deepcopy({
         key: value for key, value in locals().items() if key != "pump_stark_fraction"})
     branch = _single_branch(branch, branches)
@@ -2942,20 +2944,10 @@ def compute_spectrum(D_GHz, *,
     coupling_ledger = physical_coupling_ledger(branch)
     coupling_norm = coupling_ledger["macroscopic_coupling_norm"]
     coupling_ls = factors.combined_residual * coupling_norm
-    # Eligibility follows declared fidelity, never the shared PHASE_ULTRA
-    # propagator or the response backend (which can fall back to the grid).
-    closure_fidelity = _FIDELITY_LEGACY.get(model_fidelity, model_fidelity)
     gain_closure = fwm_gain_closure.provenance(
-        enabled=bool(gain_closure_enabled and legacy_gain_calibration_fixture),
-        eligible=closure_fidelity in (FIDELITY_FAST, FIDELITY_BALANCED),
         w_pump=w_pump, w_probe=w_probe, w_conjugate=w_conj,
-        D_GHz=D_GHz, branch=branch)
-    gain_closure["historical_fixture_requested"] = bool(legacy_gain_calibration_fixture)
-    gain_closure["retired_switch_requested"] = bool(gain_closure_enabled)
-    gain_closure["runtime_policy"] = (
-        "historical calibration fixture only" if legacy_gain_calibration_fixture
-        else "retired: calibration data rejected by user; no empirical correction")
-    cross_coupling_scale = gain_closure["coupling_multiplier"]
+        gain_closure_enabled=gain_closure_enabled,
+        legacy_gain_calibration_fixture=legacy_gain_calibration_fixture)
     eta = (qe * (1.0 - loss_frac) if detection_efficiency is None
            else float(detection_efficiency))
     if not 0.0 <= eta <= 1.0:
@@ -3019,17 +3011,6 @@ def compute_spectrum(D_GHz, *,
     probe_axis_GHz = probe_scan_axis_GHz(
         D_GHz, coarse_points, fine_points, window_mhz, scan_min, scan_max,
         branches=(branch,))
-    if gain_closure["output_calibration"]["applied"] and probe_axis_GHz.size > 1:
-        # A 2.75-MHz display grid can miss the affine knee by ~25%. Include the
-        # 1-MHz calibration detunings within the requested scan, without moving
-        # its bounds or changing the UI. Already-fine/direct grids stay intact.
-        if np.max(np.diff(probe_axis_GHz)) > 0.001 + 1e-12:
-            gain_nodes = float(D_GHz) - np.arange(3030, 3040, dtype=float) / 1000.0
-            gain_nodes = gain_nodes[(gain_nodes >= probe_axis_GHz[0])
-                                    & (gain_nodes <= probe_axis_GHz[-1])]
-            gain_nodes = [node for node in gain_nodes if not np.any(
-                np.isclose(probe_axis_GHz, node, rtol=0.0, atol=1e-12))]
-            probe_axis_GHz = np.sort(np.r_[probe_axis_GHz, gain_nodes])
     k_pump_vac, k_probe_vac, k_conj_vac = seeded_option_a_wavenumbers(
         D_GHz, probe_axis_GHz, legacy_centroid=legacy_mean_field_fixture)
     omega_probe = constants.C_LIGHT * k_probe_vac
@@ -3101,10 +3082,9 @@ def compute_spectrum(D_GHz, *,
         score_scatter = 0.0
         score_profile = np.ascontiguousarray(_gaussian_overlap_profile(
             ULTRA_PROPAGATION_SEGMENTS, L, w_pump, w_probe, pump_probe_angle_deg))
-        lab_gain_active = gain_closure["output_calibration"]["applied"]
-        score_noise_enabled = lab_gain_active or excess_noise_model is not False
+        score_noise_enabled = excess_noise_model is not False
         if phase_detail == PHASE_ULTRA and score_noise_enabled:
-            score_cfg = ({} if lab_gain_active or excess_noise_model in (None, True)
+            score_cfg = ({} if excess_noise_model in (None, True)
                          else dict(excess_noise_model))
             score_kappa = score_cfg.get(
                 "pump_scatter_kappa", HARDENED_PUMP_SCATTER_KAPPA)
@@ -3116,8 +3096,7 @@ def compute_spectrum(D_GHz, *,
 
         def score_readout(chi4, rows):
             """Pointwise copy of the readout below, used only to steer refinement."""
-            chi_ss, chi_cs, chi_sc, chi_cc = fwm_gain_closure.apply(
-                chi4, cross_coupling_scale)
+            chi_ss, chi_cs, chi_sc, chi_cc = chi4
             rows = np.asarray(rows, dtype=int)
             if phase_detail == PHASE_LEGACY:
                 k_probe_rows = np.full(rows.size, K_VEC, dtype=float)
@@ -3163,15 +3142,10 @@ def compute_spectrum(D_GHz, *,
             G_s_rows, G_c_rows = observables.pump_depletion_saturation(
                 G_s_rows, G_c_rows, P_pump, P_probe,
                 legacy_probe_floor=legacy_mean_field_fixture)
-            G_s_rows, G_c_rows = fwm_gain_closure.apply_power_gain(
-                G_s_rows, G_c_rows, calibration=gain_closure["output_calibration"],
-                P_pump=P_pump, P_seed=P_probe,
-                legacy_probe_floor=legacy_mean_field_fixture)
             # In the new calibration context the atomic sampling must not depend
             # on external detector efficiency. Keep a fixed steering readout;
             # the actual noise readout below still uses the requested eta.
-            score_eta = ((1.0 if lab_gain_active else eta)
-                         if legacy_gain_calibration_fixture or legacy_mean_field_fixture
+            score_eta = (eta if legacy_gain_calibration_fixture or legacy_mean_field_fixture
                          else 1.0)
             if phase_detail == PHASE_ULTRA and score_noise_enabled:
                 noise = observables.balanced_twin_beam_noise(
@@ -3213,11 +3187,7 @@ def compute_spectrum(D_GHz, *,
                 "analytic Voigt (Faddeeva), untruncated Maxwell; reference line "
                 f"weights {convention}")
     response_estimator["velocity_classes"] = int(v_grid.size)
-    # Keep the atomic truncation audit and pole guards on the original response.
-    # Both adjacent-order transfer maps use the same corrected cross couplings.
     atomic_high_response = (chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg)
-    chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = fwm_gain_closure.apply(
-        atomic_high_response, cross_coupling_scale)
     delta_k_z = None
     delta_k_z_vacuum = None
     k_probe_prop = np.full_like(probe_axis_GHz, K_VEC, dtype=float)
@@ -3297,8 +3267,7 @@ def compute_spectrum(D_GHz, *,
     canonical = observables.canonical_transfer_diagnostics(
         T_small_signal, omega_probe, omega_conj, area_probe, area_conj)
     if lower_order_response is not None:
-        low_ss, low_cs, low_sc, low_cc = fwm_gain_closure.apply(
-            lower_order_response, cross_coupling_scale)
+        low_ss, low_cs, low_sc, low_cc = lower_order_response
         _, _, T_lower_order = observables.gain_from_chi(
             low_ss, low_sc, low_cs, low_cc,
             k_probe_prop, k_conj_prop, L, N_atoms, line_strength=coupling_ls,
@@ -3352,15 +3321,6 @@ def compute_spectrum(D_GHz, *,
     # three-field solve and therefore does not validate the absolute gain.
     G_s, G_c = observables.pump_depletion_saturation(
         G_s, G_c, P_pump, P_probe,
-        legacy_probe_floor=legacy_mean_field_fixture)
-    # Temporary laboratory gain fit: 7.7%/7.4% worst in-sample residual, no
-    # statistical confidence interval or held-out accuracy established. The
-    # transfer/canonical audits above retain the uncalibrated mean-field values;
-    # the algebraic noise readout below uses the displayed gains consistently.
-    # See fwm-tpd-gain-physical-replacement and analysis/fwm_gain_hotfix/DEVLOG.md.
-    G_s, G_c = fwm_gain_closure.apply_power_gain(
-        G_s, G_c, calibration=gain_closure["output_calibration"],
-        P_pump=P_pump, P_seed=P_probe,
         legacy_probe_floor=legacy_mean_field_fixture)
     hardened_noise = None
     pump_scatter_kappa_used = HARDENED_PUMP_SCATTER_KAPPA
@@ -3443,12 +3403,6 @@ def compute_spectrum(D_GHz, *,
         eom_spectrum_application=eom_seed_spectrum_application,
         response_estimator=response_estimator,
     )
-    if gain_closure["applied"]:
-        claim_gate["badges"] += ("SEMI_EMPIRICAL_GAIN_ESTIMATE",)
-        claim_gate["reasons"] += (
-            "off-diagonal coupling includes one Sim2025 representative-gain fit; "
-            "held-out comparison is mixed (McCormick2008 about 4.7x low)",)
-
     if legacy_mean_field_fixture:
         claim_gate["badges"] += ("HISTORICAL_MEAN_FIELD_FIXTURE",)
         claim_gate["reasons"] += (
@@ -3518,10 +3472,7 @@ def compute_spectrum(D_GHz, *,
         "temperature_K": float(T),
         "velocity_cutoff_sigma": float(velocity_cutoff),
         "input_seed_plane": "atomic medium entrance, after entrance window",
-        "output_gain_plane": (
-            "empirical pump-on/pump-off output ratio; physical plane unresolved"
-            if gain_closure["output_calibration"]["applied"] else
-            "atomic medium exit, before exit window"),
+        "output_gain_plane": "atomic medium exit, before exit window",
         "smallsignal_output_gain_plane": "atomic medium exit, before exit window",
         "displayed_gains_posthoc_saturated": True,
         "pump_depletion_cap": 1.0 + 0.5 * P_pump / max(P_probe, 1e-30),
@@ -4000,6 +3951,18 @@ class FWMScheme(Scheme):
                 fixed["Transition line"] = "D2"
         return dict(fields=("temp_c", "cell_mm", "biphoton_temp_c", "biphoton_cell_mm"), fixed=fixed)
 
+    def migrate_default_params(self, params):
+        replay_flags = ("gain_closure_enabled", "legacy_gain_calibration_fixture")
+        if not any(name in params for name in replay_flags):
+            return params
+        migrated = dict(params)
+        for name in replay_flags:
+            if name in migrated and not isinstance(migrated[name], bool):
+                raise ValueError(f"{name} must be true or false.")
+        fwm_gain_closure.reject_retired_replay(
+            *(migrated.pop(name, False) for name in replay_flags))
+        return migrated
+
     def param_schema(self):
         seeded = {"mode": MODE_SEEDED}
         biphoton = {"mode": MODE_BIPHOTON}
@@ -4475,6 +4438,9 @@ class FWMScheme(Scheme):
         )
 
     def compute(self, params):
+        fwm_gain_closure.reject_retired_replay(
+            params.get("gain_closure_enabled", False),
+            params.get("legacy_gain_calibration_fixture", False))
         if params.get("mode", MODE_SEEDED) == MODE_BIPHOTON:
             params = self._biphoton_runtime_params(params)
             return _solver_from_topology_key(
@@ -5830,9 +5796,11 @@ def full_spectrum(D_GHz, T_K, P_pump_mW, P_probe_uW, line_strength, loss_pct,
     benchmark hardware. This scheduling choice is not a numerical approximation.
     ``response_method`` and the scan settings are forwarded unchanged, so the
     pole-residue tiers solve each branch exactly as ``compute_spectrum`` does.
-    Untiered calls retain the original model. The app passes an explicit fidelity
-    and ``gain_closure_enabled`` to both branches.
+    Untiered calls retain the original model. The historical affine replay
+    flags have the same compatibility policy as in ``compute_spectrum``.
     """
+    fwm_gain_closure.reject_retired_replay(
+        gain_closure_enabled, legacy_gain_calibration_fixture)
     common = dict(
         T=T_K, P_pump=P_pump_mW * 1e-3, P_probe=P_probe_uW * 1e-6,
         line_strength=line_strength, mode_overlap_penalty=mode_overlap_penalty,

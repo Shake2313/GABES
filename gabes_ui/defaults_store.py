@@ -1,6 +1,7 @@
 """Portable named parameter snapshots, shared by file and browser storage.
 
-Only input parameters declared by the active scheme are accepted. A missing
+Only input parameters declared by the active scheme are saved. Schemes can
+migrate older settings on import before current input validation. A missing
 parameter uses its current schema default so an older snapshot can still be
 loaded when the scheme gains an input. Derived readouts are never persisted.
 """
@@ -20,6 +21,10 @@ MAX_NAME_LENGTH = 80
 
 class DefaultValidationError(ValueError):
     """A snapshot cannot be safely applied to the active scheme."""
+
+
+class DefaultMigrationError(DefaultValidationError):
+    """A scheme cannot apply a setting from an older snapshot."""
 
 
 def _name(value):
@@ -167,7 +172,14 @@ def parse_default(scheme, payload):
     if payload["scheme"] != scheme.name:
         raise DefaultValidationError(
             f"This default belongs to a different scheme; select {payload['scheme']} first.")
-    return create_default(scheme, payload["name"], payload["params"])
+    values = payload["params"]
+    migrate = getattr(scheme, "migrate_default_params", None)
+    if isinstance(values, dict) and migrate is not None:
+        try:
+            values = migrate(dict(values))
+        except ValueError as exc:
+            raise DefaultMigrationError(str(exc)) from exc
+    return create_default(scheme, payload["name"], values)
 
 
 def dump_default(record):

@@ -453,14 +453,18 @@ sidebar controls and the plots follow `param_schema()` and the observables dict.
   absorption is already included in the atomic transfer used by NF, so these
   total products are not applied to NF again. Zero detected power has no NF.
 
-### Retired gain calibration
+### Retired affine gain replay
 
-Current Fast, Balanced and Ultra runs apply neither the fitted cross-coupling
-multiplier nor the local empirical output-gain fit. The correction control is
-removed. A historical API replay requires both
-`legacy_gain_calibration_fixture=True` and `gain_closure_enabled=True`;
-the old switch alone cannot enable calibration. The development method, data
-and labelled fixtures remain in [the historical development log](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_gain_hotfix/DEVLOG.md).
+Public main has retired the historical fitted cross-coupling and affine
+output-gain replay. Older file and browser settings with inactive replay flags
+still load. Import drops the inactive flags and keeps the other settings.
+A request that sets both `legacy_gain_calibration_fixture=True` and
+`gain_closure_enabled=True` raises `ValueError` in the API. Settings import
+displays the same retirement notice. Replay remains available at the
+[GABES-archive tag `pre-split-2026-11-09`](https://github.com/Shake2313/GABES-archive/tree/pre-split-2026-11-09).
+The development method, data and labelled fixtures remain in
+[the historical development log](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_gain_hotfix/DEVLOG.md).
+
 With **2026-10-13 lab** selected, the **Empirical gain calibration** toggle applies a frozen frequency shift/width
 and armwise gain correction to the current model. It remains active outside
 3022–3044 MHz and after changing temperature, powers, detuning or geometry;
@@ -769,9 +773,10 @@ G. Sim, H. Kim, H. S. Moon, Sci. Rep. **15**, 7727 (2025). 85Rb squeezing-optima
 Geometry: cell L=12.5 mm, pump⊥probe. Pump/seed waist, crossing angle and detector
 efficiency describe this apparatus point. GABES exposes total detection efficiency
 η; SABES retains the optical-loss and detector-QE split. The historical
-Fast/Balanced gain hotfix was anchored at this point and is retained only in an
-explicit legacy API fixture. Current production retains the uncalibrated reduced
-model. No tier predicts validated physical squeezing.
+Fast/Balanced gain hotfix was anchored at this point. Replay it at the
+[GABES-archive tag `pre-split-2026-11-09`](https://github.com/Shake2313/GABES-archive/tree/pre-split-2026-11-09).
+Current production retains the uncalibrated reduced model as its baseline.
+No tier predicts validated physical squeezing.
 
 **Detection reference.** The 86.94 % value in this experimental table combines
 the historical 92 % QE with 5.5 % post-cell loss. Current GABES exposes separate

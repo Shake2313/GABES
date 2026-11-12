@@ -4,6 +4,7 @@ from io import BytesIO
 import pytest
 
 from gabes.schemes.base import ParamSpec, Preset, Scheme
+from gabes.schemes.fwm import FWMScheme
 from gabes_ui import defaults
 from gabes_ui.defaults_store import create_default, dump_default
 
@@ -80,6 +81,33 @@ def test_local_import_restores_values_and_offers_named_choice(state):
     defaults._import(scheme, upload_key, defaults.builtin_defaults(scheme))
     assert defaults._params(scheme) == record["params"]
     assert defaults._saved(scheme)["Local snapshot"] == record
+
+
+@pytest.mark.parametrize("browser", [False, True], ids=["file", "browser"])
+def test_old_fwm_defaults_load_inactive_flags_and_report_explicit_replay(state, browser):
+    scheme = FWMScheme()
+    record = create_default(scheme, "Older settings", {"temp_c": 101.0})
+    inactive = dict(record, params=dict(record["params"],
+                                        gain_closure_enabled=False,
+                                        legacy_gain_calibration_fixture=False))
+    replay = dict(record, name="Old replay", params={
+        "temp_c": 115.0, "gain_closure_enabled": True,
+        "legacy_gain_calibration_fixture": True,
+    })
+    if browser:
+        defaults._receive(scheme, {"records": [inactive, replay]})
+    else:
+        upload_key = defaults._key(scheme, "import_default")
+        builtins = defaults.builtin_defaults(scheme)
+        for item in (inactive, replay):
+            state[upload_key] = BytesIO(dump_default(item).encode())
+            defaults._import(scheme, upload_key, builtins)
+        assert state["fwm__temp_c"] == 101.0
+    assert defaults._saved(scheme) == {"Older settings": record}
+    message, is_error = state[defaults._key(scheme, "defaults_notice")]
+    assert is_error
+    assert "retired" in message.lower()
+    assert "pre-split-2026-11-09" in message
 
 
 @pytest.mark.parametrize("payload", [b"not json", b'{"scheme":"other"}'])

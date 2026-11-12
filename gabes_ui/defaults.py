@@ -6,8 +6,8 @@ import streamlit as st
 from gabes_ui.controls import current_params
 from gabes_ui.defaults_browser import render_browser_store
 from gabes_ui.defaults_store import (
-    DefaultValidationError, create_default, default_filename, dump_default,
-    parse_default,
+    DefaultMigrationError, DefaultValidationError, create_default,
+    default_filename, dump_default, parse_default,
 )
 
 
@@ -72,19 +72,25 @@ def _receive(scheme, event):
         return
     builtins = {record["name"] for record in builtin_defaults(scheme).values()}
     invalid = 0
+    migration_error = None
     for raw in event.get("records", []):
         try:
             record = parse_default(scheme, raw)
             if record["name"] in builtins:
                 raise DefaultValidationError("A built-in default cannot be replaced.")
             _saved(scheme)[record["name"]] = record
-        except DefaultValidationError:
+        except DefaultValidationError as exc:
             invalid += 1
+            if migration_error is None and isinstance(exc, DefaultMigrationError):
+                migration_error = str(exc)
     if acknowledged:
         _activate(scheme, "saved:" + command["record"]["name"], refresh=True)
         _notice(scheme, f'Saved “{command["record"]["name"]}” in this browser.')
     elif invalid:
-        _notice(scheme, f"Skipped {invalid} incompatible browser default(s).", True)
+        message = f"Skipped {invalid} incompatible browser default(s)."
+        if migration_error:
+            message += f" {migration_error}"
+        _notice(scheme, message, True)
 
 
 def _named_record(scheme, name, builtins):

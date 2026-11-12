@@ -5766,31 +5766,34 @@
     },
     {
       "id": "fwm-legacy-gain-replay-retirement",
-      "area": "gabes/fwm_gain_closure.py + gabes/schemes/fwm.py (legacy_gain_calibration_fixture, gain_closure_enabled)",
-      "title": "Decide whether main keeps the retired FWM gain-hotfix replay path",
+      "area": "gabes/schemes/fwm.py (legacy_gain_calibration_fixture, gain_closure_enabled)",
+      "title": "Retire the historical FWM affine gain replay from main",
       "origin": "ai_execution_of_human_request",
       "priority": "P3",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "user_decision_2026_11_11": "Retire the opt-in affine replay from public main after the repository split; keep the archive replay, receipts and tests at pre-split-2026-11-09 (R13).",
-      "adoption_status": "user_approved_registration_only",
-      "problem": "User decision 2026-11-09 (repository split S2): tests/test_fwm_gain_hotfix.py and tests/test_fwm_tpd_gain_hotfix.py move to the archive with the dated analysis/fwm_gain_hotfix records, and this retirement question is registered. ⟦AI⟧ Until the user decides, main retains the legacy replay code. The two end-to-end replay test files move to the archive. Main retains helper and compatibility tests, including tests/test_fwm_gain_reference_planes.py.",
+      "adoption_status": "user_approved_implementation",
+      "problem": "User decision 2026-11-09 (repository split S2): tests/test_fwm_gain_hotfix.py and tests/test_fwm_tpd_gain_hotfix.py move to the archive with the dated analysis/fwm_gain_hotfix records, and this retirement question is registered. ⟦AI⟧ Before R13, main retained the legacy replay code and helper tests. The two end-to-end replay test files moved to the archive.",
       "recommendation_2026_11_09": "⟦AI⟧ Recommend retiring only the opt-in affine gain replay from public main after the split and user decision. Keep the pre-split archive replay, receipts, and tests. Accept old inactive settings. For an explicit dual-flag replay request, report retirement and point to the archive tag. Preserve the separate legacy_mean_field_fixture and supported empirical/noise models. If replay stays, add an archive-independent end-to-end regression.",
-      "call_sites": [
+      "historical_call_sites_before_r13": [
         "gabes/schemes/fwm.py: compute_spectrum, focused scheme compute, full scan, full_spectrum, and raw/readout export (23 matching lines).",
         "gabes/fwm_measured_gain.py: rejects composing historical fixture flags with the measured reference (one matching line).",
         "README.md: documents the direct API and its two opt-in replay flags. This is a compatibility decision."
       ],
-      "decision_required": [
+      "alternatives_before_r13": [
         "Remove the legacy replay path from main (its records and tests stay in the archive), or keep it with a main-side regression test."
       ],
+      "implementation_2026_11_12": "⟦AI⟧ Main retired the executable affine replay and fitted cross-coupling. File and browser imports drop inactive legacy flags and preserve remaining settings. An explicit dual-flag request raises ValueError in the API and reports retirement and the archive tag on settings import. The inactive ledger schema, separate legacy_mean_field_fixture, and supported calibration and noise models keep their contracts.",
+      "archive_replay_tag": "https://github.com/Shake2313/GABES-archive/tree/pre-split-2026-11-09",
       "acceptance_criteria": [
-        "⟦AI⟧ Either the replay path is gone from main with no remaining callers, or main has a test that exercises it without archive records."
+        "⟦AI⟧ Inactive legacy settings still load, and an explicit dual-flag replay request reports retirement and the archive tag.",
+        "⟦AI⟧ The historical replay remains available at the pinned archive tag. Current FWM calibration and noise models retain their existing contracts."
       ],
       "source_documents": [
         "docs/repo_restructure/README.md"
       ],
-      "last_reviewed_at": "2026-11-09"
+      "last_reviewed_at": "2026-11-12"
     }
   ],
   "_daily_report_sync_history": [
