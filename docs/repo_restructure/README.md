@@ -95,6 +95,29 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-12: **S5 3단계 완료: `gabes_lab.blocks`** (사용자 "3단계 진행").
+  - ⟦AI⟧ 블록 6개. 물리 없음. 새로 지어낸 것이 아니라 파이프라인·도구에 흩어져 있던 헬퍼를 모음:
+    - `provenance`: `utc_now`, `sha256_file`·`sha256_bytes`, `portable_path`(rydberg `_serialized_path`), `file_record`, `git`, `git_state`(rydberg `_git_metadata`), `github_slug`, `runtime_info`.
+    - `io`: `write_json`·`dumps_json`·`read_json`·`write_text`. 레이아웃 인자(indent, allow_nan, default, trailing_newline)는 기존 기록의 바이트를 지키기 위한 것. 텍스트 모드라 Windows에서는 CRLF로 씀(예전과 같음).
+    - `figures`: `pyplot()`(Agg), `save_figure`(형식별 파일, dpi는 래스터에만, 저장 후 닫기).
+    - `snapshot`: `capture`·`save`·`load`·`compare`, CLI `python -m gabes_lab.blocks.snapshot compare A.npz B.npz`. AGENTS 통합 규칙(비트 동일 또는 1e-12 상대)을 검사하는 도구.
+    - `runner`: `start_run(name)` → `runs/<name>/<UTC>-<commit7>/`. `run.json`(`gabes_lab.run/1`)에 argv, config, repo, 출력 전에 잡은 git 상태, 런타임, 시간, 출력 파일 sha256을 남김. 중간에 죽은 실행은 status `running`으로 남음.
+    - `publish_to_archive`: 끝난 실행 폴더(또는 일반 폴더)를 아카이브 작업본 `<dest>/`로 복사하고 `publish_manifest.json`(`gabes_lab.publish/1`)을 씀. 내용: source `{repo, commit, branch, dirty, path}`, 아카이브 engine 고정 커밋과 일치 여부, 파일 sha256. 거절 조건: 미완료 실행, 실행 뒤 바뀐 파일, dirty main(`--allow-dirty`면 dirty로 기록), 비어 있지 않은 대상, `engine/` 안이나 상위 경로. 아카이브에 커밋하지 않음.
+  - ⟦AI⟧ 호출부 전환:
+    - rydberg `workflow`와 그림 스크립트 3개: 자체 헬퍼 5개와 그림 저장 루프 3벌을 블록으로 바꿈.
+    - squeezing 스캐너 9개: 기본 출력이 `analysis/squeezing/...`·`docs/squeezing_report/...`에서 `runs/squeezing/<scan>/`으로 바뀜. 예전 경로는 main에 없어서, `delta_T`·`theory_max`는 긴 계산을 마친 뒤 폴더가 없어 저장하다 실패했음. `--out`은 low_pump_power·variable_audit(기본값 변경)과 hanle(새로 추가)에 있음. v5/v6 래퍼의 직접 실행용 import 우회는 지움.
+    - 도구 5개(PSR 벤치마크 2개, `ui_audit`, `split_boundary`, `migration_manifest`): sha256, git HEAD, JSON 쓰기를 블록으로 바꿈.
+    - `.gitignore`에 `/runs/`. README 폴더 지도에 블록 목록.
+  - ⟦AI⟧ 값이 아닌 동작 차이 하나: brief·paper 그림의 `--output-stem`에 점이 있으면 예전 `with_suffix`는 점 뒤를 잘랐으나 이제 그대로 두고 확장자를 붙임.
+  - ⟦AI⟧ 검증(전후 비교, 실행 시각·생성 시각 제외):
+    - rydberg example·brief 설정과 그림 3개: `results.json`, PNG, PDF(CreationDate 제외) 같음. TeX 매크로는 생성 시각 한 줄만 다름. 매니페스트는 바뀐 소스 파일 해시만 다름.
+    - low_pump_power·variable_audit `--quick`을 HEAD 트리와 새 트리에서 실행: JSON(`runtime_s` 제외), MD, PNG 바이트 같음. variable_audit은 아카이브 CSV 사본을 임시 트리에 넣어 돌림(아래 발견 사항).
+    - delta_T·tpd_angle_detail 2×2 격자, hanle quick을 기본 위치로 실행 → `run.json` complete, 출력 해시 기록.
+    - Migration Manifest 재생성: `head_commit` 외 바이트 같음(파일은 되돌림, 3단계는 이동 없음).
+    - 블록 테스트 20개(`tests/test_lab_blocks.py`) 포함 집중 테스트 68 통과. 실제 아카이브 작업본 드라이런: dirty 거절, `--allow-dirty`로 5파일, engine 고정 f333a50 ≠ main 04a21ac 표시. 아카이브 변경 없음.
+    - full suite는 돌리지 않음. 바뀐 코드는 `gabes_lab`과 그 테스트뿐이고 엔진은 그대로. S6에서 전체 검증.
+  - ⟦AI⟧ 발견(별건): `variable_audit.sec_paper_db`가 `archive/fwm_squeezing_paper_parameters.csv`를 읽는데 이 파일은 아카이브에만 있음. main에서 이 스캐너는 첫 절에서 멈춤. checklist `variable-audit-paper-db-source`(사용자 결정 대기).
+  - 다음: 4단계 AGENTS 규칙과 `gabes_lab/README.md`.
 - 2026-11-12: **S5 2단계 완료: `gabes_lab`과 pytest 전용 (R6, R7)** (사용자 "코덱스 작업이 끝났습니다. 이거 확인하고, 포함해서 2단계 진행해주세요").
   - ⟦AI⟧ Codex R13 확인 (c67d884, FWM affine replay 퇴역, 로컬):
     - 두 재현 플래그가 모두 true일 때만 재현 요청으로 봄. 공개 경로 세 곳(`compute_spectrum`, `full_spectrum`, `FWMScheme.compute`)과 provenance가 같은 함수 `reject_retired_replay`로 거절하고, 오류 문구가 아카이브 태그 `pre-split-2026-11-09`를 안내함.
@@ -431,7 +454,7 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 완료 2026-11-09 |
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
 | S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8, f9d1130: 아카이브 HEAD 1,373 통과 / 0 실패, 옛 배치 검사 8개는 분리 태그에서 재현) |
-| S5 | main 통합 (이전 P2–P5) | 진행 중: 1단계 UI 파일럿, 2단계 `gabes_lab`·pytest 전용 완료 2026-11-12 |
+| S5 | main 통합 (이전 P2–P5) | 진행 중: 1단계 UI 파일럿, 2단계 `gabes_lab`·pytest 전용, 3단계 블록 완료 2026-11-12 |
 | S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 대기 |
 
 S5 세부:

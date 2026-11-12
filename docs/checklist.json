@@ -5794,6 +5794,29 @@
         "docs/repo_restructure/README.md"
       ],
       "last_reviewed_at": "2026-11-12"
+    },
+    {
+      "id": "variable-audit-paper-db-source",
+      "area": "gabes_lab/pipelines/squeezing/variable_audit/scan_variable_audit.py (sec_paper_db)",
+      "title": "⟦AI⟧ variable_audit 문헌 표 CSV를 main에서 찾을 수 있게 하기",
+      "origin": "ai_found_during_s5_step3",
+      "priority": "P3",
+      "effort": "small",
+      "status": "open",
+      "adoption_status": "pending_user_decision",
+      "problem": "⟦AI⟧ sec_paper_db가 REPO_ROOT/archive/fwm_squeezing_paper_parameters.csv를 읽는데, 분리 뒤 이 파일은 GABES-archive의 archive/에만 있다. main에서 스캐너를 실행하면 첫 절 paper_db에서 FileNotFoundError로 멈춘다. S5 3단계 검증은 아카이브 사본을 임시 트리에 넣고 실행했다. 실행 경로 문제이며 계산 값과는 무관하다.",
+      "options": [
+        "⟦AI⟧ 추천: 문헌 표이므로 main references/fwm_experiments/로 복사하고 경로를 고친다 (main은 references/*_experiments 문헌 DB를 유지).",
+        "⟦AI⟧ 대안: 스캐너가 --paper-db 인자로 경로를 받고, 없으면 그 절만 건너뛰었다고 기록한다."
+      ],
+      "acceptance_criteria": [
+        "⟦AI⟧ main 단독 체크아웃에서 scan_variable_audit --quick이 끝까지 실행된다.",
+        "⟦AI⟧ paper_db 절 결과가 아카이브 사본으로 돌린 S5 3단계 결과와 같다."
+      ],
+      "source_documents": [
+        "docs/repo_restructure/README.md"
+      ],
+      "last_reviewed_at": "2026-11-12"
     }
   ],
   "_daily_report_sync_history": [
