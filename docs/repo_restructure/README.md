@@ -111,7 +111,7 @@
       - 산출 경로는 바꾸지 않음(결과 유지 원칙). squeezing 스캐너는 계속 `analysis/squeezing/...`에 쓰므로 `.gitignore`에 `/analysis/`와 `gabes_lab/**/generated*/`를 넣고, 아카이브로 간 npz 예외 줄을 지움. 산출 위치 정리는 3단계 io·runner 블록에서 함.
       - README 폴더 지도에 `gabes_ui/`, `sabes/`, `gabes_lab/`를 넣고, AGENTS·UI 허브·`gabes_ui/DESIGN.md`의 도구 경로를 고침.
     - 5b4a96d: pytest 전용(R7). `pytest.ini`에 `pythonpath = .`를 넣고 테스트 35개에서 `sys.path.insert`를 지움(쓰지 않게 된 `ROOT`·`sys`·`Path` import도 함께). README 테스트 안내는 모두 `python -m pytest -q`. 직접 실행하는 스크립트 `tests/capture_baseline.py`, `tests/verify_hanle_eit_eia.py`는 그대로 둠.
-    - 이 기록 커밋: Migration Manifest 재생성(52 건 {'move+edit': 19, 'move': 33}).
+    - 이 기록 커밋: Migration Manifest 재생성(18b0b5f 이후 52건: 그대로 이동 33, 이동+경로 수정 19).
   - ⟦AI⟧ 설계 세부 조정: 개발 도구는 `gabes_lab/tools/`에 둠(R6의 "tools 흡수"). 테스트 파일의 `if __name__ == "__main__"` 블록은 남김. 이제 직접 실행되지 않으므로 정리 후보임.
   - ⟦AI⟧ 검증: 이동 관련 테스트 62 통과, main 전체 2,367 통과 / 1 skip / 0 실패(330 s). `python -m`으로 `ui_audit`, rydberg `workflow`, `migration_manifest` 실행 확인. `--help`가 CP949 콘솔에서 실패하는 문제는 이동 전부터 있었음(UTF-8 출력에서는 정상).
   - 다음: 3단계 블록(provenance, io, figures, snapshot, runner, publish_to_archive), 4단계 AGENTS 규칙과 `gabes_lab/README.md`.
