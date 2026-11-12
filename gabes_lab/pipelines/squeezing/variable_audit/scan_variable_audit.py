@@ -64,7 +64,6 @@ Usage:
 """
 import argparse
 import csv
-import json
 import math
 import os
 import sys
@@ -82,7 +81,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 import numpy as np
 
+from gabes_lab.blocks.io import write_json  # noqa: E402
 from gabes_lab.blocks.paths import REPO_ROOT as REPO  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import constants, hyperfine, observables                 # noqa: E402
 from gabes.core import blas_single_thread                           # noqa: E402
@@ -1215,11 +1216,12 @@ def write_markdown(res, path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "generated"))
+    ap.add_argument("--out", default=None,
+                    help="output folder (default: a new run folder under runs/squeezing/variable_audit/)")
     ap.add_argument("--quick", action="store_true")
     args = ap.parse_args()
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    run = start_run("squeezing/variable_audit", out=args.out, config={"quick": args.quick})
+    out = run.dir
 
     t0 = time.time()
     res = {}
@@ -1245,12 +1247,12 @@ def main():
     )
     promote_gain_referred_schema(res)
 
-    (out / "variable_audit.json").write_text(
-        json.dumps(res, indent=1, ensure_ascii=False, default=float),
-        encoding="utf-8")
+    write_json(out / "variable_audit.json", res, indent=1, allow_nan=True,
+               default=float, trailing_newline=False)
     print(f"json   -> {out / 'variable_audit.json'}")
     write_markdown(res, out / "variable_audit.md")
     print(f"total {time.time()-t0:.1f}s")
+    run.finish()
 
 
 if __name__ == "__main__":

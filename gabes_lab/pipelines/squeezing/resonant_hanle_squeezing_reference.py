@@ -16,10 +16,9 @@ Typical use:
 
     python -m gabes_lab.pipelines.squeezing.resonant_hanle_squeezing_reference --fidelity fine
 
-Outputs:
-    analysis/squeezing/resonant_hanle_squeezing_reference.npz
-    analysis/squeezing/resonant_hanle_squeezing_reference.png
-    analysis/squeezing/resonant_hanle_squeezing_reference.md
+Outputs (a new run folder under runs/squeezing/resonant_hanle_reference/, or --out):
+    resonant_hanle_squeezing_reference.npz, .png, .md and the tolerance,
+    Hanle-optimization and calibration figures, plus run.json.
 """
 from __future__ import annotations
 
@@ -33,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import constants, observables, species  # noqa: E402
 from gabes.schemes import fwm, magneto  # noqa: E402
@@ -1622,6 +1621,8 @@ def apply_json_config(args: argparse.Namespace) -> argparse.Namespace:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
+    p.add_argument("--out", default="",
+                   help="Output folder (default: a new run folder under runs/).")
     p.add_argument("--config-json", default="",
                    help="Optional JSON file with argument-name keys to override CLI/defaults.")
     p.add_argument("--fidelity", choices=("quick", "balanced", "fine", "ultra"),
@@ -1717,6 +1718,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
     args = parse_args()
+    run = start_run("squeezing/resonant_hanle_reference", out=args.out or None,
+                    config=vars(args))
     settings = fidelity_settings(args.fidelity)
     configs = make_source_configs()
     if args.only:
@@ -1777,7 +1780,7 @@ def main() -> None:
             f"norm RMS={fit['normalized_rms']:.3g}",
             flush=True)
 
-    out = ROOT / "analysis" / "squeezing"
+    out = run.dir
     out_npz = out / f"{OUT_STEM}.npz"
     out_png = out / f"{OUT_STEM}.png"
     out_tol_png = out / f"{OUT_STEM}_tolerance.png"
@@ -1800,6 +1803,7 @@ def main() -> None:
     if wrote_cal:
         print(f"saved {out_cal_png}")
     print(f"saved {out_md}")
+    run.finish()
 
 
 if __name__ == "__main__":

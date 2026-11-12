@@ -26,6 +26,9 @@ table per temperature (`fwm.collisional_atom`); squeezing now peaks near
 121-131 °C and worsens at higher T rather than tracking the density monotonically.
 
     python -m gabes_lab.pipelines.squeezing.scan_squeezing_delta_T
+
+Outputs (squeezing_map.npz, .png) go to a new run folder under
+runs/squeezing/delta_T/ with its run.json record.
 """
 import os
 import time
@@ -34,7 +37,7 @@ os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
 
 import numpy as np
 
-from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import atoms, constants, doppler, hyperfine, kernels, observables  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402
@@ -205,6 +208,9 @@ def run_grid():
 
 
 def main():
+    run = start_run("squeezing/delta_T", config=dict(
+        delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta=ETA,
+        coarse_points=COARSE_POINTS, velocity_step=VELOCITY_STEP))
     print(f"eta = QE*(1-loss) = {QE:.4f}*(1-{LOSS_FRAC}) = {ETA:.5f}")
     print(f"detection-loss asymptote 10log10(1-eta) = {S_FLOOR_DB:.4f} dB")
     print(f"grid: {DELTA_GHZ.size} one-photon detunings Δ x {TEMP_C.size} T = "
@@ -233,13 +239,14 @@ def main():
     print(f"\nSim optimum (Δ=0.9 GHz, T=121 °C): "
           f"ξ = {sim['S_dB']:.4f} dB,  G_s = {sim['G_s']:.2f}")
 
-    out = ROOT / "analysis" / "squeezing"
+    out = run.dir
     np.savez(out / "squeezing_map.npz",
              delta_ghz=DELTA_GHZ, temp_c=TEMP_C, xi_dB=Xi,
              G_s=Gs, G_c=Gc, delta_mhz=Dlt, eta=ETA, floor_dB=S_FLOOR_DB)
 
     _plot(Xi, Gs, Dbest, Tbest, Sbest, out)
     print(f"\nsaved: {out/'squeezing_map.npz'}  and  squeezing_map.png")
+    run.finish()
 
 
 def _plot(Xi, Gs, Dbest, Tbest, Sbest, out):

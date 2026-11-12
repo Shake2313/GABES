@@ -1,4 +1,8 @@
-"""Shared runner for detailed two-photon-detuning and crossing-angle scans."""
+"""Shared runner for detailed two-photon-detuning and crossing-angle scans.
+
+Each scan writes squeezing_tpd_angle_detail.npz and its figure into a new run
+folder under runs/squeezing/tpd_angle_detail/<version>/ (or `out`).
+"""
 from __future__ import annotations
 
 import os
@@ -16,7 +20,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 
-from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes.core import blas_single_thread  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402
@@ -43,16 +47,6 @@ class ScanConfig:
     two_photon_axis_mhz: np.ndarray
     reference_delta_ghz: float
     reference_temperature_c: float
-
-    @property
-    def output_dir(self) -> Path:
-        return (ROOT / "analysis" / "squeezing"
-                / f"squeezing_frontier_ideal_{self.version}_tpd_angle_detail")
-
-    @property
-    def document_figure(self) -> Path:
-        return (ROOT / "docs" / "squeezing_report"
-                / f"squeezing_frontier_ideal_{self.version}_tpd_angle_detail.png")
 
 
 _TABLE_STATE = threading.local()
@@ -183,7 +177,7 @@ def _print_row(row: dict) -> None:
         f"dkz={row['delta_k_z']:.2e} 1/m")
 
 
-def _plot(config: ScanConfig, xi, trusted, summary_rows) -> None:
+def _plot(config: ScanConfig, xi, trusted, summary_rows, path: Path) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -256,13 +250,12 @@ def _plot(config: ScanConfig, xi, trusted, summary_rows) -> None:
     axes[2].legend(fontsize=7)
 
     fig.tight_layout()
-    config.document_figure.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(config.document_figure, dpi=150)
-    print(f"wrote {config.document_figure}")
+    fig.savefig(path, dpi=150)
+    print(f"wrote {path}")
 
 
-def run(config: ScanConfig) -> None:
-    config.output_dir.mkdir(parents=True, exist_ok=True)
+def run(config: ScanConfig, out: str | Path | None = None) -> Path:
+    record = start_run(f"squeezing/tpd_angle_detail/{config.version}", out=out)
     shape4 = (config.delta_axis_ghz.size, config.temperature_axis_c.size,
               config.angle_axis_deg.size, config.two_photon_axis_mhz.size)
     shape3 = shape4[:3]
@@ -342,7 +335,7 @@ def run(config: ScanConfig) -> None:
     for row in rows:
         _print_row(row)
 
-    out_npz = config.output_dir / "squeezing_tpd_angle_detail.npz"
+    out_npz = record.dir / "squeezing_tpd_angle_detail.npz"
     np.savez(
         out_npz,
         delta_ghz=config.delta_axis_ghz,
@@ -382,4 +375,7 @@ def run(config: ScanConfig) -> None:
         gap_max=GAP_MAX,
     )
     print(f"saved {out_npz}")
-    _plot(config, xi, trusted, rows[:2])
+    _plot(config, xi, trusted, rows[:2],
+          record.dir / f"squeezing_frontier_ideal_{config.version}_tpd_angle_detail.png")
+    record.finish()
+    return record.dir

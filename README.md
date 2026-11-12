@@ -172,11 +172,16 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
   `fwm_double_lambda_gain_squeezing.png`; the active physics lives in `gabes/`.
 - `tests/` — regression + physics validation; `baseline_focused.npz` is an
   intentional compatibility snapshot documented by `baseline_focused_manifest.json`.
-- `gabes_lab/` — development package. `blocks/` holds helpers without physics
-  (`paths.REPO_ROOT`); `pipelines/` holds reusable analyses that call `gabes`:
+- `gabes_lab/` — development package. `blocks/` holds helpers without physics:
+  `paths` (repository root), `provenance` (hashes, git state, portable paths),
+  `io` (UTF-8 JSON), `figures`, `snapshot` (before/after comparison for
+  refactors that must keep results), `runner` (run folders under `runs/` with a
+  `run.json` record) and `publish_to_archive` (copies a finished result into a
+  GABES-archive working copy with a provenance manifest). `pipelines/` holds
+  reusable analyses that call `gabes`:
   `rydberg_cell_heating` (config-driven temperature sweep, clean CSV overlays,
   provenance manifest, figures, XeLaTeX report inputs) and the `squeezing`
-  scanners; `tools/` holds `ui_audit`, the PSR benchmarks and repository
+  scanners, which write to `runs/squeezing/<scan>/`; `tools/` holds `ui_audit`, the PSR benchmarks and repository
   maintenance (`split_boundary`, `migration_manifest`). Run a module from the
   repository root with `python -m gabes_lab.<area>.<module>`.
 - `requirements.txt` — Streamlit, NumPy, SciPy, matplotlib and runtime helpers.

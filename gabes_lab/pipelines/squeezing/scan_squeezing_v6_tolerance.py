@@ -24,9 +24,9 @@ Two readouts for the re-solve scans:
 Trust gate: same twin-beam gap gate as the frontier scan
   (GAP_MIN <= G_s - G_c <= GAP_MAX), delta-window edges excluded for best-delta.
 
-Outputs:
-  analysis/squeezing/squeezing_v6_tolerance/squeezing_v6_tolerance.npz
-  docs/squeezing_report/squeezing_v6_tolerance.png
+Outputs (a new run folder under runs/squeezing/v6_tolerance/, with run.json):
+  squeezing_v6_tolerance.npz
+  squeezing_v6_tolerance.png
 
 Run from the repo root:
   python -m gabes_lab.pipelines.squeezing.scan_squeezing_v6_tolerance
@@ -44,7 +44,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 
-from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -59,9 +59,6 @@ from gabes import observables  # noqa: E402
 # Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
 # (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
 RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
-
-OUT = ROOT / "analysis" / "squeezing" / "squeezing_v6_tolerance"
-DOC_OUT = ROOT / "docs" / "squeezing_report" / "squeezing_v6_tolerance.png"
 
 # ---- v6 finite-loss optimum (center point) ---------------------------------
 D0_GHZ = -1.50
@@ -191,7 +188,7 @@ def _fmt(v, unit=""):
 
 
 def main():
-    OUT.mkdir(parents=True, exist_ok=True)
+    run = start_run("squeezing/v6_tolerance")
     t0 = time.time()
 
     # ---- center point (fine δ axis, loss remap, and validation) ------------
@@ -304,7 +301,7 @@ def main():
             print(f"    +{thr:4.2f} dB: [{_fmt(lo, unit)}, {_fmt(hi, unit)}]")
 
     np.savez(
-        OUT / "squeezing_v6_tolerance.npz",
+        run.dir / "squeezing_v6_tolerance.npz",
         center=np.array([D0_GHZ, T0_C, TPD0_MHZ, P_PROBE0, LOSS0, xi_c]),
         thresholds_db=np.array(THRESHOLDS_DB),
         opd_ghz=OPD_AXIS_GHZ, xi_opd_fixed=xi_opd_f, xi_opd_best=xi_opd_b,
@@ -323,14 +320,16 @@ def main():
         velocity_step=VELOCITY_STEP, velocity_cutoff=VELOCITY_CUTOFF,
         gap_min=GAP_MIN, gap_max=GAP_MAX,
     )
-    print(f"\nsaved {OUT / 'squeezing_v6_tolerance.npz'}")
+    print(f"\nsaved {run.dir / 'squeezing_v6_tolerance.npz'}")
 
     _plot(xi_c, scans, table, gap_tpd, gate_trust,
-          (xi_opd_b, tr_opd), (xi_t_b, tr_t), (xi_p_b, tr_p))
+          (xi_opd_b, tr_opd), (xi_t_b, tr_t), (xi_p_b, tr_p),
+          run.dir / "squeezing_v6_tolerance.png")
     print(f"total {time.time() - t0:.0f}s")
+    run.finish()
 
 
-def _plot(xi_c, scans, table, gap_tpd, gate_trust, opd_b, t_b, p_b):
+def _plot(xi_c, scans, table, gap_tpd, gate_trust, opd_b, t_b, p_b, path):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -391,9 +390,8 @@ def _plot(xi_c, scans, table, gap_tpd, gate_trust, opd_b, t_b, p_b):
     fig.suptitle("v6 optimum tolerance scan (hardened Ultra, eta = 0.8694)",
                  fontsize=12)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    DOC_OUT.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(DOC_OUT, dpi=150)
-    print(f"wrote {DOC_OUT}")
+    fig.savefig(path, dpi=150)
+    print(f"wrote {path}")
 
 
 if __name__ == "__main__":

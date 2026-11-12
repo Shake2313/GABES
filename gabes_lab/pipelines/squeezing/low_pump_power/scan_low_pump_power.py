@@ -62,7 +62,6 @@ Usage:
     python -m gabes_lab.pipelines.squeezing.low_pump_power.scan_low_pump_power --out DIR
 """
 import argparse
-import json
 import math
 import os
 import sys
@@ -81,7 +80,8 @@ for _stream in (sys.stdout, sys.stderr):
 
 import numpy as np
 
-from gabes_lab.blocks.paths import REPO_ROOT as REPO  # noqa: E402
+from gabes_lab.blocks.io import write_json  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import constants, hyperfine, observables             # noqa: E402
 from gabes.core import blas_single_thread                       # noqa: E402
@@ -871,12 +871,13 @@ def write_markdown(res, path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent / "generated"))
+    ap.add_argument("--out", default=None,
+                    help="output folder (default: a new run folder under runs/squeezing/low_pump_power/)")
     ap.add_argument("--quick", action="store_true", help="coarse grids, for smoke tests")
     ap.add_argument("--no-figure", action="store_true")
     args = ap.parse_args()
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
+    run = start_run("squeezing/low_pump_power", out=args.out, config={"quick": args.quick, "figure": not args.no_figure})
+    out = run.dir
 
     t0 = time.time()
     res = {}
@@ -908,8 +909,8 @@ def main():
         runtime_s=time.time() - t0)
 
     jpath = out / "low_pump_power.json"
-    jpath.write_text(json.dumps(res, indent=1, ensure_ascii=False,
-                                default=float), encoding="utf-8")
+    write_json(jpath, res, indent=1, allow_nan=True, default=float,
+               trailing_newline=False)
     print(f"json   -> {jpath}")
     write_markdown(res, out / "low_pump_power.md")
     if not args.no_figure:
@@ -929,6 +930,7 @@ def main():
     print(f"gain saturation dlnG/dlnP   : {ps['slope_dlnG1_dlnP_80_250mW']:.3f}")
     print(f"600 mW/530um -> 135 mW/300um: {ps['penalty_dB']:+.2f} dB")
     print(f"total {time.time()-t0:.1f}s")
+    run.finish()
 
 
 if __name__ == "__main__":

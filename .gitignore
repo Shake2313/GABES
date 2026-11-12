@@ -60,7 +60,9 @@ mpl_cache/
 numba_cache/
 __pycache__/
 
-# Pipeline outputs. Dated records and results belong to GABES-archive; scanners that
-# still write to archive-layout paths (analysis/...) keep those files local.
+# Pipeline outputs. Results belong to GABES-archive and reach it only through
+# gabes_lab.blocks.publish_to_archive. Run folders (gabes_lab.blocks.runner) and
+# older local outputs at archive-layout paths (analysis/...) stay local.
+/runs/
 /analysis/
 gabes_lab/**/generated*/

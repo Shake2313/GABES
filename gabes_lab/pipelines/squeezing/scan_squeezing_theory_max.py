@@ -13,6 +13,9 @@ S(η)=η·S_ideal+(1-η) is monotone in S_ideal, the minimizing δ is also
 η-independent. The (Δ,T) grid is therefore solved once and remapped for each η.
 
     python -m gabes_lab.pipelines.squeezing.scan_squeezing_theory_max
+
+Outputs (squeezing_theory_max.npz, .png) go to a new run folder under
+runs/squeezing/theory_max/ with its run.json record.
 """
 import os
 import time
@@ -22,7 +25,7 @@ os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
 
 import numpy as np
 
-from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes.schemes import fwm                       # noqa: E402
 from gabes.core import blas_single_thread           # noqa: E402
@@ -190,6 +193,9 @@ def cap_sweep():
 
 
 def main():
+    run = start_run("squeezing/theory_max", config=dict(
+        delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta_qe=ETA_QE, eta_ref=ETA_REF,
+        coarse_points=COARSE_POINTS, velocity_step=VELOCITY_STEP))
     print("Gain-derived mean-field diagnostic search (loss = 0)")
     print(f"  QE = {QE}, asymptote(η=QE) = {floor_dB(ETA_QE):.3f} dB")
     print(f"  grid: {DELTA_GHZ.size} one-photon detunings Δ "
@@ -218,7 +224,7 @@ def main():
 
     rows = cap_sweep()
 
-    out = ROOT / "analysis" / "squeezing"
+    out = run.dir
     np.savez(out / "squeezing_theory_max.npz",
              delta_ghz=DELTA_GHZ, temp_c=TEMP_C, S_ideal_dB=Sid,
              G_s=Gs, G_c=Gc, delta_mhz=Dlt,
@@ -227,6 +233,7 @@ def main():
              cap_sweep=np.array(rows))
     _plot(Sid, S_qe, Gs, out)
     print(f"\nsaved: {out/'squeezing_theory_max.npz'} and squeezing_theory_max.png")
+    run.finish()
 
 
 def _plot(Sid, S_qe, Gs, out):
