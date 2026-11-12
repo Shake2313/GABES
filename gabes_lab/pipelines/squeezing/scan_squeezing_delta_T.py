@@ -25,19 +25,16 @@ Raman collisions) makes χ̄ temperature-dependent, so the scan rebuilds the χ�
 table per temperature (`fwm.collisional_atom`); squeezing now peaks near
 121-131 °C and worsens at higher T rather than tracking the density monotonically.
 
-    python analysis/squeezing/scan_squeezing_delta_T.py
+    python -m gabes_lab.pipelines.squeezing.scan_squeezing_delta_T
 """
 import os
-import sys
 import time
-from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
 
 from gabes import atoms, constants, doppler, hyperfine, kernels, observables  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402

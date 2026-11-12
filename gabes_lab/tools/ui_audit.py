@@ -7,9 +7,9 @@ so the audit needs no extra packages. The UI redesign (docs/ui_redesign/)
 records one run per phase and compares them.
 
 Usage
-    python tools/ui_audit.py --tag baseline            # spawns Streamlit on a free port
-    python tools/ui_audit.py --tag p1 --url http://localhost:8501
-    python tools/ui_audit.py --compare baseline p1     # markdown diff table
+    python -m gabes_lab.tools.ui_audit --tag baseline            # spawns Streamlit on a free port
+    python -m gabes_lab.tools.ui_audit --tag p1 --url http://localhost:8501
+    python -m gabes_lab.tools.ui_audit --compare baseline p1     # markdown diff table
 
 DOM contract the redesign must keep (or update here in the same commit):
   * stApp carries Streamlit's data-test-script-state attribute;
@@ -40,7 +40,9 @@ import time
 import urllib.request
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+from gabes_lab.blocks.paths import REPO_ROOT
+
+REPO = REPO_ROOT
 AUDIT_ROOT = REPO / "docs" / "ui_redesign" / "audit"
 DESKTOP = dict(width=1440, height=900, deviceScaleFactor=1, mobile=False)
 MOBILE = dict(width=390, height=844, deviceScaleFactor=1, mobile=True)
@@ -76,7 +78,6 @@ def _visible_by_default(spec, defaults):
 
 
 def scheme_inventory():
-    sys.path.insert(0, str(REPO))
     from gabes import schemes
 
     rows = []

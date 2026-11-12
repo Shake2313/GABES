@@ -3,7 +3,7 @@
 Results, caches and dated records belong to the archive repository. This
 guard fails when a tracked main-side file exceeds its size budget, so heavy
 outputs cannot creep back into main. Before the split it checks only the
-files that tools/split_boundary.py assigns to main; after the split every
+files that gabes_lab/tools/split_boundary.py assigns to main; after the split every
 tracked file is main.
 """
 import subprocess
@@ -25,7 +25,7 @@ def _tracked():
 def _main_side(paths):
     if not any(path.startswith("docs/grand_challenge/") for path in paths):
         return paths  # split done: everything tracked is main
-    from tools.split_boundary import ARCHIVE, classify
+    from gabes_lab.tools.split_boundary import ARCHIVE, classify
     return [path for path in paths if classify(path)[0] != ARCHIVE]
 
 

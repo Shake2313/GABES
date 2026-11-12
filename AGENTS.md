@@ -9,7 +9,7 @@ own `AGENTS.md`.
 
 - **Basics, architecture, physics traps, references** → `README.md`. Read it first.
 - **Front-end design refactor** → `docs/ui_redesign/README.md`: plan, decisions,
-  dev log, before/after metrics from `tools/ui_audit.py`. Read it before touching
+  dev log, before/after metrics from `gabes_lab/tools/ui_audit.py`. Read it before touching
   layout or styling in `streamlit_app.py` or `gabes_ui/`.
 - **Deferred or planned work and user decisions** → `docs/checklist.json`.
   Anything intentionally left for later, and every pending or recorded value
@@ -33,7 +33,7 @@ own `AGENTS.md`.
   - `tests/test_repo_size_guard.py` keeps main light. New results, captures and
     reports go to the archive, not main.
 - **Repository split** → `docs/repo_restructure/README.md`: plan, user
-  decisions and the boundary tool `tools/split_boundary.py`.
+  decisions and the boundary tool `gabes_lab/tools/split_boundary.py`.
 
 ## Quick mental model
 

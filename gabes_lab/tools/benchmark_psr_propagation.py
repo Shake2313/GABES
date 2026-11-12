@@ -1,7 +1,7 @@
 """Reproduce PSR S4 longitudinal pump, noise and thermal-propagation checks.
 
 Example:
-    python tools/benchmark_psr_propagation.py --output docs/psr/s4_benchmark.json
+    python -m gabes_lab.tools.benchmark_psr_propagation --output docs/psr/s4_benchmark.json
 The default includes a real 70 C Maxwell calculation. Use
 --skip-thermal only for a faster single-velocity development run.
 """
@@ -14,20 +14,18 @@ import json
 from pathlib import Path
 import platform
 import subprocess
-import sys
 
 import numpy as np
 import scipy
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
 
 from gabes.psr_conventions import jones_from_angles, jones_polarization_angles
 from gabes.psr_full_obe import solve_psr_pump
 from gabes.psr_homodyne import psr_homodyne_readout, psr_output_homodyne_readout
 from gabes.psr_propagation import solve_psr_propagation
 from gabes.psr_spectrum import psr_local_generator, psr_uniform_transfer
-from tools.benchmark_psr_thermal import _difference, _measure, _serialize
+from gabes_lab.tools.benchmark_psr_thermal import _difference, _measure, _serialize
 
 
 _SOURCES = (
@@ -35,8 +33,8 @@ _SOURCES = (
     "gabes/psr_spectrum.py", "gabes/psr_homodyne.py", "gabes/psr_conventions.py",
     "gabes/magneto_multilevel.py", "gabes/species.py", "gabes/beam.py", "gabes/constants.py",
     "gabes/core.py", "gabes/quantum/traveling.py", "gabes/quantum/contracts.py",
-    "gabes/quantum/channels.py", "tools/benchmark_psr_thermal.py",
-    "tools/benchmark_psr_propagation.py")
+    "gabes/quantum/channels.py", "gabes_lab/tools/benchmark_psr_thermal.py",
+    "gabes_lab/tools/benchmark_psr_propagation.py")
 
 
 def _hashes():

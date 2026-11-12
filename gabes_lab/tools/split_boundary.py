@@ -4,12 +4,12 @@ the private archive, and what in main still points at archive-side files.
 docs/repo_restructure/README.md holds the plan and the user decisions; this file
 is its machine-readable boundary (S2). Rules are ordered; the first match wins.
 
-    python tools/split_boundary.py report              # counts + violations
-    python tools/split_boundary.py report --json out.json
-    python tools/split_boundary.py checkout DIR        # main-only shared clone at HEAD
-    python tools/split_boundary.py links [--apply]     # rewrite main doc links to the archive
-    python tools/split_boundary.py history-paths REPO OUT   # filter-repo path list
-    python tools/split_boundary.py manifest ...        # Split Manifest (S3)
+    python -m gabes_lab.tools.split_boundary report              # counts + violations
+    python -m gabes_lab.tools.split_boundary report --json out.json
+    python -m gabes_lab.tools.split_boundary checkout DIR        # main-only shared clone at HEAD
+    python -m gabes_lab.tools.split_boundary links [--apply]     # rewrite main doc links to the archive
+    python -m gabes_lab.tools.split_boundary history-paths REPO OUT   # filter-repo path list
+    python -m gabes_lab.tools.split_boundary manifest ...        # Split Manifest (S3)
 
 A pattern ending in "/**" matches everything below that folder; "*" never
 crosses a "/".
@@ -28,7 +28,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
-ROOT = Path(__file__).resolve().parents[1]
+from gabes_lab.blocks.paths import REPO_ROOT
+
+ROOT = REPO_ROOT
 MAIN, ARCHIVE = "main", "archive"
 # User decisions R1/R9 (2026-11-09): the private archive and the tag that
 # pins every pre-split path.
@@ -77,6 +79,7 @@ RULES: list[tuple[str, str, str]] = [
     # Product code, data, references and tooling.
     ("gabes/**", MAIN, "engine"),
     ("gabes_ui/**", MAIN, "UI package"),
+    ("gabes_lab/**", MAIN, "development package: blocks, pipelines, tools (S5)"),
     ("assets/**", MAIN, "UI assets"),
     ("sabes/**", MAIN, "SABES model and UI parts"),
     ("static/**", MAIN, "Streamlit static files"),
@@ -354,7 +357,7 @@ def manifest(args) -> int:
         hub="docs/repo_restructure/README.md",
         archive_repo=ARCHIVE_REPO, main_repo=args.main_repo_name, split_tag=SPLIT_TAG,
         source_head=source_head, main_head=rev(args.main_repo, "HEAD"),
-        tool=dict(boundary="tools/split_boundary.py", boundary_sha256=_sha256(Path(__file__)),
+        tool=dict(boundary="gabes_lab/tools/split_boundary.py", boundary_sha256=_sha256(Path(__file__)),
                   git_filter_repo=filter_repo),
         rules=[dict(pattern=p, side=s, reason=w) for p, s, w in RULES],
         filter_paths=dict(file=Path(args.paths).name, sha256=_sha256(Path(args.paths)),

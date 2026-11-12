@@ -57,9 +57,9 @@ NOISE LAYER = the closed-form twin-beam law, per v2's layer table (the
 microscopic quantum-Langevin layer is still pending there).
 
 Usage:
-    python analysis/squeezing/low_pump_power/scan_low_pump_power.py
-    python analysis/squeezing/low_pump_power/scan_low_pump_power.py --quick
-    python analysis/squeezing/low_pump_power/scan_low_pump_power.py --out DIR
+    python -m gabes_lab.pipelines.squeezing.low_pump_power.scan_low_pump_power
+    python -m gabes_lab.pipelines.squeezing.low_pump_power.scan_low_pump_power --quick
+    python -m gabes_lab.pipelines.squeezing.low_pump_power.scan_low_pump_power --out DIR
 """
 import argparse
 import json
@@ -81,14 +81,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 import numpy as np
 
-ROOT = Path(__file__).resolve()
-for cand in [ROOT, *ROOT.parents]:
-    if (cand / "gabes").is_dir() and (cand / "tests").is_dir():
-        REPO = cand
-        break
-else:  # pragma: no cover
-    raise SystemExit("Could not locate the GABES repo root (needs gabes/ + tests/).")
-sys.path.insert(0, str(REPO))
+from gabes_lab.blocks.paths import REPO_ROOT as REPO  # noqa: E402
 
 from gabes import constants, hyperfine, observables             # noqa: E402
 from gabes.core import blas_single_thread                       # noqa: E402
@@ -645,7 +638,7 @@ def write_markdown(res, path):
     a = L.append
     pub = res["published"]
     a("# 저출력 펌프(100–200 mW) FWM gain/ideal-law 진단\n")
-    a("자동 생성 파일 — `analysis/squeezing/low_pump_power/scan_low_pump_power.py`\n")
+    a("자동 생성 파일 — `gabes_lab/pipelines/squeezing/low_pump_power/scan_low_pump_power.py`\n")
     a("**Claim gate — `MEAN_FIELD_IDEAL_LAW_DIAGNOSTIC`.** GABES의 절대 이득은 "
       "예측값이 아니며, 아래 ξ 값은 측정 이득 또는 mean-field gain에 조건부 "
       "ideal twin-beam 법칙을 적용한 진단이다. microscopic Langevin "

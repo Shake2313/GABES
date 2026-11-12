@@ -59,8 +59,8 @@ comparison").  Read only the declared sensitivities and orderings; the dB score
 is a gain-referred ideal-law diagnostic, not physical squeezing.
 
 Usage:
-    python analysis/squeezing/variable_audit/scan_variable_audit.py
-    python analysis/squeezing/variable_audit/scan_variable_audit.py --quick
+    python -m gabes_lab.pipelines.squeezing.variable_audit.scan_variable_audit
+    python -m gabes_lab.pipelines.squeezing.variable_audit.scan_variable_audit --quick
 """
 import argparse
 import csv
@@ -82,14 +82,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 import numpy as np
 
-ROOT = Path(__file__).resolve()
-for cand in [ROOT, *ROOT.parents]:
-    if (cand / "gabes").is_dir() and (cand / "tests").is_dir():
-        REPO = cand
-        break
-else:  # pragma: no cover
-    raise SystemExit("Could not locate the GABES repo root (needs gabes/ + tests/).")
-sys.path.insert(0, str(REPO))
+from gabes_lab.blocks.paths import REPO_ROOT as REPO  # noqa: E402
 
 from gabes import constants, hyperfine, observables                 # noqa: E402
 from gabes.core import blas_single_thread                           # noqa: E402
@@ -807,7 +800,7 @@ def write_markdown(res, path):
     f = lambda x, s="{:.2f}": "—" if x is None else s.format(x)
 
     a("# FWM 동작 변수 점검 — mean-field gain과 gain-referred 진단\n")
-    a("자동 생성 — `analysis/squeezing/variable_audit/scan_variable_audit.py`\n")
+    a("자동 생성 — `gabes_lab/pipelines/squeezing/variable_audit/scan_variable_audit.py`\n")
     a(f"판독 규약은 v6 gain-referred diagnostic tolerance 절과 동일: hardened Ultra, η = {ETA}, "
       f"δ 격자 {DELTA_STEP_MHZ:.0f} MHz, gap gate [{GAP_MIN}, {GAP_MAX}]. "
       f"기준점은 레퍼런스 DB의 gold reference (Sim 2025: Δ=+0.9 GHz, T=121 °C, "

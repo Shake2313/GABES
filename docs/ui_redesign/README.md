@@ -25,7 +25,7 @@ SABES에도 같은 시각 규약 적용. 광학 테이블의 glyph·광로·라�
 | `plan.md` | 단계별 작업 체크리스트 + 완료 기준 + 목표 수치 | 작업 완료·범위 변경 시 |
 | `decisions.md` | 결정 기록(평가표·대안·근거) | 결정 추가·번복 시 (번복도 새 항목) |
 | `log.md` | 날짜별 개발 로그, 최신이 위 | 작업 세션마다 |
-| `audit/<tag>/` | `tools/ui_audit.py` 측정값(`metrics.json`, `summary.md`) + 첫 화면 스크린샷 | 단계 종료마다 새 tag |
+| `audit/<tag>/` | `gabes_lab/tools/ui_audit.py` 측정값(`metrics.json`, `summary.md`) + 첫 화면 스크린샷 | 단계 종료마다 새 tag |
 
 스크린샷 PNG는 repo `.gitignore`(`*.png`) 정책으로 git 제외 — Google Drive 동기 폴더에만 보존. 수치는 git에 남음.
 
@@ -44,7 +44,7 @@ SABES에도 같은 시각 규약 적용. 광학 테이블의 glyph·광로·라�
 
 ## 검증 절차 (단계마다)
 1. `python -m pytest -q` (FWM baseline 포함).
-2. `python tools/ui_audit.py --tag <단계>` → `python tools/ui_audit.py --compare baseline <단계>`.
+2. `python -m gabes_lab.tools.ui_audit --tag <단계>` → `python -m gabes_lab.tools.ui_audit --compare baseline <단계>`.
 3. 비교표를 `log.md`에 붙이고 `plan.md` 목표 수치 대조.
 4. 시각 변화 → 스크린샷 확인 (`audit/<tag>/*.png`), 필요 시 `design:design-critique`·`design:accessibility-review`.
 

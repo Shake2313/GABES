@@ -6,9 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from analysis.rydberg_cell_heating import workflow as workflow_module
-from analysis.rydberg_cell_heating.adapters import validate_status
-from analysis.rydberg_cell_heating.workflow import load_clean_csv, run_analysis
+from gabes_lab.pipelines.rydberg_cell_heating import workflow as workflow_module
+from gabes_lab.pipelines.rydberg_cell_heating.adapters import validate_status
+from gabes_lab.pipelines.rydberg_cell_heating.workflow import load_clean_csv, run_analysis
 from gabes import species
 
 
@@ -49,7 +49,7 @@ def test_status_vocabulary_is_strict():
 
 def test_serialized_paths_are_repo_relative_or_safe_external_ids(tmp_path: Path):
     internal = workflow_module._serialized_path(Path(workflow_module.__file__))
-    assert internal == "analysis/rydberg_cell_heating/workflow.py"
+    assert internal == "gabes_lab/pipelines/rydberg_cell_heating/workflow.py"
     assert "\\" not in internal
 
     external = tmp_path / "operator trace.csv"
@@ -128,8 +128,8 @@ def test_shared_eit_loader_and_temperature_metadata_are_preserved(tmp_path: Path
     )
     assert manifest["inputs"][0]["path"] == dataset["path"]
     code_paths = {entry["path"] for entry in manifest["code"]}
-    assert "analysis/rydberg_cell_heating/workflow.py" in code_paths
-    assert "analysis/rydberg_cell_heating/adapters.py" in code_paths
+    assert "gabes_lab/pipelines/rydberg_cell_heating/workflow.py" in code_paths
+    assert "gabes_lab/pipelines/rydberg_cell_heating/adapters.py" in code_paths
     assert all("\\" not in path for path in code_paths)
     assert all(
         artifact["path"].startswith("external://")

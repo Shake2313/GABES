@@ -1,6 +1,6 @@
 """Write the S5 Migration Manifest: where each moved or removed file went, and why.
 
-usage: python tools/migration_manifest.py [--base COMMIT] [--head COMMIT] [--output PATH]
+usage: python -m gabes_lab.tools.migration_manifest [--base COMMIT] [--head COMMIT] [--output PATH]
 
 The manifest is generated from git, never written by hand. For every file that
 the S5 consolidation renamed or deleted between `--base` and `--head` it
@@ -16,7 +16,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from gabes_lab.blocks.paths import REPO_ROOT
+
+ROOT = REPO_ROOT
 BASE = "18b0b5f"  # main before S5 started (2026-11-12)
 OUTPUT = ROOT / "docs" / "repo_restructure" / "s5_migration" / "migration_manifest.json"
 
@@ -26,6 +28,10 @@ MIGRATIONS = [
     ("sabes/components/", "R5", "SABES screen code moves to gabes_ui/sabes; the SABES model stays in sabes/."),
     ("sabes/layout/render.py", "R5", "Optical-table drawing spec is screen code; moved to gabes_ui/sabes/render.py."),
     ("sabes_page.py", "R5", "SABES page entry point moves to gabes_ui/sabes/page.py."),
+    ("tools/", "R6", "Developer tools join the development package (gabes_lab/tools)."),
+    ("analysis/rydberg_cell_heating/test_", "R6", "Package tests live in the root tests/ folder."),
+    ("analysis/rydberg_cell_heating/", "R6", "Reusable heating workflow becomes a gabes_lab pipeline."),
+    ("analysis/squeezing/", "R6", "Reusable squeezing scanners become gabes_lab pipelines."),
 ]
 
 KINDS = {"R": "move", "D": "delete"}
@@ -83,7 +89,7 @@ def main(argv=None):
     if unexplained:
         sys.exit("no MIGRATIONS reason for: " + ", ".join(unexplained))
     manifest = dict(schema="gabes.migration_manifest.v1", base_commit=base, head_commit=head,
-                    generator="tools/migration_manifest.py", count=len(rows), entries=rows)
+                    generator="gabes_lab/tools/migration_manifest.py", count=len(rows), entries=rows)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     kinds = {}

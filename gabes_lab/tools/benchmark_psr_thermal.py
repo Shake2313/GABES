@@ -1,7 +1,7 @@
 """Reproduce the PSR S3 thermal kernel, cutoff and homodyne benchmark.
 
 Run from any directory, for example:
-    python tools/benchmark_psr_thermal.py --output docs/psr/s3_benchmark.json
+    python -m gabes_lab.tools.benchmark_psr_thermal --output docs/psr/s3_benchmark.json
 The optional --rf-points 25 reproduces the UI-sized signed RF grid.
 --reference-order 20 increases the fixed quadrature reference order.
 No timing threshold is an acceptance criterion.
@@ -15,15 +15,13 @@ import json
 from pathlib import Path
 import platform
 import subprocess
-import sys
 from time import perf_counter
 import tracemalloc
 
 import numpy as np
 import scipy
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
 
 from gabes import constants
 from gabes.psr_full_obe import solve_psr_pump
@@ -139,7 +137,7 @@ def main(argv=None):
                                         for name in ("gabes/psr_full_obe.py", "gabes/psr_spectrum.py",
                                                      "gabes/psr_thermal.py", "gabes/psr_homodyne.py",
                                                      "gabes/magneto_multilevel.py", "gabes/species.py",
-                                                     "gabes/core.py", "tools/benchmark_psr_thermal.py")}),
+                                                     "gabes/core.py", "gabes_lab/tools/benchmark_psr_thermal.py")}),
         command=dict(rf_points=args.rf_points, reference_order=args.reference_order,
                      reference_method=args.reference_method, max_order=args.max_order),
         conditions=dict(detuning_mhz=detuning, **inputs, rf_hz=frequencies,

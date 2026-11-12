@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import json
 
-from analysis.rydberg_cell_heating.adapters import (
+from gabes_lab.pipelines.rydberg_cell_heating.adapters import (
     ElectrometryAdapter,
     StaticRydbergAdapter,
     _finite_or_none,
@@ -129,7 +129,7 @@ def test_configured_opacity_scales_once_and_reuses_atomic_phasors(opacity_point,
     raw = dict(point.raw, ls=12345.0)
     with monkeypatch.context() as check:
         check.setattr(static.scheme, "compute", lambda *a, **k: pytest.fail("extra static solve"))
-        check.setattr("analysis.rydberg_cell_heating.adapters.weak_signal_response",
+        check.setattr("gabes_lab.pipelines.rydberg_cell_heating.adapters.weak_signal_response",
                       lambda *a, **k: pytest.fail("extra configured finite-IF solve"))
         changed = static.point_from_raw(
             raw, params, 40.0, False,

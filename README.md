@@ -160,6 +160,11 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
 - `streamlit_app.py` — generic UI. Renders only the selected scheme's
   `param_schema()`; caches the heavy solve on `recompute` knobs only (so
   navigate-only knobs like the FWM two-photon detuning update instantly).
+- `gabes_ui/` — UI package: design tokens, controls, plot components, assets
+  (`gabes_ui/assets/`) and the SABES screen (`gabes_ui/sabes/`, opened with
+  `?app=sabes`). Package map and rules: `gabes_ui/DESIGN.md`.
+- `sabes/` — SABES apparatus model: beamline, instruments, detection and the
+  optical-table layout geometry.
 - `archive/` — retired legacy entry points and artifacts. It preserves the
   early `AutoOD/` calculator; the current Rb D1/D2 calculator with selectable
   isotope composition lives in `references/AutoOD-Rb/`. It also keeps the
@@ -167,8 +172,13 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
   `fwm_double_lambda_gain_squeezing.png`; the active physics lives in `gabes/`.
 - `tests/` — regression + physics validation; `baseline_focused.npz` is an
   intentional compatibility snapshot documented by `baseline_focused_manifest.json`.
-- `analysis/rydberg_cell_heating/` — config-driven temperature sweep, clean CSV
-  overlays, provenance manifest, figures, and XeLaTeX report inputs.
+- `gabes_lab/` — development package. `blocks/` holds helpers without physics
+  (`paths.REPO_ROOT`); `pipelines/` holds reusable analyses that call `gabes`:
+  `rydberg_cell_heating` (config-driven temperature sweep, clean CSV overlays,
+  provenance manifest, figures, XeLaTeX report inputs) and the `squeezing`
+  scanners; `tools/` holds `ui_audit`, the PSR benchmarks and repository
+  maintenance (`split_boundary`, `migration_manifest`). Run a module from the
+  repository root with `python -m gabes_lab.<area>.<module>`.
 - `requirements.txt` — Streamlit, NumPy, SciPy, matplotlib and runtime helpers.
 - `references/` — Sim et al. 2025 paper PDF + Steck Rb85 data + OE stabilization paper. The Rydberg-EIT scheme cites arXiv:2606.04354 for its 85Rb reference defaults; the Biphoton defaults cite the Cs biphoton-temporal-waveform paper and the 87Rb telecom biphoton source paper from the app's Reference panel.
 - `references/rydberg_experiments/` — [Rydberg-EIT electrometry literature database](references/rydberg_experiments/README.md), using the FWM/PSR evidence structure. Ju et al. (2026) is the temporary Gold reference for experimental geometry and conditions, designated by the user on 2026-11-03.
@@ -346,7 +356,7 @@ batch workflow additionally supports axial `T(z),n(z)`, segmented Beer–Lambert
 effective atom number, and unit-aware EIT/RF/PSD CSV overlays:
 
 ```powershell
-python -m analysis.rydberg_cell_heating.workflow --config analysis/rydberg_cell_heating/example_config.json
+python -m gabes_lab.pipelines.rydberg_cell_heating.workflow --config gabes_lab/pipelines/rydberg_cell_heating/example_config.json
 ```
 
 Full time-domain LO+SIG/lock-in processing, full Zeeman/polarization, spatial
@@ -356,28 +366,30 @@ deferred.
 ## Tests
 
 ```
-python tests/test_regression.py      # FWM matches the versioned compatibility baseline
-python tests/test_absorption.py      # OD width, full-D1 AutoOD scale + line ratio, Lambda AT/EIT/CPT
-python tests/test_rydberg_eit.py     # 85Rb Rydberg-EIT reference defaults, linewidth, RF AT split
-python tests/test_rydberg_electrometry.py # finite-IF response and detector/noise conventions
+python -m pytest -q tests/test_regression.py      # FWM matches the versioned compatibility baseline
+python -m pytest -q tests/test_absorption.py      # OD width, full-D1 AutoOD scale + line ratio, Lambda AT/EIT/CPT
+python -m pytest -q tests/test_rydberg_eit.py     # 85Rb Rydberg-EIT reference defaults, linewidth, RF AT split
+python -m pytest -q tests/test_rydberg_electrometry.py # finite-IF response and detector/noise conventions
 python -m pytest -q tests/test_detection.py # shared photodetection: photon count, 2eI = R^2 2hbar omega P, Planck split pin
-python tests/test_rydberg_experiment.py # thermal/axial/SAM/dephasing experiment helpers
+python -m pytest -q tests/test_rydberg_experiment.py # thermal/axial/SAM/dephasing experiment helpers
 python -m pytest -q tests/test_vapor_cell.py # shared cell layer: cold-spot pressure, Rydberg density pin
-python tests/test_rydberg_experimental_csv.py # unit-aware EIT/RF/PSD import
-python -m pytest -q analysis/rydberg_cell_heating/test_workflow.py # report workflow
-python tests/test_sas.py             # 6j↔CF2, HF splittings, no-pump→OD (7/5), hyperfine-pumping crossovers, internal Generic compatibility
+python -m pytest -q tests/test_rydberg_experimental_csv.py # unit-aware EIT/RF/PSD import
+python -m pytest -q tests/test_rydberg_cell_heating_workflow.py # report workflow
+python -m pytest -q tests/test_sas.py             # 6j↔CF2, HF splittings, no-pump→OD (7/5), hyperfine-pumping crossovers, internal Generic compatibility
 python -m pytest -q tests/test_probe_saturation.py # alkali D-line finite probe, Gaussian propagation, tiered AutoOD anchors
-python tests/test_experimental_csv.py # A/B parsing, correction, ReferenceOD, manual alignment
+python -m pytest -q tests/test_experimental_csv.py # A/B parsing, correction, ReferenceOD, manual alignment
 
-python tests/test_magneto.py         # CG values, Hanle dip, EIA peak, NMOR zero-crossing
-python tests/test_coincidence.py     # twin-beam photon-pair statistics
-python tests/test_fwm_generic.py     # generic SFWM topology + biphoton detector model
-python tests/test_fwm_floquet.py     # N_F=1,2,3 direct/kernel parity + full-scan gate
-python tests/test_fwm_pump_response.py # pump-only frame, trace-zero Nambu response + poles
-python tests/test_fwm_angular_doppler.py # 2-D Maxwell geometry + grid/cutoff convergence
-python tests/test_schemes_render.py  # every registered scheme computes + renders
+python -m pytest -q tests/test_magneto.py         # CG values, Hanle dip, EIA peak, NMOR zero-crossing
+python -m pytest -q tests/test_coincidence.py     # twin-beam photon-pair statistics
+python -m pytest -q tests/test_fwm_generic.py     # generic SFWM topology + biphoton detector model
+python -m pytest -q tests/test_fwm_floquet.py     # N_F=1,2,3 direct/kernel parity + full-scan gate
+python -m pytest -q tests/test_fwm_pump_response.py # pump-only frame, trace-zero Nambu response + poles
+python -m pytest -q tests/test_fwm_angular_doppler.py # 2-D Maxwell geometry + grid/cutoff convergence
+python -m pytest -q tests/test_schemes_render.py  # every registered scheme computes + renders
 ```
-(or `pytest tests/`)
+Run the whole suite with `python -m pytest -q`. `pytest.ini` puts the repository
+root on the import path, so test files do not edit `sys.path` and are run through
+pytest rather than as scripts.
 
 Microscopic FWM research code lives in `gabes/quantum/` and `gabes/fwm_quantum/`.
 Its Grand Challenge research — independent references, campaigns, audits, the
@@ -701,7 +713,7 @@ as the default full-scan solver.
   is guarded against the compiled kernel. The two-branch full probe-scan view
   solves every displayed detuning with poles in both tiers. See
   `analysis/fwm_lite/DEVLOG.md`.
-- The `analysis/squeezing` scanners use the same pole engine on their own velocity
+- The `gabes_lab/pipelines/squeezing` scanners use the same pole engine on their own velocity
   measures (`GABES_FWM_RESPONSE=maxwell_grid` restores the per-class grid).
 - **Magneto** Doppler on is the exact untruncated Maxwell average of the
   light-region shift, not a velocity grid. Without a transverse field the paraffin

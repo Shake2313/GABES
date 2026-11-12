@@ -8,10 +8,10 @@ presentation.
 Run from the repository root:
 
 ```powershell
-python -m analysis.rydberg_cell_heating.workflow --config analysis/rydberg_cell_heating/example_config.json
+python -m gabes_lab.pipelines.rydberg_cell_heating.workflow --config gabes_lab/pipelines/rydberg_cell_heating/example_config.json
 ```
 
-The default output directory is `analysis/rydberg_cell_heating/generated/` and
+The default output directory is `gabes_lab/pipelines/rydberg_cell_heating/generated/` and
 contains:
 
 - `results.json`: model sweeps, imported rows, capability states, and optima.

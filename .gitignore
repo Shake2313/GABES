@@ -48,16 +48,6 @@ docs/Rydberg cell-heating analysis/$out/
 # Preserve User Guide assets that were already tracked before reorganization.
 !docs/Userguide/userguide_assets/*.png
 
-# Preserve the tracked squeezing data archives at their reorganized paths.
-!analysis/squeezing/squeezing_frontier_finite_loss_v4/squeezing_frontier.npz
-!analysis/squeezing/squeezing_frontier_finite_loss_v6/squeezing_frontier.npz
-!analysis/squeezing/squeezing_frontier_ideal_v4_merged.npz
-!analysis/squeezing/squeezing_frontier_ideal_v5/squeezing_frontier.npz
-!analysis/squeezing/squeezing_frontier_ideal_v5_tpd_angle_detail/squeezing_tpd_angle_detail.npz
-!analysis/squeezing/squeezing_frontier_ideal_v6/squeezing_frontier.npz
-!analysis/squeezing/squeezing_frontier_ideal_v6_low_angle_ridge/squeezing_low_angle_ridge.npz
-!analysis/squeezing/squeezing_frontier_ideal_v6_tpd_angle_detail/squeezing_tpd_angle_detail.npz
-!analysis/squeezing/squeezing_v6_tolerance/squeezing_v6_tolerance.npz
 
 # SABES local validation state and browser-export scratch file.
 /.playwright-cli/sabes-session-2026-10-16.json
@@ -70,6 +60,7 @@ mpl_cache/
 numba_cache/
 __pycache__/
 
-# Exceeds GitHub's 100 MB file limit; kept outside git and published as an
-# archive Release asset. Identity: coarse.jsonl.external.json beside it.
-/analysis/squeezing/operating_point_20261014/coarse.jsonl
+# Pipeline outputs. Dated records and results belong to GABES-archive; scanners that
+# still write to archive-layout paths (analysis/...) keep those files local.
+/analysis/
+gabes_lab/**/generated*/

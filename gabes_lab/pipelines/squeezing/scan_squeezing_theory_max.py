@@ -12,20 +12,17 @@ G_s and G_c do not depend on detection efficiency η. Because
 S(η)=η·S_ideal+(1-η) is monotone in S_ideal, the minimizing δ is also
 η-independent. The (Δ,T) grid is therefore solved once and remapped for each η.
 
-    python analysis/squeezing/scan_squeezing_theory_max.py
+    python -m gabes_lab.pipelines.squeezing.scan_squeezing_theory_max
 """
 import os
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
 
 from gabes.schemes import fwm                       # noqa: E402
 from gabes.core import blas_single_thread           # noqa: E402

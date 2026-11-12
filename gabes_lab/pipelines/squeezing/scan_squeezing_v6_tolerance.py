@@ -29,7 +29,7 @@ Outputs:
   docs/squeezing_report/squeezing_v6_tolerance.png
 
 Run from the repo root:
-  python analysis/squeezing/scan_squeezing_v6_tolerance.py
+  python -m gabes_lab.pipelines.squeezing.scan_squeezing_v6_tolerance
 """
 from __future__ import annotations
 
@@ -37,7 +37,6 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
@@ -45,8 +44,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     try:

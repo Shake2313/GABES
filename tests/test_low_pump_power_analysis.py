@@ -1,6 +1,6 @@
 import pytest
 
-from analysis.squeezing.low_pump_power import scan_low_pump_power as low_pump
+from gabes_lab.pipelines.squeezing.low_pump_power import scan_low_pump_power as low_pump
 
 
 def test_transit_scaled_atom_accepts_current_fwm_builder_api():

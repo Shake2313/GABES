@@ -34,5 +34,5 @@ SABES 광학 테이블의 추가 규칙은 [SABES 디자인 규칙](../docs/SABE
 ## 검증
 
 1. 관련 테스트: `python -m pytest -q tests/test_ui_*.py tests/test_sabes_*.py`와 바꾼 컴포넌트의 테스트.
-2. 화면이 바뀌면 `python tools/ui_audit.py --tag <단계>` → `--compare baseline <단계>`, 스크린샷 확인.
+2. 화면이 바뀌면 `python -m gabes_lab.tools.ui_audit --tag <단계>` → `--compare baseline <단계>`, 스크린샷 확인.
 3. 앱 확인: `.claude/launch.json`의 `gabes` 설정(`streamlit run streamlit_app.py`). SABES는 `?app=sabes`.
