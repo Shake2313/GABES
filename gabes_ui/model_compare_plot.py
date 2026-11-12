@@ -4,17 +4,16 @@ from bisect import bisect_left, bisect_right
 from collections.abc import Mapping
 from hashlib import sha256
 from math import isfinite
-from pathlib import Path
 
 import streamlit as st
 
 from .component_runtime import missing_apptest_component, spectrum_component_js
+from .paths import asset_text
 
-_ASSETS = Path(__file__).resolve().parents[1] / "assets" / "ui"
 _COMPONENT = st.components.v2.component(
     "gabes_model_compare",
     html='<section class="mc" aria-label="Model comparison"></section>',
-    css=(_ASSETS / "model_compare.css").read_text(encoding="utf-8"),
+    css=asset_text("ui/model_compare.css"),
     js=spectrum_component_js("model_compare.js"),
 )
 

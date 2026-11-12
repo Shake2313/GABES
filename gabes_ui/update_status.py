@@ -1,9 +1,8 @@
 """Browser-visible update state; observes rendering without changing computation."""
-from pathlib import Path
-
 import streamlit as st
 
 from .component_runtime import missing_apptest_component
+from .paths import asset_text
 
 _COMPONENT = st.components.v2.component(
     "gabes_update_status",
@@ -15,7 +14,7 @@ _COMPONENT = st.components.v2.component(
       color:var(--g-accent-ink,#0369A1)}
     .update-status[data-phase="error"]{color:var(--g-danger-ink,#B91C1C)}
     """,
-    js=(Path(__file__).resolve().parents[1] / "assets/ui/update_status.js").read_text(encoding="utf-8"),
+    js=asset_text("ui/update_status.js"),
 )
 
 

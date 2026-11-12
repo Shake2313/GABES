@@ -1,7 +1,6 @@
 """Preview math, committed exports, and unavailable intervals stay consistent."""
 import base64
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -14,13 +13,14 @@ import pytest
 
 from gabes.experimental_alignment import AxisAlignment
 from gabes_ui import liveplot
+from gabes_ui.paths import UI_ASSETS
 
 
 def test_browser_affine_and_nf_interpolation_match_python():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js is needed to exercise browser preview math")
-    asset = Path(liveplot.__file__).resolve().parents[1] / "assets/ui/liveplot.js"
+    asset = UI_ASSETS / "liveplot.js"
     url = "data:text/javascript;base64," + base64.b64encode(asset.read_bytes()).decode()
     source = np.array([1e-6, 1.01e-6, 1.07e-6, 1.2e-6])
     y = np.array([0.2, 0.7, 0.3, 1.1])
@@ -223,7 +223,7 @@ def test_latest_completed_gesture_survives_delayed_reply_and_active_drag():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js is needed to exercise live interaction ordering")
-    asset = Path(liveplot.__file__).resolve().parents[1] / "assets/ui/liveplot.js"
+    asset = UI_ASSETS / "liveplot.js"
     url = "data:text/javascript;base64," + base64.b64encode(asset.read_bytes()).decode()
     script = f"""
       import assert from 'node:assert/strict';

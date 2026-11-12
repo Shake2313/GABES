@@ -5,9 +5,7 @@
 these tokens, either as CSS custom properties (`--g-<name>`) or directly when
 it renders into an isolated iframe. Rationale: docs/ui_redesign/decisions.md D2.
 """
-from pathlib import Path
-
-ASSETS = Path(__file__).resolve().parents[1] / "assets"
+from .paths import asset_text
 
 LIGHT = {
     "ground": "#F5F7FA",
@@ -66,6 +64,6 @@ def css_variables(theme_base="light"):
 
 
 def app_css(theme_base="light"):
-    """Token variables followed by the GABES stylesheet (assets/ui/gabes.css)."""
-    sheet = (ASSETS / "ui" / "gabes.css").read_text(encoding="utf-8")
+    """Token variables followed by the GABES stylesheet (`ui/gabes.css` asset)."""
+    sheet = asset_text("ui/gabes.css")
     return css_variables(theme_base) + "\n" + sheet

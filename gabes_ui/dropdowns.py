@@ -1,15 +1,14 @@
 """One browser policy for short, selection-only Streamlit dropdowns."""
-from pathlib import Path
-
 import streamlit as st
 
 from .component_runtime import missing_apptest_component
+from .paths import asset_text
 
 
 _COMPONENT = st.components.v2.component(
     "gabes_dropdown_policy",
     html='<span class="dropdown-policy" hidden></span>',
-    js=(Path(__file__).resolve().parents[1] / "assets/ui/dropdown_policy.js").read_text(encoding="utf-8"),
+    js=asset_text("ui/dropdown_policy.js"),
 )
 
 

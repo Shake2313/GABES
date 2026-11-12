@@ -5,7 +5,6 @@ import csv
 from io import BytesIO, StringIO
 import json
 import math
-from pathlib import Path
 import shutil
 import subprocess
 import zipfile
@@ -14,6 +13,7 @@ import pytest
 
 from gabes_ui import spectral_compare as workspace
 from gabes_ui.export import _build_plot_zip_bytes, _curve_csv_bytes
+from gabes_ui.paths import UI_ASSETS
 
 
 @pytest.fixture
@@ -236,8 +236,7 @@ def test_actual_shared_scale_and_native_sampling_in_node():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js required for shared spectrum scale tests")
-    source = (Path(__file__).resolve().parents[1] /
-              "assets/ui/spectrum_plot.js").read_text(encoding="utf-8")
+    source = (UI_ASSETS / "spectrum_plot.js").read_text(encoding="utf-8")
     # Expose the existing internal sampler for this behavioral test only.
     url = "data:text/javascript;base64," + base64.b64encode(
         (source + "\nexport {curveSample};\n").encode()).decode()

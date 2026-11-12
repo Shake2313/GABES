@@ -1,18 +1,19 @@
 """Status never claims synchronization while a browser gesture is pending."""
 import base64
 import json
-from pathlib import Path
 import shutil
 import subprocess
 
 import pytest
+
+from gabes_ui.paths import UI_ASSETS
 
 
 def test_browser_update_states_cover_pending_preview_and_failure():
     node = shutil.which('node')
     if not node:
         pytest.skip('Node.js required for browser status logic')
-    source = Path(__file__).resolve().parents[1] / 'assets/ui/update_status.js'
+    source = UI_ASSETS / 'update_status.js'
     url = 'data:text/javascript;base64,' + base64.b64encode(source.read_bytes()).decode()
     script = f'''import {{updateMessage}} from {json.dumps(url)};
 console.log(JSON.stringify([
@@ -32,7 +33,7 @@ def test_removed_plot_does_not_leave_update_status_stuck():
     node = shutil.which('node')
     if not node:
         pytest.skip('Node.js required for browser status lifecycle')
-    source = Path(__file__).resolve().parents[1] / 'assets/ui/update_status.js'
+    source = UI_ASSETS / 'update_status.js'
     url = 'data:text/javascript;base64,' + base64.b64encode(source.read_bytes()).decode()
     script = f'''import mount from {json.dumps(url)};
 const listeners=new Map();let running=false,observe;

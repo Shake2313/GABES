@@ -1,19 +1,19 @@
 """Direct SAS window edits reject invalid limits before mutating navigation."""
 import base64
-from pathlib import Path
 import re
 import shutil
 import subprocess
 
 import pytest
 
+from gabes_ui.paths import UI_ASSETS
+
 
 def test_sas_window_input_validation_and_recovery():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js required for spectrum range tests")
-    source = (Path(__file__).resolve().parents[1] /
-              "assets/ui/model_compare.js").read_text(encoding="utf-8")
+    source = (UI_ASSETS / "model_compare.js").read_text(encoding="utf-8")
     body = re.search(r"function applyRange\(\)\{(.*?)\n  \}", source, re.S).group(1)
     encoded = base64.b64encode(body.encode()).decode()
     script = r"""

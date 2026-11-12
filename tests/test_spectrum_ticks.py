@@ -1,18 +1,18 @@
 """Logarithmic zooms retain visible, correctly positioned frequency ticks."""
 import base64
-from pathlib import Path
 import shutil
 import subprocess
 
 import pytest
+
+from gabes_ui.paths import UI_ASSETS
 
 
 def test_short_log_windows_render_frequency_ticks():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js required for spectrum tick tests")
-    source = (Path(__file__).resolve().parents[1] /
-              "assets/ui/spectrum_plot.js").read_text(encoding="utf-8")
+    source = (UI_ASSETS / "spectrum_plot.js").read_text(encoding="utf-8")
     module = "data:text/javascript;base64," + base64.b64encode(
         (source + "\nexport {spectrum};\n").encode()).decode()
     script = r"""

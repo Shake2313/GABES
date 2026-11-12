@@ -31,6 +31,7 @@ from gabes_ui.controls import (
 from gabes_ui.defaults import render_defaults
 from gabes_ui.dropdowns import render_dropdown_policy
 from gabes_ui.guide import guide_button
+from gabes_ui.paths import asset_text
 from gabes_ui.plotcard import PLOT_LOCK, render_more, render_plot_section
 from gabes_ui.readout import (
     metrics_table_markdown,
@@ -51,7 +52,7 @@ APP_DIR = Path(__file__).resolve().parent
 
 @st.cache_data(show_spinner=False)
 def _asset_text(filename):
-    return (APP_DIR / "assets" / filename).read_text(encoding="utf-8")
+    return asset_text(filename)
 
 
 THEME_BASE = (st.get_option("theme.base") or "light").lower()

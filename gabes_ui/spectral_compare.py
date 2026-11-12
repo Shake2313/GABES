@@ -1,6 +1,5 @@
 """Shared sampled-curve workspace for the registered scientific schemes."""
 from bisect import bisect_left, bisect_right
-from pathlib import Path
 import hashlib
 import json
 import math
@@ -12,17 +11,16 @@ from gabes_ui.component_runtime import missing_apptest_component, spectrum_compo
 from gabes_ui.conditions import render_comparison_controls, render_power_inputs
 from gabes_ui import export as ui_export
 from gabes_ui.controls import skey
+from gabes_ui.paths import asset_text
 from gabes_ui.spectral_sweep import (
     RowSweep, assemble_dataset, digest, extract_row, resolve_row, row_value,
     scan_values, workspace_key,
 )
 
-_ASSETS = Path(__file__).resolve().parents[1] / "assets" / "ui"
 _COMPONENT = st.components.v2.component(
     "gabes_spectral_compare",
     html='<section class="mc sc" aria-label="Spectral comparison"></section>',
-    css=(_ASSETS / "model_compare.css").read_text(encoding="utf-8") + "\n"
-        + (_ASSETS / "spectral_compare.css").read_text(encoding="utf-8"),
+    css=asset_text("ui/model_compare.css") + "\n" + asset_text("ui/spectral_compare.css"),
     js=spectrum_component_js("spectral_compare.js"),
 )
 

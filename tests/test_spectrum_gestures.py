@@ -1,17 +1,18 @@
 """Pan, cursor confinement and one commit per gesture are shared chart contracts."""
 import base64
-from pathlib import Path
 import shutil
 import subprocess
 
 import pytest
+
+from gabes_ui.paths import UI_ASSETS
 
 
 def test_pointer_preview_commit_cancel_and_window_geometry():
     node=shutil.which("node")
     if not node:
         pytest.skip("Node.js required for spectrum gesture tests")
-    src=Path(__file__).resolve().parents[1] / "assets/ui/spectrum_gestures.js"
+    src=UI_ASSETS / "spectrum_gestures.js"
     url="data:text/javascript;base64,"+base64.b64encode(src.read_bytes()).decode()
     script=r"""
 import assert from 'node:assert/strict';

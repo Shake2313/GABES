@@ -1,18 +1,19 @@
 """Dropdown keyboard policy blocks editing while preserving navigation and number entry."""
 import base64
 import json
-from pathlib import Path
 import shutil
 import subprocess
 
 import pytest
+
+from gabes_ui.paths import UI_ASSETS
 
 
 def test_native_dropdown_policy_keeps_navigation_and_numeric_text_edits():
     node = shutil.which("node")
     if not node:
         pytest.skip("Node.js is required for browser keyboard policy")
-    source = Path(__file__).resolve().parents[1] / "assets/ui/dropdown_policy.js"
+    source = UI_ASSETS / "dropdown_policy.js"
     url = "data:text/javascript;base64," + base64.b64encode(source.read_bytes()).decode()
     script = f"""
 import mount from {json.dumps(url)};
