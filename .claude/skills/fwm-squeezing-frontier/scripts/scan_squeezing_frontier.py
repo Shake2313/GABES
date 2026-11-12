@@ -98,6 +98,8 @@ sys.path.insert(0, str(REPO / "tests"))
 from gabes.schemes import fwm                         # noqa: E402
 from gabes.core import blas_single_thread             # noqa: E402
 from gabes import observables                         # noqa: E402
+from gabes_lab.blocks.figures import save_figure      # noqa: E402
+from gabes_lab.blocks.runner import start_run         # noqa: E402
 
 # Fidelity label -> compute_spectrum kwargs. `legacy` passes nothing (defaults to
 # phase_detail=legacy). The others switch on the matching propagation refinements;
@@ -105,7 +107,7 @@ from gabes import observables                         # noqa: E402
 FIDELITY_KW = {
     "legacy":   dict(phase_detail=fwm.PHASE_LEGACY),
     "balanced": dict(phase_detail=fwm.PHASE_BALANCED, model_fidelity=fwm.FIDELITY_BALANCED),
-    "fine":     dict(phase_detail=fwm.PHASE_FINE,     model_fidelity=fwm.FIDELITY_HIGH),
+    "fine":     dict(phase_detail=fwm.PHASE_FINE,     model_fidelity=fwm.FIDELITY_BALANCED),
     "ultra":    dict(phase_detail=fwm.PHASE_ULTRA,    model_fidelity=fwm.FIDELITY_ULTRA),
 }
 
@@ -317,13 +319,18 @@ def main():
                          "capture the low-gain dip on the frontier)")
     ap.add_argument("--branch", type=int, default=fwm.DEFAULT_BRANCH, choices=(-1, 1))
     ap.add_argument("--jobs", type=int, default=min(os.cpu_count() or 1, 8))
-    ap.add_argument("--out", type=str, default=str(REPO / "analysis"))
+    ap.add_argument("--out", help="output directory (default: a new run under runs/squeezing/frontier)")
     ap.add_argument("--no-plot", action="store_true",
                     help="skip the matplotlib figure (still saves the .npz). Useful "
                          "for chunked/sub-grid runs whose figure will be discarded "
                          "and re-plotted after merging with other chunks.")
     args = ap.parse_args()
 
+    with start_run("squeezing/frontier", out=args.out, config=vars(args)) as run:
+        _run_scan(args, run)
+
+
+def _run_scan(args, run):
     fid_kw = FIDELITY_KW[args.fidelity]
     # The hardened excess-noise model is intrinsic to Ultra (see fwm.compute_spectrum);
     # nothing to switch on. A --pump-scatter-kappa override is passed through as a
@@ -535,9 +542,8 @@ def main():
     print("\nVERDICT: " + verdict)
     sys.stdout.flush()
 
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    np.savez(out / "squeezing_frontier.npz", delta_ghz=D, temp_c=T, xi_dB=Xi,
+    snapshot = run.path("squeezing_frontier.npz")
+    np.savez(snapshot, delta_ghz=D, temp_c=T, xi_dB=Xi,
              xi_qe_dB=Xi_qe, G_s=Gs, G_c=Gc, gap=Gap, in_cell_od=OD, delta_mhz=Dlt,
              edge=Edge, gap_bad=GapBad, tmin_idx=Tmin_iT, eta=eta, eta_qe=eta_qe,
              det_floor_dB=det_floor, floor_qe_dB=floor_qe, xi_opt_dB=xi_opt,
@@ -546,17 +552,17 @@ def main():
              noise_model=("hardened" if hardened else "off"),
              od_conj=OdConj, od_probe=OdProbe, pump_scatter=PumpScatter)
     if args.no_plot:
-        print(f"\nsaved: {out/'squeezing_frontier.npz'}  (plot skipped, --no-plot; "
+        print(f"\nsaved: {snapshot}  (plot skipped, --no-plot; "
               f"total {time.time()-t0:.0f}s)", flush=True)
     else:
         _plot(D, T, Xi, Gs, OD, Tmin_iT, eiD, ejT, oiD, oiT, det_floor, xi_opt,
-              args.metric, args.fidelity, out)
-        print(f"\nsaved: {out/'squeezing_frontier.npz'} and squeezing_frontier.png  "
+              args.metric, args.fidelity, run.path("squeezing_frontier"))
+        print(f"\nsaved: {snapshot} and squeezing_frontier.png  "
               f"(total {time.time()-t0:.0f}s)", flush=True)
 
 
 def _plot(D, T, Xi, Gs, OD, Tmin_iT, eiD, ejT, oiD, oiT, det_floor, xi_opt,
-          metric, fidelity, out):
+          metric, fidelity, output_stem):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -611,7 +617,7 @@ def _plot(D, T, Xi, Gs, OD, Tmin_iT, eiD, ejT, oiD, oiT, det_floor, xi_opt,
     axT.grid(alpha=0.3); axT.legend(fontsize=8)
 
     fig.tight_layout()
-    fig.savefig(out / "squeezing_frontier.png", dpi=130)
+    save_figure(fig, output_stem, dpi=130, bbox_inches=None)
 
 
 if __name__ == "__main__":

@@ -84,7 +84,10 @@ window. Useful flags:
 - `--coarse N --vstep V --vcut S` — higher δ / velocity-class precision.
 - `--window G` — half-width of the δ scan window in GHz (default 0.7; raise it if
   the verdict says the optimum was reached only at δ-edge-limited points).
-- `--out DIR` — where to drop `squeezing_frontier.npz` / `.png` (default `analysis/`).
+- `--out DIR` sets the output folder. The default is a new folder at
+  `runs/squeezing/frontier/<UTC>-<commit7>/`. It contains
+  `squeezing_frontier.npz`, `squeezing_frontier.png` (unless `--no-plot`),
+  and `run.json` with the configuration, status, and output hashes.
 
 Relay the script's `BEST ACHIEVABLE` + `RESULT` + `EFFICIENT FRONTIER` + `VERDICT`
 block to the user, and surface the saved `squeezing_frontier.png` (heatmap +
