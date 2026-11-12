@@ -10,18 +10,18 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 from pathlib import Path
 import platform
-import subprocess
 from time import perf_counter
 import tracemalloc
 
 import numpy as np
 import scipy
 
+from gabes_lab.blocks.io import write_json  # noqa: E402
 from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.provenance import git, sha256_file  # noqa: E402
 
 from gabes import constants
 from gabes.psr_full_obe import solve_psr_pump
@@ -122,18 +122,14 @@ def main(argv=None):
     convergence = thermal_convergence(adaptive, length, detection_efficiency=efficiency)
     scalar_comparison = {key: _difference(reference["pump_state"][key], adaptive["pump_state"][key])
                          for key in ("chi_probe", "alpha_per_m", "excited_fraction")}
-    try:
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
-                              capture_output=True, text=True, check=True).stdout.strip()
-    except (subprocess.SubprocessError, OSError):
-        head = None
+    head = git("rev-parse", "HEAD")
     report = dict(
         provenance="\u27e6AI\u27e7 Numerical implementation benchmark; not experimental validation",
         created_at=datetime.now(timezone(timedelta(hours=9))).isoformat(),
         environment=dict(python=platform.python_version(), numpy=np.__version__,
                          scipy=scipy.__version__, platform=platform.platform(), git_head=head,
                          source_state="working tree; HEAD alone does not identify uncommitted sources",
-                         source_sha256={name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest()
+                         source_sha256={name: sha256_file(ROOT/name)
                                         for name in ("gabes/psr_full_obe.py", "gabes/psr_spectrum.py",
                                                      "gabes/psr_thermal.py", "gabes/psr_homodyne.py",
                                                      "gabes/magneto_multilevel.py", "gabes/species.py",
@@ -163,9 +159,7 @@ def main(argv=None):
                             readout={key: _difference(reference_readout[key], adaptive_readout[key])
                                      for key in ("minimum_db", "maximum_db", "minimum_variance",
                                                  "maximum_variance", "covariance")})))
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(_serialize(report), ensure_ascii=False, indent=2,
-                                     allow_nan=False)+"\n", encoding="utf-8")
+    write_json(args.output, _serialize(report))
     print(json.dumps(dict(output=str(args.output), convergence=convergence["status"],
                           class_evaluations=adaptive["performance"]["class_evaluations"],
                           adaptive_seconds=adaptive_timing["elapsed_seconds"],

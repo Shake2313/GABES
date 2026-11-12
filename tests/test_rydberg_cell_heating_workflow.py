@@ -48,12 +48,12 @@ def test_status_vocabulary_is_strict():
 
 
 def test_serialized_paths_are_repo_relative_or_safe_external_ids(tmp_path: Path):
-    internal = workflow_module._serialized_path(Path(workflow_module.__file__))
+    internal = workflow_module.portable_path(Path(workflow_module.__file__))
     assert internal == "gabes_lab/pipelines/rydberg_cell_heating/workflow.py"
     assert "\\" not in internal
 
     external = tmp_path / "operator trace.csv"
-    external_id = workflow_module._serialized_path(external)
+    external_id = workflow_module.portable_path(external)
     assert external_id.startswith(
         "external://operator_trace.csv#path-sha256="
     )
@@ -150,7 +150,7 @@ def test_git_metadata_is_captured_before_generated_writes(
         assert not generated.exists()
         return expected
 
-    monkeypatch.setattr(workflow_module, "_git_metadata", capture_before_write)
+    monkeypatch.setattr(workflow_module, "git_state", capture_before_write)
     artifacts = run_analysis(config_path, make_figures=False)
     manifest = json.loads(artifacts["manifest"].read_text(encoding="utf-8"))
     assert calls == [True]

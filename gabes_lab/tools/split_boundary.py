@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-import hashlib
 import json
 import re
 import subprocess
@@ -29,6 +28,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 from gabes_lab.blocks.paths import REPO_ROOT
+from gabes_lab.blocks.provenance import sha256_bytes, sha256_file
 
 ROOT = REPO_ROOT
 MAIN, ARCHIVE = "main", "archive"
@@ -329,10 +329,6 @@ def history_paths(args) -> int:
     return 0
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def manifest(args) -> int:
     """Split Manifest: what went where, from which commit, and the old->new commit map."""
     def rev(repo, ref):
@@ -357,14 +353,14 @@ def manifest(args) -> int:
         hub="docs/repo_restructure/README.md",
         archive_repo=ARCHIVE_REPO, main_repo=args.main_repo_name, split_tag=SPLIT_TAG,
         source_head=source_head, main_head=rev(args.main_repo, "HEAD"),
-        tool=dict(boundary="gabes_lab/tools/split_boundary.py", boundary_sha256=_sha256(Path(__file__)),
+        tool=dict(boundary="gabes_lab/tools/split_boundary.py", boundary_sha256=sha256_file(Path(__file__)),
                   git_filter_repo=filter_repo),
         rules=[dict(pattern=p, side=s, reason=w) for p, s, w in RULES],
-        filter_paths=dict(file=Path(args.paths).name, sha256=_sha256(Path(args.paths)),
+        filter_paths=dict(file=Path(args.paths).name, sha256=sha256_file(Path(args.paths)),
                           count=len(Path(args.paths).read_text(encoding="utf-8").splitlines())),
         source_tree=dict(main_files=len(main_list), archive_files=len(archive_list),
-                         main_list_sha256=hashlib.sha256("\n".join(main_list).encode()).hexdigest(),
-                         archive_list_sha256=hashlib.sha256("\n".join(archive_list).encode()).hexdigest()),
+                         main_list_sha256=sha256_bytes("\n".join(main_list).encode()),
+                         archive_list_sha256=sha256_bytes("\n".join(archive_list).encode())),
         commit_map=dict(rewritten=sum(1 for _, n in pairs if n), dropped=sum(1 for _, n in pairs if not n),
                         pairs=pairs),
         provenance_rule=(f"Paths under archive-side folders cited by main code or data resolve in "

@@ -9,16 +9,16 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 from pathlib import Path
 import platform
-import subprocess
 
 import numpy as np
 import scipy
 
+from gabes_lab.blocks.io import write_json  # noqa: E402
 from gabes_lab.blocks.paths import REPO_ROOT as ROOT  # noqa: E402
+from gabes_lab.blocks.provenance import git, sha256_file  # noqa: E402
 
 from gabes.psr_conventions import jones_from_angles, jones_polarization_angles
 from gabes.psr_full_obe import solve_psr_pump
@@ -38,7 +38,7 @@ _SOURCES = (
 
 
 def _hashes():
-    return {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in _SOURCES}
+    return {name: sha256_file(ROOT/name) for name in _SOURCES}
 
 
 def _result(path, efficiency=.9025):
@@ -122,11 +122,7 @@ def main(argv=None):
                        scope="Real 70 C Maxwell classes, short uniform-density cell; full pump update and per-segment noise.",
                        requested=dict(detuning_mhz=-900., length_m=.001, rf_hz=rf, **thermal_inputs))
 
-    try:
-        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT,
-                              capture_output=True, text=True, check=True).stdout.strip()
-    except (subprocess.SubprocessError, OSError):
-        head = None
+    head = git("rev-parse", "HEAD")
     after = _hashes()
     changed = {name: dict(before=source_before[name], after=after[name])
                for name in _SOURCES if source_before[name] != after[name]}
@@ -150,8 +146,7 @@ def main(argv=None):
         uniform_reference=uniform,
         room_temperature_thermal=thermal)
     output = args.output if args.output.is_absolute() else ROOT/args.output
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(_serialize(report), ensure_ascii=False, indent=2, allow_nan=False)+"\n", encoding="utf-8")
+    write_json(output, _serialize(report))
     passed = bool(adaptive["convergence"]["passed"] and reference["convergence"]["passed"]
                   and scaled["convergence"]["passed"] and fixed["convergence"]["passed"] and not changed
                   and (thermal is None or thermal["result"]["convergence"]["passed"]))

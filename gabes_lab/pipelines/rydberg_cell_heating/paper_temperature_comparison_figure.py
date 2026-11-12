@@ -14,6 +14,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from gabes_lab.blocks import figures
+
 
 def _mv(metrics: Mapping[str, Any], name: str) -> float:
     v = metrics[name]
@@ -31,9 +33,7 @@ EXP_ERR = np.array([0.4, 0.04, 0.5, 0.1])
 
 
 def build_figure(results_path: Path, output_stem: Path) -> dict[str, float]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = figures.pyplot()
 
     results = json.loads(results_path.read_text(encoding="utf-8"))
     at = results["model"]["sweeps"]["AT electrometry"]
@@ -112,11 +112,7 @@ def build_figure(results_path: Path, output_stem: Path) -> dict[str, float]:
     fig.suptitle("GABES temperature sweep vs paper Fig. 5(a) landmarks (2606.04354v1)",
                  fontsize=12, fontweight="bold")
     fig.tight_layout()
-    output_stem.parent.mkdir(parents=True, exist_ok=True)
-    for suffix in (".pdf", ".png"):
-        fig.savefig(output_stem.with_suffix(suffix), dpi=220 if suffix == ".png" else None,
-                    bbox_inches="tight")
-    plt.close(fig)
+    figures.save_figure(fig, output_stem, ("pdf", "png"), dpi=220)
 
     return {
         "gabes_optimum_c": gabes_opt_c,

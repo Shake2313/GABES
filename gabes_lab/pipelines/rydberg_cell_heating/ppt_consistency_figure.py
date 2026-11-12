@@ -24,13 +24,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .workflow import (
-    _json_dump,
-    _serialized_path,
-    _sha256,
-    _utc_now,
-    load_clean_csv,
-)
+from gabes_lab.blocks.io import write_json
+from gabes_lab.blocks.provenance import file_record, portable_path, sha256_file, utc_now
+
+from .workflow import load_clean_csv
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CSV = HERE / "ppt_rf_sensitivity_2026-07-15.csv"
@@ -164,28 +161,24 @@ def register_in_manifest(output_path: Path) -> None:
         return
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     script_path = Path(__file__).resolve()
-    code_entry = {
-        "path": _serialized_path(script_path),
-        "sha256": _sha256(script_path),
-        "bytes": script_path.stat().st_size,
-    }
+    code_entry = file_record(script_path)
     manifest["code"] = [
         entry for entry in manifest.get("code", [])
         if entry.get("path") != code_entry["path"]
     ] + [code_entry]
     artifact_entry: dict[str, Any] = {
-        "path": _serialized_path(output_path),
+        "path": portable_path(output_path),
         "format": "pdf",
         "description": "PPT-internal consistency diagnostic (deck transcription only)",
         "status": "PPT",
-        "sha256": _sha256(output_path),
-        "generated_at_utc": _utc_now(),
+        "sha256": sha256_file(output_path),
+        "generated_at_utc": utc_now(),
     }
     manifest["artifacts"] = [
         entry for entry in manifest.get("artifacts", [])
         if entry.get("path") != artifact_entry["path"]
     ] + [artifact_entry]
-    _json_dump(manifest_path, manifest)
+    write_json(manifest_path, manifest)
     print(f"registered in {manifest_path}")
 
 

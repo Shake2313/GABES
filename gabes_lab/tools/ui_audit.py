@@ -40,7 +40,9 @@ import time
 import urllib.request
 from pathlib import Path
 
+from gabes_lab.blocks.io import write_json
 from gabes_lab.blocks.paths import REPO_ROOT
+from gabes_lab.blocks.provenance import git
 
 REPO = REPO_ROOT
 AUDIT_ROOT = REPO / "docs" / "ui_redesign" / "audit"
@@ -529,11 +531,7 @@ async def run_audit(url, out_dir, browser):
 
 
 def git_head():
-    try:
-        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=str(REPO),
-                                       text=True, stderr=subprocess.DEVNULL).strip()
-    except Exception:
-        return "unknown"
+    return git("rev-parse", "--short", "HEAD", root=REPO) or "unknown"
 
 
 # ----------------------------------------------------------------------
@@ -633,8 +631,7 @@ def main():
                created=time.strftime("%Y-%m-%d %H:%M:%S %z"),
                url_mode="spawned" if server is not None else "external",
                meta=meta, schemes=results)
-    (out_dir / "metrics.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1),
-                                          encoding="utf-8")
+    write_json(out_dir / "metrics.json", doc, indent=1, allow_nan=True, trailing_newline=False)
     (out_dir / "summary.md").write_text(summary_markdown(doc), encoding="utf-8")
     print(summary_markdown(doc))
 

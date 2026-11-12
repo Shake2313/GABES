@@ -15,14 +15,10 @@ from __future__ import annotations
 import argparse
 import copy
 import csv
-import datetime as dt
 from dataclasses import asdict
-import hashlib
 import json
 import math
 import os
-import platform
-import subprocess
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -48,7 +44,12 @@ from gabes.rydberg_experiment import (
 from gabes.rydberg_experimental_csv import load_eit_csv, load_psd_csv, load_rf_sweep_csv
 from gabes.rydberg_opacity import opacity_samples, opacity_spec
 
+from gabes_lab.blocks import figures
+from gabes_lab.blocks.io import write_json
 from gabes_lab.blocks.paths import REPO_ROOT
+from gabes_lab.blocks.provenance import (
+    file_record, git_state, portable_path, runtime_info, sha256_file, utc_now,
+)
 
 
 SCHEMA_VERSION = 1
@@ -73,51 +74,6 @@ CSV_SCHEMAS: dict[str, dict[str, set[str]]] = {
 }
 TRACE_KINDS = frozenset({"eit_spectrum", "rf_sweep", "psd"})
 SUPPORTED_INPUT_KINDS = frozenset(CSV_SCHEMAS) | TRACE_KINDS
-
-
-def _utc_now() -> str:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
-
-
-def _json_dump(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
-        encoding="utf-8",
-    )
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _serialized_path(path: str | os.PathLike[str]) -> str:
-    """Return a portable, non-identifying path for JSON/report provenance.
-
-    Repository-owned files are written as POSIX paths relative to ``ROOT``.
-    External files retain a readable basename plus a short hash of their
-    resolved location, which lets repeated references be matched without
-    publishing drive letters, user directories, or temporary-directory names.
-    The real :class:`Path` is still used for all filesystem operations.
-    """
-
-    resolved = Path(path).expanduser().resolve()
-    try:
-        return resolved.relative_to(ROOT).as_posix()
-    except ValueError:
-        location_digest = hashlib.sha256(
-            str(resolved).encode("utf-8", errors="surrogatepass")
-        ).hexdigest()[:16]
-        basename = resolved.name or "external-path"
-        safe_basename = "".join(
-            character if character.isalnum() or character in "._-" else "_"
-            for character in basename
-        )
-        return f"external://{safe_basename}#path-sha256={location_digest}"
 
 
 def _resolve(base: Path, value: str | os.PathLike[str]) -> Path:
@@ -184,9 +140,9 @@ def _trace_provenance(
     if source_name:
         named_path = Path(source_name).expanduser()
         if named_path.is_absolute():
-            result["source_name"] = _serialized_path(named_path)
+            result["source_name"] = portable_path(named_path)
         elif source_path is not None and source_name == str(source_path):
-            result["source_name"] = _serialized_path(source_path)
+            result["source_name"] = portable_path(source_path)
     result["header"] = list(result["header"]) if result["header"] is not None else None
     result["assumptions"] = list(result["assumptions"])
     return result
@@ -200,7 +156,7 @@ def _load_trace_input(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Load a raw trace through the shared GABES experimental CSV layer."""
     options = dict(spec.get("loader", {}))
-    options.setdefault("source_name", _serialized_path(path))
+    options.setdefault("source_name", portable_path(path))
     if kind == "eit_spectrum":
         if spec.get("temperature_c") is None:
             raise ValueError(
@@ -295,7 +251,7 @@ def load_inputs(
             provenance.append({**base, "state": "not_configured", "status": "PENDING"})
             continue
         path = _resolve(config_dir, str(path_value))
-        serialized_path = _serialized_path(path)
+        serialized_path = portable_path(path)
         if not path.is_file():
             if required:
                 raise FileNotFoundError(f"required input not found: {path}")
@@ -331,7 +287,7 @@ def load_inputs(
             "state": "loaded",
             "status": declared_status,
             "path": serialized_path,
-            "sha256": _sha256(path),
+            "sha256": sha256_file(path),
             "bytes": path.stat().st_size,
             "row_count": len(rows),
             **({"parser": trace_metadata.get("parser_provenance")}
@@ -416,9 +372,7 @@ def _helper_metric(point: Mapping[str, Any], key: str) -> tuple[float, str] | No
 def _make_figures(
     results: Mapping[str, Any], output_dir: Path, formats: list[str], dpi: int
 ) -> list[dict[str, Any]]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = figures.pyplot()
 
     allowed_formats = {"png", "pdf", "svg"}
     unknown = set(formats) - allowed_formats
@@ -427,15 +381,13 @@ def _make_figures(
     artifacts: list[dict[str, Any]] = []
 
     def save(fig: Any, stem: str, description: str) -> None:
-        for suffix in formats:
-            path = output_dir / f"{stem}.{suffix}"
-            fig.savefig(path, dpi=dpi if suffix == "png" else None, bbox_inches="tight")
+        paths = figures.save_figure(fig, output_dir / stem, formats, dpi=dpi)
+        for suffix, path in zip(formats, paths):
             artifacts.append({
-                "path": _serialized_path(path),
+                "path": portable_path(path),
                 "format": suffix, "description": description,
                 "status": "PREDICTED",
             })
-        plt.close(fig)
 
     sweeps = results["model"]["sweeps"]
     for view, points in sweeps.items():
@@ -653,24 +605,6 @@ def _write_tex_macros(results: Mapping[str, Any], path: Path) -> None:
     for name, value in macros.items():
         lines.append(rf"\providecommand{{\{name}}}{{{_tex_escape(value)}}}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def _git_metadata() -> dict[str, Any]:
-    def run(*args: str) -> str | None:
-        try:
-            proc = subprocess.run(
-                ["git", *args], cwd=ROOT, capture_output=True, text=True,
-                check=False, timeout=5,
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            return None
-        return proc.stdout.strip() if proc.returncode == 0 else None
-
-    return {
-        "commit": run("rev-parse", "HEAD"),
-        "branch": run("branch", "--show-current"),
-        "dirty": bool(run("status", "--porcelain")),
-    }
 
 
 def _source_notes(config: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -1078,7 +1012,7 @@ def run_analysis(
     config_file = Path(config_path).expanduser().resolve()
     # Capture repository state before creating the output directory or writing
     # generated artifacts, so this run cannot make its own provenance "dirty".
-    git_metadata = _git_metadata()
+    git_metadata = git_state()
     config = json.loads(config_file.read_text(encoding="utf-8-sig"))
     if int(config.get("schema_version", -1)) != SCHEMA_VERSION:
         raise ValueError(
@@ -1220,7 +1154,7 @@ def run_analysis(
     results: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "analysis_id": str(config.get("analysis_id", config_file.stem)),
-        "generated_at_utc": _utc_now(),
+        "generated_at_utc": utc_now(),
         "evidence_status_vocabulary": sorted(ALLOWED_STATUSES),
         "source_notes": _source_notes(config),
         "inputs": datasets,
@@ -1308,7 +1242,7 @@ def run_analysis(
     results_path = out / "results.json"
     macros_path = out / "results_macros.tex"
     manifest_path = out / "source_manifest.json"
-    _json_dump(results_path, results)
+    write_json(results_path, results)
     _write_tex_macros(results, macros_path)
 
     code_paths = [Path(__file__).resolve(), Path(__file__).with_name("adapters.py").resolve()]
@@ -1327,33 +1261,18 @@ def run_analysis(
         "schema_version": SCHEMA_VERSION,
         "analysis_id": results["analysis_id"],
         "generated_at_utc": results["generated_at_utc"],
-        "config": {
-            "path": _serialized_path(config_file),
-            "sha256": _sha256(config_file),
-            "bytes": config_file.stat().st_size,
-        },
+        "config": file_record(config_file),
         "inputs": input_provenance,
-        "code": [
-            {
-                "path": _serialized_path(path),
-                "sha256": _sha256(path),
-                "bytes": path.stat().st_size,
-            }
-            for path in code_paths
-        ],
-        "runtime": {
-            "python": platform.python_version(),
-            "platform": platform.platform(),
-            "numpy": np.__version__,
-        },
+        "code": [file_record(path) for path in code_paths],
+        "runtime": runtime_info(),
         "git": git_metadata,
         "artifacts": [
             {
-                "path": _serialized_path(results_path),
+                "path": portable_path(results_path),
                 "role": "machine-readable results",
             },
             {
-                "path": _serialized_path(macros_path),
+                "path": portable_path(macros_path),
                 "role": "generated TeX macros",
             },
             *figures,
@@ -1363,7 +1282,7 @@ def run_analysis(
             "transcription must be supplied as a status=PPT CSV or source note."
         ),
     }
-    _json_dump(manifest_path, manifest)
+    write_json(manifest_path, manifest)
     return {
         "output_dir": out,
         "results": results_path,

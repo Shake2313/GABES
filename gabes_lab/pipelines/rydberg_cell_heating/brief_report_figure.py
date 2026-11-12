@@ -8,6 +8,8 @@ from typing import Any, Mapping
 
 import numpy as np
 
+from gabes_lab.blocks import figures
+
 
 def _metric(point: Mapping[str, Any], name: str) -> float:
     return float(point["metrics"][name]["value"])
@@ -19,10 +21,7 @@ def _finite_if_sensitivity(point: Mapping[str, Any]) -> float:
 
 def build_figure(results_path: Path, output_stem: Path) -> dict[str, float]:
     """Create a two-panel summary and return the plotted comparison values."""
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = figures.pyplot()
 
     results = json.loads(results_path.read_text(encoding="utf-8"))
     sweeps = results["model"]["sweeps"]
@@ -187,14 +186,7 @@ def build_figure(results_path: Path, output_stem: Path) -> dict[str, float]:
         fontweight="bold",
     )
     fig.tight_layout()
-    output_stem.parent.mkdir(parents=True, exist_ok=True)
-    for suffix in (".pdf", ".png"):
-        fig.savefig(
-            output_stem.with_suffix(suffix),
-            dpi=220 if suffix == ".png" else None,
-            bbox_inches="tight",
-        )
-    plt.close(fig)
+    figures.save_figure(fig, output_stem, ("pdf", "png"), dpi=220)
 
     best_measured_index = int(np.argmin(measured_sensitivity))
     best_model_index = int(np.argmin(model_sensitivity))

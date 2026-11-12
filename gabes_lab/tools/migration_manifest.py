@@ -10,13 +10,13 @@ not migrations and are left out. Reasons come from MIGRATIONS below; add a row
 there in the same commit as a new move.
 """
 import argparse
-import hashlib
-import json
 import subprocess
 import sys
 from pathlib import Path
 
+from gabes_lab.blocks.io import write_json
 from gabes_lab.blocks.paths import REPO_ROOT
+from gabes_lab.blocks.provenance import sha256_bytes
 
 ROOT = REPO_ROOT
 BASE = "18b0b5f"  # main before S5 started (2026-11-12)
@@ -43,7 +43,7 @@ def git(*args):
 
 
 def blob_sha256(commit, path):
-    return hashlib.sha256(git("cat-file", "blob", f"{commit}:{path}")).hexdigest()
+    return sha256_bytes(git("cat-file", "blob", f"{commit}:{path}"))
 
 
 def reason_for(path):
@@ -90,8 +90,7 @@ def main(argv=None):
         sys.exit("no MIGRATIONS reason for: " + ", ".join(unexplained))
     manifest = dict(schema="gabes.migration_manifest.v1", base_commit=base, head_commit=head,
                     generator="gabes_lab/tools/migration_manifest.py", count=len(rows), entries=rows)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    write_json(args.output, manifest, indent=1, allow_nan=True)
     kinds = {}
     for row in rows:
         kinds[row["kind"]] = kinds.get(row["kind"], 0) + 1
