@@ -95,6 +95,26 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-12: **S5 2단계 완료: `gabes_lab`과 pytest 전용 (R6, R7)** (사용자 "코덱스 작업이 끝났습니다. 이거 확인하고, 포함해서 2단계 진행해주세요").
+  - ⟦AI⟧ Codex R13 확인 (c67d884, FWM affine replay 퇴역, 로컬):
+    - 두 재현 플래그가 모두 true일 때만 재현 요청으로 봄. 공개 경로 세 곳(`compute_spectrum`, `full_spectrum`, `FWMScheme.compute`)과 provenance가 같은 함수 `reject_retired_replay`로 거절하고, 오류 문구가 아카이브 태그 `pre-split-2026-11-09`를 안내함.
+    - 옛 설정 가져오기는 `Scheme.migrate_default_params`가 두 플래그를 지우고 나머지 값을 유지함. 둘 다 true면 `DefaultMigrationError`로 사유를 보여 줌.
+    - 재현이 아닌 경로의 계산은 그대로임. 플래그 하나만 켠 호출도 provenance 필드가 이전과 같은 값임.
+    - HEAD 2151a28에서 FWM·DEFAULTS·회귀·문서 테스트 604 통과.
+    - Codex 인계의 아카이브 쪽 할 일: 엔진 고정 커밋을 c67d884 이후로 올릴 때 측정 이득 기록, Stark·Zeeman 소스 영수증, GC 감사를 다시 검증하고, 옛 재현 스위트는 `pre-split-2026-11-09`에서 돌림.
+  - ⟦AI⟧ 커밋(로컬, push 없음):
+    - 6e3ee82: `gabes_lab/` 생성과 이동(R6).
+      - `blocks/paths.py`의 `REPO_ROOT`는 위로 올라가며 `gabes/`와 `pytest.ini`가 함께 있는 폴더를 찾음. 아카이브의 `engine/` 안에서도 같은 방식으로 찾음.
+      - `pipelines/rydberg_cell_heating`, `pipelines/squeezing`(하위 `low_pump_power`, `variable_audit`), `tools/`(`ui_audit`, PSR 벤치마크 2개, `split_boundary`, `migration_manifest`).
+      - rydberg 패키지 안의 테스트 2개는 `tests/test_rydberg_cell_heating_workflow.py`, `tests/test_rydberg_cell_heating_adapters.py`로 옮김.
+      - 실행은 `python -m gabes_lab.<area>.<module>`. 이동한 스크립트의 `sys.path.insert`와 직접 실행용 import 우회를 지움.
+      - 산출 경로는 바꾸지 않음(결과 유지 원칙). squeezing 스캐너는 계속 `analysis/squeezing/...`에 쓰므로 `.gitignore`에 `/analysis/`와 `gabes_lab/**/generated*/`를 넣고, 아카이브로 간 npz 예외 줄을 지움. 산출 위치 정리는 3단계 io·runner 블록에서 함.
+      - README 폴더 지도에 `gabes_ui/`, `sabes/`, `gabes_lab/`를 넣고, AGENTS·UI 허브·`gabes_ui/DESIGN.md`의 도구 경로를 고침.
+    - 5b4a96d: pytest 전용(R7). `pytest.ini`에 `pythonpath = .`를 넣고 테스트 35개에서 `sys.path.insert`를 지움(쓰지 않게 된 `ROOT`·`sys`·`Path` import도 함께). README 테스트 안내는 모두 `python -m pytest -q`. 직접 실행하는 스크립트 `tests/capture_baseline.py`, `tests/verify_hanle_eit_eia.py`는 그대로 둠.
+    - 이 기록 커밋: Migration Manifest 재생성(52 건 {'move+edit': 19, 'move': 33}).
+  - ⟦AI⟧ 설계 세부 조정: 개발 도구는 `gabes_lab/tools/`에 둠(R6의 "tools 흡수"). 테스트 파일의 `if __name__ == "__main__"` 블록은 남김. 이제 직접 실행되지 않으므로 정리 후보임.
+  - ⟦AI⟧ 검증: 이동 관련 테스트 62 통과, main 전체 2,367 통과 / 1 skip / 0 실패(330 s). `python -m`으로 `ui_audit`, rydberg `workflow`, `migration_manifest` 실행 확인. `--help`가 CP949 콘솔에서 실패하는 문제는 이동 전부터 있었음(UTF-8 출력에서는 정상).
+  - 다음: 3단계 블록(provenance, io, figures, snapshot, runner, publish_to_archive), 4단계 AGENTS 규칙과 `gabes_lab/README.md`.
 - 2026-11-12: **S5 시작, 1단계 UI 파일럿 완료** (사용자 "S5 시작").
   - ⟦AI⟧ reflog: Drive가 `.git/logs` 생성을 다시 허용함. `core.logAllRefUpdates` 설정을 지우고(기본값 true) 임시 ref로 기록되는 것을 확인함.
   - ⟦AI⟧ 옛 `.git` 백업 `GABES-pre-split-dotgit`(3.0 GB)을 사용자 승인으로 지움. 지우기 전에 확인한 것:
@@ -411,7 +431,7 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 완료 2026-11-09 |
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
 | S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8, f9d1130: 아카이브 HEAD 1,373 통과 / 0 실패, 옛 배치 검사 8개는 분리 태그에서 재현) |
-| S5 | main 통합 (이전 P2–P5) | 진행 중: 1단계 UI 파일럿 완료 2026-11-12 |
+| S5 | main 통합 (이전 P2–P5) | 진행 중: 1단계 UI 파일럿, 2단계 `gabes_lab`·pytest 전용 완료 2026-11-12 |
 | S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 대기 |
 
 S5 세부:

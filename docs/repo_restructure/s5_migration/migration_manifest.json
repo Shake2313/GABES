@@ -1,10 +1,260 @@
 {
  "schema": "gabes.migration_manifest.v1",
  "base_commit": "18b0b5f6a8ca90016f5690bbe93d77dcc61c9f49",
- "head_commit": "3996056a3c5f46be87a5fd4fd239a8e76c1cd272",
- "generator": "tools/migration_manifest.py",
- "count": 25,
+ "head_commit": "5b4a96d1ce7daeecba883751b6a9837683cb40b2",
+ "generator": "gabes_lab/tools/migration_manifest.py",
+ "count": 52,
  "entries": [
+  {
+   "old_path": "analysis/rydberg_cell_heating/README.md",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/README.md",
+   "sha256_before": "f489c5688c524b710811ad31cf615bb6e6544d52d134c5c7f1c559606d02e56a",
+   "sha256_after": "d125363d599f7321e4a00b2ee77b9d2ce131f3bced709d81659609555008f698",
+   "kind": "move+edit",
+   "similarity": 97,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/__init__.py",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/__init__.py",
+   "sha256_before": "54f90266c118df4c4a673cdd63fd36d20f75d48c5eeee07e110345f4cf4b1c23",
+   "sha256_after": "54f90266c118df4c4a673cdd63fd36d20f75d48c5eeee07e110345f4cf4b1c23",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/adapters.py",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/adapters.py",
+   "sha256_before": "676b4ad23baf7fa01169c04b9acee0ef9e7df226f301adba1146f95d86f132d5",
+   "sha256_after": "676b4ad23baf7fa01169c04b9acee0ef9e7df226f301adba1146f95d86f132d5",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/brief_report_config.json",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/brief_report_config.json",
+   "sha256_before": "e801c01ff7cbd9aae5bffa8d018ab4538731ff979078d524d2412249fb6f75f5",
+   "sha256_after": "e801c01ff7cbd9aae5bffa8d018ab4538731ff979078d524d2412249fb6f75f5",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/brief_report_config_v3.json",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/brief_report_config_v3.json",
+   "sha256_before": "e14db463c11756dc99847141436a5021500d4c24e41ae8402530ac5d302bc1ed",
+   "sha256_after": "e14db463c11756dc99847141436a5021500d4c24e41ae8402530ac5d302bc1ed",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/brief_report_figure.py",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/brief_report_figure.py",
+   "sha256_before": "b956f04e7dafc489c06f12f71144a4f795047bbfe43d5600f88eb7e1f5eb09bb",
+   "sha256_after": "b956f04e7dafc489c06f12f71144a4f795047bbfe43d5600f88eb7e1f5eb09bb",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/example_config.json",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/example_config.json",
+   "sha256_before": "724e62684ae6fbf80345a61ea79b65120d8865a4e662b8ed1a8b7a0dca8b1a8b",
+   "sha256_after": "724e62684ae6fbf80345a61ea79b65120d8865a4e662b8ed1a8b7a0dca8b1a8b",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/paper_temperature_comparison_figure.py",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/paper_temperature_comparison_figure.py",
+   "sha256_before": "eccd52c965893239f0c3fe1099ceb4a197b35ec66c77f27197f3242b90653b87",
+   "sha256_after": "eccd52c965893239f0c3fe1099ceb4a197b35ec66c77f27197f3242b90653b87",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/ppt_consistency_figure.py",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/ppt_consistency_figure.py",
+   "sha256_before": "7dfe9e5d1e4d5bc8c657f75967f5881ed3d42e6e1d0ba3e4dbd74b99a2d55483",
+   "sha256_after": "7dfe9e5d1e4d5bc8c657f75967f5881ed3d42e6e1d0ba3e4dbd74b99a2d55483",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/ppt_rf_sensitivity_2026-07-15.csv",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/ppt_rf_sensitivity_2026-07-15.csv",
+   "sha256_before": "3c11f4b0725a3b14eae293190c1012257fd539441d6e4a4a9c58d8dedf6330e7",
+   "sha256_after": "3c11f4b0725a3b14eae293190c1012257fd539441d6e4a4a9c58d8dedf6330e7",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/workflow.py",
+   "new_path": "gabes_lab/pipelines/rydberg_cell_heating/workflow.py",
+   "sha256_before": "87a8bfec3ad5846a8caeadf54889ffe5a7397accb54ace3c57fc7b2b68250547",
+   "sha256_after": "8038f70773af89efce3b236c77a71538535961b7be0ab61c0cf02a21b54ee39b",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R6",
+   "reason": "Reusable heating workflow becomes a gabes_lab pipeline."
+  },
+  {
+   "old_path": "analysis/squeezing/bench_numba_fwm.py",
+   "new_path": "gabes_lab/pipelines/squeezing/bench_numba_fwm.py",
+   "sha256_before": "3c39ef2518cd3ac78aba08a1a3859aba668ad374d569365d30de4edffea20660",
+   "sha256_after": "7df055474bd79f258f83ea3bd6d5c964e1d20d9c602f4d644291cfaaad70419b",
+   "kind": "move+edit",
+   "similarity": 93,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/low_pump_power/scan_low_pump_power.py",
+   "new_path": "gabes_lab/pipelines/squeezing/low_pump_power/scan_low_pump_power.py",
+   "sha256_before": "639cab14901f37e92f5f999ecdefa74016b9438c60338cf0cb1e68680c3299b0",
+   "sha256_after": "8cf937afc3a2efb41ec87459b05edd1cfe9cca2663d121d63e6ba770c5c58a1f",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/resonant_hanle_squeezing_reference.py",
+   "new_path": "gabes_lab/pipelines/squeezing/resonant_hanle_squeezing_reference.py",
+   "sha256_before": "91539465e27586c5225a0fd3389775b96abbb683c6125f2a79ace5f3e4798e0b",
+   "sha256_after": "864f99d91917f193f33eda0fce23c4a90cf87d520a99cf4fe382d8b32ccfa13b",
+   "kind": "move+edit",
+   "similarity": 99,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/scan_squeezing_delta_T.py",
+   "new_path": "gabes_lab/pipelines/squeezing/scan_squeezing_delta_T.py",
+   "sha256_before": "006d90ff1633a63e9a1921735c395a7b45ce0aaaf602fa31c114aae550151aa8",
+   "sha256_after": "775b06ff85f22293abef217ce2efdbf219562c8aa82bbe50e2bc5a16744cb44f",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/scan_squeezing_theory_max.py",
+   "new_path": "gabes_lab/pipelines/squeezing/scan_squeezing_theory_max.py",
+   "sha256_before": "814a1020fc209895e12023d45df07954de564740390dfdc0d89ff4a9edb787b7",
+   "sha256_after": "779d455f520508c461810678c78074d560706a37937bdd83505e9c5cb5f95398",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/scan_squeezing_tpd_angle_detail.py",
+   "new_path": "gabes_lab/pipelines/squeezing/scan_squeezing_tpd_angle_detail.py",
+   "sha256_before": "764e12b6f95082ce72e3e44e5b91a7b28a98ee5d111a28383e1db412ccad2711",
+   "sha256_after": "dae1e8375345d2311479ea5813039ac30da4ec4d878d767f2eddf9cbb5d87b1c",
+   "kind": "move+edit",
+   "similarity": 99,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/scan_squeezing_v5_loss0_tpd_angle_detail.py",
+   "new_path": "gabes_lab/pipelines/squeezing/scan_squeezing_v5_loss0_tpd_angle_detail.py",
+   "sha256_before": "49349b2f8923842cd350658e6f8313836acf770444b4ffc99cb1d6e08cdb57ff",
+   "sha256_after": "49349b2f8923842cd350658e6f8313836acf770444b4ffc99cb1d6e08cdb57ff",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/scan_squeezing_v6_loss0_tpd_angle_detail.py",
+   "new_path": "gabes_lab/pipelines/squeezing/scan_squeezing_v6_loss0_tpd_angle_detail.py",
+   "sha256_before": "b914917e9bfd691dd84a71535fc800000a15036323d952e9ac605582b3ec637d",
+   "sha256_after": "b914917e9bfd691dd84a71535fc800000a15036323d952e9ac605582b3ec637d",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/scan_squeezing_v6_tolerance.py",
+   "new_path": "gabes_lab/pipelines/squeezing/scan_squeezing_v6_tolerance.py",
+   "sha256_before": "3bea735da4e6e207ef8bf0dde60438f01936c4cacab6344318ce5fbe646d5338",
+   "sha256_after": "1349e0a86bbba06feb6552487e07d55e01f7d1664c6da6ecc944d76fbc72cf18",
+   "kind": "move+edit",
+   "similarity": 99,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "analysis/squeezing/variable_audit/scan_variable_audit.py",
+   "new_path": "gabes_lab/pipelines/squeezing/variable_audit/scan_variable_audit.py",
+   "sha256_before": "d75225748874d83f41d55caf304e21b644da8c8437826b250b943cd7a96f42a2",
+   "sha256_after": "9e16fd286c3a5b215b248474d81d2f8d48dcfb05a919a557259c92cf4218b3d1",
+   "kind": "move+edit",
+   "similarity": 99,
+   "decision": "R6",
+   "reason": "Reusable squeezing scanners become gabes_lab pipelines."
+  },
+  {
+   "old_path": "tools/benchmark_psr_propagation.py",
+   "new_path": "gabes_lab/tools/benchmark_psr_propagation.py",
+   "sha256_before": "1d5650f7dfd6ff8232068ab85bbd7d4e87012761061d16356813fabc41d7fb3c",
+   "sha256_after": "75918e241788c61ab3eecffe73121067c76c52f079b492f66e71c044756e5d79",
+   "kind": "move+edit",
+   "similarity": 96,
+   "decision": "R6",
+   "reason": "Developer tools join the development package (gabes_lab/tools)."
+  },
+  {
+   "old_path": "tools/benchmark_psr_thermal.py",
+   "new_path": "gabes_lab/tools/benchmark_psr_thermal.py",
+   "sha256_before": "0c90d531eafc73559883717deea415c6c74f33a560089a01e19ae903c4c55fd8",
+   "sha256_after": "525e5601ee0ac28bf5b2ffd9a148b057cadbaad4e034a7b3d3bf9825f6079a79",
+   "kind": "move+edit",
+   "similarity": 97,
+   "decision": "R6",
+   "reason": "Developer tools join the development package (gabes_lab/tools)."
+  },
+  {
+   "old_path": "tools/split_boundary.py",
+   "new_path": "gabes_lab/tools/split_boundary.py",
+   "sha256_before": "7012e2b30be96ce20144a0a69a85907191106461871502a8d5ecb93227b91191",
+   "sha256_after": "d65691001a67b249664afeb5ef8c9605a5002edd3ee78fe183b9ab1dda09d7fb",
+   "kind": "move+edit",
+   "similarity": 95,
+   "decision": "R6",
+   "reason": "Developer tools join the development package (gabes_lab/tools)."
+  },
+  {
+   "old_path": "tools/ui_audit.py",
+   "new_path": "gabes_lab/tools/ui_audit.py",
+   "sha256_before": "d225584d229a2dad4a2485316c0f8a78009418fbc2feae4367d8665bc54476d9",
+   "sha256_after": "19870184c90dd8f1a50b708d0515ab0bfd4327dd4b2ea02d41d4e6cd7ade3631",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R6",
+   "reason": "Developer tools join the development package (gabes_lab/tools)."
+  },
   {
    "old_path": "assets/gabes-logo-draft.svg",
    "new_path": "gabes_ui/assets/gabes-logo-draft.svg",
@@ -254,6 +504,26 @@
    "similarity": 98,
    "decision": "R5",
    "reason": "Optical-table drawing spec is screen code; moved to gabes_ui/sabes/render.py."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/test_adapter_integration_regressions.py",
+   "new_path": "tests/test_rydberg_cell_heating_adapters.py",
+   "sha256_before": "6311f79c39faae5b05aa980288dda6f777be5b99d772d1ceb391a922415268c2",
+   "sha256_after": "14ce89881a82e2e3ceca4786a2470ccfaadeb080f85395d86f740f3e35cb2ac3",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R6",
+   "reason": "Package tests live in the root tests/ folder."
+  },
+  {
+   "old_path": "analysis/rydberg_cell_heating/test_workflow.py",
+   "new_path": "tests/test_rydberg_cell_heating_workflow.py",
+   "sha256_before": "fb7bdbf6054abcc61e51c0dff7ade2142e478effb4eb6ec4fa961adc82b2a255",
+   "sha256_after": "2e21df6982f9c12e92dee3a8f3875b7f49b30110e9cf9ae6a213cd9c7f9ebed1",
+   "kind": "move+edit",
+   "similarity": 97,
+   "decision": "R6",
+   "reason": "Package tests live in the root tests/ folder."
   }
  ]
 }
