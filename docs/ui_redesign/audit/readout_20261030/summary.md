@@ -40,7 +40,7 @@ Rydberg의 `RF field from fitted Ω_RF`는 현재 시뮬레이션 Rabi 파라미
 
 ## ⟦AI⟧ 이번 적용·검증
 
-- [공통 이름 스타일](../../../../assets/ui/gabes.css): 0.75rem→0.9rem, 일반 두께→600, muted 회색→본문 ink 색. 말줄임 제거·줄바꿈 허용. 숫자·설명과의 계층 유지. 표시 항목 선정·계산 무변경.
+- [공통 이름 스타일](../../../../gabes_ui/assets/ui/gabes.css): 0.75rem→0.9rem, 일반 두께→600, muted 회색→본문 ink 색. 말줄임 제거·줄바꿈 허용. 숫자·설명과의 계층 유지. 표시 항목 선정·계산 무변경.
 - `python -m pytest -q tests/test_ui_readout.py tests/test_ui_design_feedback.py --durations=3`: **29 통과**, 1.46s.
 - 전체 수치 회귀·GC 생략: CSS 변경과 표시 조사만 수행.
 - 실제 FWM 화면 1440×1000·390×844: 이름 14.4px/600/`rgb(14,23,38)` 확인, 잘림0. [데스크톱](../../../../output/playwright/readout_audit_20261030/fwm_desktop.png) · [모바일](../../../../output/playwright/readout_audit_20261030/fwm_mobile.png).
