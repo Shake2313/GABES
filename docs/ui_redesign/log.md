@@ -2,6 +2,19 @@
 
 최신이 위. 항목 = 날짜 · 단계 · 한 일 · 측정/검증 · 남은 일·주의.
 
+## 2026-11-12 · 저장소 통합 S5 1단계: UI 파일럿 (R5)
+
+직접 사용자 요청: "S5 시작". 계획과 결정 R5는 [저장소 분리·통합 허브](../repo_restructure/README.md).
+
+### ⟦AI⟧ 반영·검증
+
+- 자산 경로를 `gabes_ui/paths.py`(`ASSETS`, `UI_ASSETS`, `asset_text`) 한 곳으로 모음. UI 모듈 6개, 앱의 로고 읽기, 테스트 7개가 이 모듈을 씀(53c35db).
+- `assets/` → `gabes_ui/assets/`, SABES 화면 코드(`sabes/components/`, `sabes/layout/render.py`, `sabes_page.py`) → `gabes_ui/sabes/`(3996056). git이 rename으로 인식해 `--follow` 이력이 이어짐. SABES 모델은 루트 `sabes/`에 남고, `sabes.layout`은 그리기 함수를 더 이상 다시 내보내지 않음.
+- [디자인 허브](../../gabes_ui/DESIGN.md)와 프로젝트 스킬 `gabes-ui-design`을 새로 만듦.
+- 검증: 관련 SABES·UI·문서 테스트 473 통과. main 전체 2,367 통과 / 1 skip / 0 실패(345 s, Codex R13 진행 중 변경이 작업트리에 있는 상태). 내장 브라우저에서 첫 화면(OD/SAS)과 `?app=sabes` 광학 테이블 캔버스가 예외 없이 그려짐. 화면 변화가 없어 ui_audit은 다시 재지 않음.
+- 남은 일: S5 2단계(`gabes_lab`, 테스트의 `sys.path.insert` 제거, README 실행 안내)는 Codex R13이 착지한 뒤.
+
+
 ## 2026-11-06 · SABES 잔여 작업 마감
 
 직접 사용자 요청: 남은 SABES 작업을 일괄 커밋·푸시하고 현재 작업 상태 마감.

@@ -1,0 +1,259 @@
+{
+ "schema": "gabes.migration_manifest.v1",
+ "base_commit": "18b0b5f6a8ca90016f5690bbe93d77dcc61c9f49",
+ "head_commit": "3996056a3c5f46be87a5fd4fd239a8e76c1cd272",
+ "generator": "tools/migration_manifest.py",
+ "count": 25,
+ "entries": [
+  {
+   "old_path": "assets/gabes-logo-draft.svg",
+   "new_path": "gabes_ui/assets/gabes-logo-draft.svg",
+   "sha256_before": "eec52bbf83db6dd90b9bb3a9c9ac2b16fc57dd89153a3a02eb476da6bfa466de",
+   "sha256_after": "eec52bbf83db6dd90b9bb3a9c9ac2b16fc57dd89153a3a02eb476da6bfa466de",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-logo-v2.svg",
+   "new_path": "gabes_ui/assets/gabes-logo-v2.svg",
+   "sha256_before": "8241443cc2282162da5d12b085ee935a3024158a7b48775a09027b0815a5c860",
+   "sha256_after": "8241443cc2282162da5d12b085ee935a3024158a7b48775a09027b0815a5c860",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-logo-v3-dark.svg",
+   "new_path": "gabes_ui/assets/gabes-logo-v3-dark.svg",
+   "sha256_before": "f556cf1309c934818da869ae76f868aa0390d7478a5bdc44eec85e0e1ecf9bdc",
+   "sha256_after": "f556cf1309c934818da869ae76f868aa0390d7478a5bdc44eec85e0e1ecf9bdc",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-logo-v3.svg",
+   "new_path": "gabes_ui/assets/gabes-logo-v3.svg",
+   "sha256_before": "6b7442393c6f92bd49f4c241e68594a6c3913119a713653d1c334fd908964d99",
+   "sha256_after": "6b7442393c6f92bd49f4c241e68594a6c3913119a713653d1c334fd908964d99",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-mark-v2.svg",
+   "new_path": "gabes_ui/assets/gabes-mark-v2.svg",
+   "sha256_before": "bb14bdc472f3938b688e1777c5ddd127c7beef1d47a5798cd4f3eb810a0bd936",
+   "sha256_after": "bb14bdc472f3938b688e1777c5ddd127c7beef1d47a5798cd4f3eb810a0bd936",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-mark-v3-dark.svg",
+   "new_path": "gabes_ui/assets/gabes-mark-v3-dark.svg",
+   "sha256_before": "4a940aae53d4781ad89c8184f493973bc617d08e6ff693e694f929dc7757cc5d",
+   "sha256_after": "4a940aae53d4781ad89c8184f493973bc617d08e6ff693e694f929dc7757cc5d",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-mark-v3-mono.svg",
+   "new_path": "gabes_ui/assets/gabes-mark-v3-mono.svg",
+   "sha256_before": "10e85cbb0ca5aaa35e1da07a96e714767df26936fabefd93e5fa04de25f2f2d3",
+   "sha256_after": "10e85cbb0ca5aaa35e1da07a96e714767df26936fabefd93e5fa04de25f2f2d3",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/gabes-mark-v3.svg",
+   "new_path": "gabes_ui/assets/gabes-mark-v3.svg",
+   "sha256_before": "3371341d433975385b2f3462b057fb9313f1f736dd39a37d08d703b36929a82a",
+   "sha256_after": "3371341d433975385b2f3462b057fb9313f1f736dd39a37d08d703b36929a82a",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/logo-preview.html",
+   "new_path": "gabes_ui/assets/logo-preview.html",
+   "sha256_before": "bc5aa087c621d2d06d0a8b14664d0baff93f91f4cdc0394d4614439943fcfb72",
+   "sha256_after": "bc5aa087c621d2d06d0a8b14664d0baff93f91f4cdc0394d4614439943fcfb72",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/dropdown_policy.js",
+   "new_path": "gabes_ui/assets/ui/dropdown_policy.js",
+   "sha256_before": "83f04e10bda403a3473221644e21bbbbc2e6d4e613faf23aa8fc6be325058dcd",
+   "sha256_after": "83f04e10bda403a3473221644e21bbbbc2e6d4e613faf23aa8fc6be325058dcd",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/gabes.css",
+   "new_path": "gabes_ui/assets/ui/gabes.css",
+   "sha256_before": "f1de5f62942253a893c2410e9471daa8ad11be9160b5f3bc9a943f0e69b7e21d",
+   "sha256_after": "f1de5f62942253a893c2410e9471daa8ad11be9160b5f3bc9a943f0e69b7e21d",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/liveplot.js",
+   "new_path": "gabes_ui/assets/ui/liveplot.js",
+   "sha256_before": "72294ada5090acc2c93dbc5893068d9a3ccd61698c6e61b0a4a134e41077f7cc",
+   "sha256_after": "72294ada5090acc2c93dbc5893068d9a3ccd61698c6e61b0a4a134e41077f7cc",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/model_compare.css",
+   "new_path": "gabes_ui/assets/ui/model_compare.css",
+   "sha256_before": "f525ef5d9aac2c1dda1f6bc2a3149d92dce3571d895f9bf12841f19acb200ddc",
+   "sha256_after": "f525ef5d9aac2c1dda1f6bc2a3149d92dce3571d895f9bf12841f19acb200ddc",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/model_compare.js",
+   "new_path": "gabes_ui/assets/ui/model_compare.js",
+   "sha256_before": "8826cc478c5a1d83d51b808aad35c0e41795f27479c5028f041463feed030ace",
+   "sha256_after": "8826cc478c5a1d83d51b808aad35c0e41795f27479c5028f041463feed030ace",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/spectral_compare.css",
+   "new_path": "gabes_ui/assets/ui/spectral_compare.css",
+   "sha256_before": "73a903e07d518b1b75015148edc2b9fa19aa587340d99f39ac386e3af43133e5",
+   "sha256_after": "73a903e07d518b1b75015148edc2b9fa19aa587340d99f39ac386e3af43133e5",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/spectral_compare.js",
+   "new_path": "gabes_ui/assets/ui/spectral_compare.js",
+   "sha256_before": "99c21a39308ae34d9a80748987512867916d2236c5fdefe08f5a02cc647e5d94",
+   "sha256_after": "99c21a39308ae34d9a80748987512867916d2236c5fdefe08f5a02cc647e5d94",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/spectrum_gestures.js",
+   "new_path": "gabes_ui/assets/ui/spectrum_gestures.js",
+   "sha256_before": "1ef7cf1be337cb59fc9e14c599b5dd60321ab902798ebfde1099db62fed98b17",
+   "sha256_after": "1ef7cf1be337cb59fc9e14c599b5dd60321ab902798ebfde1099db62fed98b17",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/spectrum_map.js",
+   "new_path": "gabes_ui/assets/ui/spectrum_map.js",
+   "sha256_before": "08fae01ead811e3ff7dc80a744746bfb622931f3f8851973a46204fe2ddcbead",
+   "sha256_after": "08fae01ead811e3ff7dc80a744746bfb622931f3f8851973a46204fe2ddcbead",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/spectrum_plot.js",
+   "new_path": "gabes_ui/assets/ui/spectrum_plot.js",
+   "sha256_before": "a963c39f43228155a494530eec5a418e72ac7f0dda1714e72f8e20e16f542892",
+   "sha256_after": "a963c39f43228155a494530eec5a418e72ac7f0dda1714e72f8e20e16f542892",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "assets/ui/update_status.js",
+   "new_path": "gabes_ui/assets/ui/update_status.js",
+   "sha256_before": "09962bbcfb85c03540e491d1b5f9e99c527f20cc00f8cdd0d207c70afb843352",
+   "sha256_after": "09962bbcfb85c03540e491d1b5f9e99c527f20cc00f8cdd0d207c70afb843352",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "UI assets belong to the UI package (gabes_ui/assets)."
+  },
+  {
+   "old_path": "sabes/components/__init__.py",
+   "new_path": "gabes_ui/sabes/components/__init__.py",
+   "sha256_before": "cd43b720db1a5ce751496dbde5cf950e102fea615a578198caa2e51dde2c12a7",
+   "sha256_after": "9956ab23ad46c6eaa13033b8585cbd263031d0c0b14dac63729f583f17af0503",
+   "kind": "move+edit",
+   "similarity": 84,
+   "decision": "R5",
+   "reason": "SABES screen code moves to gabes_ui/sabes; the SABES model stays in sabes/."
+  },
+  {
+   "old_path": "sabes/components/canvas.py",
+   "new_path": "gabes_ui/sabes/components/canvas.py",
+   "sha256_before": "f0d1beaa82060d67ecebd2bff0116f4bfc0d1763b73afc0adc1079538080036e",
+   "sha256_after": "f0d1beaa82060d67ecebd2bff0116f4bfc0d1763b73afc0adc1079538080036e",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "SABES screen code moves to gabes_ui/sabes; the SABES model stays in sabes/."
+  },
+  {
+   "old_path": "sabes/components/frontend/index.html",
+   "new_path": "gabes_ui/sabes/components/frontend/index.html",
+   "sha256_before": "6a9208b2efa0c3b8bd483a3d4d224a8991dc510cd16e5f49d89bf2f11d918807",
+   "sha256_after": "6a9208b2efa0c3b8bd483a3d4d224a8991dc510cd16e5f49d89bf2f11d918807",
+   "kind": "move",
+   "similarity": 100,
+   "decision": "R5",
+   "reason": "SABES screen code moves to gabes_ui/sabes; the SABES model stays in sabes/."
+  },
+  {
+   "old_path": "sabes_page.py",
+   "new_path": "gabes_ui/sabes/page.py",
+   "sha256_before": "94ec09f5a884dc3be6a4a16e0ab2ad8faf059ebaa4755cfda4cd51a930ad7ad1",
+   "sha256_after": "0b832f2d3ef8205d73a109b4b955157d2966a6012c7c0db8c5885f3f8b39ddf3",
+   "kind": "move+edit",
+   "similarity": 99,
+   "decision": "R5",
+   "reason": "SABES page entry point moves to gabes_ui/sabes/page.py."
+  },
+  {
+   "old_path": "sabes/layout/render.py",
+   "new_path": "gabes_ui/sabes/render.py",
+   "sha256_before": "831a74b2fe3508b4f7b5bc55f8e66882c9c02933b5daec8fa13b6611149e9c6c",
+   "sha256_after": "ea116b31b7ec8f39902c9db9c69b3fe1cd7537724ad0f8d6adc91eb56a3220fb",
+   "kind": "move+edit",
+   "similarity": 98,
+   "decision": "R5",
+   "reason": "Optical-table drawing spec is screen code; moved to gabes_ui/sabes/render.py."
+  }
+ ]
+}

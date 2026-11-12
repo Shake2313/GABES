@@ -95,6 +95,20 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-12: **S5 시작, 1단계 UI 파일럿 완료** (사용자 "S5 시작").
+  - ⟦AI⟧ reflog: Drive가 `.git/logs` 생성을 다시 허용함. `core.logAllRefUpdates` 설정을 지우고(기본값 true) 임시 ref로 기록되는 것을 확인함.
+  - ⟦AI⟧ 옛 `.git` 백업 `GABES-pre-split-dotgit`(3.0 GB)을 사용자 승인으로 지움. 지우기 전에 확인한 것:
+    - 브랜치·태그 11개는 모두 아카이브 원격에 있음.
+    - 아카이브에 없던 것은 Codex 앱의 turn-diff 스냅샷 ref 37개와, 지난 커밋 준비 때 에이전트가 `.git` 안에 쓴 작업 파일(임시 index·상태 파일·스크립트)뿐임.
+    - `grand-challenge-runs`는 thermal campaign 실행기의 `TemporaryDirectory`가 남긴 소스 사본과 pyc뿐이었음.
+  - ⟦AI⟧ Codex가 같은 작업본에서 R13을 진행 중이어서, S5는 Codex가 고치는 파일(`README.md`, `docs/checklist.json`, FWM 엔진·스킴, `gabes_ui/defaults*.py`, 관련 테스트)을 건드리지 않음. 커밋은 `git commit --only -- <내 경로>`로 내 파일만 담음.
+  - ⟦AI⟧ 커밋(로컬, push 없음):
+    - 53c35db: 자산 경로를 `gabes_ui/paths.py` 한 곳으로 모음.
+    - 3996056: R5 이동. `assets/` → `gabes_ui/assets/`, `sabes/components/`·`sabes/layout/render.py`·`sabes_page.py` → `gabes_ui/sabes/`. 루트에는 `streamlit_app.py`, `.streamlit/`, `static/`만 남음.
+    - 이 기록 커밋: [디자인 허브](../../gabes_ui/DESIGN.md), 스킬 `.claude/skills/gabes-ui-design`, Migration Manifest 생성기 [`tools/migration_manifest.py`](../../tools/migration_manifest.py)와 [첫 결과](s5_migration/migration_manifest.json)(25건: 그대로 이동 22, 이동+경로 수정 3).
+  - ⟦AI⟧ 설계 세부 조정: 계획은 "이동과 내용 수정은 별도 커밋"이었으나, 이동 커밋에 import·경로 수정을 함께 넣음. 중간 커밋이 깨지지 않게 하려는 것이며, 수정이 작아 git이 rename으로 인식함(유사도 84–100 %).
+  - ⟦AI⟧ 검증: 관련 SABES·UI·문서 테스트 473 통과. main 전체 2,367 통과 / 1 skip / 0 실패(345 s, Codex R13 진행 중 변경이 작업트리에 있는 상태). 내장 브라우저에서 첫 화면과 SABES 광학 테이블 확인.
+  - 다음: 2단계(`gabes_lab` 생성, `tools/`와 재사용 파이프라인 이동, 루트 conftest, 테스트 37개의 `sys.path.insert` 제거, README 실행 안내)는 R13 착지 뒤. 이어서 3단계 블록, 4단계 AGENTS 규칙.
 - 2026-11-11: **S4 완료 (Codex d1a74d8), 독립 검증, 아카이브 push** (사용자 "S4 진행", push 승인 "지금 push").
   - Codex d1a74d8 (아카이브):
     - main 경로 626개를 제거함.
@@ -397,7 +411,7 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | S2 | 위 의존 끊기, .gitignore·크기 감시, `output/` untrack → full pytest | 완료 2026-11-09 |
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
 | S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8, f9d1130: 아카이브 HEAD 1,373 통과 / 0 실패, 옛 배치 검사 8개는 분리 태그에서 재현) |
-| S5 | main 통합 (이전 P2–P5) | 대기 |
+| S5 | main 통합 (이전 P2–P5) | 진행 중: 1단계 UI 파일럿 완료 2026-11-12 |
 | S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 대기 |
 
 S5 세부:
