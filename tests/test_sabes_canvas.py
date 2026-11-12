@@ -136,7 +136,3 @@ def test_missing_frontend_is_reported_clearly(monkeypatch):
     monkeypatch.setattr(canvas_module, "_FRONTEND_DIR", ROOT / "does-not-exist")
     with pytest.raises(FileNotFoundError, match="package data"):
         canvas_module._instance()
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

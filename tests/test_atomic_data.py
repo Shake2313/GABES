@@ -79,7 +79,3 @@ def test_lande_gf_matches_the_j_half_closed_form(iso):
     assert upper == pytest.approx((gJ + 2 * I * gI) / (2 * I + 1), rel=1e-14)
     assert lower == pytest.approx((-gJ + (2 * I + 2) * gI) / (2 * I + 1), rel=1e-14)
     assert species.lande_gf(gJ, gI, I, 0.5, 0) == 0.0
-
-
-if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q"]))

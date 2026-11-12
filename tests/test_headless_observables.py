@@ -83,10 +83,3 @@ def test_base_headless_observables_passes_include_figures_false():
     view = ProbeScheme().headless_observables({}, {})
     assert view["figure"] is None
     assert view["metrics"][0]["value"] == "False"
-
-
-if __name__ == "__main__":
-    test_current_schemes_support_headless_observables()
-    test_headless_observables_do_not_build_figures()
-    test_base_headless_observables_passes_include_figures_false()
-    print("All current schemes expose headless observables.")

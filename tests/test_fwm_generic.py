@@ -972,33 +972,3 @@ def test_responsivity_tracks_quantum_efficiency():
     # Display-only conversion R = QE·λ/hc; the legacy caption showed 0.59 A/W.
     assert abs(fwm.responsivity_AW(0.92) - 0.59) < 5e-3
     assert abs(fwm.responsivity_AW(0.9045) - 0.58) < 5e-3
-
-
-if __name__ == "__main__":
-    test_topology_energy_and_roles()
-    test_phase_matching_reference_angle_is_maximum()
-    test_rb87_default_vector_phase_match_has_positive_rate()
-    test_rb87_equal_angles_are_transversely_suppressed()
-    test_side_flip_suppresses_matched_geometry()
-    test_detector_background_and_window_reduce_car()
-    test_timing_jitter_broadens_waveform()
-    test_long_jitter_kernel_preserves_axis_length()
-    test_reference_g2_uses_explicit_added_accidentals()
-    test_rb87_telecom_preset_smoke()
-    test_cs_btw_channels_have_different_widths()
-    test_biphoton_ui_render_modes()
-    test_fwm_headless_observables_skip_figure_generation()
-    test_squeezing_hides_twin_beam_coincidence_figure()
-    test_seeded_phase_detail_modes_are_gated_by_resolution()
-    test_fidelity_alias_and_ultra_tiny_grid()
-    test_loss_noise_never_improves_squeezing()
-    test_rb85_fwm_zeeman_cg_sum_rules_match_lumped_strengths()
-    test_biphoton_fine_phase_map_is_lazy_and_figure_only()
-    test_fwm_default_buttons_are_squeezing_and_contextual_biphoton()
-    test_cs_btw_short_window_render_no_shape_error()
-    test_beam_geometry_knobs_default_to_the_legacy_constants()
-    test_beam_geometry_knobs_route_to_both_spectrum_paths()
-    test_qe_knob_sets_current_nf_and_its_conditional_symmetric_loss_floor()
-    test_pump_waist_moves_the_gain()
-    test_responsivity_tracks_quantum_efficiency()
-    print("Generic SFWM / biphoton checks OK.")

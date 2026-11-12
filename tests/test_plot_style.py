@@ -110,12 +110,3 @@ def test_a_styled_scheme_figure_renders_isotope_labels_under_a_hostile_font():
             apply_gabes_plot_style(fig)
             assert _glyph_warnings(fig) == []
             plt.close(fig)
-
-
-if __name__ == "__main__":
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    for fn in fns:
-        fn()
-        print("ok:", fn.__name__)
-    print(f"\nPlot style OK ({len(fns)} tests): font stack pinned per figure, "
-          "global rcParams untouched.")

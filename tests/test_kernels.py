@@ -232,15 +232,3 @@ def test_sas_kernel_matches_reference(over):
             continue
         worst = np.abs(fast[key] - ref[key]).max() / np.abs(ref[key]).max()
         assert worst < 1e-11, f"{key}: rel diff {worst:.3e}"
-
-
-if __name__ == "__main__":
-    for br in (-1, +1):
-        test_kernel_matches_reference(br)
-    print("FWM kernel == reference (rel < 1e-10) on both branches")
-    for nm in _MAG_CASES:
-        test_magneto_kernel_matches_reference(nm)
-    print("magneto kernel == reference (rel < 1e-9) on all cases")
-    for c in _affine_cases():
-        test_affine_scan_kernel_matches_reference(c)
-    print("affine-scan kernel == reference (rel < 1e-11) on Λ/Rydberg")

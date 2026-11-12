@@ -573,20 +573,3 @@ def test_unresolved_central_width_uses_status_hero():
     assert heroes[0]["value"] == "unavailable"
     assert heroes[1]["value"] == "physical zero outside scan"
     assert all(str(m["value"]).lower() != "n/a" for m in heroes)
-
-
-if __name__ == "__main__":
-    test_clebsch_gordan_known_values()
-    test_manifold_emission_normalised()
-    test_manifold_emission_transfers_ground_coherence()
-    test_angular_momentum_commutator()
-    test_reference_default_is_87rb_d1_paraffin_polarized_hanle()
-    test_paraffin_linear_qwp_gives_zero_field_dip()
-    test_paraffin_circular_qwp_gives_zero_field_peak()
-    test_paraffin_wall_coherence_narrows_central_feature()
-    test_buffer_mode_has_single_broad_hanle_and_ground_relaxation_broadens()
-    test_longitudinal_b_offset_shifts_physical_field_axis()
-    test_nmor_zero_crossing()
-    test_cell_type_controls_visibility_metadata()
-    test_invalid_transition_handled()
-    print("Unregistered single-pair reference OK (Hanle, paraffin, buffer cell, NMOR).")

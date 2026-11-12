@@ -9,7 +9,6 @@ Unregistered single-pair reference: exact Maxwell light-region average.
 
     pytest tests/test_magneto_doppler.py
 """
-import sys
 from unittest.mock import patch
 
 import numpy as np
@@ -109,7 +108,3 @@ def test_exact_average_is_reported_and_replaces_the_class_knob():
     assert "Grid-fallback B rows" in derived
     assert raw["doppler_scale"] == 1.0 and raw["N_eff"] == raw["N"]
     assert "velocity_classes" not in {spec.name for spec in scheme.param_schema()}
-
-
-if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q"]))

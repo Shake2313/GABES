@@ -321,7 +321,3 @@ def test_incomplete_component_models_use_stars_without_hiding_partial_support():
 
 def _lerp(a, b, t):
     return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

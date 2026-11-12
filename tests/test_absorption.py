@@ -309,19 +309,3 @@ def test_lambda_unresolved_features_use_status_heroes():
     assert at_heroes[0].get("kind") == "status"
     split = next(m for m in at_view["metrics"] if m["label"] == "AT splitting")
     assert split["value"] == "—"
-
-
-if __name__ == "__main__":
-    test_od_cold_natural_linewidth()
-    test_od_ne_buffer_pressure_broadens_cold_linewidth()
-    test_od_doppler_voigt_width()
-    test_hyperfine_autood_absolute_scale()
-    test_hyperfine_group_strength_ratio()
-    test_hyperfine_self_broadening_monotone()
-    test_at_splitting_equals_coupling_rabi()
-    test_lambda_coupling_power_and_diameter_scale_rabi()
-    test_lambda_beam_angle_mismatch_broadens_warm_eit()
-    test_eit_transparency()
-    test_cpt_subnatural_dark_resonance()
-    test_lambda_regime_defaults_are_mode_driven()
-    print("Phase-1 absorption physics OK (OD 2-mode / hyperfine / AT/EIT/CPT).")

@@ -370,7 +370,3 @@ def test_warnings_aggregate_from_every_stage():
     result = bridge.run(fat, resolution=fwm.FIDELITY_ULTRA)
     assert any("twin radii" in w for w in result.geometry.warnings)
     assert len(result.warnings) >= len(result.geometry.warnings)
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

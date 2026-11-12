@@ -444,8 +444,3 @@ def test_waist_follows_the_telescope_lenses():
     assert longer.seed_waist_m > base.seed_waist_m
     assert longer.seed_waist_m / base.seed_waist_m == pytest.approx(400.0 / 250.0,
                                                                    rel=1e-6)
-
-
-if __name__ == "__main__":
-    import pytest as _pytest
-    raise SystemExit(_pytest.main([__file__, "-q"]))

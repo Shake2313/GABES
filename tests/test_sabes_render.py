@@ -202,7 +202,3 @@ def test_legend_covers_every_beam_colour_actually_drawn(chain):
         drawn.update(s["stroke"] for s in _shapes(render.build_spec(part, chain),
                                                   "path"))
     assert drawn <= {colour for colour, _dash, _name in render.legend_rows()}
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

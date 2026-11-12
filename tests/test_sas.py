@@ -17,7 +17,6 @@ Generic Γ-unit hole-burning fallback: Voigt background, Lamb dip, crossover.
 
     python -m pytest -q tests/test_sas.py
 """
-import sys
 from unittest.mock import patch
 
 import numpy as np
@@ -775,7 +774,3 @@ def test_doppler_temperature_schema_is_advanced_and_gated():
         "constrain_doppler_temp": False}
     assert tie.advanced_group == released.advanced_group == "Cell temperatures"
     assert tie.recompute and released.recompute
-
-
-if __name__ == "__main__":
-    sys.exit(pytest.main([__file__, "-q"]))

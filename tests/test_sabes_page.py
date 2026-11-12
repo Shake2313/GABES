@@ -304,10 +304,6 @@ def test_sabes_is_not_reachable_from_the_scheme_registry():
     assert "sabes" not in " ".join(schemes.REGISTRY).lower()
 
 
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))
-
-
 # ------------------------------------------------- page/model drift
 
 def test_every_model_attribute_the_page_reads_actually_exists():

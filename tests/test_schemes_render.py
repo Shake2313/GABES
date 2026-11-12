@@ -179,9 +179,3 @@ def test_internal_modes_have_useful_heroes(case_name, scheme, params):
     assert not view.get("figure_views"), f"{case_name}: headless path built carousel views"
     _assert_metric_contract(
         case_name, view.get("metrics"), view.get("hero_count", 2))
-
-
-if __name__ == "__main__":
-    test_all_schemes_render()
-    print("All schemes compute + render OK:",
-          ", ".join(s.name for s in schemes.all_schemes()))

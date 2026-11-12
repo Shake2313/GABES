@@ -126,13 +126,3 @@ def test_hanle_calibration_fit_recovers_b_axis_and_affine_signal():
     assert np.isclose(fit["b_offset_ut"], true_offset, atol=0.0051)
     assert fit["normalized_rms"] < 1e-9
     assert fit["r2"] > 0.999999
-
-
-if __name__ == "__main__":
-    test_oe_probe_locked_source_places_probe_on_87rb_d1_f2_f2()
-    test_oe_double_locked_source_places_both_modes_on_87rb_d1()
-    test_absolute_sensitivity_has_shot_noise_power_scaling()
-    test_electronic_noise_penalizes_total_but_not_shot_limited_sensitivity()
-    test_gaussian_intensity_and_equivalent_waist_are_inverse()
-    test_parse_float_axis_accepts_comma_list_and_rejects_empty_axis()
-    print("resonant Hanle reference frequency-lock tests OK")

@@ -226,14 +226,3 @@ def test_invalid_dc_and_missing_calibrations_are_rejected():
         assert "transition_dipole" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("zero transition dipole was accepted")
-
-
-if __name__ == "__main__":
-    test_weak_signal_sidebands_satisfy_linearized_equations_and_hermiticity()
-    test_low_if_phasor_matches_static_rabi_derivative_and_high_if_rolls_off()
-    test_complex_phasors_are_coherently_averaged()
-    test_rf_dipole_conversion_round_trip_and_rms_convention()
-    test_photodiode_responsivity_and_balanced_noise_budget()
-    test_atomic_to_detector_chain_produces_absolute_sensitivity_without_anchor()
-    test_invalid_dc_and_missing_calibrations_are_rejected()
-    print("Rydberg electrometry linear-response checks OK.")

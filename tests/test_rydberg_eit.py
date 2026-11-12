@@ -616,20 +616,3 @@ def test_rydberg_view_declares_experimental_csv_overlay():
     view = sc.headless_observables(sc.compute(params), params)
     assert view["comparison"]["axis_index"] == 0
     assert view["comparison"]["x_unit"] == "MHz"
-
-
-if __name__ == "__main__":
-    test_reference_defaults_match_rydberg_eit_paper()
-    test_default_eit_linewidth_is_finite()
-    test_microwave_at_splitting_tracks_lo_rabi()
-    test_absolute_sensitivity_is_computed_without_reference_injection()
-    test_if_proxy_metric_and_temperature_dephasing_are_opt_in()
-    test_coupling_power_and_waist_drive_rabi()
-    test_at_center_shift_tracks_microwave_detuning()
-    test_doppler_on_broadens_eit_linewidth()
-    test_per_level_doppler_ratio_is_backward_compatible()
-    test_default_view_is_eit_fig2a()
-    test_model_eit_compensation_pair()
-    test_probe_power_broadens_eit()
-    test_fig2b_extra_view_runs()
-    print("Rydberg-EIT reference checks OK.")

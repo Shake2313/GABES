@@ -365,7 +365,3 @@ def test_the_page_routes_every_instrument_and_gates_the_electrical_ones():
     # The electrical branch is reached only after a detector is built.
     assert router.index("_detector_from_calibration") < router.index("Oscilloscope")
     assert "detector.convert(beam)" in router
-
-
-if __name__ == "__main__":
-    raise SystemExit(pytest.main([__file__, "-q"]))

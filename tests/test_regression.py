@@ -223,16 +223,3 @@ def test_fwm_defaults_match_sim_preset():
     assert defaults["mode_overlap_penalty"] == 1.0
     assert defaults["polarization_penalty"] == 1.0
     assert defaults["zeeman_participation_penalty"] == 1.0
-
-
-if __name__ == "__main__":
-    test_regression()
-    test_seeded_doppler_interpolation_geometry_built_once()
-    test_seeded_coupling_factorization_preserves_legacy_api_bitwise()
-    test_seeded_coupling_factors_multiply_without_hidden_rescaling()
-    test_seeded_factorized_and_collapsed_coupling_match_in_ultra()
-    test_branch_summation_rejected()
-    test_seeded_sideband_beat_matches_tpd_convention()
-    test_fwm_uses_rb85_d1_hyperfine_strengths()
-    test_fwm_defaults_match_sim_preset()
-    print("Phase-0 regression OK - gabes FWM reproduces the baseline.")

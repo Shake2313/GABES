@@ -62,9 +62,3 @@ def test_canonical_gain_relation_does_not_silently_opt_in():
     result = observables.coincidence_stats(np.array([2.0]), np.array([1.0]))
     assert result["ideal_nonclassicality"] is None
     assert not result["evidence"]["ideal_fixture_opt_in"]
-
-
-if __name__ == "__main__":
-    test_ideal_two_mode_squeezer()
-    test_fwm_spectrum_coincidence_is_an_unverified_gain_only_comparison()
-    print("Coincidence comparisons OK (explicit ideal fixture; production claims unavailable).")

@@ -44,10 +44,3 @@ def test_measured_source_noise_anchor_propagates_symmetric_loss():
     expected = eta * source_noise + (1.0 - eta)
 
     assert np.isclose(got, expected)
-
-
-if __name__ == "__main__":
-    test_asymmetric_balanced_noise_recovers_symmetric_eta_formula()
-    test_shot_weight_minimizes_normalized_noise_for_unequal_powers()
-    test_measured_source_noise_anchor_propagates_symmetric_loss()
-    print("balanced readout tests OK")
