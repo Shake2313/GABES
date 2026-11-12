@@ -30,8 +30,8 @@ SABES에도 같은 시각 규약 적용. 광학 테이블의 glyph·광로·라�
 스크린샷 PNG는 repo `.gitignore`(`*.png`) 정책으로 git 제외 — Google Drive 동기 폴더에만 보존. 수치는 git에 남음.
 
 ## 작업 규칙
-- **범위**: `streamlit_app.py`(라우터·상단 바·흐름), UI 패키지 `gabes_ui/`, `assets/`, `static/`,
-  `.streamlit/config.toml`, `sabes_page.py`의 공유 스타일. 계산 경로(`compute`, `observables`의 물리값) 무수정.
+- **범위**: `streamlit_app.py`(라우터·상단 바·흐름), UI 패키지 `gabes_ui/`(자산 `gabes_ui/assets/`, SABES 화면 `gabes_ui/sabes/`), `static/`,
+  `.streamlit/config.toml`의 공유 스타일. 계산 경로(`compute`, `observables`의 물리값) 무수정.
   - `theme` 토큰 · `format` 숫자 포맷 · `units` 단위 파서 · `scrub` ScrubField 컴포넌트 ·
     `controls` rail 조립 · `shell` 상단 바 조각 · `plotcard` 그림·오버레이·More · `readout` strip · `export` · `guide`
 - **예외**: P4 metric 표시 계약(`tier`/`attach_to`/`evidence`)만 `gabes/schemes/*` 수정. 계산 세션 커밋 후 진행.

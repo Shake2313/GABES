@@ -33,7 +33,8 @@ from gabes.core import blas_single_thread
 from gabes.schemes import fwm
 
 from sabes import bridge, detection as detection_model, instruments, layout
-from sabes.components import canvas as canvas_module
+from gabes_ui.sabes.components import canvas as canvas_module
+from gabes_ui.sabes.render import build_spec, legend_rows
 from sabes.beamline import (SetupSettings, solve_seed_polarizer_deg,
                             solve_seed_trim_deg, solve_split_angle_deg)
 from sabes.calibration import default_calibration
@@ -789,7 +790,7 @@ def _render_table_tab(result, calibration, host, detection):
     st.caption("Drawing coordinates are schematic. Physical x/y/z, exact waist "
                "positions and the crossing point still require measurement.")
     probe = st.session_state.get(_probe_key(part.key))
-    spec = layout.build_spec(part, result.chain, selected=selected,
+    spec = build_spec(part, result.chain, selected=selected,
                              probe=probe, twin_states=twin)
     event = canvas_module.svg_canvas(spec, selected=selected,
                                      key=f"sabes_table_{part.key}")
@@ -803,7 +804,7 @@ def _render_table_tab(result, calibration, host, detection):
     swatches = " ".join(
         f"<span class='sabes-key'><i style='background:{colour};"
         f"{'opacity:.75' if dashed else ''}'></i>{escape(name)}</span>"
-        for colour, dashed, name in layout.legend_rows())
+        for colour, dashed, name in legend_rows())
     st.markdown(
         f"<div class='sabes-legend'>{swatches}"
         "<span class='sabes-key sabes-key--note'>* Detailed component model "

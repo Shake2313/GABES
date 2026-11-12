@@ -18,10 +18,10 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from sabes import components  # noqa: E402
-from sabes.components import canvas as canvas_module  # noqa: E402
+from gabes_ui.sabes import components  # noqa: E402
+from gabes_ui.sabes.components import canvas as canvas_module  # noqa: E402
 
-FRONTEND = ROOT / "sabes" / "components" / "frontend" / "index.html"
+FRONTEND = ROOT / "gabes_ui" / "sabes" / "components" / "frontend" / "index.html"
 
 
 # --------------------------------------------------------------- packaging
@@ -44,7 +44,7 @@ def test_importing_the_package_does_not_shadow_the_module():
     """`canvas` is a module; the drawing function is `svg_canvas`.
 
     Binding the function to the package attribute `canvas` would make
-    `from sabes.components import canvas` silently return a function, which is
+    `from gabes_ui.sabes.components import canvas` silently return a function, which is
     exactly the bug this naming avoids.
     """
     import types

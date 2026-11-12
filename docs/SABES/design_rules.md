@@ -23,7 +23,7 @@
 
 ### 기존 시각 언어
 
-색·글꼴 출처는 [gabes_ui/theme.py](../../gabes_ui/theme.py), 광선 식별색은 [sabes/layout/render.py](../../sabes/layout/render.py). iframe도 기존 토큰·IBM Plex Sans/Mono 전달받아 사용. 제목·소자명은 Sans, 수치·단위는 기존 숫자 포맷. 간격·모서리·버튼·탭은 공유 console 규칙 우선.
+색·글꼴 출처는 [gabes_ui/theme.py](../../gabes_ui/theme.py), 광선 식별색은 [gabes_ui/sabes/render.py](../../gabes_ui/sabes/render.py). iframe도 기존 토큰·IBM Plex Sans/Mono 전달받아 사용. 제목·소자명은 Sans, 수치·단위는 기존 숫자 포맷. 간격·모서리·버튼·탭은 공유 console 규칙 우선.
 
 | 역할 | 유지 기준 |
 |---|---|

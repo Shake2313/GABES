@@ -350,16 +350,16 @@ def test_only_the_two_reconstructed_readings_are_marked_synthesised(chain,
 
 
 def test_the_page_labels_synthesised_readings_on_screen():
-    source = (ROOT / "sabes_page.py").read_text(encoding="utf-8")
+    source = (ROOT / "gabes_ui" / "sabes" / "page.py").read_text(encoding="utf-8")
     assert "reading.synthesised" in source
     assert "SYNTHESISED" in source
 
 
 def test_the_page_routes_every_instrument_and_gates_the_electrical_ones():
     """Oscilloscope and analyser must go through a photodiode, as on the bench."""
-    import sabes_page
+    from gabes_ui.sabes import page as sabes_page
 
-    source = (ROOT / "sabes_page.py").read_text(encoding="utf-8")
+    source = (ROOT / "gabes_ui" / "sabes" / "page.py").read_text(encoding="utf-8")
     router = source[source.index("def _read_instrument"):
                     source.index("def _scope_reading")]
     for name in sabes_page.INSTRUMENTS:

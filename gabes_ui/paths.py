@@ -5,8 +5,7 @@ so moving the asset folder changes one line.
 """
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-ASSETS = ROOT / "assets"
+ASSETS = Path(__file__).resolve().parent / "assets"
 UI_ASSETS = ASSETS / "ui"
 
 

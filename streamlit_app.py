@@ -78,7 +78,7 @@ READOUT_CACHE_VERSION = "v17-rydberg-workspace-20261105"
 
 
 def _inject_css():
-    # Tokens + stylesheet live in gabes_ui/theme.py and assets/ui/gabes.css.
+    # Tokens + stylesheet live in gabes_ui/theme.py and gabes_ui/assets/ui/gabes.css.
     # The anchor lets the stylesheet hide its own element slot (no layout gap).
     st.markdown(f"<style>{ui_theme.app_css(THEME_BASE)}</style>"
                 "<span class='gabes-style-anchor'></span>", unsafe_allow_html=True)
@@ -143,7 +143,7 @@ def _open_sabes():
 
 
 if st.query_params.get("app") == SABES_QUERY_VALUE:
-    import sabes_page
+    from gabes_ui.sabes import page as sabes_page
     sabes_page.render(host=_sabes_host())
     st.stop()
 

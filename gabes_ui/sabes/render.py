@@ -24,8 +24,8 @@ import math
 
 from gabes_ui.theme import LIGHT
 
-from ..components import canvas as canvas_module
-from .table import (BEAM_COMMON, BEAM_CONJUGATE, BEAM_PROBE, BEAM_PUMP,
+from .components import canvas as canvas_module
+from sabes.layout.table import (BEAM_COMMON, BEAM_CONJUGATE, BEAM_PROBE, BEAM_PUMP,
                     BEAM_REFERENCE, BEAM_SEED)
 
 # --- palette -------------------------------------------------------------
@@ -215,7 +215,7 @@ def build_spec(layout, chain, *, selected=None, probe=None, twin_states=None):
     Beams are drawn first so optics sit on top of them. A single clean stroke
     keeps closely spaced routes distinct without adding glow or extra width.
     """
-    from .probe import resolve_link_beam
+    from sabes.layout.probe import resolve_link_beam
 
     shapes = []
     # Reference routes are alternatives. Keep the normal FWM colour legible on

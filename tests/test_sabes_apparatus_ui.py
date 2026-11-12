@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import sabes_page as page  # noqa: E402
+from gabes_ui.sabes import page  # noqa: E402
 from sabes.presets import (LAB_PROFILE, PAPER_PROFILE, power_targets,  # noqa: E402
                            profile_calibration, profile_settings)
 
@@ -212,7 +212,7 @@ def test_real_streamlit_editor_keeps_edits_when_widgets_are_removed_and_recreate
 
     app = AppTest.from_string("""
 import streamlit as st
-import sabes_page as page
+from gabes_ui.sabes import page
 page._seed_session_state()
 st.checkbox("Show editor", key="show_editor", value=True)
 st.button("Reset", on_click=page._reset_defaults)

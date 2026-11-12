@@ -23,7 +23,7 @@ Working, headless-testable, and deployed behind `?app=sabes`:
 - `sabes/beamline.py` — the Sim et al. source chain as an **ordered list**
 - `sabes/detection.py` — pre-solve geometry, post-solve readout
 - `sabes/bridge.py` — settings → GABES params → squeezing → detector
-- `sabes_page.py` — three compute tiers (optics / solve / readout)
+- `gabes_ui/sabes/page.py` (was `sabes_page.py`) — three compute tiers (optics / solve / readout)
 
 Validated: fed the paper's own geometry the pipeline reproduces a hand-driven
 GABES run to 1e-6 dB at both Fast and Ultra fidelity.
@@ -249,7 +249,7 @@ instrument output invites being read as evidence.
 ## What A and B settled
 
 **B: the hand-written component works.** No npm, no lockfile, no build step —
-`sabes/components/` declares the component over a static `frontend/index.html`
+`gabes_ui/sabes/components/` declares the component over a static `frontend/index.html`
 implementing the postMessage protocol in vanilla JS. Verified in the browser at
 `?app=sabes&dev=canvas`: optic clicks return an id, empty clicks return a
 coordinate **in spec units** (checked at three render scales including 0.42×,

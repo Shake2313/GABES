@@ -20,7 +20,8 @@ sys.path.insert(0, str(ROOT))
 
 from sabes import layout  # noqa: E402
 from sabes.beamline import SetupSettings, build_source_chain  # noqa: E402
-from sabes.layout import parts, render, table  # noqa: E402
+from sabes.layout import parts, table  # noqa: E402
+from gabes_ui.sabes import render  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +50,7 @@ def test_beam_width_is_clamped_at_both_ends():
 
 
 def test_the_pump_is_drawn_heavier_than_the_seed(chain):
-    spec = layout.build_spec(parts.PART2, chain)
+    spec = render.build_spec(parts.PART2, chain)
     def width(a, b):
         link = parts.PART2.link_between(a, b)
         points = [[float(x), float(y)] for x, y in parts.PART2.points(link)]
@@ -63,7 +64,7 @@ def test_the_pump_is_drawn_heavier_than_the_seed(chain):
 
 def test_clickability_in_the_drawing_matches_the_model(chain):
     for part in layout.LAYOUTS:
-        spec = layout.build_spec(part, chain)
+        spec = render.build_spec(part, chain)
         for shape in _shapes(spec):
             if shape.get("kind") == "path":
                 continue
@@ -72,7 +73,7 @@ def test_clickability_in_the_drawing_matches_the_model(chain):
 
 def test_incomplete_component_models_are_starred_but_still_open(chain):
     """A pending component model may still own a usable transmission control."""
-    spec = layout.build_spec(parts.PART1, chain)
+    spec = render.build_spec(parts.PART1, chain)
     by_id = {s["id"]: s for s in _shapes(spec) if s.get("id")}
     assert by_id["noise_eater"]["opacity"] < 1.0
     assert "component model not yet implemented" in by_id["noise_eater"]["title"]
@@ -80,7 +81,7 @@ def test_incomplete_component_models_are_starred_but_still_open(chain):
     assert by_id["noise_eater"]["clickable"] is True
     assert "opacity" not in by_id["eom"] or by_id["eom"]["opacity"] == 1.0
     for part in layout.LAYOUTS:
-        spec = layout.build_spec(part, chain)
+        spec = render.build_spec(part, chain)
         assert "lumped" not in json.dumps(spec).lower()
 
 
@@ -88,13 +89,13 @@ def test_beams_are_never_clickable(chain):
     """Clicking a beam means clicking the table under it -- that is how an
     instrument head gets placed on the beam."""
     for part in layout.LAYOUTS:
-        for shape in _shapes(layout.build_spec(part, chain), "path"):
+        for shape in _shapes(render.build_spec(part, chain), "path"):
             assert shape["clickable"] is False
 
 
 def test_segments_with_no_known_beam_are_drawn_faint(chain):
     """The locking arm carries light the source chain does not model."""
-    spec = layout.build_spec(parts.PART1, chain)
+    spec = render.build_spec(parts.PART1, chain)
     reference = [s for s in _shapes(spec, "path")
                  if s["stroke"] == render.BEAM_STYLE[table.BEAM_REFERENCE]["stroke"]]
     assert reference
@@ -122,7 +123,7 @@ def test_every_node_gets_a_glyph_and_unknown_ones_fall_back():
 def test_glyph_parts_stay_inside_the_clickable_group(chain):
     """Sub-primitives make a polarizing cube look like one without splitting it
     into separate click targets."""
-    spec = layout.build_spec(parts.PART2, chain)
+    spec = render.build_spec(parts.PART2, chain)
     by_id = {s["id"]: s for s in _shapes(spec) if s.get("id")}
     assert by_id["pbs_in"]["parts"], "a PBS needs its diagonal"
     assert len(by_id["cell"]["parts"]) == 2, "cell windows remain visible"
@@ -137,8 +138,8 @@ def test_glyph_parts_stay_inside_the_clickable_group(chain):
 
 
 def test_selection_is_visible_in_the_spec(chain):
-    plain = layout.build_spec(parts.PART2, chain)
-    picked = layout.build_spec(parts.PART2, chain, selected="cell")
+    plain = render.build_spec(parts.PART2, chain)
+    picked = render.build_spec(parts.PART2, chain, selected="cell")
     def cell(spec):
         return next(s for s in _shapes(spec) if s.get("id") == "cell")
     assert cell(picked)["stroke"] != cell(plain)["stroke"]
@@ -150,7 +151,7 @@ def test_selection_is_visible_in_the_spec(chain):
 def test_spec_survives_the_json_round_trip(chain):
     """It crosses an iframe boundary, so a numpy scalar would break rendering."""
     for part in layout.LAYOUTS:
-        spec = layout.build_spec(part, chain, probe=(10, 20))
+        spec = render.build_spec(part, chain, probe=(10, 20))
         restored = json.loads(json.dumps(spec))
         assert restored["width"] == part.width
         assert restored["probe"] == [10.0, 20.0]
@@ -159,13 +160,13 @@ def test_spec_survives_the_json_round_trip(chain):
 
 def test_spec_stays_small_enough_to_ship_every_rerun(chain):
     for part in layout.LAYOUTS:
-        payload = json.dumps(layout.build_spec(part, chain))
+        payload = json.dumps(render.build_spec(part, chain))
         assert len(payload) < 60_000, f"{part.key}: {len(payload)} bytes"
 
 
 def test_grid_is_declared_but_is_not_a_scale(chain):
     """The breadboard dots are atmosphere: display units are not millimetres."""
-    spec = layout.build_spec(parts.PART2, chain)
+    spec = render.build_spec(parts.PART2, chain)
     assert spec["grid"] > 0
     ratios = list(layout.probe.display_scale_m_per_unit(parts.PART2).values())
     assert max(ratios) / min(ratios) > 10.0
@@ -176,8 +177,8 @@ def test_grid_is_declared_but_is_not_a_scale(chain):
 def test_widths_follow_the_chain_rather_than_being_baked_in(chain):
     """Turn the pump down and the drawing has to thin out."""
     quiet = build_source_chain(replace(SetupSettings(), ta_current_a=0.9))
-    loud = layout.build_spec(parts.PART2, chain)
-    soft = layout.build_spec(parts.PART2, quiet)
+    loud = render.build_spec(parts.PART2, chain)
+    soft = render.build_spec(parts.PART2, quiet)
     def pump_width(spec):
         link = parts.PART2.link_between("cell", "pbs_out")
         points = [[float(x), float(y)] for x, y in parts.PART2.points(link)]
@@ -189,8 +190,8 @@ def test_widths_follow_the_chain_rather_than_being_baked_in(chain):
 def test_twin_states_light_up_the_post_cell_arms(chain):
     seed = chain.seed
     twin = {"probe": seed.scaled(14.0), "conjugate": seed.scaled(13.0)}
-    plain = layout.build_spec(parts.PART2, chain)
-    gained = layout.build_spec(parts.PART2, chain, twin_states=twin)
+    plain = render.build_spec(parts.PART2, chain)
+    gained = render.build_spec(parts.PART2, chain, twin_states=twin)
     def probe_width(spec):
         link = parts.PART2.link_between("dm_probe", "iris_probe")
         points = [[float(x), float(y)] for x, y in parts.PART2.points(link)]
@@ -202,9 +203,9 @@ def test_twin_states_light_up_the_post_cell_arms(chain):
 def test_legend_covers_every_beam_colour_actually_drawn(chain):
     drawn = set()
     for part in layout.LAYOUTS:
-        drawn.update(s["stroke"] for s in _shapes(layout.build_spec(part, chain),
+        drawn.update(s["stroke"] for s in _shapes(render.build_spec(part, chain),
                                                   "path"))
-    assert drawn <= {colour for colour, _dash, _name in layout.legend_rows()}
+    assert drawn <= {colour for colour, _dash, _name in render.legend_rows()}
 
 
 if __name__ == "__main__":

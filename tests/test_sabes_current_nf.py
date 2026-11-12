@@ -8,7 +8,7 @@ import pytest
 from gabes.passive_readout import passive_l1_from_spectrum
 from gabes.schemes import fwm
 from sabes import bridge
-import sabes_page
+from gabes_ui.sabes import page as sabes_page
 
 
 def _result():

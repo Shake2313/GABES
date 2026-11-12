@@ -24,7 +24,7 @@ from sabes.beamline import SetupSettings, build_source_chain  # noqa: E402
 from sabes.calibration import default_calibration  # noqa: E402
 from sabes.detection import DetectionSettings  # noqa: E402
 
-import sabes_page  # noqa: E402
+from gabes_ui.sabes import page as sabes_page  # noqa: E402
 
 
 # ------------------------------------------------------------------ controls
@@ -118,7 +118,7 @@ def test_the_sidebar_no_longer_carries_the_parameter_wall():
     Checked as a property rather than a widget count: the sidebar may render a
     parameter *only* as the orphan fallback, which a healthy build never enters.
     """
-    source = (ROOT / "sabes_page.py").read_text(encoding="utf-8")
+    source = (ROOT / "gabes_ui" / "sabes" / "page.py").read_text(encoding="utf-8")
     sidebar = source[source.index("def _render_sidebar"):
                      source.index("def _owned_parameters")]
     assert "st.number_input" not in sidebar
@@ -248,7 +248,7 @@ def test_cached_solve_key_preserves_eom_audit_metadata():
 
 
 def test_page_routes_global_noise_only_to_the_post_cell_balanced_analyser():
-    source = (ROOT / "sabes_page.py").read_text(encoding="utf-8")
+    source = (ROOT / "gabes_ui" / "sabes" / "page.py").read_text(encoding="utf-8")
     block = source[source.index('if choice == "Spectrum analyser"'):
                    source.index("raise KeyError(choice)")]
     assert 'reading.link.beam in ("probe", "conjugate")' in block
@@ -333,7 +333,7 @@ def test_every_model_attribute_the_page_reads_actually_exists():
     live = {"geom": geom, "readout": read, "chain": chain,
             "detection": detection_settings, "settings": settings}
 
-    source = (ROOT / "sabes_page.py").read_text(encoding="utf-8")
+    source = (ROOT / "gabes_ui" / "sabes" / "page.py").read_text(encoding="utf-8")
     missing = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Attribute):
