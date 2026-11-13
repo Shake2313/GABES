@@ -134,6 +134,7 @@ def scan_values(low, high, count, current, spec):
 def assemble_dataset(template, snapshot):
     data = deepcopy(template)
     rows = snapshot["rows"]
+    data["sweep"] = {k: deepcopy(v) for k, v in snapshot.items() if k != "rows"}
     if not rows:
         return data
     data["series"] = [deepcopy(payload["series"]) for _, payload in rows]
@@ -167,7 +168,6 @@ def assemble_dataset(template, snapshot):
     else:
         data.pop("summary", None)
     data["varied"]["values"] = [row_value(row) for row in data["series"]]
-    data["sweep"] = {k: deepcopy(v) for k, v in snapshot.items() if k != "rows"}
     return data
 
 

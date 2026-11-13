@@ -80,6 +80,13 @@ def comparison_plots(dataset):
                                           "frequency_reference": block["axis"].get("reference", ""),
                                           "observable": definition["observable"]},
                 })
+                metadata = traces[-1]["quantity_metadata"]
+                for key in ("branch", "status", "sample_status", "sample_reasons", "condition_ids"):
+                    if key in curve:
+                        metadata[key] = curve[key]
+                status = curve.get("observable_status", {}).get(definition["observable"])
+                if status is not None:
+                    metadata["observable_status"] = status
             result.append({"label": panel["title"], "source": source, "traces": traces})
     return result
 

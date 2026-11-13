@@ -5,6 +5,7 @@ built only when a download is clicked (deferred `download_button` data), so
 an ordinary rerun no longer serialises every raw array.
 """
 import csv
+from collections import Counter
 import json
 import re
 import subprocess
@@ -137,6 +138,37 @@ def collect_view_plot_payloads(view, main_figure):
     return payloads
 
 
+def named_plot_arrays(plot_payloads):
+    """Return the native plotted samples by name for scripts and result exports.
+
+    Pass the plots from a result bundle, or collect them from the scheme's
+    figure view with :func:`collect_view_plot_payloads`. Names use the visible
+    plot/trace labels, with axis and curve indices for ambiguous labels.
+    """
+    entries = []
+    for plot_index, plot in enumerate(plot_payloads):
+        if not isinstance(plot, dict):
+            continue
+        plot_label = _safe_token(plot.get("label", f"figure_{plot_index}"), f"figure{plot_index}")
+        for trace_index, trace in enumerate(plot.get("traces", ())):
+            if not isinstance(trace, dict):
+                continue
+            trace_label = _safe_token(trace.get("figure_curve_label"), f"trace{trace_index}")
+            key = f"{plot_label}/{trace_label}"
+            entries.append((key, plot_index, trace_index, trace))
+    counts = Counter(key for key, *_ in entries)
+    occupied = set(counts)
+    result = {}
+    for key, plot_index, trace_index, trace in entries:
+        if counts[key] > 1:
+            axis = trace.get("axis_index", 0)
+            key = f"{key}--plot{plot_index}-axis{axis}-curve{trace_index}"
+            while key in occupied or key in result:
+                key += "-duplicate"
+        result[key] = trace
+    return result
+
+
 def _curve_csv_bytes(trace):
     x_data = trace.get("x_data", [])
     y_data = trace.get("y_data", [])
@@ -169,18 +201,8 @@ def _build_plot_zip_bytes(plot_payloads):
         return None
     zip_buffer = BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for plot_index, plot_payload in enumerate(plot_payloads):
-            if not isinstance(plot_payload, dict):
-                continue
-            plot_label = _safe_token(plot_payload.get("label", f"figure_{plot_index}"), f"figure{plot_index}")
-            for trace_index, trace in enumerate(plot_payload.get("traces", ())):
-                if not isinstance(trace, dict):
-                    continue
-                trace_label = _safe_token(
-                    trace.get("figure_curve_label", f"trace{trace_index}"),
-                    f"trace{trace_index}")
-                curve_name = f"{plot_label}/{trace_label}.csv"
-                zf.writestr(curve_name, _curve_csv_bytes(trace))
+        for name, trace in named_plot_arrays(plot_payloads).items():
+            zf.writestr(f"{name}.csv", _curve_csv_bytes(trace))
     return zip_buffer.getvalue()
 
 
@@ -199,7 +221,7 @@ def app_revision():
 
 def build_export_payload(*, scheme, raw, params, view, plot_payloads,
                          comparison_payload, cache_version, readout_cache_version,
-                         model_comparison=None):
+                         model_comparison=None, extra_view=None):
     return {
         "generated_at_utc": datetime.utcnow().isoformat() + "Z",
         "app_revision": app_revision(),
@@ -249,25 +271,28 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
                if model_comparison is not None else {}),
         },
         "plots": to_json_primitive(plot_payloads),
+        **({"extra_view": to_json_primitive(extra_view)} if extra_view is not None else {}),
     }
 
 
 def render_export(container, *, scheme, raw, params, view, plot_payloads,
                   comparison_payload, cache_version, readout_cache_version,
-                  model_comparison=None):
+                  model_comparison=None, extra_view=None, key_suffix=""):
     """Download buttons for the bundle, all curves, and each curve."""
     def bundle_bytes():
         payload = build_export_payload(
             scheme=scheme, raw=raw, params=params, view=view,
             plot_payloads=plot_payloads, comparison_payload=comparison_payload,
             cache_version=cache_version, readout_cache_version=readout_cache_version,
-            model_comparison=model_comparison,
+            model_comparison=model_comparison, extra_view=extra_view,
         )
         return json.dumps(payload, indent=2, ensure_ascii=False,
                           allow_nan=False).encode("utf-8")
 
     timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     scheme_token = _safe_token(scheme.name or "gabes", "gabes")
+    if key_suffix:
+        scheme_token = f"{scheme_token}_{_safe_token(key_suffix)}"
     with container:
         st.caption("The JSON includes the model comparison and selected point. "
                    "The CSV curves use the current model conditions."

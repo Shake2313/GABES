@@ -869,7 +869,25 @@ def render_plot_section(view, scheme, spec_by_name, raw, params,
              cache_version, readout_cache_version)
 
 
-def render_more(view, scheme, params, cache_version):
+def _extra_export_metadata(key, data, compute_params, figure):
+    """Export the completed run's own branch and renderer provenance."""
+    metadata = {"name": key, "compute_params": compute_params, "status": "complete"}
+    for attr, label in (
+        ("_gabes_measured_gain_reference", "measured_gain_reference"),
+        ("_gabes_experimental_gain_calibration", "experimental_gain_calibration"),
+        ("_gabes_gain_calibration_model", "gain_calibration_model"),
+        ("_gabes_experimental_jasperse_readout", "experimental_jasperse_readout"),
+    ):
+        if hasattr(figure, attr):
+            metadata[label] = getattr(figure, attr)
+    branches = {name: data[name] for name in ("minus", "plus") if name in data}
+    if branches:
+        metadata["branches"] = {name: {k: raw[k] for k in ("branch", "validation_level", "claim_gate")
+                                       if k in raw} for name, raw in branches.items()}
+    return metadata
+
+
+def render_more(view, scheme, params, cache_version, readout_cache_version=None):
     """Tables, diagnostic figures and heavy on-demand views behind pills."""
     items = [(table["title"], "table", table) for table in view.get("tables", [])]
     items += [(f"Diagnostic · {title}", "figure", extra_fig)
@@ -911,5 +929,15 @@ def render_more(view, scheme, params, cache_version):
                 with st.spinner("Running…"):
                     data = _cached_extra(scheme.name, obj.key, extra_items, cache_version)
                 with PLOT_LOCK:
-                    render_fig(obj.render(data, params) if obj.render_with_params
-                               else obj.render(data))
+                    figure = obj.render(data, params) if obj.render_with_params else obj.render(data)
+                    plots = ui_export.collect_view_plot_payloads({}, figure)
+                    for plot in plots:
+                        plot.update(label=obj.key, source="extra_view")
+                    metadata = _extra_export_metadata(obj.key, data, dict(extra_items), figure)
+                    render_fig(figure)
+                ui_export.render_export(
+                    st.popover("Export extra view", icon=":material/download:", type="tertiary"),
+                    scheme=scheme, raw=data, params=params, view={}, plot_payloads=plots,
+                    comparison_payload=None, cache_version=cache_version,
+                    readout_cache_version=readout_cache_version, extra_view=metadata,
+                    key_suffix="extra-view")

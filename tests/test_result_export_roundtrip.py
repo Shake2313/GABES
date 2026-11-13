@@ -1,0 +1,112 @@
+"""Exports use the same rendered data and preserve reproduction context."""
+from io import BytesIO
+import json
+from types import SimpleNamespace
+import zipfile
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+from gabes.core import blas_single_thread
+from gabes.schemes import get
+from gabes_ui import export, plotcard
+from gabes_ui.spectral_compare import comparison_plots
+from gabes_ui.spectral_sweep import assemble_dataset
+
+
+@pytest.fixture(autouse=True)
+def noninteractive_canvas():
+    with matplotlib.rc_context({"backend": "Agg"}):
+        yield
+
+
+def test_named_native_curves_round_trip_from_exported_conditions():
+    scheme = get("lambda")
+    params = scheme.defaults()
+
+    def render(condition):
+        with blas_single_thread():
+            raw = scheme.compute({key: condition[key] for key in scheme.recompute_keys()})
+            view = scheme.observables(raw, condition)
+        plots = export.collect_view_plot_payloads(view, view["figure"])
+        for figure in [view["figure"], *(f for _, f in view.get("figures", ()))]:
+            plt.close(figure)
+        return raw, view, plots
+
+    raw, view, plots = render(params)
+    bundle = export.build_export_payload(scheme=scheme, raw=raw, params=params, view=view,
+        plot_payloads=plots, comparison_payload=None, cache_version=scheme.cache_version,
+        readout_cache_version="roundtrip-test")
+    loaded = json.loads(json.dumps(bundle, allow_nan=False))
+    _, _, replay = render(loaded["params"])
+    saved, rerun = export.named_plot_arrays(loaded["plots"]), export.named_plot_arrays(replay)
+    assert saved and saved.keys() == rerun.keys()
+    for key in saved:
+        for array in ("x_data", "y_data"):
+            np.testing.assert_allclose(np.asarray(saved[key][array], float),
+                                       np.asarray(rerun[key][array], float),
+                                       rtol=1e-12, atol=1e-15, equal_nan=True)
+
+
+def test_named_arrays_and_zip_preserve_duplicate_curve_labels():
+    trace = dict(axis_index=0, figure_curve_label="branch", x_data=[1.], y_data=[2.])
+    plots = [dict(label="Scan", traces=[trace, dict(trace, axis_index=1, y_data=[3.])])]
+    named = export.named_plot_arrays(plots)
+    assert [trace["y_data"] for trace in named.values()] == [[2.], [3.]]
+    with zipfile.ZipFile(BytesIO(export._build_plot_zip_bytes(plots))) as archive:
+        assert archive.namelist() == [name + ".csv" for name in named]
+
+
+def test_lazy_extra_view_export_runs_only_when_requested(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    calls, downloads = [], []
+    scheme = get("lambda")
+
+    def render(raw, _params):
+        figure, axis = plt.subplots()
+        axis.plot([1., 2.], raw["signal"], label="signal")
+        return figure
+
+    extra = SimpleNamespace(key="Test scan", description="Test scan", param_keys=(),
+                            render=render, render_with_params=True)
+    monkeypatch.setattr(type(scheme), "extra_views", lambda _self: [extra])
+    def compute(*_args):
+        calls.append("run")
+        return {"signal": [3., 4.], "minus": {"branch": -1, "validation_level": "PREDICTED"}}
+    def download(*_args, **kwargs):
+        downloads.append(kwargs)
+    monkeypatch.setattr(plotcard, "_cached_extra", compute)
+    monkeypatch.setattr(export, "render_export", download)
+    monkeypatch.setattr(plotcard.st, "pills", lambda *_args, **_kwargs: "Test scan")
+    app = AppTest.from_string("""
+        from gabes.schemes import get
+        from gabes_ui.plotcard import render_more
+        import streamlit as st
+        scheme = get("lambda")
+        st.session_state.setdefault("lambda__more", "Test scan")
+        render_more({}, scheme, scheme.defaults(), scheme.cache_version, "roundtrip-test")
+    """).run()
+    assert not app.exception and not calls and not downloads
+    app.button[0].click().run()
+    assert not app.exception and calls == ["run"] and len(downloads) == 1
+    result = downloads[0]
+    assert result["plot_payloads"][0]["traces"][0]["y_data"] == [3., 4.]
+    assert result["key_suffix"] == "extra-view"
+    assert result["extra_view"]["branches"]["minus"]["validation_level"] == "PREDICTED"
+    assert result["extra_view"]["status"] == "complete"
+    assert result["extra_view"]["compute_params"]
+
+
+def test_sweep_exports_status_before_first_row_and_keeps_curve_provenance():
+    curve = dict(id="branch", label="Lower branch", branch=-1, x=[1., 2.],
+                 observables={"gain": [3., None]}, observable_status={"gain": ["available", "unresolved"]})
+    template = dict(axis=dict(label="Frequency", unit="MHz"), series=[curve],
+                    panels=[dict(title="Gain", y_label="Gain", curves=[dict(series_id="branch", observable="gain")])])
+    dataset = assemble_dataset(template, dict(rows=[], status="failed", completed=0, error="no completed rows"))
+    assert dataset["sweep"] == dict(status="failed", completed=0, error="no completed rows")
+    metadata = comparison_plots(dataset)[0]["traces"][0]["quantity_metadata"]
+    assert metadata["branch"] == -1
+    assert metadata["observable_status"] == ["available", "unresolved"]

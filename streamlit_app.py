@@ -360,7 +360,7 @@ def render_spectra():
                     st.markdown(metrics_table_markdown(metrics))
 
     render_plot_section(view, scheme, spec_by_name, raw, params, cache_version, READOUT_CACHE_VERSION)
-    render_more(view, scheme, params, cache_version)
+    render_more(view, scheme, params, cache_version, READOUT_CACHE_VERSION)
 
 
 with workspace:
