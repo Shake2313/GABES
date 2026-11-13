@@ -11,6 +11,29 @@ from fixtures.magneto_speed_20261030.validation import (
 )
 
 
+@pytest.fixture
+def reference_at_current_ground_g(monkeypatch):
+    """Compare solver algorithms at the same approved atomic input."""
+    backend, _ = load_baselines()
+    backend.build_multilevel_atom.cache_clear()
+    backend._magnetic_generator.cache_clear()
+    def with_steck_g(iso, f):
+        # Evaluate the frozen Landé expression with the new input coefficient.
+        ff = f * (f + 1)
+        jj = iso.Jg * (iso.Jg + 1)
+        ii = iso.I * (iso.I + 1)
+        return (2.00233113 * (ff + jj - ii) + iso.g_I * (ff + ii - jj)) / (2 * ff)
+
+    with monkeypatch.context() as patch:
+        # The frozen solver retains its original input for historical replay.
+        patch.setattr(backend, "_landeg", with_steck_g)
+        try:
+            yield backend
+        finally:
+            backend._magnetic_generator.cache_clear()
+            backend.build_multilevel_atom.cache_clear()
+
+
 def test_frozen_scheme_is_bound_to_frozen_backend_only():
     import gabes
     before, scheme = load_baselines()
@@ -20,9 +43,9 @@ def test_frozen_scheme_is_bound_to_frozen_backend_only():
 
 
 @pytest.mark.parametrize("name,kwargs", list(branch_cases().items()))
-def test_fast_solver_matches_independent_frozen_complex_reference(name, kwargs):
-    before, _ = load_baselines()
-    reference = before.multilevel_response([-137.], **kwargs)
+def test_fast_solver_matches_independent_frozen_complex_reference(
+        name, kwargs, reference_at_current_ground_g):
+    reference = reference_at_current_ground_g.multilevel_response([-137.], **kwargs)
     result = current.multilevel_response([-137.], **kwargs)
     report = compare_backend(reference, result)
     assert report["passed"], name + ": " + json.dumps(_json(report), ensure_ascii=False)
@@ -44,19 +67,49 @@ def test_fast_calls_leave_shared_multilevel_atomic_arrays_unchanged(isotope, lin
         np.testing.assert_array_equal(value, saved[name], err_msg=f"mutated shared {isotope} {line} {name}")
 
 
-def test_retained_complex_mode_matches_frozen_backend():
-    before, _ = load_baselines()
+def test_retained_complex_mode_matches_frozen_backend(reference_at_current_ground_g):
     kwargs = dict(isotope="Rb87", line="D2", intensity_mw_cm2=.04,
                   doppler=False, b_ut=[0., .0004], b_x_ut=.0003, b_y_ut=.0002)
-    reference = before.multilevel_response([-100.], **kwargs)
+    reference = reference_at_current_ground_g.multilevel_response([-100.], **kwargs)
     result = current.multilevel_response([-100.], solver_basis="complex", **kwargs)
     assert compare_backend(reference, result)["passed"]
 
 
 @pytest.mark.parametrize("name,params", list(small_scheme_cases().items()))
-def test_physical_readout_snr_masks_and_best_detuning_match_frozen_scheme(name, params):
+def test_physical_readout_snr_masks_and_best_detuning_match_frozen_scheme(
+        name, params, reference_at_current_ground_g):
     report = compare_scheme_case(params)
+    if name == "biased_transverse":
+        _check_biased_transverse_roundoff_null(params, report)
     assert report["passed"], name + ": " + json.dumps(_json(report), ensure_ascii=False)
+
+
+def _check_biased_transverse_roundoff_null(params, report):
+    from gabes.schemes import magneto_unified as live
+    from fixtures.magneto_speed_20261030.validation import evaluate_scheme
+
+    _, frozen = load_baselines()
+    old_raw, old_view, _ = evaluate_scheme(frozen, params)
+    _, new_view, _ = evaluate_scheme(live, params)
+    zero = np.asarray(old_raw["physical_b_ut"]) == 0
+    assert np.count_nonzero(zero) == 1
+    old_slope, new_slope = (np.asarray(v["transmission_slope_per_t"])
+                            for v in (old_view, new_view))
+    assert abs(old_slope[zero].item()) < 1e-6
+    assert abs(new_slope[zero].item()) < 1e-6
+
+    # At this sampled transmission null, dividing by solver roundoff can turn
+    # a numerical zero into a finite-looking sensitivity. Keep the original
+    # mask and reciprocal tolerances at the other nine samples.
+    old_budget, new_budget = (v["transmission_sensitivity"] for v in (old_view, new_view))
+    resolved = ~zero
+    checks = report["readout"]["checks"]
+    prefix = "transmission_sensitivity."
+    for key in ("valid", "field_asd_t_per_sqrt_hz", "field_rms_t"):
+        a, b = (np.asarray(v[key], dtype=float)[resolved] for v in (old_budget, new_budget))
+        checks[prefix + key] = array_check(a, b, atol=1e-21, rtol=2e-7)
+    report["readout"]["passed"] = all(check["passed"] for check in checks.values())
+    report["passed"] = report["backend"]["passed"] and report["readout"]["passed"]
 
 
 def test_comparison_uses_zero_floor_but_does_not_waive_availability_changes():

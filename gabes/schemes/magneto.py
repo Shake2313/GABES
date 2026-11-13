@@ -582,7 +582,7 @@ class SinglePairMagnetoReference(Scheme):
         valid = (Fg in Fg_allowed and Fe in Fe_allowed and abs(Fe - Fg) <= 1
                  and strength > 1e-12 and (2 * Fg + 1) + (2 * Fe + 1) <= MAX_LEVELS)
 
-        gFg = (species.lande_gf(species.GJ_S12_LEGACY, RB87.g_I, RB87.I, RB87.Jg, Fg)
+        gFg = (species.lande_gf(RB87.gJ_S, RB87.g_I, RB87.I, RB87.Jg, Fg)
                if Fg in Fg_allowed else 0.0)
         gFe = (species.lande_gf(RB87.gJ_P12, RB87.g_I, RB87.I, JE_D1, Fe)
                if Fe in Fe_allowed else 0.0)

@@ -57,6 +57,10 @@ def test_steck_density_is_the_second_convention():
     assert 0.50 < min(ratio) and max(ratio) < 0.60
 
 
+def test_rubidium_ground_electronic_g_factors_match_steck():
+    assert species.RB85.gJ_S == species.RB87.gJ_S == 2.00233113
+
+
 @pytest.mark.parametrize("legacy, record, deviation", [
     (constants.GAMMA_2PI, species.RB85.gamma_D1_mhz * 1e6, 0.0),
     (constants.MASS_85RB, species.RB85.mass, 0.0),
@@ -65,7 +69,6 @@ def test_steck_density_is_the_second_convention():
     (constants.NU_GROUND_HF, 3.0 * species.RB85.A_S * 1e6, 0.0),
     (constants.NU_D1_85RB, species.RB85.nu_D1, 0.0),
     (constants.RB85_ABUNDANCE, species.RB85.abundance, 0.0),
-    (species.GJ_S12_LEGACY, species.RB87.gJ_S, -2.996507376e-8),
 ])
 def test_legacy_constants_deviate_only_as_documented(legacy, record, deviation):
     assert legacy / record - 1.0 == pytest.approx(deviation, rel=1e-6, abs=1e-15)

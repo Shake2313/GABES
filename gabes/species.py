@@ -53,11 +53,6 @@ _LG, _LE, _SE = 0, 1, 0.5      # alkali D line: nS → nP orbital, electron spin
 # Self-broadening coefficient β/2π = 0.69e-7 Hz·cm³ (Rb; AutoOD).
 BETA_SELF = 2 * np.pi * 0.69e-7 * 1e-6        # rad·s⁻¹·m³
 
-# Legacy ground g_J used by the magneto schemes; the Steck record `gJ_S` is
-# 2.00233113 for Rb (−3.0e-8 relative). Kept so magneto outputs stay
-# bit-identical (docs/checklist.json atomic-data-legacy-value-unification).
-GJ_S12_LEGACY = 2.002_331_070
-
 
 # =====================================================================
 # Hyperfine line strengths

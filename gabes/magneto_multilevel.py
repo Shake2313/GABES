@@ -88,7 +88,7 @@ def build_multilevel_atom(isotope="Rb85", line="D1"):
         dict(structure.dipoles), structure.ground_energy_mhz,
         structure.excited_energy_mhz, structure.gamma, structure.frequency_hz,
         structure.dipole_sq, structure.mass, thermal, trace,
-        tuple(species.lande_gf(species.GJ_S12_LEGACY, iso.g_I, iso.I, iso.Jg, f)
+        tuple(species.lande_gf(iso.gJ_S, iso.g_I, iso.I, iso.Jg, f)
               for f in fs))
 
 

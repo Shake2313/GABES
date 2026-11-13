@@ -42,7 +42,7 @@ def _full_obe_rotation(atom, delta_mhz, intensity_mw_cm2, *, field_ut,
     gi = -0.0009951414
     for index, (F, m) in enumerate(atom.ground):
         energies[index] += (constants.MU_B / constants.HBAR * field_ut * 1e-6 * m
-                            * _hyperfine_g(iso.I, 0.5, F, 2.002331070, gi))
+                            * _hyperfine_g(iso.I, 0.5, F, iso.gJ_S, gi))
     for index, (F, m) in enumerate(atom.excited):
         energies[ng + index] += (constants.MU_B / constants.HBAR * field_ut * 1e-6 * m
                                  * _hyperfine_g(iso.I, 0.5, F, 0.666, gi))
