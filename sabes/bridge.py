@@ -100,37 +100,104 @@ class SabesResult:
 
     @property
     def gains(self):
+        """The FWM-selected probe and conjugate power gains."""
+        point = (self.observables or {}).get("gain_operating_point")
+        if point is not None:
+            return float(point["G_s"]), float(point["G_c"])
+        return self.raw_gains
+
+    @property
+    def raw_gains(self):
+        """Uncalibrated atomic-source gains kept separately for audit."""
         if self.raw is None:
             return None
+        point = (self.observables or {}).get("atomic_operating_point")
+        if point is not None:
+            return point["G_s"], point["G_c"]
         index = _operating_index(self.raw, self.params)
         return (float(np.asarray(self.raw["G_s"])[index]),
                 float(np.asarray(self.raw["G_c"])[index]))
 
     @property
+    def gain_curve(self):
+        """The gain arrays and matching probe-frequency axis used in the FWM view."""
+        return (self.observables or {}).get("gain_curve", self.raw)
+
+    @property
+    def noise_model(self):
+        return (self.observables or {}).get("noise_model", self.params.get("noise_model"))
+
+    @property
+    def readout_evidence(self):
+        """Report model assumptions and gain calibration at the selected detuning."""
+        view = self.observables or {}
+        if "noise_operating_point" not in view:
+            return None
+        noise = view.get("noise_operating_point") or {}
+        calibration = view["experimental_gain_calibration"]
+        gain_point = view["gain_operating_point"]
+        experimental = view.get("experimental_jasperse_readout")
+        if experimental is not None:
+            noise_scope = experimental["scope"]
+            status = ("EFFECTIVE_JASPERSE_GAIN_APPROXIMATION"
+                      if noise["inference_approximate"] else "EFFECTIVE_JASPERSE_ESTIMATE")
+            if not noise["available"]:
+                status = "UNAVAILABLE_AT_SELECTED_DETUNING"
+            noise_class = "model_prediction"
+        else:
+            noise_scope = ("Static passive vacuum completion of the small-signal canonical "
+                           "transfer. The selected empirical gain does not modify this transfer.")
+            status = noise.get("passive_l1_status", "UNAVAILABLE_CANONICAL_TRANSFER")
+            noise_class = "mean_field_diagnostic"
+        return {
+            "provenance": "computed",
+            "noise": {
+                "evidence_class": noise_class, "status": status, "scope": noise_scope,
+                "common_cell_loss_pct": (self.params.get("jasperse_loss_pct", 0.0)
+                                         if experimental is not None else None),
+                "operating_point": noise or None,
+            },
+            "gain": {
+                "basis": gain_point["gain_basis"],
+                "evidence_class": ("calibrated_reproduction"
+                                   if calibration["applied"] else "mean_field_diagnostic"),
+                "calibration_applied": calibration["applied"],
+                "calibration_model": calibration["calibration_model"],
+                "calibration_status": calibration["status"],
+                "profile": calibration.get("profile") if calibration["applied"] else None,
+                "calibration_point": (calibration.get("selected_point")
+                                      if calibration["applied"] else None),
+                "operating_point": gain_point,
+            },
+        }
+
+    def _current_noise_point(self):
+        view = self.observables or {}
+        if "noise_operating_point" in view:
+            return view["noise_operating_point"] or {}
+        if "passive_l1_operating_point" in view:
+            return view["passive_l1_operating_point"] or {}
+        return None
+
+    @property
     def gain_referred_noise_db(self):
-        """Current NF in dB; legacy raw algebra only for old result fixtures."""
+        """Selected model NF in dB, with the legacy diagnostic for old fixtures."""
         if self.raw is None:
             return None
-        view = self.observables or {}
-        if "jasperse_readout" in view or "passive_l1_operating_point" in view:
-            point = view.get("passive_l1_operating_point") or {}
+        point = self._current_noise_point()
+        if point is not None:
             value = point.get("NF_dB")
-            return (float(value) if value is not None and np.isfinite(value)
-                    else None)
+            return float(value) if value is not None and np.isfinite(value) else None
         values = self.raw.get("gain_referred_noise_dB")
         if values is None:
             values = self.raw["S_dB"]
-        return float(np.asarray(values)[
-            _operating_index(self.raw, self.params)])
+        return float(np.asarray(values)[_operating_index(self.raw, self.params)])
 
     @property
     def noise_factor(self):
         """Linear NF at the selected point, with unavailable values preserved."""
-        if self.raw is None:
-            return None
-        view = self.observables or {}
-        if "jasperse_readout" in view or "passive_l1_operating_point" in view:
-            point = view.get("passive_l1_operating_point") or {}
+        point = self._current_noise_point()
+        if point is not None:
             value = point.get("NF")
             return (float(value) if value is not None and np.isfinite(value)
                     and value > 0.0 else None)
@@ -320,13 +387,10 @@ def to_gabes_params(chain, settings, geometry, *, base=None, quantize=True,
 
 
 def noise_observables(raw, params):
-    """Cheap current NF readout for the page, without figures or cell-loss audit."""
-    if "T_canonical_small_signal" not in raw:
+    """Resolve FWM-selected gains and NF without figures or the cell-loss audit."""
+    if "raman_center_minus_GHz" not in raw:
         return {}
-    readout = fwm._seeded_passive_l1_readout(raw, params)
-    center = raw.get("raman_center_minus_GHz", fwm.branch_center_GHz(params["opd"], -1))
-    point = fwm._passive_l1_selected(readout, raw, center + params["tpd"]*1e-3)
-    return {"jasperse_readout": readout, "passive_l1_operating_point": point}
+    return fwm.seeded_operating_readout(raw, params)
 
 
 def solve_key(params, scheme=None):
@@ -365,7 +429,7 @@ def run(settings=None, calibration=None, detection=None, *,
                            params=params)
 
     raw = scheme.compute(params)
-    observables = scheme.headless_observables(raw, params)
+    observables = noise_observables(raw, params)
     result = SabesResult(settings=settings, chain=chain, geometry=geom,
                          params=params, raw=raw, observables=observables)
     read = detection_module.readout(geom, chain, result.gains, settings,

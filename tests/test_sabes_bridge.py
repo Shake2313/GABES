@@ -79,8 +79,8 @@ def test_reference_geometry_reproduces_the_gabes_default_diagnostic():
     scheme = fwm.FWMScheme()
     defaults = scheme.defaults()
     reference = scheme.compute(defaults)
-    reference_db = scheme.headless_observables(
-        reference, defaults)["passive_l1_operating_point"]["NF_dB"]
+    reference_view = scheme.headless_observables(reference, defaults)
+    reference_db = reference_view["noise_operating_point"]["NF_dB"]
 
     result = bridge.run(**_reference_overrides())
     for key in ("opd", "tpd", "temp_c", "cell_mm", "pump_mw", "probe_uw"):
@@ -90,8 +90,7 @@ def test_reference_geometry_reproduces_the_gabes_default_diagnostic():
     # pump lands on 600.0008 mW rather than exactly 600. That residual is the
     # only thing between the two runs.
     assert result.gains[0] == pytest.approx(
-        float(np.asarray(reference["G_s"])[
-            bridge._operating_index(reference, defaults)]), rel=1e-5)
+        reference_view["gain_operating_point"]["G_s"], rel=1e-5)
 
 
 def test_native_geometry_differs_only_through_qe_and_waists():

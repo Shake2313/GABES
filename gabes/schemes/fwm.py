@@ -3906,6 +3906,84 @@ def _experimental_noise_selected(readout, raw, delta_mhz):
     return point
 
 
+def seeded_operating_readout(raw, params, *, include_passive=False):
+    """Resolve FWM gain and NF selections without figures or absorption solves."""
+    tpd = params["tpd"]
+    phase_view = params.get("squeezing_view") == SQUEEZING_QUADRATURE_PHASE
+    op = operating_point(raw, tpd, branch=-1)
+    gain_model = params.get("gain_calibration_model", MODEL_LAB)
+    literature_gain = gain_model in (MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
+    experimental_gain = calibrate_experimental_gain(
+        raw, enabled=params.get("experimental_gain_calibration", False),
+        selected_delta_mhz=tpd, model=gain_model)
+    gain_active = experimental_gain["applied"]
+    gain_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
+    displayed_gain = experimental_gain
+    noise_raw = raw
+    if gain_active:
+        # Include the committed point for curve/metric agreement. Only the
+        # lab profile has the measured 1-MHz feature needing a denser grid.
+        if literature_gain:
+            gain_axis = np.unique(np.r_[gain_axis, tpd])
+        else:
+            support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
+                np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
+            gain_axis = np.unique(np.r_[gain_axis, np.linspace(*support, 221), tpd])
+        displayed_gain = evaluate_experimental_gain(
+            raw, gain_axis, enabled=True, model=gain_model)
+        noise_raw = dict(raw, probe_axis_GHz=raw["raman_center_minus_GHz"]+gain_axis*1e-3)
+        omega = np.asarray(raw.get("omega_probe_rad_s", constants.OMEGA_D1))
+        if omega.ndim:
+            noise_raw["omega_probe_rad_s"] = np.interp(
+                noise_raw["probe_axis_GHz"], raw["probe_axis_GHz"], omega)
+    displayed_gs = displayed_gain["G_s"] if gain_active else raw["G_s"]
+    displayed_gc = displayed_gain["G_c"] if gain_active else raw["G_c"]
+    displayed_point = experimental_gain["selected_point"] if gain_active else op
+
+    noise_model = (NOISE_EXPERIMENTAL_JASPERSE if phase_view else
+                   params.get("noise_model", NOISE_PASSIVE_L1))
+    passive_readout = None
+    passive_op = None
+    experimental_noise = None
+    if ("T_canonical_small_signal" in raw
+            and (include_passive or noise_model == NOISE_PASSIVE_L1)):
+        passive_readout = _seeded_passive_l1_readout(raw, params)
+        passive_op = _passive_l1_selected(passive_readout, raw, op["probe_GHz"])
+    noise_point = passive_op
+    if noise_model == NOISE_EXPERIMENTAL_JASPERSE:
+        experimental_noise = experimental_jasperse_readout(
+            noise_raw, params, gains=displayed_gain if gain_active else None)
+        experimental_noise["internal_delta_mhz"] = gain_axis
+        noise_point = _experimental_noise_selected(experimental_noise, raw, tpd)
+
+    gain_point = {
+        "G_s": float(displayed_point["G_s"]),
+        "G_c": float(displayed_point["G_c"]),
+        "two_photon_detuning_mhz": float(tpd),
+        "gain_basis": (experimental_gain.get("gain_quantity", "effective source power gain")
+                       if gain_active else "atomic-medium power gain"),
+        "phase_independent": True,
+    }
+    if phase_view and not gain_axis[0]-1e-9 <= tpd <= gain_axis[-1]+1e-9:
+        gain_point.update(G_s=float("nan"), G_c=float("nan"))
+    return {
+        "atomic_operating_point": op,
+        "gain_operating_point": gain_point,
+        "gain_curve": {
+            "probe_axis_GHz": raw["raman_center_minus_GHz"] + gain_axis * 1e-3
+            if gain_active else raw["probe_axis_GHz"],
+            "internal_delta_mhz": gain_axis, "G_s": displayed_gs, "G_c": displayed_gc,
+        },
+        "experimental_gain_calibration": experimental_gain,
+        "noise_model": noise_model,
+        "noise_operating_point": noise_point,
+        "jasperse_readout": experimental_noise if experimental_noise is not None else passive_readout,
+        "experimental_jasperse_readout": experimental_noise,
+        "passive_l1_readout": passive_readout,
+        "passive_l1_operating_point": passive_op,
+    }
+
+
 def _plot_reference(axis, value, label):
     """Label the physical reference on the plot without adding a data trace."""
     axis.axhline(value, color="#47555a", lw=.8, ls=":")
@@ -4516,7 +4594,6 @@ class FWMScheme(Scheme):
         squeezing_view = params.get("squeezing_view", SQUEEZING_INTENSITY_DIFFERENCE)
         phase_view = squeezing_view == SQUEEZING_QUADRATURE_PHASE
         noise_db = np.asarray(raw["gain_referred_noise_dB"])
-        op = operating_point(raw, tpd, branch=-1)
         measured_reference = _measured_gain_reference_readout(
             raw, enabled=params.get("measured_gain_calibration", False),
             seed_input_assumption=params.get("seed_input_assumption", ""),
@@ -4526,37 +4603,21 @@ class FWMScheme(Scheme):
         chi_gain = gain_model in (MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
         stark_gain = gain_model == MODEL_STARK
         zeeman_gain = gain_model == MODEL_ZEEMAN
-        experimental_gain = calibrate_experimental_gain(
-            raw, enabled=params.get("experimental_gain_calibration", False),
-            selected_delta_mhz=tpd, model=gain_model)
+        selected = seeded_operating_readout(raw, params, include_passive=True)
+        op = selected["atomic_operating_point"]
+        gain_point = selected["gain_operating_point"]
+        experimental_gain = selected["experimental_gain_calibration"]
         gain_active = experimental_gain["applied"]
-        gain_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
-        displayed_gain = experimental_gain
-        noise_raw = raw
-        if gain_active:
-            # Include the committed point for curve/metric agreement. Only the
-            # lab profile has the measured 1-MHz feature needing a denser grid.
-            if literature_gain:
-                gain_axis = np.unique(np.r_[gain_axis, tpd])
-            else:
-                support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
-                    np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
-                gain_axis = np.unique(np.r_[gain_axis, np.linspace(*support, 221), tpd])
-            displayed_gain = evaluate_experimental_gain(
-                raw, gain_axis, enabled=True, model=gain_model)
-            noise_raw = dict(raw, probe_axis_GHz=raw["raman_center_minus_GHz"]+gain_axis*1e-3)
-            omega = np.asarray(raw.get("omega_probe_rad_s", constants.OMEGA_D1))
-            if omega.ndim:
-                noise_raw["omega_probe_rad_s"] = np.interp(
-                    noise_raw["probe_axis_GHz"], raw["probe_axis_GHz"], omega)
-        displayed_gs = displayed_gain["G_s"] if gain_active else raw["G_s"]
-        displayed_gc = displayed_gain["G_c"] if gain_active else raw["G_c"]
+        gain_curve = selected["gain_curve"]
+        gain_axis = gain_curve["internal_delta_mhz"]
+        displayed_gs = gain_curve["G_s"]
+        displayed_gc = gain_curve["G_c"]
         displayed_point = experimental_gain["selected_point"] if gain_active else op
-        noise_model = (NOISE_EXPERIMENTAL_JASPERSE if phase_view else
-                       params.get("noise_model", NOISE_PASSIVE_L1))
-        experimental_noise = None
-        passive_readout = None
-        passive_op = None
+        noise_model = selected["noise_model"]
+        experimental_noise = selected["experimental_jasperse_readout"]
+        passive_readout = selected["passive_l1_readout"]
+        passive_op = selected["passive_l1_operating_point"]
+        noise_point = selected["noise_operating_point"]
         selected_noise_db = op["gain_referred_noise_dB"]
         noise_label = "Squeezing [dB]"
         noise_help = (
@@ -4565,10 +4626,7 @@ class FWMScheme(Scheme):
         noise_delta = "legacy data; physical squeezing unavailable"
         sidebar_readouts = {}
         cell_absorption = None
-        if "T_canonical_small_signal" in raw:
-            passive_readout = _seeded_passive_l1_readout(raw, params)
-            passive_op = _passive_l1_selected(
-                passive_readout, raw, op["probe_GHz"])
+        if passive_readout is not None:
             noise_db = passive_readout["NF_dB"]
             selected_noise_db = passive_op["NF_dB"]
             noise_help = (
@@ -4583,12 +4641,7 @@ class FWMScheme(Scheme):
             cell_absorption = _seeded_absorption_readout(raw, op["probe_GHz"])
             sidebar_readouts = _seeded_sidebar_readouts(
                 raw, params, passive_readout, op["probe_GHz"], cell_absorption)
-        noise_point = passive_op
-        if noise_model == NOISE_EXPERIMENTAL_JASPERSE:
-            experimental_noise = experimental_jasperse_readout(
-                noise_raw, params, gains=displayed_gain if gain_active else None)
-            experimental_noise["internal_delta_mhz"] = gain_axis
-            noise_point = _experimental_noise_selected(experimental_noise, raw, tpd)
+        if experimental_noise is not None:
             noise_db = experimental_noise["NF_dB"]
             selected_noise_db = noise_point["NF_dB"]
             noise_help = (
@@ -4613,17 +4666,6 @@ class FWMScheme(Scheme):
 
         phase_scan = (experimental_quadrature_phase_scan(experimental_noise, gain_axis, tpd)
                       if phase_view else None)
-        gain_point = {
-            "G_s": float(displayed_point["G_s"]),
-            "G_c": float(displayed_point["G_c"]),
-            "two_photon_detuning_mhz": float(tpd),
-            "gain_basis": (experimental_gain.get("gain_quantity", "effective source power gain")
-                           if gain_active else "atomic-medium power gain"),
-            "phase_independent": True,
-        }
-        if phase_view and not gain_axis[0]-1e-9 <= tpd <= gain_axis[-1]+1e-9:
-            gain_point.update(G_s=float("nan"), G_c=float("nan"))
-
         fig = None
         if include_figures and phase_view:
             import matplotlib.pyplot as plt
@@ -4929,7 +4971,7 @@ class FWMScheme(Scheme):
         active_noise = experimental_noise if experimental_noise is not None else passive_readout
         if active_noise is not None:
             seed = active_noise["seed_noise"]
-            axis = noise_raw["probe_axis_GHz"] if experimental_noise is not None else raw["probe_axis_GHz"]
+            axis = gain_curve["probe_axis_GHz"] if experimental_noise is not None else raw["probe_axis_GHz"]
             at_point = lambda value: float(np.interp(op["probe_GHz"], axis, value))
             noise_rows += (
                 f"| Noise model | {noise_model} |\n"

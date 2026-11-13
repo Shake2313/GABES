@@ -33,6 +33,7 @@ from gabes.core import blas_single_thread
 from gabes.schemes import fwm
 
 from sabes import bridge, detection as detection_model, instruments, layout
+from gabes_ui.controls import skey
 from gabes_ui.sabes.components import canvas as canvas_module
 from gabes_ui.sabes.render import build_spec, legend_rows
 from sabes.beamline import (SetupSettings, solve_seed_polarizer_deg,
@@ -48,6 +49,10 @@ SESSION_PREFIX = "_sabes_"
 SETTINGS_VERSION = "sabes-apparatus-20261016-v4"
 
 FIDELITIES = (fwm.FIDELITY_FAST, fwm.FIDELITY_ULTRA)
+FWM_READOUT_KEYS = (
+    "noise_model", "experimental_gain_calibration", "gain_calibration_model",
+    "jasperse_loss_pct", "seed_classical_rin_scaled",
+)
 
 # Matplotlib's font and layout caches are process-global and Streamlit can
 # overlap reruns, so figure construction is serialised the same way the
@@ -668,6 +673,7 @@ def _read_instrument(choice, reading, result, calibration, detection):
             signal,
             result.gain_referred_noise_db if balanced else None,
             total_power_w=total,
+            noise_model=(getattr(result, "noise_model", None) if balanced else None),
             pump_leakage_dbm=(detection.pump_leakage_dbm
                               if balanced else None),
             eom_noise=(readout.eom_noise
@@ -679,7 +685,8 @@ def _scope_reading(signal, result, reading):
     """Return a swept-frequency trace or a synthetic time trace."""
     mode = st.session_state.get(_key("scope_mode"), "Scan")
     if mode == "Scan" and result.raw is not None:
-        axis = np.asarray(result.raw["probe_axis_GHz"])
+        curve = getattr(result, "gain_curve", result.raw)
+        axis = np.asarray(curve["probe_axis_GHz"])
         beam_name = reading.link.beam
         gain_key = {"probe": "G_s", "conjugate": "G_c"}.get(beam_name)
         if gain_key is None:
@@ -695,7 +702,7 @@ def _scope_reading(signal, result, reading):
             wanted = reading.beam.power_at(wanted_offset)
             scale = wanted / operating_gain if operating_gain > 0.0 else 0.0
             background = max(reading.beam.total_power_w - wanted, 0.0)
-            power = np.asarray(result.raw[gain_key]) * scale + background
+            power = np.asarray(curve[gain_key]) * scale + background
         return instruments.Oscilloscope().scan(
             signal, axis, power, x_label="Probe frequency", x_unit="GHz")
     return instruments.Oscilloscope().timeseries(signal)
@@ -708,7 +715,7 @@ def _render_reading(reading):
             "<div class='sabes-synth'>SYNTHESISED — an illustrative trace built "
             "from the declared model inputs. It is not a measured-shape "
             "reproduction or validation evidence.</div>", unsafe_allow_html=True)
-    if reading.note and not reading.synthesised:
+    if reading.note:
         st.caption(reading.note)
 
     st.markdown(_markdown_table(
@@ -1020,6 +1027,19 @@ def _set_browser_title(title):
     )
 
 
+def _fwm_readout_settings():
+    """Carry the FWM readout choices across the separate SABES route."""
+    settings = {}
+    for name in FWM_READOUT_KEYS:
+        key = skey(fwm.FWMScheme.name, name)
+        if key in st.session_state:
+            value = st.session_state[key]
+            # Preserve values when the FWM widgets are absent from this route.
+            st.session_state[key] = value
+            settings[name] = value
+    return settings
+
+
 def render(host=None):
     """Entry point called by `streamlit_app.py`."""
     _set_browser_title("SABES — Specific Atomic Bloch Equation Solver")
@@ -1035,7 +1055,7 @@ def render(host=None):
 
     # ---- Tier A: optics ----
     result = bridge.run(settings, calibration, detection, solve=False,
-                        resolution=fidelity)
+                        resolution=fidelity, **_fwm_readout_settings())
     params = result.params
 
     # ---- Tier B: the solve ----
@@ -1064,13 +1084,11 @@ def render(host=None):
     metrics = [
         {"label": "Noise level [dB]",
          "value": _noise_db_text(result.gain_referred_noise_db),
-         "help": "Calculated NF in dB: 10·log10(NF) at the selected two-photon "
-                 "detuning. Model interpretation is shown by the status badge; "
-                 "this is not a measured noise level."},
+         "help": f"{result.noise_model}: modelled 10·log10(NF) at the selected "
+                 "two-photon detuning. See Detection for assumptions."},
         {"label": "Gain G_s / G_c",
          "value": f"{result.gains[0]:.2f} / {result.gains[1]:.2f}",
-         "help": "Probe (seed) gain G_s / conjugate gain G_c. Both gains use "
-                 "the input seed power as their reference."},
+         "help": result.readout_evidence["gain"]["basis"]},
         {"label": "Detector clearance",
          "value": f"{readout.clearance_db:.1f} dB",
          "help": "Shot noise above the amplifier noise floor. This is detector "
@@ -1088,6 +1106,8 @@ def render(host=None):
         _render_table_tab(result, calibration, host, detection)
 
     with tabs[1]:
+        st.caption("Gain and noise model versus two-photon detuning. "
+                   "The analyser uses RF frequency.")
         observables = _cached_observables(
             raw, tuple(sorted(params.items(), key=lambda kv: kv[0])),
             fwm.FWMScheme().cache_version)
@@ -1137,8 +1157,19 @@ def render(host=None):
             eom_loaded_text += (
                 f" ({eom_shift:+.3g} dB normalized shift; absolute EOM PSD "
                 "is positive)")
+        evidence = result.readout_evidence
+        gain = evidence["gain"]
+        noise = evidence["noise"]
         rows = [
-            ("Model status", validation_level),
+            ("Atomic source status", validation_level),
+            ("Noise model", result.noise_model),
+            ("Noise evidence", noise["evidence_class"].replace("_", " ")),
+            ("Noise status", noise["status"].replace("_", " ").lower()),
+            ("Gain basis", gain["basis"]),
+            ("Gain evidence", gain["evidence_class"].replace("_", " ")),
+            ("Gain calibration", (f"{gain['calibration_model']} · "
+                                  f"{gain['calibration_point']['status']}"
+                                  if gain["calibration_applied"] else "Off")),
             ("Calculated NF [dB]", _noise_db_text(result.gain_referred_noise_db)),
             ("NF (linear)", (f"{result.noise_factor:.6g}"
                              if result.noise_factor is not None else "unavailable")),
@@ -1176,6 +1207,9 @@ def render(host=None):
                  result.gain_referred_noise_db), digits=1)
               if result.gain_referred_noise_db is not None else "unavailable")),
         ]
+        if noise["common_cell_loss_pct"] is not None:
+            rows.append(("Assumed common in-cell loss",
+                         f"{noise['common_cell_loss_pct']:g} %"))
         for arm in readout.arms:
             arm_geometry = next(item for item in geom.arms
                                 if item.name == arm.name)
@@ -1191,6 +1225,7 @@ def render(host=None):
             ]
         st.markdown(_markdown_table(("Quantity", "Value"), rows))
         st.caption(
+            f"{noise['scope']} "
             "NF = Var(N_probe−N_conjugate) / mean(N_probe+N_conjugate). "
             "The algebraic floor 10·log10(1−η) assumes ideal-vacuum completion; "
             "it is not a physical squeezing bound for the current atomic model. "

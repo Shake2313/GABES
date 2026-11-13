@@ -44,6 +44,12 @@ def session_payload(result, detection, calibration, apparatus, profile):
             "NF_dB": result.gain_referred_noise_db,
             "claim_gate": raw.get("claim_gate"),
         },
+        "selected_readout": {
+            "noise_model": result.noise_model,
+            "raw_atomic_gains": result.raw_gains,
+            "physical_squeezing_dB": result.physical_squeezing_db,
+            "evidence": result.readout_evidence,
+        },
         "scope": {
             "display_coordinates": "schematic units; physical x/y/z unknown",
             "distance_plane": "cell output end to D-mirror",

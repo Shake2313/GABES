@@ -145,7 +145,7 @@ class SpectrumAnalyzer:
     technical_corner_hz: float = 0.0
 
     def analyze(self, signal, gain_referred_noise_db=None, *, total_power_w=None,
-                pump_leakage_dbm=None, pump_rin_db_per_hz=None,
+                noise_model=None, pump_leakage_dbm=None, pump_rin_db_per_hz=None,
                 eom_noise=None) -> Reading:
         """Build a detector spectrum from the supplied powers and PSDs.
 
@@ -278,10 +278,13 @@ class SpectrumAnalyzer:
             x_label="RF frequency", x_unit="MHz",
             y_label="Noise power", y_unit="dBm",
         )
-        return Reading(
-            self.name, tuple(quantities), trace, tuple(warnings), SYNTHESISED,
-            note=("MEAN_FIELD_DIAGNOSTIC / PHYSICAL_SQUEEZING_UNAVAILABLE. "
-                  "The RF shape is not measured or modeled."
-                  if gain_referred_noise_db is not None else
-                  "Computed detector noise levels; no twin-beam gain trace "
-                  "applies at this beam."))
+        if gain_referred_noise_db is None:
+            note = "Computed detector noise levels for this beam."
+        elif noise_model is None:
+            note = ("MEAN_FIELD_DIAGNOSTIC / PHYSICAL_SQUEEZING_UNAVAILABLE. "
+                    "The RF shape is not measured or modeled.")
+        else:
+            note = (f"{noise_model} supplies a scalar NF for the synthetic detector-headroom "
+                    "overlay. RF source shape and bandwidth are unavailable.")
+        return Reading(self.name, tuple(quantities), trace, tuple(warnings),
+                       SYNTHESISED, note=note)
