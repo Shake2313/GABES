@@ -11,6 +11,11 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 from . import fwm_measured_gain as measured
+from .fwm_calibration_common import calibration_axis, sample_model_gain
+
+# Historical evaluators import the previous private names directly.
+_axis = calibration_axis
+_sample_model = sample_model_gain
 
 
 MODEL_ID = "fwm_20261013_warp_affine_residual_v1"
@@ -127,46 +132,6 @@ def profile():
         "noise_covariance_calibrated": False,
         "arms": copy.deepcopy(_ARMS),
     }
-
-
-def _axis(raw):
-    branch = raw.get("branch", -1)
-    center_key = "raman_center_plus_GHz" if branch == 1 else "raman_center_minus_GHz"
-    center = raw.get(center_key, raw.get("raman_center_minus_GHz"))
-    if center is None:
-        raise ValueError("calibration requires the Raman scan center")
-    axis = (np.asarray(raw["probe_axis_GHz"], dtype=float)-float(center))*1e3
-    if axis.ndim != 1 or axis.size < 2 or np.any(~np.isfinite(axis)):
-        raise ValueError("calibration requires at least two finite scan points")
-    return axis
-
-
-def _sample_model(axis, gain, positions, *, arm):
-    """Positive interpolation with a finite explicit continuation past the scan.
-
-    Log interpolation avoids negative cubic overshoot. Beyond the computed scan,
-    a positive exponential continuation approaches the passive asymptote over
-    one fifth of the computed span. That scope is reported separately from the
-    much narrower experimental calibration interval.
-    """
-    gain = np.asarray(gain, dtype=float)
-    positions = np.asarray(positions, dtype=float)
-    if gain.shape != axis.shape or np.any(~np.isfinite(gain)) or np.any(gain < 0):
-        raise ValueError("calibration gain arrays must be finite, nonnegative and match scan points")
-    order = np.argsort(axis)
-    x, g = axis[order], gain[order]
-    if np.any(np.diff(x) <= 0):
-        raise ValueError("calibration scan points must be distinct")
-    outside = (positions < x[0]) | (positions > x[-1])
-    if not np.any(g):
-        return np.zeros_like(positions), outside
-    bounded = np.clip(positions, x[0], x[-1])
-    sampled = np.exp(PchipInterpolator(x, np.log(np.maximum(g, 1e-30)), extrapolate=False)(bounded))
-    asymptote = 1.0 if arm == "probe" else 0.0
-    length = max(float((x[-1]-x[0])/5.0), 1.0)
-    distance = np.abs(positions-bounded)
-    sampled = np.where(outside, asymptote+(sampled-asymptote)*np.exp(-distance/length), sampled)
-    return sampled, outside
 
 
 def _context_changes(raw):

@@ -15,8 +15,15 @@ import numpy as np
 
 from . import constants, doppler, fwm_chi_gain as propagation, fwm_zeeman_response as atom
 from . import hyperfine, observables
-from .fwm_experiment_gain import _axis, _sample_model
-from .fwm_literature_gain import _domain, features
+from .fwm_calibration_common import (
+    cached_profile_loader, calibration_axis, literature_domain, literature_features,
+    sample_model_gain,
+)
+
+_axis = calibration_axis
+_sample_model = sample_model_gain
+_domain = literature_domain
+features = literature_features
 
 MODEL_ID = "fwm_literature_zeeman_response_v1"
 PROFILE_PATH = Path(__file__).with_name("data") / "fwm_zeeman_gain_v1.json"
@@ -25,9 +32,7 @@ PHYSICAL_KEYS = ("D_GHz", "temperature_K", "input_pump_power_W", "input_seed_pow
     "raman_center_minus_GHz", "raman_center_plus_GHz")
 
 
-@lru_cache(maxsize=1)
-def _record():
-    return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+_record = cached_profile_loader(lambda: PROFILE_PATH)
 
 
 def profile():

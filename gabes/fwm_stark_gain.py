@@ -15,16 +15,21 @@ from pathlib import Path
 import numpy as np
 
 from . import fwm_chi_gain as chi
-from .fwm_experiment_gain import _axis, _sample_model
-from .fwm_literature_gain import _domain, features
+from .fwm_calibration_common import (
+    cached_profile_loader, calibration_axis, literature_domain, literature_features,
+    sample_model_gain,
+)
+
+_axis = calibration_axis
+_sample_model = sample_model_gain
+_domain = literature_domain
+features = literature_features
 
 MODEL_ID = "fwm_literature_stark_response_v1"
 PROFILE_PATH = Path(__file__).with_name("data") / "fwm_stark_gain_v1.json"
 
 
-@lru_cache(maxsize=1)
-def _record():
-    return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+_record = cached_profile_loader(lambda: PROFILE_PATH)
 
 
 def profile():

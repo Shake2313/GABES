@@ -6,18 +6,22 @@ solver or identify a microscopic susceptibility/noise covariance.
 from __future__ import annotations
 
 import copy
-import json
-from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
 
-from . import hyperfine
-from .fwm_experiment_gain import _axis, _sample_model
+from .fwm_calibration_common import (
+    FEATURE_LIMIT, cached_profile_loader, calibration_axis, literature_domain, literature_features,
+    sample_model_gain,
+)
+
+_axis = calibration_axis
+_sample_model = sample_model_gain
+_domain = literature_domain
+features = literature_features
 
 MODEL_ID = "fwm_literature_coupled_generation_v1"
 PROFILE_PATH = Path(__file__).with_name("data") / "fwm_literature_gain_v1.json"
-FEATURE_LIMIT = 3.0
 LOG_SCALE_LIMIT = float(np.log(20.0))
 PARAMETER_KEYS = {
     "opd": "D_GHz", "temp_c": "temperature_K", "pump_mw": "input_pump_power_W",
@@ -27,9 +31,7 @@ PARAMETER_KEYS = {
 }
 
 
-@lru_cache(maxsize=1)
-def _frozen_profile():
-    return json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+_frozen_profile = cached_profile_loader(lambda: PROFILE_PATH)
 
 
 def profile():
@@ -42,17 +44,6 @@ def profile():
     result["noise_covariance_calibrated"] = False
     result["susceptibility_identified"] = False
     return result
-
-
-def features(temperature_K, pump_power_W, pump_waist_m):
-    """Fixed dimensionless physics coordinates, never test-set standardization."""
-    t, power, waist = map(float, (temperature_K, pump_power_W, pump_waist_m))
-    if not np.isfinite([t, power, waist]).all() or t <= 0 or power < 0 or waist <= 0:
-        raise ValueError("literature gain context must have finite positive T/waist and nonnegative pump")
-    density_ratio = hyperfine.number_density(t) / hyperfine.number_density(386.15)
-    intensity_ratio = (max(power, 1e-30) / waist**2) / (0.3 / (530e-6)**2)
-    return np.array([1.0, np.clip(np.log(density_ratio), -FEATURE_LIMIT, FEATURE_LIMIT),
-                     np.clip(np.log(intensity_ratio), -FEATURE_LIMIT, FEATURE_LIMIT)])
 
 
 def coupled_gains(probe_gain, conjugate_gain, scale, *, pump_power_W=None, seed_power_W=None):
@@ -103,20 +94,6 @@ def _context(raw):
     if any(key not in raw for key in needed):
         raise ValueError("literature gain calibration requires temperature, pump power and waist metadata")
     return features(*(raw[key] for key in needed))
-
-
-def _domain(raw, delta, record):
-    outside = []
-    for key, limits in record.get("raw_training_bounds", {}).items():
-        value = raw.get(key)
-        if value is None or not np.isfinite(float(value)) or not limits[0]-1e-12 <= float(value) <= limits[1]+1e-12:
-            outside.append(key)
-    bounds = record.get("training_delta_bounds_mhz", [-16.0, 26.0])
-    within = (delta >= bounds[0]-1e-9) & (delta <= bounds[1]+1e-9) & (not outside)
-    if int(raw.get("branch", -1)) != -1:
-        within = np.zeros(np.shape(delta), dtype=bool)
-        outside.append("branch")
-    return within, outside
 
 
 def evaluate(raw, delta_mhz, *, enabled=True):
