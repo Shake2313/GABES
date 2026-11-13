@@ -1457,7 +1457,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "in_progress",
       "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "user_decision_2026_11_06": "User decision 2026-11-06: judge the Rydberg linewidth, AT and sensitivity readouts with the SAS sub-Doppler rule: at least one feature FWHM between a half-height edge and the scan edge, at least six sample intervals per FWHM, and an optimum that moves by at most 5 % over the final two deterministic refinements. Low transmission or contrast is judged only from a calibrated detector-noise SNR; without one the status is 'not assessed'. ⟦AI⟧ Reuse lineshape.MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM and MIN_SUBDOPPLER_SAMPLES_PER_FWHM; implement after the in-flight gabes/schemes/rydberg.py work.",
       "user_decision": "User decision 2026-11-04: keep the numeric linewidth and sensitivity readouts and attach a validity status (for example unresolved, scan-edge-limited, low contrast, near-zero transmitted power), as the SAS sub-Doppler readout does; do not withhold values on an arbitrary transmission cutoff.",
@@ -1493,7 +1493,8 @@
           "previous_text": "Low-transmission, low-contrast, edge-limited, or unresolved results do not expose numeric linewidth/sensitivity as hero metrics.",
           "reason": "⟦AI⟧ Low transmission, static AT resolution and finite-IF sensitivity have separate validity criteria."
         }
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ 130436f records observable-specific edge, sampling and deterministic refinement status, with the balanced reference fixed at the reported bare resonance. Across 76 cases all 2960 atomic leaves were bit-identical. Default static AT split 3.163500 to 3.169758 MHz; selected detuning -2.247750 to -2.255456 MHz and ASD 13.241290 to 13.172349 nV/cm/sqrt(Hz). EIT width 1.603494 MHz unchanged. Calibrated detector SNR remains NOT_ASSESSED and sparse Doppler optimization remains provisional; no arbitrary low-transmission cut. 96 focused tests passed."
     },
     {
       "id": "rydberg-experimental-validation-dataset",
