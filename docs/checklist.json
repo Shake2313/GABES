@@ -5849,6 +5849,30 @@
         "⟦AI⟧ Preserve frozen calibration records and identify archive receipts to re-issue against the next public engine pin."
       ],
       "implementation_2026_11_13": "⟦AI⟧ e76228d shares axis, sampling, feature/domain and cached JSON loader implementation. Compatibility aliases, model-local patches and cache clearing remain available. Across all five calibration models and defaults/extrapolation, 20924 raw and display leaves were byte-identical; six runtime fields excluded. 205 focused passed in isolation, including the FWM compatibility baseline. For fresh archive evidence at the next public pin, record the new shared source dependency alongside the model modules. Preserve the sealed receipts."
+    },
+    {
+      "id": "fwm-scheme-package-consolidation",
+      "area": "gabes/schemes/fwm/",
+      "title": "⟦AI⟧ Split FWM scheme into modules",
+      "origin": "ai_execution_of_2026_11_13_handoff_consolidation_12",
+      "priority": "P2",
+      "effort": "large",
+      "status": "ready",
+      "acceptance_criteria": [
+        "Preserve public and historical private imports and all supported outputs, including calibration and SABES.",
+        "Keep live archive audit source provenance usable at the next published pin.",
+        "Run the full suite at the final detached main revision."
+      ]
+    },
+    {
+      "id": "linear-hyperfine-absorption-consolidation",
+      "area": "gabes/linear_hyperfine.py + gabes/schemes/absorption.py + gabes/schemes/fwm/",
+      "title": "⟦AI⟧ Move linear hyperfine profiles into shared engine code",
+      "origin": "ai_execution_of_2026_11_13_handoff_wave2",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "done",
+      "implementation_2026_11_13": "⟦AI⟧ c7c86c3 shares the code location while retaining finite-window OBE, untruncated Faddeeva and resolved SAS velocity sums. No backend was replaced. Survey peak-normalized OBE/Faddeeva difference 2.55e-4 to 3.83e-4. Focused 158 passed; merged pressure/OD/SAS/FWM scope 115 passed."
     }
   ],
   "_daily_report_sync_history": [
