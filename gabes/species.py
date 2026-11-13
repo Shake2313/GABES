@@ -334,17 +334,37 @@ def line_integrated_alpha(iso, line, N):
     return out
 
 
-def pump_rabi_from_power(power_mw, waist_mm, gamma):
+# Effective far-detuned pi-polarized pump I_sat, Steck D-line data,
+# revision 2.3.4 (8 August 2025), Table 7 for each species.
+# https://steck.us/alkalidata/rubidium85numbers.pdf
+# https://steck.us/alkalidata/rubidium87numbers.pdf
+# https://steck.us/alkalidata/cesiumnumbers.pdf
+_PUMP_I_SAT_MW_CM2 = {
+    ("Rb85", "D1"): 4.4876, ("Rb85", "D2"): 2.50399,
+    ("Rb87", "D1"): 4.4876, ("Rb87", "D2"): 2.50399,
+    ("Cs133", "D1"): 2.5055, ("Cs133", "D2"): 1.6573,
+}
+
+
+def pump_saturation_intensity(iso, line):
+    """Steck effective far-detuned pi-polarized I_sat [W/m^2]."""
+    try:
+        return 10.0 * _PUMP_I_SAT_MW_CM2[iso.name, line]
+    except KeyError as error:
+        raise ValueError(f"Pump saturation intensity unsupported for {iso.name} {line}") from error
+
+
+def pump_rabi_from_power(power_mw, waist_mm, gamma, *, iso=RB85, line="D1"):
     """
     Pump Rabi Ω [rad/s] from beam power and 1/e² waist: I = 2P/(πw²),
-    Ω = Γ·√(I/2I_sat) with I_sat = 4.484 mW/cm² (the reference saturation
-    intensity; documented in the scheme About). Power 0 → Ω 0 → linear OD limit.
+    Ω = Γ·√(I/2I_sat) with the line-specific pump saturation intensity.
+    Zero pump power gives zero Rabi frequency and the linear OD limit.
     The conversion itself is `beam.peak_intensity` and `beam.two_level_rabi`.
     """
     if power_mw <= 0:
         return 0.0
     intensity = beam.peak_intensity(power_mw * 1e-3, waist_mm * 1e-3)
-    return beam.two_level_rabi(intensity, gamma, constants.I_SAT)
+    return beam.two_level_rabi(intensity, gamma, pump_saturation_intensity(iso, line))
 
 
 # Per-(species, line) recommended slider values for the "Default" button —

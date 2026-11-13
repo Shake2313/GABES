@@ -82,5 +82,5 @@ def test_callers_use_the_shared_conversion():
     intensity = beam.peak_intensity(P_mw * 1e-3, w_mm * 1e-3)
     assert probe_saturation.gaussian_peak_intensity(P_mw, w_mm) == intensity
     assert species.pump_rabi_from_power(P_mw, w_mm, constants.GAMMA) == beam.two_level_rabi(
-        intensity, constants.GAMMA, constants.I_SAT)
+        intensity, constants.GAMMA, 44.876)
     assert species.pump_rabi_from_power(0.0, 1.0, constants.GAMMA) == 0.0

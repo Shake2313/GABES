@@ -389,8 +389,10 @@ class SASScheme(Scheme):
             "power broadening, longitudinal depletion, and Gaussian beam averaging. "
             "The Finite-probe model table reports the current reference scope, "
             "pump-probe limitation, passivity correction, and beam-geometry limits.\n\n"
-            "The **pump power** maps to its existing Rabi scale via "
-            "I = 2P/(πw²), Ω = Γ·√(I/2I_sat), using the Advanced pump waist.\n\n"
+            "The **pump power** maps to the Rabi scale via I = 2P/(πw²) and "
+            "Ω = Γ·√(I/2I_sat), using the Advanced pump waist and Steck's "
+            "effective far-detuned π-polarized I_sat for the isotope and line "
+            "([D-line tables](https://steck.us/alkalidata/)).\n\n"
             "The Advanced **Paraffin-coated cell** switch retains the two ground-"
             "hyperfine populations between beam passages while rethermalizing velocity. "
             "It uses the existing transit rate for beam exchange and a fixed reference "
@@ -483,7 +485,7 @@ class SASScheme(Scheme):
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
             N = vapor_cell.cold_spot_limited_density(
                 species.number_density(iso, T_density), T_density, T_doppler) * weight
-            Op = species.pump_rabi_from_power(power, waist, man.gamma)
+            Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
             gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
             saturation_intensity = (
                 probe_saturation.closed_two_level_saturation_intensity(
@@ -601,6 +603,9 @@ class SASScheme(Scheme):
                     rb_composition=composition, rb85_fraction=rb85_fraction,
                     isotope_fractions={iso.name: float(weight)
                                        for iso, weight in comps},
+                    pump_saturation_intensity_w_m2={
+                        iso.name: species.pump_saturation_intensity(iso, line)
+                        for iso, _ in comps},
                     frequency_reference=iso_ref.name,
                     composition_reference_matched=composition_matched,
                     density_temp_c=T_density - 273.15,
@@ -816,6 +821,8 @@ class SASScheme(Scheme):
                     density_temp_c=T_density - 273.15,
                     doppler_temp_c=T_doppler - 273.15,
                     doppler_temp_tied=tied,
+                    pump_saturation_intensity_w_m2={
+                        "Rb85": species.pump_saturation_intensity(species.RB85, "D1")},
                     gamma_eff=gamma_eff, offsets=offsets, two=(n_exc == 2))
 
     # =================================================================
