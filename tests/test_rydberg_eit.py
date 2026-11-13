@@ -642,7 +642,7 @@ def test_finite_if_vector_noise_matches_scalar_detector(ratio, corr):
                          sensitivity.total_field_asd_v_m_per_sqrt_hz])
     actual = np.column_stack([
         result[f"{kind}_field_asd_v_m_per_sqrt_hz"] for kind in ("psn", "technical", "total")])
-    np.testing.assert_allclose(actual, expected, rtol=5e-15)
+    np.testing.assert_array_equal(actual, expected)
 
 
 def test_separated_temperature_uses_effective_motion_and_cold_spot_pressure():

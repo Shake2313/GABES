@@ -1272,7 +1272,8 @@ class RydbergEITScheme(Scheme):
                 noise, float(abs(current_phasor)))
         current_phasors = electrometry.current_responsivity_from_atomic_phasor(
             transmission_phasor_per_rabi, current_scale, rf_coupling)
-        responsivity = np.abs(current_phasors)
+        # Match scalar complex abs so refinement diagnostics also retain precision.
+        responsivity = np.hypot(current_phasors.real, current_phasors.imag)
         valid = np.isfinite(responsivity) & (responsivity > 0.0)
         if not valid.any():
             return None
