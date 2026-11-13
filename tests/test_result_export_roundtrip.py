@@ -85,7 +85,6 @@ def test_lazy_extra_view_export_runs_only_when_requested(monkeypatch):
     monkeypatch.setattr(plotcard.st, "pills", lambda *_args, **_kwargs: "Test scan")
     app = AppTest.from_string("""
         from gabes.schemes import get
-from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL, ODScheme
         from gabes_ui.plotcard import render_more
         import streamlit as st
         scheme = get("lambda")
