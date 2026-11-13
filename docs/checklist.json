@@ -5819,7 +5819,8 @@
       "origin": "ai_found_during_s5_step3",
       "priority": "P3",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
+      "completed_at": "2026-11-13",
       "user_decision_2026_11_13": "User decision 2026-11-13: copy the literature table into main at references/fwm_experiments/ and point the scanner there (option 1). ⟦AI⟧ Byte copy of GABES-archive archive/fwm_squeezing_paper_parameters.csv with its source commit and SHA-256 recorded; content corrections belong to fwm-reference-parameter-provenance.",
       "adoption_status": "user_decided_2026_11_13",
       "problem": "⟦AI⟧ sec_paper_db가 REPO_ROOT/archive/fwm_squeezing_paper_parameters.csv를 읽는데, 분리 뒤 이 파일은 GABES-archive의 archive/에만 있다. main에서 스캐너를 실행하면 첫 절 paper_db에서 FileNotFoundError로 멈춘다. S5 3단계 검증은 아카이브 사본을 임시 트리에 넣고 실행했다. 실행 경로 문제이며 계산 값과는 무관하다.",
@@ -5861,7 +5862,8 @@
       "accepted_or_retained": 61,
       "implemented_current_pass": 5,
       "already_fixed": 11,
-      "rejected": 8
+      "rejected": 8,
+      "implementation_2026_11_13": "⟦AI⟧ Implementation 94f6875. Byte copy from GABES-archive commit 387549130d5d2926759c667826a6c650a5b0fe95, 13,536 bytes, SHA-256 028bd42e3d04f9811594312a24abe1fdeac67562f4a2e3f378f4a6a1731315b1. The scanner and literature DB builder resolve the tracked copy. The quick scanner completed all nine sections in 12.5 s and the paper DB section reproduced the historical-path result. Focused source and size-guard tests: 2 passed."
     },
     "priority_policy": "_priority_policy",
     "report": "docs/daily_report/reconciliation_2026-10-19/README.md",
