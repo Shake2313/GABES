@@ -5860,13 +5860,13 @@
       "origin": "ai_execution_of_2026_11_13_handoff_consolidation_12",
       "priority": "P2",
       "effort": "large",
-      "status": "in_progress",
+      "status": "done",
       "acceptance_criteria": [
         "Preserve public and historical private imports and all supported outputs, including calibration and SABES.",
         "Keep live archive audit source provenance usable at the next published pin.",
         "Run the full suite at the final detached main revision."
       ],
-      "implementation_2026_11_13": "⟦AI⟧ 4838f32 splits seeded, biphoton, phase, readout, references and scheme code. Historical imports and runtime hooks preserved. 53631 typed raw/display leaves across defaults, endpoints, calibration and noise choices, extras and SABES are byte-identical. Archive 2b1a872 fingerprints the package source closure. Final main suite verification is running."
+      "implementation_2026_11_13": "⟦AI⟧ 4838f32 splits seeded, biphoton, phase, readout, references and scheme code. Historical imports and runtime hooks preserved. 53631 typed raw/display leaves across defaults, endpoints, calibration and noise choices, extras and SABES are byte-identical. Archive 2b1a872 fingerprints the package source closure. Frozen 890f07f full suite: 2442 passed, one optional local AutoOD skip, zero failures. FWM and SABES opened in local Streamlit. Later provenance, Guide and certification-label follow-ups were checked separately and a final combined frozen run was scheduled."
     },
     {
       "id": "linear-hyperfine-absorption-consolidation",
