@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from .. import collisions, magneto_multilevel, species
+from .. import buffer_relaxation, collisions, magneto_multilevel, species
 from ..magneto_noise import magnetic_sensitivity, shot_noise_reference
 from ..plot_style import apply_gabes_plot_style
 from ..report import derived_table
@@ -160,7 +160,7 @@ class UnifiedMagnetoScheme(Scheme):
     caption = ("Rb D1/D2 Hanle transmission and nonlinear magneto-optical rotation, "
                "using a shared multihyperfine Budker-based model for magnetic-field "
                "and optical-detuning scans.")
-    cache_version = "budker-unified-v5-ne-optical-reference"
+    cache_version = "budker-unified-v6-cylinder-relaxation"
     defaults_version = "budker-unified-v2-axis-readout"
     supports_headless_observables = True
     model_comparison_parameter = "qwp_deg"
@@ -185,6 +185,7 @@ class UnifiedMagnetoScheme(Scheme):
         field = {"scan_axis": FIELD_SCAN}
         optical = {"scan_axis": OPTICAL_SCAN}
         paraffin = {"cell_type": PARAFFIN}
+        cylinder = {"cell_type": BUFFER, "buffer_ground_model": buffer_relaxation.QUENCHING_CYLINDER}
         return [
             ParamSpec("scan_axis", "Scan axis", "Readout", FIELD_SCAN,
                       choices=(FIELD_SCAN, OPTICAL_SCAN), control="segmented",
@@ -208,8 +209,26 @@ class UnifiedMagnetoScheme(Scheme):
                       help="Opt in to measured line shift and elastic optical broadening."),
             ParamSpec("ne_pressure_torr", "Ne buffer pressure", "Cell & beams",
                       0.0, 0.0, 200.0, 0.1, "Torr", advanced=True,
-                      visible_if={"cell_type": BUFFER, "use_ne_optical_reference": True},
-                      help="Ne partial pressure at operating temperature."),
+                      visible_if={"cell_type": BUFFER},
+                      help="Ne partial pressure at operating temperature. Used by the optical "
+                           "pressure reference and quenching-cylinder model."),
+            ParamSpec("buffer_ground_model", "Buffer ground relaxation model", "Atomic",
+                      buffer_relaxation.MANUAL_GROUND_RATE,
+                      choices=(buffer_relaxation.MANUAL_GROUND_RATE,
+                               buffer_relaxation.QUENCHING_CYLINDER),
+                      advanced=True, visible_if={"cell_type": BUFFER},
+                      help="The cylinder reference uses its lowest wall-diffusion mode. "
+                           "Select Manual rate to use an independently measured reset rate."),
+            ParamSpec("buffer_radius_mm", "Cylinder inner radius", "Cell & beams",
+                      0.0, 0.0, 100.0, 0.1, "mm", advanced=True, visible_if=cylinder,
+                      help="Enter the measured inner radius. Zero means unspecified."),
+            ParamSpec("buffer_beam_radius_mm", "Atomic beam radius (1/e²)", "Cell & beams",
+                      0.0, 0.0, 50.0, 0.1, "mm", advanced=True, visible_if=cylinder,
+                      help="Centered beam radius for the diffusion validity check. Zero means unspecified."),
+            ParamSpec("buffer_wall", "Cylinder wall", "Cell & beams",
+                      "Unspecified", choices=("Unspecified", "Fully quenching"),
+                      advanced=True, visible_if=cylinder,
+                      help="Fully quenching assumes zero spin polarization at the wall."),
             ParamSpec("intensity_mw_cm2", "Beam intensity", "Fields", 1., 0.01, 20., .01, "mW/cm²"),
             ParamSpec("qwp_deg", "QWP angle", "Fields", 45. if self.mode == "eia" else 0.,
                       0., 45., .5, "°", endpoints=("linear", "circular"),
@@ -295,6 +314,13 @@ class UnifiedMagnetoScheme(Scheme):
         return magneto_comparison(self, params, resolve_raw=resolve_raw,
                                   current_raw=current_raw, current_view=current_view)
 
+    def solve_param_keys(self, params):
+        keys = super().solve_param_keys(params)
+        if (params.get("cell_type") == BUFFER
+                and params.get("buffer_ground_model") == buffer_relaxation.QUENCHING_CYLINDER):
+            return keys + ("cell_mm",)
+        return keys
+
     def compute(self, params):
         p = dict(self.defaults(), **params)
         axis = p["scan_axis"]
@@ -340,13 +366,26 @@ class UnifiedMagnetoScheme(Scheme):
             b_x_ut=transverse*math.cos(phi), b_y_ut=transverse*math.sin(phi),
             magnetic_derivative=True,
         )
-        collision_report = {}
+        reference_reports = {}
         if p["cell_type"] == BUFFER and p["use_ne_optical_reference"]:
             effects = collisions.pressure_effects(
                 p["isotope"], p["line"], p["ne_pressure_torr"], p["temp_c"] + 273.15)
-            collision_report["optical_collisions"] = effects.readout()
+            reference_reports["optical_collisions"] = effects.readout()
             conditions.update(elastic_hwhm=effects.optical_dephasing_rad_s,
-                              optical_shift_mhz=collision_report["optical_collisions"]["shift_mhz"])
+                              optical_shift_mhz=reference_reports["optical_collisions"]["shift_mhz"])
+        if p["cell_type"] == BUFFER and p["buffer_ground_model"] == buffer_relaxation.QUENCHING_CYLINDER:
+            wall = "quenching" if p["buffer_wall"] == "Fully quenching" else "unspecified"
+            budget = buffer_relaxation.cylinder_budget(
+                p["isotope"], "Ne", float(p["ne_pressure_torr"]), p["temp_c"] + 273.15,
+                float(p["buffer_beam_radius_mm"]) * 1e-3, float(p["buffer_radius_mm"]) * 1e-3,
+                float(p["cell_mm"]) * 1e-3, wall=wall)
+            reference_reports["buffer_relaxation"] = budget
+            if "total_s_inverse" in budget:
+                conditions["ground_relaxation_hz"] = budget["total_s_inverse"]
+                budget["applied_rate_source"] = "calculated lowest mode and spin-destruction proxy"
+            else:
+                budget["applied_rate_source"] = "configured manual reset rate"
+            budget["applied_rate_s_inverse"] = conditions["ground_relaxation_hz"]
         backend = dict(magneto_multilevel.multilevel_response(delta, b_ut=fields, **conditions))
         backend.setdefault("cell_length_m", RESPONSE_LENGTH_M)
         expected = (fields.size, delta.size)
@@ -360,7 +399,7 @@ class UnifiedMagnetoScheme(Scheme):
                     response_reference=dict(density_m3=RESPONSE_DENSITY_M3,
                                             cell_length_m=RESPONSE_LENGTH_M),
                     operating_field_index=center, linearity=linearity, backend=backend,
-                    **collision_report)
+                    **reference_reports)
 
     def observables(self, raw, params, include_figures=True):
         p = dict(self.defaults(), **params)
@@ -409,8 +448,13 @@ class UnifiedMagnetoScheme(Scheme):
         cell_scope = ("coated-cell common dark reservoir" if raw["cell_type"] == PARAFFIN else
                       "effective single-region buffer/transit reset; pressure broadening and diffusion omitted")
         collision_report = raw.get("optical_collisions")
+        relaxation_report = raw.get("buffer_relaxation")
         if collision_report is not None:
             cell_scope = "Single-region buffer cell with Ne optical reference"
+        if relaxation_report is not None:
+            cell_scope = "Quenching cylinder reference: " + relaxation_report["status"]
+            if collision_report is not None:
+                cell_scope += ", with Ne optical reference"
         reference = atomic["detuning_reference"]
         noise = shot_noise_reference(T, reference_transmission=float(.5*(T[0]+T[-1])),
             frequency_hz=settings["frequency_hz"], intensity_mw_cm2=settings["intensity_mw_cm2"],
@@ -445,6 +489,8 @@ class UnifiedMagnetoScheme(Scheme):
         ))
         if collision_report is not None:
             readout["optical_collisions"] = collision_report
+        if relaxation_report is not None:
+            readout["buffer_relaxation"] = relaxation_report
         selected_asd = float(asd[chosen]) if chosen is not None and available[chosen] else None
         signal_value = theta[op]*1e3 if rotation_view else T[op]
         signal_metric = dict(
@@ -500,6 +546,24 @@ class UnifiedMagnetoScheme(Scheme):
                 ("Added homogeneous FWHM", f"{collision_report['fwhm_mhz']:.3f} MHz"),
                 *(("Reference scope", warning) for warning in collision_report["warnings"]),
             ])
+        if relaxation_report is not None:
+            rows.extend([
+                ("Buffer ground relaxation", relaxation_report["status"]),
+                ("Reset rate source", relaxation_report["applied_rate_source"]),
+                ("Applied reset rate", f"{relaxation_report['applied_rate_s_inverse']:.3g} s⁻¹"),
+            ])
+            if "total_s_inverse" in relaxation_report:
+                wall_rate = relaxation_report["wall_relaxation"]["rate_s_inverse"]
+                spin_rate = relaxation_report["spin_destruction"]["rate_s_inverse"]
+                uncertainty = relaxation_report["relative_uncertainty"]
+                rows.extend([
+                    ("Diffusion to walls", f"{wall_rate:.3g} s⁻¹"),
+                    ("Spin-destruction proxy", f"{spin_rate:.3g} s⁻¹"),
+                    ("Propagated coefficient uncertainty", f"{uncertainty:.1%}"),
+                    *(("Reference scope", warning) for warning in relaxation_report["warnings"]),
+                ])
+            else:
+                rows.append(("Geometry calibration", relaxation_report["reason"]))
         notes = ("Both scan axes use the same multihyperfine Hamiltonian, optical pumping and cell dynamics. "
             "The frequency reference selects a ground-component centroid, not a truncated transition. "
             "Sensitivity is photon-noise ASD divided by the local analytic magnetic responsivity. "
