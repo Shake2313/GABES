@@ -290,6 +290,8 @@ class SinglePairMagnetoReference(Scheme):
                 "regime", "Regime", "Regime", options[0],
                 choices=tuple(options), control="segmented",
                 applies_defaults=True, recompute=False,
+                choice_labels={option: option.replace("Buffer LCA", "Buffer crossover")
+                               for option in options if option.endswith("Buffer LCA")},
                 help="Pick a ready-made magneto-optics regime; selecting one loads "
                      "its full parameter set (including the Signal readout). Same "
                      "in-panel regime selector the other schemes use."))
@@ -549,7 +551,13 @@ class SinglePairMagnetoReference(Scheme):
             "light/dark OBE exchange model so wall-preserved ground coherence can "
             "create a narrow Ramsey feature on a broad transit pedestal. The "
             "light-region exit rate sets exchange; extra in-beam pure dephasing "
-            "is independent and defaults to zero (assumed).\n\n"
+            "is independent and defaults to zero (assumed). The linear 87Rb D1 "
+            "F=2 → F'=1 paraffin preset yields a transparency feature under the "
+            "exact Maxwell average, consistent in sign with Lee and Moon (2013). "
+            "Its intensity, residual field and effective rates are model settings "
+            "for this qualitative comparison. The former Buffer LCA preset "
+            "displays as Buffer crossover because its central contrast is below "
+            "the feature classification threshold.\n\n"
             "**References**\n"
             "- D. Budker et al., sensitive magnetometry based on nonlinear "
             "magneto-optical rotation, *Phys. Rev. A* **62**, 043403 (2000), "

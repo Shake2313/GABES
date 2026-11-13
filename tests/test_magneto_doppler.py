@@ -64,6 +64,32 @@ def test_exact_average_matches_a_converged_velocity_grid(name):
         assert _relative(exact[key], grid[key]) <= 1e-5, key
 
 
+@pytest.mark.parametrize(("regime", "feature"), [
+    ("EIT dip", "EIT-like dip"),
+    ("EIA peak", "EIA/MIA-like peak"),
+    ("Buffer Hanle", "EIT-like dip"),
+    ("Buffer LCA", "crossover"),
+    ("NMOR", "EIT-like dip"),
+])
+def test_preset_feature_is_recovered_by_exact_maxwell_average(regime, feature):
+    scheme = SinglePairMagnetoReference()
+    params = _params(regime)
+    raw = scheme.compute(params)
+    readout = scheme.headless_observables(raw, params)["magneto_readout"]
+
+    assert raw["doppler_method"] == magneto.DOPPLER_EXACT
+    assert raw["doppler_fallback_rows"] == 0
+    assert readout["feature"] == feature
+    if regime == "EIT dip":
+        assert params["qwp_deg"] == 0
+        assert readout["feature_amplitude_per_m"] < -0.2 * readout["background_absorption_per_m"]
+    elif regime == "Buffer LCA":
+        spec = next(spec for spec in scheme.param_schema() if spec.name == "regime")
+        stored_key = next(key for key in spec.choices if key.endswith(regime))
+        assert spec.choice_labels[stored_key].endswith("Buffer crossover")
+        assert stored_key in scheme.recommended_defaults(scheme.defaults())
+
+
 def test_doppler_off_never_builds_a_pole_system():
     params = _params("EIT dip", scan_points=5, doppler="off")
     with patch.object(pole_doppler, "ShiftInvertSystem",
