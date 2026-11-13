@@ -135,3 +135,38 @@ def test_elastic_reference_preserves_full_obe_nonlinear_pumping():
     )["rotation_rad"][0, 0]
     assert abs(full - background) > 1e-13
     assert effective == pytest.approx(full - background, rel=.02)
+
+
+def test_elastic_excited_population_bound_controls_weak_drive_gate():
+    atom = build_multilevel_atom("Rb87", "D1")
+    laser_mhz = min(atom.excited_energy_mhz) - atom.ground_energy_mhz[-1]
+    detuning = laser_mhz - component_centroid_mhz(atom, 2)
+    intensity = 10.0
+    elastic_hwhm = 50.0 * species.MHZ
+    coherence_hwhm = atom.gamma / 2 + elastic_hwhm
+    field = np.sqrt(2 * intensity * 10 / (constants.EPS_0 * constants.C_LIGHT))
+    coupling = -np.sqrt(atom.dipole_sq) * field / constants.HBAR / (2 * np.sqrt(2))
+    drive = coupling * (atom.dipoles[-1].T + atom.dipoles[1].T)
+    expected = []
+    for ground, energy in zip(atom.ground_slices, atom.ground_energy_mhz):
+        detuning_rad_s = (atom.excited_energy_mhz - energy - laser_mhz) * species.MHZ
+        optical_coherence = drive[:, ground] / (coherence_hwhm + 1j * detuning_rad_s[:, None])
+        # The stationary excited trace follows the imaginary optical drive
+        # source balanced by natural population decay, not coherence decay.
+        source = optical_coherence.conj().T @ drive[:, ground]
+        source += source.conj().T.copy()
+        expected.append(np.linalg.eigvalsh(source / atom.gamma).max())
+    expected_bound = max(expected)
+    original_unscaled_bound = expected_bound * atom.gamma / (2 * coherence_hwhm)
+    assert original_unscaled_bound < .05 < expected_bound
+
+    settings = dict(isotope="Rb87", line="D1", intensity_mw_cm2=intensity,
+                    b_ut=0., doppler=False, gamma_out_hz=0, ground_relaxation_hz=100.,
+                    elastic_hwhm=elastic_hwhm)
+    strong = multilevel_response([detuning], **settings)["diagnostics"]
+    assert strong["virtual_excitation_bound"] == pytest.approx(expected_bound)
+    assert strong["optical_excitation_status"] == "optical elimination requires full-OBE validation"
+    weak = multilevel_response(
+        [detuning], **dict(settings, intensity_mw_cm2=intensity / 2))["diagnostics"]
+    assert weak["virtual_excitation_bound"] == pytest.approx(expected_bound / 2)
+    assert weak["optical_excitation_status"] == "weak excitation"

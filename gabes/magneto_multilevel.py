@@ -473,6 +473,11 @@ def multilevel_response(detunings_mhz, *, isotope="Rb85", line="D1", ground_f=No
                         else coordinates.generator(derivative))
     diagnostics = []
     counts = []
+    # The excited-state trace is the diagonal part of the radiative pumping
+    # source. The two broadened optical-coherence legs feed it while its
+    # natural decay rate stays fixed. Off-diagonal beat corrections do not
+    # enter this trace or its maximum over normalized ground states.
+    excitation_scale = 1.0 + 2.0 * elastic_hwhm / atom.gamma
     with core.blas_single_thread():
         for di, detuning in enumerate(delta):
             laser = centroid + detuning - optical_shift_mhz
@@ -484,7 +489,7 @@ def multilevel_response(detunings_mhz, *, isotope="Rb85", line="D1", ground_f=No
                 atom, laser-shifts, intensity_mw_cm2, polarization,
                 elastic_hwhm=elastic_hwhm)
             solve_optical = optical if coordinates is None else coordinates.generator(optical)
-            virtual_bound = max(float(np.max(np.linalg.eigvalsh(
+            virtual_bound = excitation_scale * max(float(np.max(np.linalg.eigvalsh(
                 np.einsum("vei,vej->vij", Y.conj(), Y)))) for Y in eliminated)
             for bi, field in enumerate(fields):
                 ground = _ground_generator(atom, field, ground_relaxation_hz,
@@ -538,6 +543,8 @@ def multilevel_response(detunings_mhz, *, isotope="Rb85", line="D1", ground_f=No
                         dark_residual = dark_states@dark.T + gamma_in_hz*(feed-dark_state)
                         diagnostic["dark_state_relative_residual"] = float(np.max(np.abs(dark_residual))
                             / max(1.0, np.max(np.abs(dark)), gamma_in_hz))
+                diagnostic["excited_fraction_mean"] *= excitation_scale
+                diagnostic["excited_fraction_max"] *= excitation_scale
                 diagnostic["virtual_excitation_bound"] = virtual_bound
                 diagnostics.append(diagnostic)
     k = 2*np.pi*atom.frequency_hz/constants.C_LIGHT
