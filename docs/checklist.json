@@ -5483,7 +5483,7 @@
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
       "effort": "medium",
-      "status": "ready",
+      "status": "in_progress",
       "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: adopt the Steck species record everywhere (Γ/2π 5.750 MHz, isotope mass 84.911789738 u, excited splitting 3·A(5P1/2) = 361.581 MHz, ground g_J 2.00233113); give the Generic and single-line paths the CRC vapor pressure with an explicit isotope composition (natural abundance or pure) in place of the Steck liquid fit × abundance; source a Cs self-broadening coefficient instead of reusing the Rb β. ⟦AI⟧ One commit per value, each with tests/baseline_focused.npz recaptured and the FWM/Λ/OD/SAS shifts quantified. Γ and mass move FWM, so they start after the in-flight gabes/schemes/fwm.py work lands. Expected sizes: Γ +0.07 %, mass +4.7e-6, Generic and single-line density ×1.22–1.45 for a natural cell over 313–393 K.",
       "problem": "⟦AI⟧ The 2026-10-30 atomic-data single-source refactor (angular.py leaf; hyperfine as the 85Rb D1 view of species) kept every value bit-identical, so these value splits remain: constants.GAMMA_2PI 5.746 MHz (FWM/Λ/OD and the hyperfine view) vs species RB85/RB87 gamma_D1 5.750 MHz (SAS/magneto); MASS_85RB 1.4100e-25 kg vs 84.911789738 u (+4.7e-6); NU_EXCITED_HF_D1 361.58 MHz vs 3·A(5P1/2) = 361.581 MHz; species.rb85_steck_density (Steck liquid fit × natural abundance; Λ/Rydberg Generic medium, OD single-line, SAS Generic) is 0.50–0.59 × number_density(RB85) (CRC, every other path) over 313–393 K; species.self_broadening applies the Rb β to Cs; species.GJ_S12_LEGACY 2.002331070 (magneto ground g_J) vs the Steck gJ_S 2.00233113 (−3.0e-8).",
@@ -5501,7 +5501,8 @@
         "gabes/constants.py",
         "gabes/species.py",
         "tests/test_atomic_data.py"
-      ]
+      ],
+      "linewidth_2026_11_13": "⟦AI⟧ Steck 85Rb D1 Gamma/2pi adopted (5.746 to 5.750 MHz, +0.0696%). Default FWM max absolute gain shifts 19.12/19.40 and NF 0.1603 dB, Lambda max transmission shift 3.84e-5, OD alpha up to 6.08e-4 m^-1 in magnitude, SAS transmission unchanged at default. Both AutoOD anchors passed. FWM compatibility NPZ recaptured; 159 focused and 10 baseline tests passed. Remaining mass, excited splitting, g_J, density and Cs self-broadening."
     },
     {
       "id": "cell-temperature-density-convention",

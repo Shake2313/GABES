@@ -58,7 +58,7 @@ def test_steck_density_is_the_second_convention():
 
 
 @pytest.mark.parametrize("legacy, record, deviation", [
-    (constants.GAMMA_2PI, species.RB85.gamma_D1_mhz * 1e6, -6.956521739e-4),
+    (constants.GAMMA_2PI, species.RB85.gamma_D1_mhz * 1e6, 0.0),
     (constants.MASS_85RB, species.RB85.mass, 4.651972889e-6),
     (constants.NU_EXCITED_HF_D1,
      3.0 * species.RB85.A_P12 * 1e6, -2.765632044e-6),

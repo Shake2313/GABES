@@ -138,7 +138,7 @@ RB85 = Isotope(
     name="Rb85", label="⁸⁵Rb", I=2.5, mass=84.911_789_738 * _AMU, abundance=0.7217,
     A_S=1011.910_813, A_P12=120.527, A_P32=25.0020, B_P32=25.790,
     nu_D1=377.107_385_690e12, nu_D2=384.230_406_373e12,
-    gamma_D1_mhz=5.7500, gamma_D2_mhz=6.0666,
+    gamma_D1_mhz=constants.GAMMA_2PI / 1e6, gamma_D2_mhz=6.0666,
     gJ_S=2.002_331_13, gJ_P12=0.666, gJ_P32=1.3362, g_I=-0.000_293_640_00)
 
 RB87 = Isotope(

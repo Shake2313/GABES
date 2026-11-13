@@ -24,13 +24,13 @@ MU_B = 9.2740100783e-24
 # The per-isotope reference record is `species.RB85`. These values stay
 # verbatim because the FWM baseline is bit-locked to them; known deviations
 # from that record (pinned in tests/test_atomic_data.py):
-#   GAMMA_2PI 5.746 MHz vs 5.750 MHz; MASS_85RB vs 84.911789738 u (+4.7e-6);
+#   MASS_85RB vs 84.911789738 u (+4.7e-6);
 #   NU_EXCITED_HF_D1 361.58 MHz vs 3·A(5P1/2) = 361.581 MHz.
 # Unifying them is a physics decision: checklist
 # `atomic-data-legacy-value-unification`.
 NU_D1_85RB = 377.107_385_690e12
 WAVELENGTH_D1_85RB = C_LIGHT / NU_D1_85RB
-GAMMA_2PI = 5.746e6
+GAMMA_2PI = 5.750e6
 NU_GROUND_HF = 3.035732439e9
 NU_EXCITED_HF_D1 = 361.58e6
 NU_HF = NU_GROUND_HF
