@@ -309,3 +309,38 @@ def test_lambda_unresolved_features_use_status_heroes():
     assert at_heroes[0].get("kind") == "status"
     split = next(m for m in at_view["metrics"] if m["label"] == "AT splitting")
     assert split["value"] == "—"
+
+@pytest.mark.parametrize("mode", ["eit", "cpt"])
+def test_lambda_default_window_matches_dense_reference(mode, monkeypatch):
+    scheme = schemes.get(mode)
+    params = scheme.defaults()
+    raw = scheme.compute(params)
+    view = scheme.headless_observables(raw, params)["lambda_readout"]
+    assert raw["scan"].size == 601
+    assert view["experimental_visibility"] == "not assessed"
+    measured = view["window"]
+    assert measured["status"] == "resolved"
+    assert measured["samples_per_fwhm"] >= 8
+    assert measured["edge_clearance_fwhm"] >= 1
+    assert measured["group_delay_s"] > 0
+    bounds = raw["scan"][[0, -1]]
+    monkeypatch.setattr(scheme, "_scan", lambda *args, **kwargs: np.linspace(*bounds, 12001))
+    dense = scheme.headless_observables(scheme.compute(params), params)["lambda_readout"]["window"]
+    assert measured["width_mhz"] == pytest.approx(dense["width_mhz"], rel=0.02)
+    assert measured["group_index"] == pytest.approx(dense["group_index"], rel=0.02)
+
+
+@pytest.mark.parametrize("species_key", ["Rb (natural)", "⁸⁵Rb", "⁸⁷Rb", "¹³³Cs"])
+def test_lambda_collinear_raman_rms_matches_ground_frequency(species_key):
+    from gabes import constants, species
+    from gabes.schemes.absorption import _medium_from_params
+
+    scheme = schemes.get("eit")
+    params = dict(scheme.defaults(), species=species_key, beam_angle_mrad=0.0)
+    medium = _medium_from_params(params)
+    raw = scheme.compute(params)
+    isotope = max(species.SPECIES[species_key], key=lambda entry: entry[1])[0]
+    sigma_v = np.sqrt(constants.KB * medium["T"] / medium["mass"])
+    rms_hz = raw["two_photon_k_ratio"] * raw["k_vec"] * sigma_v / (2 * np.pi)
+    expected_hz = (isotope.I + 0.5) * isotope.A_S * 1e6 * sigma_v / constants.C_LIGHT
+    assert rms_hz == pytest.approx(expected_hz, rel=1e-10)

@@ -22,7 +22,7 @@ import numpy as np
 from .. import atoms, beam, constants, doppler, hyperfine, observables, species
 from ..constants import GAMMA, K_VEC, OMEGA_D1
 from .. import affine_doppler, core
-from ..lineshape import fwhm_halfmax, window_fwhm
+from ..lineshape import MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM, fwhm_halfmax, level_crossing
 from ..report import derived_table
 from .base import ParamSpec, Preset, Scheme
 
@@ -390,6 +390,7 @@ def _medium_from_params(params, default_temp_c=50.0):
             key=key, label=key, line=line, T=T, N=species.rb85_natural_density(T),
             gamma=GAMMA, gamma_mhz=GAMMA_MHZ, k_vec=K_VEC, omega0=OMEGA_D1,
             dipole=constants.DIPOLE_D1, mass=constants.MASS_85RB,
+            ground_hf_hz=constants.NU_GROUND_HF,
         )
 
     comps = species.SPECIES.get(key, species.SPECIES["Rb (natural)"])
@@ -405,6 +406,7 @@ def _medium_from_params(params, default_temp_c=50.0):
         key=key, label=key, line=line, T=T, N=N, gamma=gamma,
         gamma_mhz=gamma_mhz, k_vec=2 * np.pi / lam, omega0=2 * np.pi * nu0,
         dipole=dipole, mass=mass,
+        ground_hf_hz=(iso_ref.I + 0.5) * iso_ref.A_S * 1e6,
     )
 
 
@@ -426,7 +428,7 @@ LAMBDA_COUPLING_DIAMETER_REF_MM = 1.0
 
 class LambdaScheme(Scheme):
     cluster = "A — Absorption"
-    cache_version = "physical-units-v5-exact-maxwell"
+    cache_version = "physical-units-v6-resolved-lambda"
     defaults_version = "physical-units-v3"
     supports_headless_observables = True
     model_comparison_parameter = "coupling_power_mw"
@@ -575,8 +577,14 @@ class LambdaScheme(Scheme):
     @staticmethod
     def _two_photon_k_ratio(params, medium):
         angle = float(params.get("beam_angle_mrad", 0.0))
-        return beam.angled_residual_k_ratio(
-            medium["k_vec"], medium["k_vec"], angle_mrad=angle)
+        # Probe addresses the lower hyperfine ground level in this Lambda model.
+        k_probe = medium["k_vec"]
+        k_coupling = k_probe - 2.0 * np.pi * medium["ground_hf_hz"] / constants.C_LIGHT
+        if angle == 0.0:
+            return beam.collinear_residual_k_ratio(k_probe, k_coupling)
+        # Scalar angle approximation. Joint transverse averaging is a separate model.
+        return np.copysign(beam.angled_residual_k_ratio(
+            k_probe, k_coupling, angle_mrad=angle), k_probe - k_coupling)
 
     def recommended_defaults(self, params):
         if self.mode is not None:
@@ -610,7 +618,15 @@ class LambdaScheme(Scheme):
             half = max(10.0, 3.0 * Oc_g)
         else:
             half = max(8.0, 4.0 * Oc_g)
-        return (Dc_g + np.linspace(-half, half, 601)) * medium["gamma"]
+        if m == "at":
+            offsets = np.linspace(-half, half, 601)
+        else:
+            # Reserve half the points for the dark resonance, while keeping
+            # the original scan extent to bracket the background and crossings.
+            local = min(half, max(0.015, min(0.22, 2.0 * (gg + Oc_g**2))))
+            wings = np.linspace(local, half, 151)[1:]
+            offsets = np.concatenate((-wings[::-1], np.linspace(-local, local, 301), wings))
+        return (Dc_g + offsets) * medium["gamma"]
 
     def compute(self, params):
         medium = _medium_from_params(params)
@@ -689,7 +705,8 @@ class LambdaScheme(Scheme):
             fig.tight_layout()
 
         ic = int(np.argmin(np.abs(x - center)))
-        metrics = self._metrics(m, x, alpha, T_trans, xphys, ic, center, raw, params)
+        window = _lambda_window_readout(x, T_trans, xphys, ic, raw, L) if m != "at" else None
+        metrics = self._metrics(m, x, alpha, T_trans, ic, center, raw, params, window)
         derived = derived_table([
             ("Medium", f"{raw.get('medium_label', '85Rb')} {raw.get('line', 'D1')}"),
             ("Γ / 2π", f"{raw.get('gamma_mhz', GAMMA_MHZ):.4f} MHz"),
@@ -706,11 +723,12 @@ class LambdaScheme(Scheme):
             dispersion=np.real(xphys), center_mhz=float(center),
             coupling_rabi_mhz=float(raw["coupling_rabi_mhz"]),
             coupling_power_mw=float(raw["coupling_power_mw"]),
-            regime=m,
+            regime=m, experimental_visibility="not assessed",
+            window=window,
         )
         return dict(metrics=metrics, figure=fig, tables=[derived], lambda_readout=readout)
 
-    def _metrics(self, mode, x, alpha, T_trans, xphys, ic, center, raw, params):
+    def _metrics(self, mode, x, alpha, T_trans, ic, center, raw, params, window):
         if mode == "at":
             # A real AT doublet needs two *resolved local maxima*. Taking the
             # largest sample on either side of centre always returns a nonzero
@@ -766,11 +784,12 @@ class LambdaScheme(Scheme):
                      tier="hero"),
             ]
         # EIT / CPT: transparency at two-photon resonance + dark-resonance width.
-        win_fwhm = window_fwhm(x, T_trans, ic)
-        ng = observables.group_index(xphys, raw["scan"], raw.get("omega0", OMEGA_D1))[ic]
+        win_fwhm = window["width_mhz"]
+        ng = window["group_index"]
+        delay = window["group_delay_s"]
         unit = "kHz" if mode == "cpt" else "MHz"
         scale = 1e3 if mode == "cpt" else 1.0
-        width_valid = np.isfinite(win_fwhm) and win_fwhm > 0
+        width_valid = window["status"] == "resolved"
         metrics = [
             dict(label="Transmission at resonance", value=f"{T_trans[ic]:.3f}",
                  numeric_value=float(T_trans[ic]), unit="1",
@@ -780,15 +799,54 @@ class LambdaScheme(Scheme):
                  value=(f"{win_fwhm*scale:.2f} {unit}" if width_valid else "—"),
                  numeric_value=float(win_fwhm*scale) if width_valid else None, unit=unit,
                  help=("Width of the transparency feature." if width_valid else
-                       "Withheld because no finite half-height crossings were found."),
+                       "Withheld until the numerical resolution checks pass."),
                  **({"tier": "hero"} if width_valid else {})),
-            dict(label="Group index n_g", value=f"{ng:.3e}",
-                 help="n_g = n + ω dn/dω at resonance (slow light when ≫ 1)."),
+            dict(label="Group index n_g", value=f"{ng:.3e}" if ng is not None else "—",
+                 numeric_value=ng, help="Group index at two-photon resonance."),
+            dict(label="Group delay", value=f"{delay * 1e9:.3g} ns" if delay is not None else "—",
+                 numeric_value=delay, unit="s", help="Excess transit time relative to vacuum."),
+            dict(label="Experimental visibility", value="Not assessed", kind="status",
+                 help="A calibrated detector-noise threshold was not supplied."),
         ]
         if not width_valid:
             metrics.append(dict(
-                label="Window status", value="unresolved", kind="status",
+                label="Window status", value=window["status"].replace("_", " "), kind="status",
                 help="The current opacity/coupling settings do not produce a "
                      "measurable transparency-window FWHM in this scan.",
                 tier="hero"))
         return metrics
+
+
+
+def _lambda_window_readout(x, transmission, chi, center_index, raw, length):
+    """Numerical support for the transparency-window and dispersion readouts."""
+    out = dict(status="unresolved", width_mhz=None, half_height_mhz=None,
+               samples_per_fwhm=None, edge_clearance_fwhm=None,
+               group_index=None, group_delay_s=None)
+    peak = float(transmission[center_index])
+    floor = float(np.min(transmission))
+    if not np.isfinite(peak - floor) or peak - floor <= np.finfo(float).eps:
+        return out
+    half = (peak + floor) * 0.5
+    left, _ = level_crossing(x, transmission, center_index, -1, half)
+    right, _ = level_crossing(x, transmission, center_index, 1, half)
+    width = right - left
+    if not np.isfinite(width) or width <= 0.0:
+        return out
+    steps = np.diff(x)
+    spans = (x[1:] > left) & (x[:-1] < right)
+    samples = width / float(np.max(steps[spans]))
+    edge = min(left - x[0], x[-1] - right) / width
+    out.update(width_mhz=float(width), half_height_mhz=[left, right],
+               samples_per_fwhm=float(samples), edge_clearance_fwhm=float(edge))
+    if edge < MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM:
+        out["status"] = "scan_edge_limited"
+    elif samples < 8.0:
+        out["status"] = "under_resolved"
+    else:
+        ng = float(observables.group_index(
+            chi, raw["scan"], raw.get("omega0", OMEGA_D1))[center_index])
+        if np.isfinite(ng):
+            out.update(status="resolved", group_index=ng,
+                       group_delay_s=(ng - 1.0) * length / constants.C_LIGHT)
+    return out
