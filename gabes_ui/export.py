@@ -226,6 +226,10 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
     quantitative = getattr(scheme, "quantitative_export", None)
     if include_quantitative and quantitative is not None and optical is not None:
         optical = {**optical, "quantitative_subdoppler": quantitative(params, optical)}
+    lambda_readout = view.get("lambda_readout")
+    include_lambda_reference = lambda_readout is not None and (
+        "optical_collisions" in lambda_readout or "joint_doppler" in lambda_readout
+    )
     return {
         "generated_at_utc": datetime.utcnow().isoformat() + "Z",
         "app_revision": app_revision(),
@@ -245,6 +249,10 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
             "metrics": to_json_primitive(view.get("metrics", [])),
             "sidebar_readouts": to_json_primitive(view.get("sidebar_readouts", {})),
             "optical_readout": to_json_primitive(optical),
+            **({"optical_collisions": to_json_primitive(view["optical_collisions"])}
+               if "optical_collisions" in view else {}),
+            **({"lambda_readout": to_json_primitive(lambda_readout)}
+               if include_lambda_reference else {}),
             "magneto_readout": to_json_primitive(view.get("magneto_readout")),
             "rydberg_readout": to_json_primitive(view.get("rydberg_readout")),
             "biphoton_evidence": to_json_primitive(view.get("biphoton_evidence")),

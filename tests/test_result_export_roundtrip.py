@@ -9,8 +9,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
+from gabes.collisions import REFERENCE_COLLISIONS
 from gabes.core import blas_single_thread
 from gabes.schemes import get
+from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL
 from gabes_ui import export, plotcard
 from gabes_ui.spectral_compare import comparison_plots
 from gabes_ui.spectral_sweep import assemble_dataset
@@ -83,6 +85,7 @@ def test_lazy_extra_view_export_runs_only_when_requested(monkeypatch):
     monkeypatch.setattr(plotcard.st, "pills", lambda *_args, **_kwargs: "Test scan")
     app = AppTest.from_string("""
         from gabes.schemes import get
+from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL
         from gabes_ui.plotcard import render_more
         import streamlit as st
         scheme = get("lambda")
@@ -110,3 +113,41 @@ def test_sweep_exports_status_before_first_row_and_keeps_curve_provenance():
     metadata = comparison_plots(dataset)[0]["traces"][0]["quantity_metadata"]
     assert metadata["branch"] == -1
     assert metadata["observable_status"] == ["available", "unresolved"]
+
+
+@pytest.mark.parametrize("scheme_name, reference, expected_key", [
+    ("od", {}, None),
+    ("od", dict(optical_collision_model=REFERENCE_COLLISIONS, ne_pressure_torr=10.0),
+     "optical_collisions"),
+    ("lambda", {}, None),
+    ("lambda", dict(optical_collision_model=REFERENCE_COLLISIONS, ne_pressure_torr=10.0),
+     "lambda_readout"),
+    ("lambda", dict(angled_doppler_model=LAMBDA_JOINT_MAXWELL,
+                    doppler="on", beam_angle_mrad=0.7), "lambda_readout"),
+])
+def test_optical_reference_exports_view_evidence_in_strict_json(scheme_name, reference, expected_key):
+    scheme = get(scheme_name)
+    params = dict(scheme.defaults(), doppler="off")
+    if scheme_name == "od":
+        params["model"] = "single 2-level"
+    params.update(reference)
+    with blas_single_thread():
+        raw = scheme.compute(params)
+        view = scheme.headless_observables(raw, params)
+    bundle = export.build_export_payload(
+        scheme=scheme, raw=raw, params=params, view=view, plot_payloads=[],
+        comparison_payload=None, cache_version=scheme.cache_version,
+        readout_cache_version="reference-export-test")
+    saved = json.loads(json.dumps(bundle, allow_nan=False))["view"]
+    new_keys = {"optical_collisions", "lambda_readout"}
+    assert new_keys.intersection(saved) == ({expected_key} if expected_key else set())
+    if expected_key:
+        assert saved[expected_key] == export.to_json_primitive(view[expected_key])
+    if "angled_doppler_model" in reference:
+        evidence = saved["lambda_readout"]["joint_doppler"]
+        assert "difference_from_scalar" in evidence
+        assert "transverse_refinement" in evidence
+    elif "optical_collision_model" in reference:
+        evidence = saved[expected_key] if scheme_name == "od" else saved[expected_key]["optical_collisions"]
+        assert evidence["shift_mhz"] == pytest.approx(-11.0)
+        assert evidence["shift_sources"][0]["source"].startswith("https://doi.org/")
