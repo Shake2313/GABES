@@ -2456,6 +2456,12 @@ class ChiPoleRows:
         conj = self._rows[1].discrete_mean(nodes, weights) / self._references[1]
         return probe[:, 0], probe[:, 1], conj[:, 0], conj[:, 1]
 
+    def gaussian_mean(self, center, sigma):
+        """Evaluate the untruncated Maxwell mean in the same response order."""
+        probe = self._rows[0].gaussian_mean(center, sigma) / self._references[0]
+        conj = self._rows[1].gaussian_mean(center, sigma) / self._references[1]
+        return probe[:, 0], probe[:, 1], conj[:, 0], conj[:, 1]
+
 
 def chi_pole_rows(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, branch, atom=ATOM, n_f=1,
                   guard_delta_eff=None):

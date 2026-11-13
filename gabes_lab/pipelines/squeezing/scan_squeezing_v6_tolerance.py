@@ -33,6 +33,7 @@ Run from the repo root:
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import time
@@ -44,6 +45,9 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 
+from gabes_lab.pipelines.squeezing._velocity_measure import (
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
@@ -78,8 +82,8 @@ BRANCH = -1
 WINDOW_GHZ = 0.7
 COARSE = 281                   # 5 MHz spacing; TPD0 = -280 sits on-grid
 COARSE_FINE = 281              # same grid for the two-photon-detuning curve
-VELOCITY_STEP = 5.0
-VELOCITY_CUTOFF = 3.0
+VELOCITY_STEP, VELOCITY_CUTOFF = CONVERGED_VELOCITY_GRID  # sampled grid (m/s, sigma)
+HISTORICAL_VELOCITY_GRID = (5.0, 3.0)
 
 GAP_MIN = 0.5
 GAP_MAX = 1.5
@@ -93,7 +97,8 @@ LOSS_AXIS = np.round(np.arange(0.0, 0.351 + 1e-9, 0.005), 4)           # 71 pts
 THRESHOLDS_DB = (0.25, 0.5, 1.0)   # degradation above the center xi
 
 
-def _solve(D_GHz, T_C, P_probe, coarse=COARSE):
+def _solve(D_GHz, T_C, P_probe, coarse=COARSE, *,
+           vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     """One hardened-Ultra solve; returns the full delta spectrum + hardened arrays."""
     center = fwm.branch_center_GHz(D_GHz, BRANCH)
     with blas_single_thread():
@@ -102,7 +107,8 @@ def _solve(D_GHz, T_C, P_probe, coarse=COARSE):
             line_strength=LINE_STRENGTH, loss_frac=LOSS0, qe=QE,
             coarse_points=coarse, fine_points=0,
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
-            velocity_step=VELOCITY_STEP, velocity_cutoff=VELOCITY_CUTOFF,
+            velocity_step=vstep, velocity_cutoff=vcut,
+            velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
             branch=BRANCH,
             phase_detail=fwm.PHASE_ULTRA, model_fidelity=fwm.FIDELITY_ULTRA,
             response_method=RESPONSE_METHOD)
@@ -188,12 +194,21 @@ def _fmt(v, unit=""):
 
 
 def main():
-    run = start_run("squeezing/v6_tolerance")
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--historical-velocity-grid", action="store_true",
+                    help="use the velocity grid from the historical report")
+    args = ap.parse_args()
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
+                   else (VELOCITY_STEP, VELOCITY_CUTOFF))
+    run = start_run("squeezing/v6_tolerance", config=dict(
+        velocity_step=vstep, velocity_cutoff=vcut,
+        velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
+        historical_velocity_grid=args.historical_velocity_grid))
     t0 = time.time()
 
     # ---- center point (fine δ axis, loss remap, and validation) ------------
     print("center solve (fine δ axis)...", flush=True)
-    sol_c = _solve(D0_GHZ, T0_C, P_PROBE0, coarse=COARSE_FINE)
+    sol_c = _solve(D0_GHZ, T0_C, P_PROBE0, coarse=COARSE_FINE, vstep=vstep, vcut=vcut)
     fixed_c, best_c = _readouts(sol_c)
     xi_c = fixed_c["xi"]
     print(f"  v6 center: xi(fixed delta -280 MHz) = {xi_c:.4f} dB, "
@@ -220,7 +235,7 @@ def main():
     print(f"\n1D scans: {len(jobs)} hardened-Ultra solves on {workers} workers",
           flush=True)
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(_solve, d, t, p): (kind, i)
+        futs = {ex.submit(_solve, d, t, p, vstep=vstep, vcut=vcut): (kind, i)
                 for (kind, i, d, t, p) in jobs}
         for n, fut in enumerate(as_completed(futs), start=1):
             kind, i = futs[fut]
@@ -317,7 +332,8 @@ def main():
         loss_frac=LOSS_AXIS, xi_loss=xi_loss,
         qe=QE, loss0=LOSS0, p_pump=P_PUMP, p_probe0=P_PROBE0,
         line_strength=LINE_STRENGTH, coarse=COARSE, coarse_fine=COARSE_FINE,
-        velocity_step=VELOCITY_STEP, velocity_cutoff=VELOCITY_CUTOFF,
+        velocity_step=vstep, velocity_cutoff=vcut,
+        velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         gap_min=GAP_MIN, gap_max=GAP_MAX,
     )
     print(f"\nsaved {run.dir / 'squeezing_v6_tolerance.npz'}")

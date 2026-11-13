@@ -9,7 +9,7 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
 import numpy as np
 
-from .scan_squeezing_tpd_angle_detail import ScanConfig, run
+from .scan_squeezing_tpd_angle_detail import ScanConfig, main
 
 
 CONFIG = ScanConfig(
@@ -24,4 +24,4 @@ CONFIG = ScanConfig(
 
 
 if __name__ == "__main__":
-    run(CONFIG)
+    main(CONFIG)

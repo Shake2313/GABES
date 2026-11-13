@@ -30,6 +30,7 @@ table per temperature (`fwm.collisional_atom`); squeezing now peaks near
 Outputs (squeezing_map.npz, .png) go to a new run folder under
 runs/squeezing/delta_T/ with its run.json record.
 """
+import argparse
 import os
 import time
 
@@ -37,6 +38,9 @@ os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
 
 import numpy as np
 
+from gabes_lab.pipelines.squeezing._velocity_measure import (
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import atoms, constants, doppler, hyperfine, kernels, observables  # noqa: E402
@@ -66,7 +70,9 @@ TEMP_C = np.round(np.arange(60.0, 150.0 + 1e-9, 5.0), 3)       # temperature
 
 # Map resolution (fast but converged for the *minimum* of a smooth curve).
 COARSE_POINTS = 81
-VELOCITY_STEP = 5.0
+VELOCITY_STEP, VELOCITY_CUTOFF = CONVERGED_VELOCITY_GRID  # sampled grid (m/s, sigma)
+HISTORICAL_VELOCITY_GRID = (5.0, 3.0)
+HISTORICAL_SIM_VELOCITY_GRID = (4.0, 3.0)
 
 
 def _delta_axis(coarse=COARSE_POINTS):
@@ -79,7 +85,8 @@ def _probe_axis_for_delta(D_GHz, delta_axis):
     return center + delta_axis / (2.0 * np.pi) / 1e9
 
 
-def best_squeezing(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP):
+def best_squeezing(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP,
+                   vcut=VELOCITY_CUTOFF):
     """Min S_dB over the δ scan on the (-) branch, plus the gains there."""
     center = fwm.branch_center_GHz(D_GHz, BRANCH)
     with blas_single_thread():
@@ -88,7 +95,8 @@ def best_squeezing(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP):
             line_strength=LINE_STRENGTH, loss_frac=LOSS_FRAC, qe=QE,
             coarse_points=coarse, fine_points=0,
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
-            velocity_step=vstep, velocity_cutoff=3.0, branch=BRANCH,
+            velocity_step=vstep, velocity_cutoff=vcut,
+            velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut), branch=BRANCH,
             response_method=RESPONSE_METHOD)
     S = spec["S_dB"]
     i = int(np.nanargmin(S))
@@ -103,7 +111,8 @@ def best_squeezing(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP):
     )
 
 
-def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP):
+def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP,
+                        vcut=VELOCITY_CUTOFF):
     """Build the χ̄ table for ONE temperature with its collisional atom.
 
     Density-dependent collisional decoherence (optical Rb self-broadening +
@@ -116,11 +125,15 @@ def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP):
     method, or a failed guard, builds the (δ × Δ_eff) table.
     Returns (response, v_grid, weights, master_delta_eff).
     """
+    def velocity_tables(cutoff):
+        grid, weights = doppler.velocity_grid(T_K, dv=vstep, cutoff_sigma=cutoff)
+        deff_chunks = [2.0 * np.pi * float(D) * 1e9 - constants.K_VEC * grid
+                       for D in DELTA_GHZ]
+        return grid, weights, np.unique(np.concatenate(deff_chunks))
+
     atom_T = fwm.collisional_atom(T_K)
-    v_grid, weights = doppler.velocity_grid(T_K, dv=vstep, cutoff_sigma=3.0)
-    deff_chunks = [2.0 * np.pi * float(D) * 1e9 - constants.K_VEC * v_grid
-                   for D in DELTA_GHZ]
-    master_delta_eff = np.unique(np.concatenate(deff_chunks))
+    exact = velocity_measure(RESPONSE_METHOD, vstep, vcut) == "exact"
+    v_grid, weights, master_delta_eff = velocity_tables(8.0 if exact else vcut)
     Op = fwm.rabi_freq(P_PUMP, fwm.W_PUMP)
     Os = fwm.rabi_freq(P_SEED, fwm.W_PROBE)
     with blas_single_thread():
@@ -135,11 +148,13 @@ def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP):
     return tables, v_grid, weights, master_delta_eff
 
 
-def _averaged_chi(tables, master_delta_eff, v_grid, weights, D_GHz):
-    """Maxwell-averaged (chi_ss, chi_cs, chi_sc, chi_cc) at one Δ on exact velocity samples."""
+def _averaged_chi(tables, master_delta_eff, v_grid, weights, D_GHz, *, gaussian_sigma=None):
+    """Maxwell-averaged susceptibility at one optical detuning."""
     Delta = 2.0 * np.pi * float(D_GHz) * 1e9
     delta_eff = Delta - constants.K_VEC * v_grid
     if isinstance(tables, fwm.ChiPoleRows):
+        if gaussian_sigma is not None:
+            return tables.gaussian_mean(Delta, gaussian_sigma)
         return tables.mean(delta_eff, weights)
     idx = np.searchsorted(master_delta_eff, delta_eff)
     if not np.array_equal(master_delta_eff[idx], delta_eff):
@@ -148,9 +163,9 @@ def _averaged_chi(tables, master_delta_eff, v_grid, weights, D_GHz):
 
 
 def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
-                      D_GHz, T_K):
+                      D_GHz, T_K, *, gaussian_sigma=None):
     chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = _averaged_chi(
-        tables, master_delta_eff, v_grid, weights, D_GHz)
+        tables, master_delta_eff, v_grid, weights, D_GHz, gaussian_sigma=gaussian_sigma)
 
     # Mirror compute_spectrum: pure-85Rb CRC density + first-principles coupling
     # normalization p_F/[2(2I+1)] on top of the residual LINE_STRENGTH.
@@ -177,7 +192,7 @@ def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
     )
 
 
-def run_grid():
+def run_grid(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     nD, nT = DELTA_GHZ.size, TEMP_C.size
     Xi = np.full((nD, nT), np.nan)
     Gs = np.full((nD, nT), np.nan)
@@ -191,13 +206,16 @@ def run_grid():
 
     # χ̄ depends on temperature (collisional decoherence), so build one table per
     # T and reuse it across all Δ at that T (Δ_eff columns picked per Δ).
+    exact = velocity_measure(RESPONSE_METHOD, vstep, vcut) == "exact"
     for iT, T_C in enumerate(TEMP_C):
         T_K = float(T_C) + 273.15
+        gaussian_sigma = (constants.K_VEC * np.sqrt(constants.KB * T_K / constants.MASS_85RB)
+                          if exact else None)
         tables, v_grid, weights, master_delta_eff = _temperature_tables(
-            T_K, delta_axis)
+            T_K, delta_axis, vstep, vcut)
         for iD, D in enumerate(DELTA_GHZ):
             r = _best_from_tables(tables, master_delta_eff, v_grid, weights,
-                                  delta_axis, float(D), T_K)
+                                  delta_axis, float(D), T_K, gaussian_sigma=gaussian_sigma)
             Xi[iD, iT] = r["S_dB"]
             Gs[iD, iT] = r["G_s"]
             Gc[iD, iT] = r["G_c"]
@@ -208,15 +226,26 @@ def run_grid():
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--historical-velocity-grid", action="store_true",
+                    help="use the velocity grid from the historical report")
+    args = ap.parse_args()
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
+                   else (VELOCITY_STEP, VELOCITY_CUTOFF))
+    sim_vstep, sim_vcut = (HISTORICAL_SIM_VELOCITY_GRID
+                           if args.historical_velocity_grid else (vstep, vcut))
     run = start_run("squeezing/delta_T", config=dict(
         delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta=ETA,
-        coarse_points=COARSE_POINTS, velocity_step=VELOCITY_STEP))
+        coarse_points=COARSE_POINTS, velocity_step=vstep, velocity_cutoff=vcut,
+        velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
+        sim_velocity_step=sim_vstep, sim_velocity_cutoff=sim_vcut,
+        historical_velocity_grid=args.historical_velocity_grid))
     print(f"eta = QE*(1-loss) = {QE:.4f}*(1-{LOSS_FRAC}) = {ETA:.5f}")
     print(f"detection-loss asymptote 10log10(1-eta) = {S_FLOOR_DB:.4f} dB")
     print(f"grid: {DELTA_GHZ.size} one-photon detunings Δ x {TEMP_C.size} T = "
           f"{DELTA_GHZ.size*TEMP_C.size} points\n")
 
-    Xi, Gs, Gc, Dlt = run_grid()
+    Xi, Gs, Gc, Dlt = run_grid(vstep, vcut)
 
     # Global maximum squeezing (most negative S_dB).
     flat = int(np.nanargmin(Xi))
@@ -235,7 +264,7 @@ def main():
     print(f"points below the η-floor (should be 0): {int(below_floor.sum())}")
 
     # Sim reference point for context.
-    sim = best_squeezing(0.9, 394.15, coarse=121, vstep=4.0)
+    sim = best_squeezing(0.9, 394.15, coarse=121, vstep=sim_vstep, vcut=sim_vcut)
     print(f"\nSim optimum (Δ=0.9 GHz, T=121 °C): "
           f"ξ = {sim['S_dB']:.4f} dB,  G_s = {sim['G_s']:.2f}")
 

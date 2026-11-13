@@ -5,13 +5,14 @@ folder under runs/squeezing/tpd_angle_detail/<version>/ (or `out`).
 """
 from __future__ import annotations
 
+import argparse
 import os
 import threading
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -32,8 +33,9 @@ LINE_STRENGTH = 0.74
 BRANCH = -1
 QE = 1.0
 LOSS = 0.0
-VELOCITY_STEP = 4.0
-VELOCITY_CUTOFF = 3.0
+VELOCITY_STEP = 1.0          # converged truncated Maxwell grid (m/s, 4 sigma)
+VELOCITY_CUTOFF = 4.0
+HISTORICAL_VELOCITY_GRID = (4.0, 3.0)
 GAP_MIN = 0.5
 GAP_MAX = 1.5
 
@@ -47,6 +49,8 @@ class ScanConfig:
     two_photon_axis_mhz: np.ndarray
     reference_delta_ghz: float
     reference_temperature_c: float
+    velocity_step: float = VELOCITY_STEP
+    velocity_cutoff: float = VELOCITY_CUTOFF
 
 
 _TABLE_STATE = threading.local()
@@ -93,8 +97,8 @@ def _compute_one(config: ScanConfig, i_delta: int, i_temp: int, i_angle: int) ->
         fine_points=0,
         scan_min=scan_min,
         scan_max=scan_max,
-        velocity_step=VELOCITY_STEP,
-        velocity_cutoff=VELOCITY_CUTOFF,
+        velocity_step=config.velocity_step,
+        velocity_cutoff=config.velocity_cutoff,
         branch=BRANCH,
         phase_detail=fwm.PHASE_ULTRA,
         pump_probe_angle_deg=angle,
@@ -255,7 +259,9 @@ def _plot(config: ScanConfig, xi, trusted, summary_rows, path: Path) -> None:
 
 
 def run(config: ScanConfig, out: str | Path | None = None) -> Path:
-    record = start_run(f"squeezing/tpd_angle_detail/{config.version}", out=out)
+    record = start_run(f"squeezing/tpd_angle_detail/{config.version}", out=out,
+                       config=dict(velocity_step=config.velocity_step,
+                                   velocity_cutoff=config.velocity_cutoff))
     shape4 = (config.delta_axis_ghz.size, config.temperature_axis_c.size,
               config.angle_axis_deg.size, config.two_photon_axis_mhz.size)
     shape3 = shape4[:3]
@@ -369,8 +375,8 @@ def run(config: ScanConfig, out: str | Path | None = None) -> Path:
         qe=QE,
         loss=LOSS,
         line_strength=LINE_STRENGTH,
-        velocity_step=VELOCITY_STEP,
-        velocity_cutoff=VELOCITY_CUTOFF,
+        velocity_step=config.velocity_step,
+        velocity_cutoff=config.velocity_cutoff,
         gap_min=GAP_MIN,
         gap_max=GAP_MAX,
     )
@@ -379,3 +385,14 @@ def run(config: ScanConfig, out: str | Path | None = None) -> Path:
           record.dir / f"squeezing_frontier_ideal_{config.version}_tpd_angle_detail.png")
     record.finish()
     return record.dir
+
+
+def main(config: ScanConfig) -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--historical-velocity-grid", action="store_true",
+                    help="use the velocity grid from the historical report")
+    args = ap.parse_args()
+    if args.historical_velocity_grid:
+        vstep, vcut = HISTORICAL_VELOCITY_GRID
+        config = replace(config, velocity_step=vstep, velocity_cutoff=vcut)
+    run(config)

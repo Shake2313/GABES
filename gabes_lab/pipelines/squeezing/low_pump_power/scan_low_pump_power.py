@@ -81,6 +81,9 @@ for _stream in (sys.stdout, sys.stderr):
 import numpy as np
 
 from gabes_lab.blocks.io import write_json  # noqa: E402
+from gabes_lab.pipelines.squeezing._velocity_measure import (
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import constants, hyperfine, observables             # noqa: E402
@@ -153,11 +156,13 @@ FID = {"legacy": dict(phase_detail=fwm.PHASE_LEGACY),
 # Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
 # (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
 RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
+VELOCITY_STEP, VELOCITY_CUTOFF = CONVERGED_VELOCITY_GRID  # sampled grid (m/s, sigma)
+HISTORICAL_VELOCITY_GRID = (5.0, 3.0)
 
 
 def spectrum(D_GHz, *, T, P_pump, P_probe, w_pump, w_probe, L, angle,
              fid="legacy", ls=LS_RESIDUAL, dmin=-100.0, dmax=450.0, npts=751,
-             vstep=5.0, vcut=3.0):
+             vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     """One probe scan; `delta_mhz` is the two-photon detuning off branch center."""
     center = fwm.branch_center_GHz(D_GHz, -1)
     with blas_single_thread():
@@ -167,7 +172,8 @@ def spectrum(D_GHz, *, T, P_pump, P_probe, w_pump, w_probe, L, angle,
             line_strength=ls, loss_frac=0.055, qe=fwm.QE_DETECTOR,
             coarse_points=npts, fine_points=0,
             scan_min=center + dmin * 1e-3, scan_max=center + dmax * 1e-3,
-            velocity_step=vstep, velocity_cutoff=vcut, branch=-1,
+            velocity_step=vstep, velocity_cutoff=vcut,
+            velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut), branch=-1,
             response_method=RESPONSE_METHOD, **FID[fid])
     s["delta_mhz"] = (s["probe_axis_GHz"] - center) * 1e3
     return s
@@ -262,10 +268,10 @@ def sec_published():
 # ==========================================================================
 # Section 2 -- the P/w^2 invariance, verified inside the engine
 # ==========================================================================
-def sec_invariance():
+def sec_invariance(*, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     base = dict(SIM)
     ref = dict(T=base["T"], P_probe=base["P_probe"], w_probe=base["w_probe"],
-               L=base["L"], angle=base["angle"])
+               L=base["L"], angle=base["angle"], vstep=vstep, vcut=vcut)
     out = {"note": "pump waist scaled at fixed seed waist/power, so any residual "
                    "difference is a pump-side effect only"}
     for fid in ("legacy", "ultra"):
@@ -356,14 +362,14 @@ def _pool(n):
     return ThreadPoolExecutor(max_workers=min(n, (os.cpu_count() or 4)))
 
 
-def sec_power_scan(quick=False):
+def sec_power_scan(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     Ps = np.array([1, 3, 10, 20, 35, 50, 80, 110, 135, 160, 200, 250, 300,
                    400, 500, 600, 800] if not quick else
                   [3, 20, 50, 135, 300, 600]) * 1e-3
     out = {}
     for label, cfg in (("jain_geometry", JAIN), ("sim_geometry", SIM)):
         with _pool(len(Ps)) as ex:
-            res = list(ex.map(lambda P: gain_peak(cfg, P_pump=P), Ps))
+            res = list(ex.map(lambda P: gain_peak(cfg, P_pump=P, vstep=vstep, vcut=vcut), Ps))
         rows = []
         for P, r in zip(Ps, res):
             Om = constants.rabi_freq(P, cfg["w_pump"])
@@ -407,7 +413,7 @@ def sec_power_scan(quick=False):
 # ==========================================================================
 # Section 5 -- (P, T) map at the Jain waist
 # ==========================================================================
-def sec_pt_map(quick=False):
+def sec_pt_map(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     Ps = np.array([20, 35, 60, 100, 135, 185, 250, 400, 600] if not quick
                   else [35, 135, 600]) * 1e-3
     Ts = (np.arange(88.0, 128.0, 3.0) if not quick
@@ -415,7 +421,7 @@ def sec_pt_map(quick=False):
     jobs = [(iP, iT, P, T) for iT, T in enumerate(Ts) for iP, P in enumerate(Ps)]
     G = np.zeros((Ps.size, Ts.size))
     with _pool(len(jobs)) as ex:
-        res = list(ex.map(lambda j: gain_peak(JAIN, P_pump=j[2], T=j[3]), jobs))
+        res = list(ex.map(lambda j: gain_peak(JAIN, P_pump=j[2], T=j[3], vstep=vstep, vcut=vcut), jobs))
     for (iP, iT, _, _), r in zip(jobs, res):
         G[iP, iT] = r["G_ss"]
     XI = np.array([[xi_from_gain(g, ETA_EXT) for g in row] for row in G])
@@ -448,11 +454,11 @@ def sec_pt_map(quick=False):
 # ==========================================================================
 # Section 6 -- waist scan, transit-time cost, diffraction limit, depletion
 # ==========================================================================
-def sec_waist(quick=False):
+def sec_waist(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     ws = np.array([100, 130, 160, 200, 250, 300, 380, 450, 530, 650, 800]
                   if not quick else [150, 300, 530]) * 1e-6
     with _pool(len(ws)) as ex:
-        res = list(ex.map(lambda w: gain_peak(JAIN, w_pump=w, w_probe=w), ws))
+        res = list(ex.map(lambda w: gain_peak(JAIN, w_pump=w, w_probe=w, vstep=vstep, vcut=vcut), ws))
     I_ref = intensity_w_cm2(SIM["P_pump"], SIM["w_pump"])   # 136 W/cm^2
     rows = []
     for w, r in zip(ws, res):
@@ -475,7 +481,7 @@ def sec_waist(quick=False):
                      "sqrt(lambda L / pi); keeping z_R >= 4L needs w >= 2x that.")
 
 
-def sec_transit():
+def sec_transit(*, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     """Cost of the smaller beam through the ground-Raman transit floor."""
     original = fwm.collisional_atom
     rows = []
@@ -487,7 +493,7 @@ def sec_transit():
                          ("floor scaled to w = 130 um", 130e-6)):
             fwm.collisional_atom = (original if w is None
                                     else transit_scaled_atom(w, original))
-            r = gain_peak(JAIN)
+            r = gain_peak(JAIN, vstep=vstep, vcut=vcut)
             rows.append(dict(label=label, w_um=None if w is None else w * 1e6,
                              floor_kHz=(constants.GAMMA_GG / (2 * math.pi) / 1e3
                                         if w is None
@@ -638,6 +644,12 @@ def write_markdown(res, path):
     a = L.append
     pub = res["published"]
     a("# 저출력 펌프(100–200 mW) FWM gain/ideal-law 진단\n")
+    grid = res.get("meta", {})
+    if grid.get("velocity_measure") == "exact":
+        a("Maxwell velocity measure: untruncated pole mean.\n")
+    elif "velocity_step" in grid:
+        a(f"Maxwell velocity grid: {grid['velocity_step']:g} m/s, "
+          f"{grid['velocity_cutoff']:g} sigma.\n")
     a("자동 생성 파일 — `gabes_lab/pipelines/squeezing/low_pump_power/scan_low_pump_power.py`\n")
     a("**Claim gate — `MEAN_FIELD_IDEAL_LAW_DIAGNOSTIC`.** GABES의 절대 이득은 "
       "예측값이 아니며, 아래 ξ 값은 측정 이득 또는 mean-field gain에 조건부 "
@@ -875,25 +887,33 @@ def main():
                     help="output folder (default: a new run folder under runs/squeezing/low_pump_power/)")
     ap.add_argument("--quick", action="store_true", help="coarse grids, for smoke tests")
     ap.add_argument("--no-figure", action="store_true")
+    ap.add_argument("--historical-velocity-grid", action="store_true",
+                    help="use the velocity grid from the historical report")
     args = ap.parse_args()
-    run = start_run("squeezing/low_pump_power", out=args.out, config={"quick": args.quick, "figure": not args.no_figure})
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
+                   else (VELOCITY_STEP, VELOCITY_CUTOFF))
+    run = start_run("squeezing/low_pump_power", out=args.out, config=dict(quick=args.quick, figure=not args.no_figure,
+                                                             velocity_step=vstep, velocity_cutoff=vcut,
+                                                             velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut)))
     out = run.dir
 
     t0 = time.time()
     res = {}
     for name, fn in (("published", lambda: sec_published()),
                      ("noise_law", lambda: sec_noise_law()),
-                     ("invariance", lambda: sec_invariance()),
-                     ("power_scan", lambda: sec_power_scan(args.quick)),
-                     ("pt_map", lambda: sec_pt_map(args.quick)),
-                     ("waist", lambda: sec_waist(args.quick)),
-                     ("transit", lambda: sec_transit()),
+                     ("invariance", lambda: sec_invariance(vstep=vstep, vcut=vcut)),
+                     ("power_scan", lambda: sec_power_scan(args.quick, vstep=vstep, vcut=vcut)),
+                     ("pt_map", lambda: sec_pt_map(args.quick, vstep=vstep, vcut=vcut)),
+                     ("waist", lambda: sec_waist(args.quick, vstep=vstep, vcut=vcut)),
+                     ("transit", lambda: sec_transit(vstep=vstep, vcut=vcut)),
                      ("depletion", lambda: sec_depletion())):
         t = time.time()
         res[name] = fn()
         print(f"  {name:12s} {time.time()-t:7.1f}s")
 
     res["meta"] = dict(
+        velocity_step=vstep, velocity_cutoff=vcut,
+        velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         eta_ext=ETA_EXT, line_strength_residual=LS_RESIDUAL,
         mean_field_layer="GABES legacy fidelity G_s_smallsignal, peak over delta",
         noise_layer="observables.intensity_difference_squeezing_dB with G_c=G_s-1",

@@ -32,6 +32,9 @@ from pathlib import Path
 
 import numpy as np
 
+from gabes_lab.pipelines.squeezing._velocity_measure import (
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import constants, detection, observables, species  # noqa: E402
@@ -224,23 +227,21 @@ def make_source_configs() -> list[SourceConfig]:
     ]
 
 
-def fidelity_settings(name: str) -> dict:
-    name = name.lower()
-    if name == "quick":
-        return dict(coarse_points=81, velocity_step=8.0,
-                    velocity_cutoff=2.5, phase_detail=fwm.PHASE_BALANCED,
-                    window_ghz=0.22)
-    if name == "balanced":
-        return dict(coarse_points=161, velocity_step=5.0,
-                    velocity_cutoff=3.0, phase_detail=fwm.PHASE_BALANCED,
-                    window_ghz=0.30)
-    if name == "ultra":
-        return dict(coarse_points=181, velocity_step=4.0,
-                    velocity_cutoff=3.0, phase_detail=fwm.PHASE_ULTRA,
-                    window_ghz=0.26)
-    return dict(coarse_points=241, velocity_step=3.0,
-                velocity_cutoff=3.0, phase_detail=fwm.PHASE_FINE,
-                window_ghz=0.35)
+VELOCITY_STEP, VELOCITY_CUTOFF = CONVERGED_VELOCITY_GRID  # sampled grid (m/s, sigma)
+
+
+def fidelity_settings(name: str, *, historical_velocity_grid: bool = False) -> dict:
+    settings = {
+        "quick": (81, 8.0, 2.5, fwm.PHASE_BALANCED, 0.22),
+        "balanced": (161, 5.0, 3.0, fwm.PHASE_BALANCED, 0.30),
+        "ultra": (181, 4.0, 3.0, fwm.PHASE_ULTRA, 0.26),
+        "fine": (241, 3.0, 3.0, fwm.PHASE_FINE, 0.35),
+    }
+    coarse, vstep, vcut, phase, window = settings.get(name.lower(), settings["fine"])
+    if not historical_velocity_grid:
+        vstep, vcut = VELOCITY_STEP, VELOCITY_CUTOFF
+    return dict(coarse_points=coarse, velocity_step=vstep, velocity_cutoff=vcut,
+                phase_detail=phase, window_ghz=window)
 
 
 def parse_float_axis(text: str) -> np.ndarray:
@@ -294,6 +295,8 @@ def compute_source(cfg: SourceConfig, settings: dict) -> dict:
             scan_max=probe_target + half,
             velocity_step=settings["velocity_step"],
             velocity_cutoff=settings["velocity_cutoff"],
+            velocity_measure=velocity_measure(RESPONSE_METHOD, settings["velocity_step"],
+                                              settings["velocity_cutoff"]),
             branch=-1,
             phase_detail=settings["phase_detail"],
             pump_probe_angle_deg=cfg.angle_deg,
@@ -1626,6 +1629,8 @@ def parse_args() -> argparse.Namespace:
                    help="Output folder (default: a new run folder under runs/).")
     p.add_argument("--config-json", default="",
                    help="Optional JSON file with argument-name keys to override CLI/defaults.")
+    p.add_argument("--historical-velocity-grid", action="store_true",
+                   help="use the velocity grid from the historical report")
     p.add_argument("--fidelity", choices=("quick", "balanced", "fine", "ultra"),
                    default="fine")
     p.add_argument("--source-anchor", choices=("paper", "model"),
@@ -1719,9 +1724,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
     args = parse_args()
+    settings = fidelity_settings(args.fidelity,
+                                 historical_velocity_grid=args.historical_velocity_grid)
     run = start_run("squeezing/resonant_hanle_reference", out=args.out or None,
-                    config=vars(args))
-    settings = fidelity_settings(args.fidelity)
+                    config={**vars(args), **settings,
+                            "velocity_measure": velocity_measure(
+                                RESPONSE_METHOD, settings["velocity_step"], settings["velocity_cutoff"])})
     configs = make_source_configs()
     if args.only:
         keep = set(args.only)

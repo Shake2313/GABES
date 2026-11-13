@@ -83,6 +83,9 @@ import numpy as np
 
 from gabes_lab.blocks.io import write_json  # noqa: E402
 from gabes_lab.blocks.paths import REPO_ROOT as REPO  # noqa: E402
+from gabes_lab.pipelines.squeezing._velocity_measure import (
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
 from gabes import constants, hyperfine, observables                 # noqa: E402
@@ -153,7 +156,9 @@ ULTRA = dict(phase_detail=fwm.PHASE_ULTRA, model_fidelity=fwm.FIDELITY_ULTRA)
 # Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
 # (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
 RESPONSE_METHOD = os.environ.get("GABES_FWM_RESPONSE", fwm.RESPONSE_POLE)
-_GOLD_SCAN = None
+VELOCITY_STEP, VELOCITY_CUTOFF = CONVERGED_VELOCITY_GRID  # sampled grid (m/s, sigma)
+HISTORICAL_VELOCITY_GRID = (5.0, 3.0)
+_GOLD_SCANS = {}
 _GOLD_SCAN_LOCK = Lock()
 
 
@@ -178,9 +183,10 @@ def _is_gold_scan(kw, D, loss, overlap, window_mhz):
     )
 
 
-def scan(cfg, *, window_mhz=350.0, **over):
+def scan(cfg, *, window_mhz=350.0, vstep=VELOCITY_STEP,
+         vcut=VELOCITY_CUTOFF, **over):
     """Hardened-Ultra probe scan on a 5 MHz delta grid."""
-    global _GOLD_SCAN
+    grid = (vstep, vcut)
     kw = {k: cfg[k] for k in ("T", "P_pump", "P_probe", "w_pump", "w_probe",
                               "L", "angle")}
     kw.update({k: v for k, v in over.items() if k in kw or k in
@@ -195,8 +201,8 @@ def scan(cfg, *, window_mhz=350.0, **over):
     if lock is not None:
         lock.acquire()
     try:
-        if is_gold and _GOLD_SCAN is not None:
-            return _GOLD_SCAN
+        if is_gold and grid in _GOLD_SCANS:
+            return _GOLD_SCANS[grid]
         with blas_single_thread():
             result = fwm.compute_spectrum(
                 D, T=kw["T"], P_pump=kw["P_pump"], P_probe=kw["P_probe"],
@@ -207,11 +213,12 @@ def scan(cfg, *, window_mhz=350.0, **over):
                 coarse_points=npts, fine_points=0,
                 scan_min=center - window_mhz * 1e-3,
                 scan_max=center + window_mhz * 1e-3,
-                velocity_step=5.0, velocity_cutoff=3.0, branch=-1,
+                velocity_step=vstep, velocity_cutoff=vcut,
+                velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut), branch=-1,
                 response_method=RESPONSE_METHOD, **ULTRA)
         result["delta_mhz"] = (result["probe_axis_GHz"] - center) * 1e3
         if is_gold:
-            _GOLD_SCAN = result
+            _GOLD_SCANS[grid] = result
         return result
     finally:
         if lock is not None:
@@ -264,7 +271,7 @@ def light_shift_mhz(P, w, Delta_GHz):
 # ==========================================================================
 # Does the optimum two-photon detuning δ move with pump intensity?
 # ==========================================================================
-def sec_tpd(quick=False):
+def sec_tpd(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     geoms = {
         "gold (w=530 um, T=121 C, D=+0.9 GHz)": dict(GOLD),
         "Jain (w=300 um, T=99 C, D=+0.8 GHz)": dict(
@@ -276,7 +283,7 @@ def sec_tpd(quick=False):
 
     def refined(cfg, P):
         """delta* on a 0.5 MHz grid: locate on the 5 MHz scan, then refine."""
-        r0 = readout(scan(cfg, P_pump=P))
+        r0 = readout(scan(cfg, P_pump=P, vstep=vstep, vcut=vcut))
         d0 = r0["delta_peak"]
         center = fwm.branch_center_GHz(cfg["D_GHz"], -1)
         with blas_single_thread():
@@ -288,7 +295,8 @@ def sec_tpd(quick=False):
                 coarse_points=121, fine_points=0,
                 scan_min=center + (d0 - 15.0) * 1e-3,
                 scan_max=center + (d0 + 15.0) * 1e-3,
-                velocity_step=5.0, velocity_cutoff=3.0, branch=-1,
+                velocity_step=vstep, velocity_cutoff=vcut,
+                velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut), branch=-1,
                 response_method=RESPONSE_METHOD, **ULTRA)
         d = (s["probe_axis_GHz"] - center) * 1e3
         k = int(np.nanargmax(s["G_s"]))
@@ -352,16 +360,16 @@ def sec_tpd(quick=False):
 # ==========================================================================
 # Pump power vs beam overlap: which one actually kills the FWM?
 # ==========================================================================
-def sec_pump_vs_overlap(quick=False):
+def sec_pump_vs_overlap(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     Ps = np.array([150, 300, 450, 600, 800, 1000] if not quick
                   else [300, 600, 1000]) * 1e-3
     ovl = np.array([1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3] if not quick
                    else [1.0, 0.7, 0.4])
     with pool(len(Ps)) as ex:
-        rp = list(ex.map(lambda P: readout(scan(GOLD, P_pump=P),
+        rp = list(ex.map(lambda P: readout(scan(GOLD, P_pump=P, vstep=vstep, vcut=vcut),
                                            GOLD["delta_mhz"]), Ps))
     with pool(len(ovl)) as ex:
-        ro = list(ex.map(lambda m: readout(scan(GOLD, mode_overlap_penalty=m),
+        ro = list(ex.map(lambda m: readout(scan(GOLD, mode_overlap_penalty=m, vstep=vstep, vcut=vcut),
                                            GOLD["delta_mhz"]), ovl))
     power_rows = [dict(P_mW=float(P * 1e3), G_fixed=r["G_fixed"],
                        xi_fixed=r["xi_fixed"], G_peak=r["G_peak"],
@@ -384,7 +392,7 @@ def sec_pump_vs_overlap(quick=False):
     eps = 0.15
     with pool(4) as ex:
         loc = list(ex.map(
-            lambda kw: readout(scan(GOLD, **kw), GOLD["delta_mhz"]),
+            lambda kw: readout(scan(GOLD, vstep=vstep, vcut=vcut, **kw), GOLD["delta_mhz"]),
             [dict(P_pump=GOLD["P_pump"] * (1 - eps)),
              dict(P_pump=GOLD["P_pump"] * (1 + eps)),
              dict(mode_overlap_penalty=1.0 - eps),
@@ -410,11 +418,11 @@ def sec_pump_vs_overlap(quick=False):
 # ==========================================================================
 # Seed: power insensitivity, and unamplified seed leaking into the probe arm
 # ==========================================================================
-def sec_seed(quick=False):
+def sec_seed(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     Ps = np.array([1, 4, 8, 16, 40, 100, 200] if not quick
                   else [1, 8, 100]) * 1e-6
     with pool(len(Ps)) as ex:
-        res = list(ex.map(lambda P: readout(scan(GOLD, P_probe=P),
+        res = list(ex.map(lambda P: readout(scan(GOLD, P_probe=P, vstep=vstep, vcut=vcut),
                                             GOLD["delta_mhz"]), Ps))
     power_rows = [dict(P_probe_uW=float(P * 1e6), G_fixed=r["G_fixed"],
                        xi_fixed=r["xi_fixed"], xi_best=r["xi_best"])
@@ -470,11 +478,11 @@ def sec_seed(quick=False):
 # ==========================================================================
 # Temperature
 # ==========================================================================
-def sec_temperature(quick=False):
+def sec_temperature(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     Ts = (np.arange(95.0, 146.0, 5.0) if not quick
           else np.array([100.0, 120.0, 140.0])) + 273.15
     with pool(len(Ts)) as ex:
-        res = list(ex.map(lambda T: (T, scan(GOLD, T=T)), Ts))
+        res = list(ex.map(lambda T: (T, scan(GOLD, T=T, vstep=vstep, vcut=vcut)), Ts))
     rows = []
     for T, s in res:
         r = readout(s, GOLD["delta_mhz"])
@@ -502,11 +510,11 @@ def sec_temperature(quick=False):
 # ==========================================================================
 # Cell length -- and whether it substitutes for temperature
 # ==========================================================================
-def sec_cell_length(quick=False):
+def sec_cell_length(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     Ls = np.array([6, 9, 12.5, 16, 19, 25, 40] if not quick
                   else [6, 12.5, 25]) * 1e-3
     with pool(len(Ls)) as ex:
-        res = list(ex.map(lambda L: (L, scan(GOLD, L=L)), Ls))
+        res = list(ex.map(lambda L: (L, scan(GOLD, L=L, vstep=vstep, vcut=vcut)), Ls))
     rows = []
     for L, s in res:
         r = readout(s, GOLD["delta_mhz"])
@@ -528,7 +536,7 @@ def sec_cell_length(quick=False):
             else:
                 hi = mid
         T = 0.5 * (lo + hi)
-        s = scan(GOLD, L=GOLD["L"] * factor, T=T)
+        s = scan(GOLD, L=GOLD["L"] * factor, T=T, vstep=vstep, vcut=vcut)
         r = readout(s, GOLD["delta_mhz"])
         trade.append(dict(L_mm=float(GOLD["L"] * factor * 1e3),
                           T_C=float(T - 273.15),
@@ -547,11 +555,11 @@ def sec_cell_length(quick=False):
 # ==========================================================================
 # Crossing angle
 # ==========================================================================
-def sec_angle(quick=False):
+def sec_angle(quick=False, *, vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     angs = (np.array([0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.32, 0.4, 0.5, 0.65,
                       0.8, 1.0]) if not quick else np.array([0.0, 0.32, 0.8]))
     with pool(len(angs)) as ex:
-        res = list(ex.map(lambda a: (a, scan(GOLD, angle=a)), angs))
+        res = list(ex.map(lambda a: (a, scan(GOLD, angle=a, vstep=vstep, vcut=vcut)), angs))
     rows = []
     for a, s in res:
         r = readout(s, GOLD["delta_mhz"])
@@ -801,6 +809,12 @@ def write_markdown(res, path):
     f = lambda x, s="{:.2f}": "—" if x is None else s.format(x)
 
     a("# FWM 동작 변수 점검 — mean-field gain과 gain-referred 진단\n")
+    grid = res.get("meta", {})
+    if grid.get("velocity_measure") == "exact":
+        a("Maxwell velocity measure: untruncated pole mean.\n")
+    elif "velocity_step" in grid:
+        a(f"Maxwell velocity grid: {grid['velocity_step']:g} m/s, "
+          f"{grid['velocity_cutoff']:g} sigma.\n")
     a("자동 생성 — `gabes_lab/pipelines/squeezing/variable_audit/scan_variable_audit.py`\n")
     a(f"판독 규약은 v6 gain-referred diagnostic tolerance 절과 동일: hardened Ultra, η = {ETA}, "
       f"δ 격자 {DELTA_STEP_MHZ:.0f} MHz, gap gate [{GAP_MIN}, {GAP_MAX}]. "
@@ -1219,25 +1233,33 @@ def main():
     ap.add_argument("--out", default=None,
                     help="output folder (default: a new run folder under runs/squeezing/variable_audit/)")
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--historical-velocity-grid", action="store_true",
+                    help="use the velocity grid from the historical report")
     args = ap.parse_args()
-    run = start_run("squeezing/variable_audit", out=args.out, config={"quick": args.quick})
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
+                   else (VELOCITY_STEP, VELOCITY_CUTOFF))
+    run = start_run("squeezing/variable_audit", out=args.out, config=dict(quick=args.quick, velocity_step=vstep,
+                                                             velocity_cutoff=vcut,
+                                                             velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut)))
     out = run.dir
 
     t0 = time.time()
     res = {}
     for name, fn in (("paper_db", lambda: sec_paper_db()),
-                     ("tpd", lambda: sec_tpd(args.quick)),
-                     ("pump_vs_overlap", lambda: sec_pump_vs_overlap(args.quick)),
-                     ("seed", lambda: sec_seed(args.quick)),
-                     ("temperature", lambda: sec_temperature(args.quick)),
-                     ("cell_length", lambda: sec_cell_length(args.quick)),
-                     ("angle", lambda: sec_angle(args.quick)),
+                     ("tpd", lambda: sec_tpd(args.quick, vstep=vstep, vcut=vcut)),
+                     ("pump_vs_overlap", lambda: sec_pump_vs_overlap(args.quick, vstep=vstep, vcut=vcut)),
+                     ("seed", lambda: sec_seed(args.quick, vstep=vstep, vcut=vcut)),
+                     ("temperature", lambda: sec_temperature(args.quick, vstep=vstep, vcut=vcut)),
+                     ("cell_length", lambda: sec_cell_length(args.quick, vstep=vstep, vcut=vcut)),
+                     ("angle", lambda: sec_angle(args.quick, vstep=vstep, vcut=vcut)),
                      ("loss", lambda: sec_loss()),
                      ("stray", lambda: sec_stray())):
         t = time.time()
         res[name] = fn()
         print(f"  {name:16s} {time.time()-t:7.1f}s")
     res["meta"] = dict(
+        velocity_step=vstep, velocity_cutoff=vcut,
+        velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         eta=ETA, gap_gate=[GAP_MIN, GAP_MAX],
         delta_step_mhz=DELTA_STEP_MHZ, gold=dict(GOLD),
         runtime_s=time.time() - t0,
