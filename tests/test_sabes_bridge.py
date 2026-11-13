@@ -369,3 +369,16 @@ def test_warnings_aggregate_from_every_stage():
     result = bridge.run(fat, resolution=fwm.FIDELITY_ULTRA)
     assert any("twin radii" in w for w in result.geometry.warnings)
     assert len(result.warnings) >= len(result.geometry.warnings)
+
+
+def test_one_cell_length_drives_optical_geometry_and_the_solver():
+    calibration = default_calibration().with_value("cell_length_mm", 19.0)
+    result = bridge.run(calibration=calibration, solve=False)
+    assert result.params["cell_mm"] == 19.0
+    assert result.geometry.mode_to_dmirror_m - result.geometry.exit_to_dmirror_m == pytest.approx(0.0095)
+    override = bridge.run(calibration=calibration, solve=False, cell_mm=22.0)
+    assert override.params["cell_mm"] == 22.0
+    assert override.geometry.mode_to_dmirror_m - override.geometry.exit_to_dmirror_m == pytest.approx(0.011)
+    assert calibration.value("cell_length_mm") == 19.0
+    assert "post_cell_loss_pct" not in calibration
+    assert "pump_seed_angle_deg" not in calibration

@@ -22,9 +22,55 @@ def json_value(value):
     raise TypeError(f"unsupported SABES export value: {type(value).__name__}")
 
 
+def _gold_reference():
+    """Separate reported and model-derived IDS for the 85Rb operating point."""
+    paper_eta = 0.865
+    code_eta = 0.945 * 0.92
+    slope_nf = 0.134
+    # Invert NF_det = 1 - eta + eta * NF_src for the slope-derived readout.
+    inferred_nf = (slope_nf - (1.0 - code_eta)) / code_eta
+    return {
+        "source": "https://doi.org/10.1038/s41598-025-86479-w",
+        "detector_efficiency": {
+            "paper": {"eta": paper_eta, "uncertainty": 0.002,
+                      "convention": "one minus the reported total loss"},
+            "code": {"eta": code_eta, "uncertainty": None,
+                     "convention": "sequential optics transmission times detector QE"},
+        },
+        "rounded_output_power": {
+            "probe_uW": 111.0, "conjugate_uW": 109.0,
+            "paper_measurement_plane": None, "uncertainty_uW": None,
+            "v7_model_plane": "cell exit before external detection loss",
+        },
+        "ids": {
+            "direct_detector_dB": -7.8,
+            "slope_detector_dB": 10.0 * math.log10(slope_nf),
+            "slope_detector_analysis_frequency_Hz": 150e3,
+            "intrinsic_inferred_from_slope": {
+                "dB": 10.0 * math.log10(inferred_nf),
+                "assumed_eta": code_eta,
+                "method": "invert symmetric vacuum loss with slope NF=0.134",
+                "uncertainty": None,
+            },
+        },
+        "v7_gaussian": {
+            "evidence_class": "output-constrained model estimate",
+            "record": "docs/squeezing_report/v7_science/theory_results.json",
+            "predicted_ids_dB_at_eta_0p865": -7.70926151275678,
+            "predicted_ids_dB_at_eta_0p8694": -7.81890347354036,
+        },
+    }
+
+
 def session_payload(result, detection, calibration, apparatus, profile):
     """Export actual active inputs, not merely the shipped apparatus JSON."""
     raw = result.raw or {}
+    evidence = result.readout_evidence
+    dependencies = calibration.output_evidence(
+        gain_calibrated=bool(evidence and evidence["gain"]["calibration_applied"]),
+        recorded_transmission=detection.post_cell_transmission_override is not None,
+        recorded_qe=detection.qe_pct_override is not None,
+    )
     rows = [{"path": path, "stage": stage, "power_w": power,
              "waist_radius_m": waist}
             for path, stage, power, waist in result.chain.budget_rows()]
@@ -37,6 +83,8 @@ def session_payload(result, detection, calibration, apparatus, profile):
         "detection_settings": detection,
         "calibration": {c.name: c.as_dict() for c in calibration},
         "derived_parameters": result.params,
+        "calibration_dependencies": dependencies,
+        "literature_reference": _gold_reference(),
         "detection_geometry": result.geometry,
         "source_power_budget": rows,
         "operating_point": {

@@ -923,18 +923,24 @@ def _etalon_transfer_table(chain):
 
 
 def _provenance_panel(calibration):
-    unverified = calibration.unverified()
-    verified = len(calibration) - len(unverified)
-    st.markdown(
-        f"**{verified} of {len(calibration)}** coefficients carry a datasheet, "
-        f"paper or fit source tag. These tags do not establish calibration of "
-        f"the installed apparatus. The table below retains reported, nominal "
-        f"and interactively edited inputs."
-    )
-    rows = [(c.name, f"{c.value:g}", c.unit or "—", c.provenance)
-            for c in unverified]
-    st.markdown(_markdown_table(("Coefficient", "Value", "Unit", "Provenance"),
-                                rows))
+    counts = calibration.evidence_counts()
+    st.markdown(_markdown_table(("Evidence class", "Applicability", "Coefficients"), [
+        (source, status.replace("_", " "), str(count))
+        for (source, status), count in sorted(counts.items())
+    ]))
+    rows = []
+    for coefficient in sorted(calibration, key=lambda c: c.name):
+        evidence = coefficient.evidence
+        applicability = evidence["applicability"]
+        rows.append((
+            coefficient.name, f"{coefficient.value:g}", coefficient.unit or "—",
+            evidence["evidence_class"], applicability["status"].replace("_", " "),
+            evidence["source"] or "unknown", coefficient.note,
+        ))
+    st.markdown(_markdown_table(
+        ("Coefficient", "Value", "Unit", "Evidence", "Applicability", "Source", "Scope"),
+        rows))
+    st.caption("Exact applicability, uncertainty and fit/holdout metadata are in the session export.")
 
 
 def _render_apparatus_tab(result, detection, calibration):

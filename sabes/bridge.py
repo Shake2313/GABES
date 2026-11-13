@@ -420,10 +420,13 @@ def run(settings=None, calibration=None, detection=None, *,
     scheme = scheme or fwm.FWMScheme()
 
     chain = build_source_chain(settings, calibration)
+    calibration_length_mm = calibration.value("cell_length_mm")
+    cell_mm = float(param_overrides.pop("cell_mm", calibration_length_mm))
+    if cell_mm != calibration_length_mm:
+        calibration = calibration.with_value("cell_length_mm", cell_mm)
     geom = detection_module.geometry(chain, settings, detection, calibration,
                                      layout=layout)
-    params = to_gabes_params(chain, settings, geom, **param_overrides)
-
+    params = to_gabes_params(chain, settings, geom, cell_mm=cell_mm, **param_overrides)
     if not solve:
         return SabesResult(settings=settings, chain=chain, geometry=geom,
                            params=params)

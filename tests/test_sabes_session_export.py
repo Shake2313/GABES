@@ -115,7 +115,8 @@ def test_export_records_live_knobs_calibration_and_their_derived_result():
     assert payload["detection_settings"]["pd_defocus_mm"] == 5.0
     assert payload["calibration"]["t_m_seed_1"] == {
         "value": 0.8, "unit": calibration.get("t_m_seed_1").unit,
-        "provenance": "hand", "note": "Live session throughput edit"}
+        "provenance": "hand", "note": "Live session throughput edit",
+        "evidence": json_value(calibration.get("t_m_seed_1").evidence)}
     assert payload["derived_parameters"] == json_value(result.params)
     assert payload["derived_parameters"]["probe_uw"] != base.params["probe_uw"]
     assert payload["derived_parameters"]["after_cell_eff_pct"] == 91.0
@@ -156,3 +157,29 @@ def test_session_json_replaces_unavailable_numbers_with_null_and_is_strict_json(
 def test_unknown_profile_fails_instead_of_silently_using_a_reference(function):
     with pytest.raises(ValueError, match="unknown SABES profile"):
         function("unregistered apparatus profile")
+
+
+def test_export_marks_modified_detector_evidence_and_reports_gold_planes():
+    result, detection, calibration = _profile(LAB_PROFILE)
+    payload = session_payload(result, detection, calibration, default_apparatus(), LAB_PROFILE)
+    nep = payload["calibration"]["bpd_nep_w_per_rthz"]["evidence"]
+    assert nep["evidence_class"] == "datasheet"
+    assert nep["applicability"]["status"] == "reference_only"
+    assert nep["uncertainty"] is None
+    dependencies = payload["calibration_dependencies"]
+    assert "bpd_nep_w_per_rthz" not in dependencies["noise"]["coefficients"]
+    assert "bpd_nep_w_per_rthz" in dependencies["detector_clearance"]["unknown_applicability_or_uncertainty"]
+    assert "loss_post_cell_residual" not in dependencies["noise"]["coefficients"]
+    assert "pd_responsivity_a_per_w" not in dependencies["noise"]["coefficients"]
+    fit = payload["calibration"]["etalon_leak"]["evidence"]
+    assert fit["role"] == "development_fit"
+    assert fit["fit"]["objective"]
+    assert fit["fit"]["holdout"] is None
+    gold = payload["literature_reference"]
+    assert gold["detector_efficiency"]["paper"]["eta"] == pytest.approx(0.865)
+    assert gold["detector_efficiency"]["code"]["eta"] == pytest.approx(0.8694)
+    assert gold["rounded_output_power"]["paper_measurement_plane"] is None
+    assert gold["rounded_output_power"]["v7_model_plane"].startswith("cell exit")
+    assert gold["ids"]["direct_detector_dB"] == -7.8
+    assert gold["ids"]["slope_detector_dB"] == pytest.approx(10*np.log10(0.134))
+    assert gold["ids"]["intrinsic_inferred_from_slope"]["dB"] < -8.7
