@@ -958,7 +958,7 @@ def phase_mismatch_grid(fields, signal_axis_deg, idler_axis_deg,
 
 
 def phase_mismatch_vector_grid(fields, signal_axis_deg, idler_axis_deg,
-                               reference_delta_k=0.0):
+                               reference_delta_k=0.0, *, precise_norm=False):
     """Vectorized signal/idler mismatch magnitude grid for biphoton collection."""
     signal_axis_deg = np.asarray(signal_axis_deg, dtype=float)
     idler_axis_deg = np.asarray(idler_axis_deg, dtype=float)
@@ -982,6 +982,11 @@ def phase_mismatch_vector_grid(fields, signal_axis_deg, idler_axis_deg,
             delta_k_x += (field.phase_sign * field.k * math.sin(angle_rad)
                           * field.side_sign)
     delta_k_z_relative = delta_k_z_absolute - (reference_delta_k or 0.0)
+    if precise_norm:
+        # Match scalar math.hypot exactly at deep sinc minima. Vectorized
+        # np.hypot can differ by an ulp on the same components.
+        return np.fromiter(map(math.hypot, delta_k_z_relative.flat, delta_k_x.flat),
+                           dtype=float, count=delta_k_x.size).reshape(delta_k_x.shape)
     return np.hypot(delta_k_z_relative, delta_k_x)
 
 
@@ -5271,13 +5276,11 @@ class FWMScheme(Scheme):
             if angle_axis is None or phase_matching is None:
                 angle_axis = np.linspace(max(params["idler_angle_deg"] - 4.0, 0.0),
                                          params["idler_angle_deg"] + 4.0, 181)
-                angle_dk = np.array([
-                    phase_mismatch_vector(
-                        raw["fields"], idler_angle_deg=a,
-                        reference_delta_k=topo.reference_delta_k
-                    )["delta_k_vector"]
-                    for a in angle_axis
-                ])
+                signal = next(field for field in raw["fields"] if field.role == "signal")
+                angle_dk = phase_mismatch_vector_grid(
+                    raw["fields"], [signal.angle_deg], angle_axis,
+                    reference_delta_k=topo.reference_delta_k, precise_norm=True,
+                )[0]
                 phase_matching = phase_matching_weight(angle_dk, raw["cell_length_m"])
 
             axPM.plot(angle_axis, phase_matching,
