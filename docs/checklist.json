@@ -4703,7 +4703,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P2",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-08-12_scheme-3_rydberg-eit.md",
         "docs/daily_report/2026-08-22_scheme-3_rydberg-eit.md",
@@ -4757,7 +4757,8 @@
         "source": "docs/checklist.json#_external_code_review_2026_10_30",
         "adoption_status": "user_approved_checklist_supplement_only",
         "note": "⟦AI⟧ 실제 캐시는 exact physical-input key와 static-slope 선택점을 사용하는 bounded LRU다. 부동소수점 키 자체를 버그로 확정하지 않고 기존 계층별 재사용 과제에 계측·입력 보존 조건만 보강한다."
-      }
+      },
+      "implementation_2026_11_13": "⟦AI⟧ d2003c5 separates bounded exact atomic, IF and propagation caches and preserves hidden imported controls across regimes. Nine production sweeps matched the parent byte-for-byte. Warm detector-only edits reduced solve calls from 20 static and 60 propagation to zero and measured 263 to 41 ms (Doppler off) and 396 to 56 ms (on). IF-only and opacity-only edits reused unaffected layers. Focused checks: 153 passed."
     },
     {
       "id": "rydberg-finite-if-affine-postprocess",
