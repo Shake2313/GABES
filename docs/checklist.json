@@ -3788,7 +3788,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "acceptance_criteria": [
         "Each extracted value has paper/version, DOI or source URL, page/figure/table, unit, optical or electrical measurement plane, experimental mode, operating-condition group, uncertainty/rounding and measured/inferred/assumed status; missing fields remain explicit unknown.",
         "Reconcile the specific v7 history corrections with primary sources before changing CSV values: gold radius and total loss, nominal 15-16 versus rounded power ratios, direct versus slope IDS, Wu outputs from different seed inputs, Vogl blue branch and gain range, McCormick2007 length conflict, Liu pump/bandwidth scan, and Jain/Monsa arithmetic discrepancies.",
@@ -3818,7 +3818,8 @@
         "docs/daily_report/2026-10-04_scheme-5_fwm.md",
         "docs/daily_report/2026-10-09_scheme-5_fwm.md",
         "docs/daily_report/2026-10-14_scheme-5_fwm.md"
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ 9a5f0fb links all ten historical paper columns to primary sources, typed operating conditions and distinct gain-only/mean-output-only targets. Corrected Wu uses separate seeds and unknown arm/plane. Observed, reported and inferred noise/loss remain distinct. Original CSV SHA-256 028bd42e3d04f9811594312a24abe1fdeac67562f4a2e3f378f4a6a1731315b1 and compatibility scanner are preserved. Verified 17 papers, 61 experiments, 1108 observations, 19 source/schema checks and 9 focused tests. Missing raw data and pooling remain calibration campaign work."
     },
     {
       "id": "fwm-finite-seed-angular-doppler-production",
