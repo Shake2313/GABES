@@ -19,12 +19,14 @@ import threading
 from collections import OrderedDict
 
 import numpy as np
+from scipy.signal import peak_prominences
 
 from .. import affine_doppler, atoms, beam, constants, core, observables, species
 from .. import rydberg_electrometry as electrometry
 from .. import rydberg_experiment as rydberg_experiment
 from .. import rydberg_opacity as opacity
-from ..lineshape import level_crossing
+from ..lineshape import (MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM,
+                         MIN_SUBDOPPLER_SAMPLES_PER_FWHM, level_crossing)
 from ..report import derived_table
 from .base import ExtraView, ParamSpec, Scheme
 
@@ -52,6 +54,7 @@ PROBE_RABI_REF_MHZ = 2.0
 SUPERHET_ATOMIC_CACHE_SIZE = 16
 SUPERHET_CLASS_CHUNK = 16384     # velocity classes per finite-IF batch solve
 MIRROR_TIE_RTOL = 1e-5           # mirror slope maxima of a symmetric line are one tie
+READOUT_REFINEMENT_RTOL = 0.05
 
 
 def _finite_scenario_envelope(curves):
@@ -357,8 +360,8 @@ class RydbergEITScheme(Scheme):
                 "detector_reference_power_ratio", "Reference/signal DC power",
                 "Detection & scaling", r["detector_reference_power_ratio"],
                 0.0, 5.0, 0.05, "×", advanced=True, recompute=False,
-                help="Reference-arm DC power relative to the transmitted signal arm. "
-                     "The electronic weight is chosen to balance the DC currents."),
+                help="Reference/signal power ratio at the bare two-photon resonance. "
+                     "Reference power and the DC balance weight are fixed across the scan."),
             ParamSpec(
                 "detector_electronic_noise_pa_sqrt_hz", "Electronics current ASD",
                 "Detection & scaling", r["detector_electronic_noise_pa_sqrt_hz"],
@@ -770,11 +773,133 @@ class RydbergEITScheme(Scheme):
         )
 
     @staticmethod
-    def _transparency_maxima(x, y, window_mhz, center_mhz=0.0):
-        """Local transmission maxima (pos [MHz], height) within ±window of line
-        centre — the dressed AT/EIT transparency peaks."""
-        return [(float(x[i]), float(y[i])) for i in range(1, y.size - 1)
-                if abs(x[i] - center_mhz) <= window_mhz and y[i] > y[i - 1] and y[i] >= y[i + 1]]
+    def _parabolic_offset(y, index):
+        """Peak location relative to its center sample, in sample intervals."""
+        if not 0 < index < y.size - 1:
+            return 0.0
+        left, center, right = map(float, y[index - 1:index + 2])
+        curvature = left - 2 * center + right
+        if not np.isfinite(curvature) or curvature >= 0.0:
+            return 0.0
+        return float(np.clip(0.5 * (left - right) / curvature, -0.5, 0.5))
+
+    @classmethod
+    def _transparency_peaks(cls, x, y, window_mhz, center_mhz):
+        indices = np.flatnonzero(
+            (y[1:-1] > y[:-2]) & (y[1:-1] >= y[2:])
+            & (np.abs(x[1:-1] - center_mhz) <= window_mhz)) + 1
+        prominences = peak_prominences(y, indices)[0]
+        peaks = []
+        for index, contrast in zip(indices, prominences):
+            offset = cls._parabolic_offset(y, index)
+            position = float(x[index] + offset * (x[index + 1] - x[index]))
+            height = float(y[index] - 0.25 * offset * (y[index - 1] - y[index + 1]))
+            peaks.append((position, height, cls._feature_support(x, y, index, contrast)))
+        return peaks
+
+    @classmethod
+    def _transparency_maxima(cls, x, y, window_mhz, center_mhz=0.0):
+        return [(pos, height) for pos, height, _ in
+                cls._transparency_peaks(x, y, window_mhz, center_mhz)]
+
+    @staticmethod
+    def _feature_support(x, y, index, contrast):
+        """Half-height support and numerical resolution on the sampled grid."""
+        result = dict(
+            status="unresolved", contrast=float(contrast), fwhm_mhz=None,
+            left_half_height_mhz=None, right_half_height_mhz=None,
+            samples_per_fwhm=None, scan_edge_distance_mhz=None,
+        )
+        if not np.isfinite(contrast) or contrast <= 0.0:
+            return result
+        half = y[index] - 0.5 * contrast
+        left, _ = level_crossing(x, y, index, -1, half)
+        right, _ = level_crossing(x, y, index, +1, half)
+        result["left_half_height_mhz"] = left if np.isfinite(left) else None
+        result["right_half_height_mhz"] = right if np.isfinite(right) else None
+        if not np.isfinite(left) or not np.isfinite(right):
+            result["status"] = "scan-edge-limited"
+            result["scan_edge_distance_mhz"] = 0.0
+            return result
+        fwhm = right - left
+        intervals = fwhm / float(np.max(np.diff(x)))
+        edge = min(left - x[0], x[-1] - right)
+        result.update(fwhm_mhz=fwhm, samples_per_fwhm=intervals,
+                      scan_edge_distance_mhz=edge)
+        if edge < MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM * fwhm:
+            result["status"] = "scan-edge-limited"
+        elif intervals < MIN_SUBDOPPLER_SAMPLES_PER_FWHM:
+            result["status"] = "resolution-limited"
+        else:
+            result["status"] = "resolved"
+        return result
+
+    @staticmethod
+    def _refinement_status(estimates, scales):
+        if any(not np.isfinite(value) for value in estimates):
+            return "not-assessed", None
+        movement = max(
+            abs(right - left) / max(abs(scale), np.finfo(float).tiny)
+            for left, right, scale in zip(estimates, estimates[1:], scales))
+        return ("converged" if movement <= READOUT_REFINEMENT_RTOL
+                else "not-converged"), float(movement)
+
+    @classmethod
+    def _finite_if_validity(cls, axis, total_asd):
+        support = dict(status="provisional-sparse-sampling", contrast=None,
+                       fwhm_mhz=None, left_half_height_mhz=None,
+                       right_half_height_mhz=None, samples_per_fwhm=None,
+                       scan_edge_distance_mhz=None, numerical_convergence="not-assessed",
+                       refinement_max_relative_change=None,
+                       refinement_sample_counts=None)
+        best = int(np.argmin(total_asd))
+        if axis.size < 9 or not np.allclose(np.diff(axis), axis[1] - axis[0]):
+            return support, 0.0
+        response = np.divide(1.0, total_asd, out=np.zeros_like(total_asd),
+                             where=np.isfinite(total_asd) & (total_asd > 0))
+        support.update(cls._feature_support(axis, response, best, response[best]))
+        if not 0 < best < axis.size - 1:
+            support["status"] = "scan-edge-limited"
+            return support, 0.0
+
+        # Constrain all refinements to the same physical basin so tied mirror
+        # optima cannot masquerade as a failure to converge.
+        region = 2.0 * (support["fwhm_mhz"] or (axis[1] - axis[0]) * 4)
+        origin = axis[best]
+        detunings, minima = [], []
+        counts = []
+        offset = 0.0
+        for stride in (4, 2, 1):
+            grid, asd = axis[::stride], total_asd[::stride]
+            eligible = (np.abs(grid - origin) <= region) & np.isfinite(asd)
+            if not eligible.any():
+                return support, 0.0
+            index = int(np.argmin(np.where(eligible, asd, np.inf)))
+            offset = cls._parabolic_offset(-asd, index)
+            detunings.append(float(grid[index] + offset * (grid[1] - grid[0])))
+            minima.append(float(cls._interpolate_sample(asd, index, offset)))
+            counts.append(grid.size)
+        width = support["fwhm_mhz"] or 0.0
+        if width:
+            value_result = cls._refinement_status(minima, minima[1:])
+            position_result = cls._refinement_status(detunings, (width, width))
+            movement = max(value_result[1], position_result[1])
+            convergence = ("converged" if movement <= READOUT_REFINEMENT_RTOL
+                           else "not-converged")
+            support.update(numerical_convergence=convergence,
+                           refinement_max_relative_change=movement,
+                           refinement_sample_counts=counts)
+            if support["status"] == "resolved" and convergence != "converged":
+                support["status"] = convergence
+        return support, offset
+
+    @staticmethod
+    def _interpolate_sample(values, index, offset):
+        if offset == 0.0:
+            return values[index]
+        left, middle, right = values[index - 1:index + 2]
+        return middle + 0.5 * offset * (
+            right - left + offset * (left - 2.0 * middle + right))
 
     @staticmethod
     def _opacity_scale(raw, params):
@@ -806,6 +931,21 @@ class RydbergEITScheme(Scheme):
             dipole_ea0 * constants.ELEMENTARY_CHARGE * BOHR_RADIUS_M,
             angular_factor=angular_factor,
             field_amplitude_convention=convention,
+        )
+
+    def _rf_dipole_provenance(self, params):
+        dipole = float(params.get("rf_transition_dipole_ea0", RF_DIPOLE_STRETCHED_EA0))
+        return dict(
+            matrix_element_ea0=dipole,
+            source=("ARC 3.10.2 getDipoleMatrixElement" if dipole == RF_DIPOLE_STRETCHED_EA0
+                    else "user input"),
+            isotope="85Rb",
+            lower_state=dict(n=40, l=2, j=2.5, mj=2.5),
+            upper_state=dict(n=39, l=3, j=3.5, mj=3.5),
+            spherical_polarization_q=1,
+            angular_factor=float(params.get("rf_angular_factor", self._REF["rf_angular_factor"])),
+            field_amplitude_convention=str(params.get(
+                "rf_field_convention", self._REF["rf_field_convention"])),
         )
 
     def _sam_calibration(self, params):
@@ -1054,6 +1194,31 @@ class RydbergEITScheme(Scheme):
             "detector_reference_power_ratio",
             self._REF["detector_reference_power_ratio"]))
         reference_weight = 1.0 / reference_ratio if reference_ratio > 0.0 else 0.0
+        balance_detuning = self._resonance_scan_mhz(params)
+        balance_transmission = float(np.interp(balance_detuning, x, transmission))
+        reference_channel = (
+            electrometry.PhotodiodeChannel(
+                incident_power_w * path_efficiency * balance_transmission * reference_ratio,
+                detector_responsivity) if reference_ratio > 0.0 else None)
+        detector_inputs = dict(
+            reference=reference_channel, reference_weight=reference_weight,
+            electronic_noise_current_asd_a_per_sqrt_hz=float(params.get(
+                "detector_electronic_noise_pa_sqrt_hz",
+                self._REF["detector_electronic_noise_pa_sqrt_hz"])) * 1.0e-12,
+            relative_intensity_noise_per_sqrt_hz=float(params.get(
+                "detector_rin_per_sqrt_hz", self._REF["detector_rin_per_sqrt_hz"])),
+            rin_correlation=float(params.get(
+                "detector_rin_correlation", self._REF["detector_rin_correlation"])),
+        )
+
+        def at_detector(transmitted_fraction, current_phasor):
+            signal_power = incident_power_w * path_efficiency * transmitted_fraction
+            detector = electrometry.BalancedDetector(
+                signal=electrometry.PhotodiodeChannel(signal_power, detector_responsivity),
+                **detector_inputs)
+            noise = electrometry.balanced_detector_noise(detector)
+            return signal_power, noise, electrometry.electrometry_sensitivity(
+                noise, float(abs(current_phasor)))
         current_phasors = electrometry.current_responsivity_from_atomic_phasor(
             transmission_phasor_per_rabi, current_scale, rf_coupling)
         candidates = []
@@ -1064,65 +1229,50 @@ class RydbergEITScheme(Scheme):
             if not np.isfinite(responsivity) or responsivity <= 0.0:
                 candidates.append(None)
                 continue
-            signal_power_w = (
-                incident_power_w * path_efficiency * transmission[global_index])
-            signal_channel = electrometry.PhotodiodeChannel(
-                signal_power_w, detector_responsivity)
-            reference_channel = (
-                electrometry.PhotodiodeChannel(
-                    signal_power_w * reference_ratio, detector_responsivity)
-                if reference_ratio > 0.0 else None)
-            detector = electrometry.BalancedDetector(
-                signal=signal_channel,
-                reference=reference_channel,
-                reference_weight=reference_weight,
-                electronic_noise_current_asd_a_per_sqrt_hz=float(params.get(
-                    "detector_electronic_noise_pa_sqrt_hz",
-                    self._REF["detector_electronic_noise_pa_sqrt_hz"])) * 1.0e-12,
-                relative_intensity_noise_per_sqrt_hz=float(params.get(
-                    "detector_rin_per_sqrt_hz",
-                    self._REF["detector_rin_per_sqrt_hz"])),
-                rin_correlation=float(params.get(
-                    "detector_rin_correlation",
-                    self._REF["detector_rin_correlation"])),
-            )
-            noise = electrometry.balanced_detector_noise(detector)
-            sensitivity = electrometry.electrometry_sensitivity(
-                noise, responsivity)
-            total_field_asd[local_index] = (
-                sensitivity.total_field_asd_v_m_per_sqrt_hz)
-            candidates.append((
-                current_phasor, signal_power_w, reference_channel,
-                noise, sensitivity,
-            ))
+            signal_power_w, noise, sensitivity = at_detector(
+                transmission[global_index], current_phasor)
+            total_field_asd[local_index] = sensitivity.total_field_asd_v_m_per_sqrt_hz
+            candidates.append((current_phasor, signal_power_w, noise, sensitivity))
         local_best = int(np.nanargmin(total_field_asd))
         best_index = int(indices[local_best])
         best = candidates[local_best]
         if best is None:
             return None
-        current_phasor, signal_power_w, reference_channel, noise, sensitivity = best
+        current_phasor, signal_power_w, noise, sensitivity = best
+        response_axis = x[indices]
+        validity, offset = self._finite_if_validity(response_axis, total_field_asd)
+        optimum_detuning = float(self._interpolate_sample(response_axis, local_best, offset))
+        optimum_transmission = float(self._interpolate_sample(
+            transmission[indices], local_best, offset))
+        if offset:
+            optimum_transmission = max(0.0, optimum_transmission)
+            current_phasor = self._interpolate_sample(current_phasors, local_best, offset)
+            signal_power_w, noise, sensitivity = at_detector(optimum_transmission, current_phasor)
         enbw_hz = float(params.get(
             "measurement_enbw_hz", self._REF["measurement_enbw_hz"]))
         optimum_dp, optimum_dc = self._optical_detunings_at_scan(
-            params, float(raw["scan"][best_index]))
+            params, optimum_detuning * MHZ)
         return dict(
             response_detuning_mhz=x[indices],
             current_phasors_a_per_v_m=current_phasors,
             psn_field_asd_v_m_per_sqrt_hz=np.asarray([
-                candidate[4].psn_field_asd_v_m_per_sqrt_hz if candidate is not None else np.inf
+                candidate[3].psn_field_asd_v_m_per_sqrt_hz if candidate is not None else np.inf
                 for candidate in candidates]),
             technical_field_asd_v_m_per_sqrt_hz=np.asarray([
-                candidate[4].technical_field_asd_v_m_per_sqrt_hz if candidate is not None else np.inf
+                candidate[3].technical_field_asd_v_m_per_sqrt_hz if candidate is not None else np.inf
                 for candidate in candidates]),
             scan_axis=self._scan_axis(params),
             transmission_phasor_per_angular_rabi=transmission_phasor_per_rabi,
             optimum_index=best_index,
-            optimum_detuning_mhz=float(x[best_index]),
-            optimum_scan_detuning_mhz=float(x[best_index]),
+            optimum_detuning_mhz=optimum_detuning,
+            optimum_scan_detuning_mhz=optimum_detuning,
             optimum_probe_detuning_mhz=optimum_dp / MHZ,
             optimum_coupling_detuning_mhz=optimum_dc / MHZ,
             optimum_two_photon_detuning_mhz=(optimum_dp + optimum_dc) / MHZ,
-            optimum_transmission=float(transmission[best_index]),
+            optimum_transmission=optimum_transmission,
+            reference_balance_detuning_mhz=balance_detuning if reference_channel is not None else None,
+            reference_balance_weight=reference_weight,
+            validity=validity,
             response_phase_deg=float(np.angle(current_phasor, deg=True)),
             current_responsivity_a_per_v_m=float(abs(current_phasor)),
             detector_responsivity_a_per_w=float(detector_responsivity),
@@ -1141,28 +1291,53 @@ class RydbergEITScheme(Scheme):
             atomic_response=atomic_response,
         )
 
-    @staticmethod
-    def _eit_features(x, T_trans, center_mhz=0.0):
-        """(FWHM [MHz], peak contrast) of the central EIT transparency feature.
+    @classmethod
+    def _eit_validity(cls, x, transmission, center_mhz):
+        index = int(np.argmin(np.abs(x - center_mhz)))
+        window = np.abs(x - center_mhz) <= 5.0
+        floor = np.min(transmission[window]) if window.any() else np.min(transmission)
+        return cls._feature_support(x, transmission, index, transmission[index] - floor)
 
-        Contrast = T(centre) − absorptive floor in a ±5 MHz window. The FWHM is
-        measured to the half-contrast level with linear interpolation of the two
-        crossings (sub-sample accurate — a bare grid walk stair-steps the
-        probe-power sweep). The transmitted-signal amplitude in Fig. 2(b) scales
-        as probe power × contrast."""
-        ic = int(np.argmin(np.abs(x - center_mhz)))
-        peak = float(T_trans[ic])
-        win = np.abs(x - center_mhz) <= 5.0
-        floor = float(np.min(T_trans[win])) if win.any() else float(np.min(T_trans))
-        contrast = peak - floor
-        if contrast <= 0:
-            return float("nan"), 0.0
-        half = floor + 0.5 * contrast
-        if ic == 0 or ic == x.size - 1:
-            return float("nan"), contrast
-        right, _ = level_crossing(x, T_trans, ic, +1, half)
-        left, _ = level_crossing(x, T_trans, ic, -1, half)
-        return abs(right - left), contrast
+    @classmethod
+    def _eit_features(cls, x, T_trans, center_mhz=0.0):
+        """Compatibility FWHM and contrast for the probe-power and heating sweeps."""
+        feature = cls._eit_validity(x, T_trans, center_mhz)
+        width = feature["fwhm_mhz"]
+        return (float("nan") if width is None else width, feature["contrast"])
+
+    def _static_readout_validity(self, x, transmission, center, window=None):
+        """Compare nested grids over the same measured scan extent."""
+        def features(stride):
+            offset = int(np.argmin(np.abs(x - center))) % stride
+            # Preserve the original endpoints so the half-height gate is checked
+            # against the same physical scan span on every refinement.
+            grid = np.unique(np.r_[0, np.arange(offset, x.size, stride), x.size - 1])
+            if window is None:
+                feature = self._eit_validity(x[grid], transmission[grid], center)
+                return feature, feature["fwhm_mhz"], grid.size
+            peaks = self._transparency_peaks(x[grid], transmission[grid], window, center)
+            chosen = sorted(sorted(peaks, key=lambda peak: peak[1])[-2:], key=lambda peak: peak[0])
+            if len(chosen) < 2:
+                return dict(status="unresolved", peaks=[], measured_peaks=peaks), None, grid.size
+            support = [peak[2] for peak in chosen]
+            statuses = [feature["status"] for feature in support]
+            status = next((item for item in ("scan-edge-limited", "resolution-limited",
+                                             "unresolved") if item in statuses), "resolved")
+            detail = dict(status=status, measured_peaks=peaks,
+                          peaks=[dict(position_mhz=peak[0], transmission=peak[1], **peak[2])
+                                 for peak in chosen])
+            return detail, chosen[1][0] - chosen[0][0], grid.size
+
+        samples = [features(stride) for stride in (4, 2, 1)]
+        detail = samples[-1][0]
+        values = [value if value is not None else np.nan for _, value, _ in samples]
+        convergence, movement = self._refinement_status(values, values[1:])
+        detail.update(numerical_convergence=convergence,
+                      refinement_max_relative_change=movement,
+                      refinement_sample_counts=[count for _, _, count in samples])
+        if detail["status"] == "resolved" and convergence != "converged":
+            detail["status"] = convergence
+        return detail
 
     def _readout(self, raw, params, atomic_response=None):
         """Cheap transmission/dispersion arrays + scalar metrics, with no
@@ -1171,7 +1346,10 @@ class RydbergEITScheme(Scheme):
         x, T_trans, xphys = self._transmission(raw["chi_bar"], raw, params)
         center_mhz = float(raw.get("two_photon_resonance_scan_mhz", self._resonance_scan_mhz(params)))
         ic = int(np.argmin(np.abs(x - center_mhz)))
-        width, _ = self._eit_features(x, T_trans, center_mhz=center_mhz)
+        eit_validity = (self._static_readout_validity(x, T_trans, center_mhz)
+                        if raw["lo_rabi_mhz"] <= 0 else None)
+        width = (eit_validity["fwhm_mhz"] if eit_validity is not None else None)
+        width = float("nan") if width is None else width
         slope = (np.nanmax(np.abs(np.gradient(T_trans, x)))
                  if np.ptp(T_trans) > 0.0 else 0.0)
         if_delta = max(float(params.get("if_khz", self._REF["if_khz"])) / 1000.0,
@@ -1201,6 +1379,7 @@ class RydbergEITScheme(Scheme):
         at_field_v_m = None
         at_split_field_estimate_v_m = None
         at_peak_positions_mhz = []
+        at_validity = None
         superhet = None
         sam = self._sam_calibration(params)
         if raw["lo_rabi_mhz"] > 0:
@@ -1217,10 +1396,11 @@ class RydbergEITScheme(Scheme):
                      "the full optical-spectrum model. For experimental data, fit "
                      "Ω_RF to the spectrum before using this value."))
             window = max(8.0, 2.0 * raw["lo_rabi_mhz"] + dmw)
-            peaks = self._transparency_maxima(x, T_trans, window, center_mhz=center_mhz)
-            at_resolved = len(peaks) >= 2
-            if at_resolved:
-                xs = sorted(p[0] for p in sorted(peaks, key=lambda p: p[1])[-2:])
+            at_validity = self._static_readout_validity(x, T_trans, center_mhz, window)
+            peaks = at_validity.pop("measured_peaks")
+            at_resolved = at_validity["status"] == "resolved"
+            if at_validity["peaks"]:
+                xs = [peak["position_mhz"] for peak in at_validity["peaks"]]
                 at_peak_positions_mhz = list(xs)
                 at_split_mhz = xs[1] - xs[0]
                 metrics.append(dict(label="RF AT splitting", value=f"{at_split_mhz:.2f} MHz",
@@ -1242,8 +1422,8 @@ class RydbergEITScheme(Scheme):
                 # Height-weighted centre of the transparency peaks: the symmetric
                 # doublet sits near the bare two-photon resonance; a detuned microwave pulls it toward the stronger
                 # dressed state, so the shift is readable even when one peak fades.
-                wsum = sum(h for _, h in peaks)
-                center = sum(px * h for px, h in peaks) / wsum - center_mhz
+                wsum = sum(h for _, h, _ in peaks)
+                center = sum(px * h for px, h, _ in peaks) / wsum - center_mhz
                 metrics.append(dict(label="AT center shift", value=f"{center:+.2f} MHz",
                                     help="Height-weighted centre of the dressed "
                                          "transparency peaks relative to the bare "
@@ -1251,9 +1431,11 @@ class RydbergEITScheme(Scheme):
                                          "and RF detuning can both shift it."))
             if not at_resolved:
                 metrics.append(dict(
-                    label="AT status", value="doublet unresolved", kind="status",
-                    help="The microwave dressing is on, but the optical spectrum "
-                         "does not contain two resolved transparency peaks."))
+                    label="AT status",
+                    value=("doublet unresolved" if at_validity["status"] == "unresolved"
+                           else at_validity["status"]), kind="status",
+                    help="A splitting needs two separated peaks with sampled half-height "
+                         "edges and a converged estimate."))
         else:
             width_valid = np.isfinite(width) and width > 0
             metrics.append(dict(
@@ -1261,11 +1443,13 @@ class RydbergEITScheme(Scheme):
                 value=(f"{width:.2f} MHz" if width_valid else "—"),
                 help=("FWHM of the central transparency feature." if width_valid else
                       "Withheld because no finite half-height crossings were found.")))
-            if not width_valid:
+            if eit_validity["status"] != "resolved":
                 metrics.append(dict(
-                    label="EIT status", value="window unresolved", kind="status",
-                    help="The current opacity/coupling settings do not produce a "
-                         "measurable EIT-window FWHM in this scan."))
+                    label="EIT status",
+                    value=("window unresolved" if eit_validity["status"] == "unresolved"
+                           else eit_validity["status"]), kind="status",
+                    help="The EIT window must pass numerical width, scan-edge and "
+                         "refinement checks before the linewidth becomes a headline value."))
         metrics.extend([
             dict(label="Max spectral slope", value=f"{slope:.3f} /MHz",
                  help="Largest static dT/dnu; used internally for electrometry tests."),
@@ -1374,9 +1558,17 @@ class RydbergEITScheme(Scheme):
         else:
             preferred_heroes = (
                 ("EIT linewidth", "Transmission at resonance", "IF discriminator")
-                if np.isfinite(width) and width > 0 else
+                if eit_validity["status"] == "resolved" else
                 ("Transmission at resonance", "EIT status", "IF discriminator")
             )
+        finite_if_validity = superhet["validity"] if superhet is not None else None
+        if finite_if_validity is not None and finite_if_validity["status"] != "resolved":
+            metrics.append(dict(
+                label="Sensitivity status", value=finite_if_validity["status"], kind="status",
+                help="The numeric sensitivity is retained as a provisional model estimate."))
+            preferred_heroes = ("Sensitivity status",) + tuple(
+                label for label in preferred_heroes
+                if label not in {"Total sensitivity", "PSN-limited sensitivity"})
         by_label = {metric["label"]: metric for metric in metrics}
         hero_labels = [
             label for label in preferred_heroes if label in by_label
@@ -1407,6 +1599,9 @@ class RydbergEITScheme(Scheme):
             optimum_two_photon_detuning_mhz=None,
             scan_axis=self._scan_axis(params),
             optimization_scope=None,
+            validity=finite_if_validity,
+            reference_balance_detuning_mhz=None,
+            reference_detector_power_w=None,
         )
         if superhet is not None:
             sensitivity_readout.update(
@@ -1421,19 +1616,28 @@ class RydbergEITScheme(Scheme):
                 optimum_coupling_detuning_mhz=superhet["optimum_coupling_detuning_mhz"],
                 optimum_two_photon_detuning_mhz=superhet["optimum_two_photon_detuning_mhz"],
                 optimization_scope=superhet["optimization_scope"],
+                reference_balance_detuning_mhz=superhet["reference_balance_detuning_mhz"],
+                reference_detector_power_w=superhet["reference_detector_power_w"],
             )
         trust_readout = dict(
             prediction_status="PREDICTED",
             calibration_status="UNCALIBRATED",
             experimental_visibility="NOT_ASSESSED",
-            numerical_convergence="NOT_ASSESSED",
+            numerical_convergence={
+                name: detail["numerical_convergence"] if detail is not None else "not-applicable"
+                for name, detail in (("eit", eit_validity), ("at", at_validity),
+                                     ("finite_if", finite_if_validity))},
+            eit_validity=eit_validity,
+            at_validity=at_validity,
+            transmitted_probe_power_w=float(raw["probe_power_uw"] * 1.0e-6 * T_trans[ic]),
+            rf_dipole_provenance=self._rf_dipole_provenance(params),
             effective_opacity=opacity_spec,
             atomic_line_strength=float(raw.get("atomic_line_strength", 1.0)),
             atom_number_participation_fraction=float(params.get(
                 "atom_participation_fraction", self._REF["atom_participation_fraction"])),
             atom_number_scope="reporting only; independent of optical opacity",
             model_scope=("scalar four-level cascade; anchored optical Rabi/transit "
-                         "model; pointwise balanced detector; no held-out "
+                         "model; reference balanced at the bare two-photon resonance; no held-out "
                          "experimental validation"),
             doppler_mode=str(params.get("doppler", self._REF["doppler"])),
             scan_axis=self._scan_axis(params),
@@ -1528,6 +1732,7 @@ class RydbergEITScheme(Scheme):
         derived = derived_table([
             ("Ladder", "85Rb 5S1/2 F=3 → 5P3/2 F'=4 → 40D5/2"),
             ("RF leg", "40D5/2 → 39F7/2"),
+            ("Experimental visibility", "Not assessed (measured detector noise required)"),
             ("Microwave frequency",
              f"{float(params.get('mw_frequency_ghz', self._REF['mw_frequency_ghz'])):.1f} GHz"),
             ("Coupling Rabi Ω_c / 2π", f"{raw['coupling_rabi_mhz']:.3f} MHz"),
@@ -1591,6 +1796,9 @@ class RydbergEITScheme(Scheme):
                 ("Detector responsivity", f"{superhet['detector_responsivity_a_per_w']:.6f} A/W"),
                 ("Signal detector power", f"{superhet['signal_detector_power_w'] * 1e6:.4f} µW"),
                 ("Reference detector power", f"{superhet['reference_detector_power_w'] * 1e6:.4f} µW"),
+                ("Reference balance detuning", (
+                    f"{superhet['reference_balance_detuning_mhz']:+.4f} MHz"
+                    if superhet["reference_balance_detuning_mhz"] is not None else "reference off")),
                 ("Current responsivity", f"{superhet['current_responsivity_a_per_v_m']:.6e} A/(V/m)"),
                 ("PSN current ASD", f"{noise.shot_noise_current_asd_a_per_sqrt_hz:.6e} A/√Hz"),
                 ("RIN current ASD", f"{noise.rin_noise_current_asd_a_per_sqrt_hz:.6e} A/√Hz"),

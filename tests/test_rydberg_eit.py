@@ -7,6 +7,7 @@ values are metadata; agreement with Gold power curves is audited separately.
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -526,10 +527,61 @@ def test_superhet_optimizes_noise_equivalent_field_not_only_response():
         result["sensitivity"].total_field_asd_v_m_per_sqrt_hz,
         finite[local_best],
     )
-    assert np.isclose(
-        result["optimum_detuning_mhz"],
-        result["response_detuning_mhz"][local_best],
-    )
+    axis = result["response_detuning_mhz"]
+    assert abs(result["optimum_detuning_mhz"] - axis[local_best]) <= 0.5 * (axis[1] - axis[0])
+    assert result["optimum_detuning_mhz"] != axis[local_best]
+    assert result["validity"]["numerical_convergence"] == "converged"
+
+
+def test_rydberg_validity_reports_sample_support_and_uncalibrated_visibility():
+    scheme = RydbergEITScheme()
+    params = scheme.recommended_defaults(scheme.defaults())["EIT"]
+    for values in (params, dict(params, temp_c=160.0)):
+        raw = scheme.compute(values)
+        readout = scheme.headless_observables(raw, values)["rydberg_readout"]
+        eit = readout["eit_validity"]
+        assert eit["contrast"] >= 0.0
+        assert eit["refinement_sample_counts"] == [201, 401, 801]
+        assert readout["transmitted_probe_power_w"] == pytest.approx(
+            values["probe_power_uw"] * 1e-6 * readout["resonance_transmission"])
+        assert readout["experimental_visibility"] == "NOT_ASSESSED"
+    assert readout["rf_dipole_provenance"]["spherical_polarization_q"] == 1
+    assert readout["rf_dipole_provenance"]["source"].startswith("ARC 3.10.2")
+
+
+def test_readout_half_height_detects_edge_limited_and_undersampled_features():
+    scheme = RydbergEITScheme()
+    for x, width, center, status in (
+            (np.linspace(-3.0, 3.0, 121), 0.04, 0.0, "resolution-limited"),
+            (np.linspace(-3.0, 3.0, 121), 0.4, 2.5, "scan-edge-limited")):
+        transmission = 0.1 + np.exp(-((x - center) / width)**2)
+        support = scheme._feature_support(x, transmission, np.argmax(transmission), 1.0)
+        assert support["status"] == status
+        assert support["fwhm_mhz"] > 0.0
+
+
+def test_finite_if_reference_stays_at_declared_balance_detuning(monkeypatch):
+    from gabes.schemes import rydberg
+    scheme = RydbergEITScheme()
+    params = scheme.recommended_defaults(scheme.defaults())["AT electrometry"]
+    params = dict(params, coupling_detuning_mhz=2.0, detector_reference_power_ratio=1.25)
+    raw = scheme.compute(params)
+    detector_reference_powers = []
+    original = rydberg.electrometry.balanced_detector_noise
+
+    def record_reference(detector):
+        detector_reference_powers.append(detector.reference.optical_power_w)
+        return original(detector)
+
+    monkeypatch.setattr(rydberg.electrometry, "balanced_detector_noise", record_reference)
+    x, transmission, _ = scheme._transmission(raw["chi_bar"], raw, params)
+    finite_if = scheme._superheterodyne_readout(raw, params, x, transmission)
+    assert finite_if["reference_balance_detuning_mhz"] == -2.0
+    assert len(detector_reference_powers) > 10
+    assert len(set(detector_reference_powers)) == 1
+    assert finite_if["reference_detector_power_w"] == pytest.approx(
+        1.25 * params["detector_path_efficiency"] * raw["probe_power_uw"] * 1e-6
+        * np.interp(-2.0, x, transmission))
 
 
 def test_separated_temperature_uses_effective_motion_and_cold_spot_pressure():

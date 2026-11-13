@@ -184,7 +184,9 @@ def test_features_and_resonance_readout_use_nonzero_center():
     assert ro['rydberg_readout']['scan_axis']=='Coupling detuning'
     doublet=.5+.2/(1+((x-2)/.2)**2)+.2/(1+((x+2)/.2)**2)
     shifted_peaks=scheme._transparency_maxima(x+12.,doublet,3.,center_mhz=12.)
-    np.testing.assert_allclose([point[0] for point in shifted_peaks],[10.,14.])
+    # The other Lorentzian tail moves each true maximum slightly toward center.
+    np.testing.assert_allclose([point[0] for point in shifted_peaks], [10., 14.],
+                               rtol=0.0, atol=3e-5)
 
 
 def test_finite_if_export_separates_scan_coordinate_from_physical_detunings():
