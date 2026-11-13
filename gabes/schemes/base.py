@@ -66,6 +66,8 @@ class ParamSpec:
     advanced_group: str = ""            # optional heading inside Advanced
     choice_labels: Optional[dict] = None  # display labels keyed by stored choice
     format: Optional[str] = None   # optional numeric-slider display format
+    # Retain saved conditional controls when the selector applies defaults.
+    preserve_conditional_defaults: bool = False
     atom_menu: Optional[tuple] = None   # ((atom, isotope, stored choice,
                                         # {companion param: value}), …): render
                                         # as Atom + Isotope selectors

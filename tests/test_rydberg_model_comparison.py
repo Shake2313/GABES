@@ -38,7 +38,7 @@ def test_eit_compensation_uses_one_solve_and_native_optical_readout(model):
     assert result["mode"] == "EIT"
     assert [s["parameter"]["value"] for s in result["series"]] == [0., 1.5]
     for curve, chi_key, expected_width in zip(
-            result["series"], ("chi_bar", "chi_bar_uncomp"), (1.60349403255, 1.89749219860)):
+            result["series"], ("chi_bar", "chi_bar_uncomp"), (1.603494232657, 1.897492269064)):
         x, y, _ = scheme._transmission(raw[chi_key], raw, params)
         np.testing.assert_array_equal(curve["x"], x)
         np.testing.assert_array_equal(curve["observables"]["transmission"], y)
@@ -66,8 +66,8 @@ def test_rf_off_unresolved_and_resolved_are_distinct_without_interpolation(model
     splits = [s["readouts"][0] for s in result["series"]]
     assert [s["status"] for s in splits] == ["not applicable", "unresolved", "resolved", "resolved"]
     assert splits[0]["value"] is None and splits[1]["value"] is None
-    assert splits[2]["value"] == pytest.approx(3.1635, abs=1e-9)
-    assert splits[3]["value"] == pytest.approx(6.882, abs=1e-9)
+    assert splits[2]["value"] == pytest.approx(3.169757758668, abs=1e-9)
+    assert splits[3]["value"] == pytest.approx(6.911912247244, abs=1e-9)
     curves = result["series"]
     assert len(curves[0]["x"]) == len(curves[3]["x"]) == 801
     assert curves[0]["x"][-1] != curves[3]["x"][-1]

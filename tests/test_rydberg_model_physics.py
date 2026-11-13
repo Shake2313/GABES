@@ -148,7 +148,7 @@ def test_same_physical_point_has_same_stationary_and_finite_if_response_on_eithe
     np.testing.assert_allclose(ap[1][0],np.dot(w,direct),rtol=1e-10,atol=1e-21)
 
 
-def test_atomic_cache_key_includes_axis_and_both_fixed_detunings(monkeypatch):
+def test_atomic_cache_key_includes_axis_and_active_fixed_detuning(monkeypatch):
     scheme = RydbergEITScheme()
     params = parameters()
     raw = scheme.compute(params)
@@ -161,10 +161,14 @@ def test_atomic_cache_key_includes_axis_and_both_fixed_detunings(monkeypatch):
     scheme._cached_superheterodyne_atomic_phasors(raw,params,x,transmission)
     scheme._cached_superheterodyne_atomic_phasors(raw,params,x,transmission)
     assert len(calls)==1
-    for changed in (dict(params,probe_detuning_mhz=1.),dict(params,coupling_detuning_mhz=1.),
-                    dict(params,scan_axis="Coupling detuning")):
-        scheme._cached_superheterodyne_atomic_phasors(raw,changed,x,transmission)
-    assert len(calls)==4
+    ignored = dict(params, probe_detuning_mhz=1.)
+    scheme._cached_superheterodyne_atomic_phasors(raw, ignored, x, transmission)
+    assert len(calls) == 1
+    for changed in (dict(params, coupling_detuning_mhz=1.),
+                    dict(params, scan_axis="Coupling detuning"),
+                    dict(ignored, scan_axis="Coupling detuning")):
+        scheme._cached_superheterodyne_atomic_phasors(raw, changed, x, transmission)
+    assert len(calls) == 4
 
 
 def test_features_and_resonance_readout_use_nonzero_center():

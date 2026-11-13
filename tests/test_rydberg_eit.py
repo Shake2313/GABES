@@ -401,7 +401,7 @@ def test_doppler_cache_tracks_the_selected_static_slope_point():
         probe_rabi_mhz=1.0, coupling_rabi_mhz=2.0, lo_rabi_mhz=3.0,
         rydberg_dephasing_mhz=0.1, temperature_dephasing_mhz=0.2,
         density_dephasing_mhz=0.3, transit_mhz=0.4,
-        rf_dephasing_mhz=0.5, scan=scan, T=320.0,
+        rf_dephasing_mhz=0.5, scan=scan, T=320.0, k_vec=1.0,
     )
     params = dict(doppler="on", if_khz=40.0, mw_detuning_mhz=0.0,
                   cell_mm=50.0)
@@ -488,7 +488,7 @@ def test_atomic_phasor_cache_retains_sweep_points_and_ignores_cell_length():
         probe_rabi_mhz=1.0, coupling_rabi_mhz=2.0, lo_rabi_mhz=3.0,
         rydberg_dephasing_mhz=0.1, temperature_dephasing_mhz=0.2,
         density_dephasing_mhz=0.3, transit_mhz=0.4,
-        rf_dephasing_mhz=0.5, scan=scan, T=320.0,
+        rf_dephasing_mhz=0.5, scan=scan, T=320.0, k_vec=1.0,
     )
     params = dict(doppler="on", if_khz=40.0, mw_detuning_mhz=0.0,
                   cell_mm=50.0)

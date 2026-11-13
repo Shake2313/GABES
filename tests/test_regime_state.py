@@ -107,3 +107,21 @@ def test_existing_canonical_widget_migrates_without_losing_its_regime():
     _run(app)
     assert app.session_state["rydberg_eit__view"] == "AT electrometry"
     assert app.session_state["rydberg_eit__probe_power_uw"] == 8.75
+
+
+def test_rydberg_regime_roundtrip_preserves_saved_conditional_controls():
+    app = AppTest.from_string(_APP).run()
+    _run(app, "AT electrometry")
+    saved = {"lo_rabi_mhz": 5.25, "probe_detuning_mhz": 2.5,
+             "coupling_detuning_mhz": 4.5, "effective_temp_c": 41.5,
+             "sam_distance_m": 2.25}
+    for key, value in saved.items():
+        app.session_state[f"rydberg_eit__{key}"] = value
+    app.session_state["rydberg_eit__probe_power_uw"] = 8.75
+    for mode in ("EIT", "AT electrometry"):
+        _run(app, mode)
+        assert not app.exception
+        assert app.session_state["rydberg_eit__view"] == mode
+        assert app.session_state["rydberg_eit__probe_power_uw"] == 6.0
+        for key, value in saved.items():
+            assert app.session_state[f"rydberg_eit__{key}"] == value

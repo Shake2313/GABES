@@ -66,7 +66,7 @@ def render_regime_selector(scheme_name, sp, scheme_obj):
             return
         st.session_state[key] = picked
         if getattr(sp, "applies_defaults", False):
-            apply_recommended_defaults(scheme_name, scheme_obj, key)
+            apply_recommended_defaults(scheme_name, scheme_obj, sp)
 
     st.segmented_control(
         sp.label, options, key=widget_key, help=sp.help or None, on_change=_changed,

@@ -51,7 +51,9 @@ TRANSIT_FACTOR = 0.6
 # Ju Fig. 2(b)'s ~1.6 MHz point occurs at low probe power, not at 6 µW.
 # No claim that this default reproduces the full measured power dependence.
 PROBE_RABI_REF_MHZ = 2.0
-SUPERHET_ATOMIC_CACHE_SIZE = 16
+STATIC_ATOMIC_CACHE_SIZE = 64
+SUPERHET_ATOMIC_CACHE_SIZE = 32
+SWEEP_PROPAGATION_CACHE_SIZE = 160
 SUPERHET_CLASS_CHUNK = 16384     # velocity classes per finite-IF batch solve
 MIRROR_TIE_RTOL = 1e-5           # mirror slope maxima of a symmetric line are one tie
 READOUT_REFINEMENT_RTOL = 0.05
@@ -110,13 +112,13 @@ class RydbergEITScheme(Scheme):
     caption = ("85Rb cascade EIT / microwave Autler-Townes electrometry. "
                "The static optical spectrum follows the 5S-5P-40D ladder; "
                "the 37 GHz RF leg dresses 40D-39F.")
-    cache_version = "rydberg-eit-v8-cp-optical-detunings"
+    cache_version = "rydberg-eit-v9-readout-and-layered-cache"
     defaults_version = "rydberg-eit-v7-optical-detunings"
     supports_headless_observables = True
     model_comparison_parameter = "lo_rabi_mhz"
     workspace_inputs = ("probe_power_uw", "coupling_power_mw", "lo_rabi_mhz")
     model_comparison_controls = ("eit_compare", "at_compare", "temperature_compare")
-    _superhet_atomic_cache_lock = threading.RLock()
+    _sweep_cache_lock = threading.RLock()
 
     REFERENCE_SENSITIVITY_NV_CM_SQRT_HZ = 12.5
     REFERENCE_PSN_LIMIT_NV_CM_SQRT_HZ = 11.2
@@ -207,7 +209,7 @@ class RydbergEITScheme(Scheme):
                       help="In Separated mode these are distinct physical temperatures. Heater setpoint stays fixed."),
             ParamSpec("view", "Regime", "Regime", "EIT",
                       choices=("EIT", "AT electrometry"), control="segmented",
-                      applies_defaults=True,
+                      applies_defaults=True, preserve_conditional_defaults=True,
                       help="EIT: no microwave dressing (Ju et al. Fig. 2a). "
                            "AT: the Rydberg RF leg is dressed."),
             ParamSpec("probe_power_uw", "Probe power", "Cell & beams",
@@ -665,6 +667,42 @@ class RydbergEITScheme(Scheme):
         center = self._resonance_scan_mhz(params)
         return (np.linspace(-half, half, 801) + center) * MHZ
 
+    @staticmethod
+    def _array_key(array):
+        return array.dtype, array.shape, array.tobytes()
+
+    @staticmethod
+    def _cache_array(array):
+        # An immutable backing store also prevents setflags(write=True).
+        return np.frombuffer(array.tobytes(), dtype=array.dtype).reshape(array.shape)
+
+    def _cached_sweep_value(self, cache_name, capacity, key, build):
+        with self._sweep_cache_lock:
+            cache = getattr(self, cache_name, None)
+            if cache is None:
+                cache = OrderedDict()
+                setattr(self, cache_name, cache)
+            if key in cache:
+                cache.move_to_end(key)
+                return cache[key]
+        result = build()
+        with self._sweep_cache_lock:
+            result = cache.setdefault(key, result)
+            cache.move_to_end(key)
+            if len(cache) > capacity:
+                cache.popitem(last=False)
+        return result
+
+    def _atomic_scan_key(self, fields, params, scan, ground_dephasing,
+                         rf_dephasing, vapor):
+        # Only the other laser is fixed. Store actual inputs to the solve,
+        # independent of UI visibility and without rounding the grid or controls.
+        return (self._scan_axis(params), self._resonance_scan_mhz(params),
+                float(params.get("mw_detuning_mhz", 0.0)),
+                fields["probe_rabi_mhz"], fields["coupling_rabi_mhz"],
+                fields["lo_rabi_mhz"], ground_dephasing, rf_dephasing, vapor,
+                self._array_key(scan))
+
     def compute(self, params):
         line = _probe_line()
         k_vec = line["k_vec"]
@@ -722,7 +760,15 @@ class RydbergEITScheme(Scheme):
         # it as a Gaussian (FWHM = residual_zeeman) convolution of the compensated
         # susceptibility over the probe detuning. (A homogeneous dephasing knob
         # only lowers the peak in this Ω_c-limited regime; it does not widen it.)
-        chi = self._scan_chi(self._atom(gd, rf_deph), h_of, scan, probe, vapor)
+        key = (probe, self._atomic_scan_key(h_fields, params, scan, gd, rf_deph, vapor))
+
+        def solve():
+            chi = self._scan_chi(self._atom(gd, rf_deph), h_of, scan, probe, vapor)
+            return self._cache_array(chi)
+
+        # Raw callers can modify their own arrays without poisoning later sweeps.
+        chi = self._cached_sweep_value(
+            "_static_atomic_cache", STATIC_ATOMIC_CACHE_SIZE, key, solve).copy()
         chi_uncomp = self._inhomogeneous(chi, scan, zeeman)
 
         return dict(
@@ -919,6 +965,19 @@ class RydbergEITScheme(Scheme):
         L = float(params.get("cell_mm", self._REF["cell_mm"])) * 1e-3
         return x, observables.transmission(alpha, L), xphys
 
+    def _cached_sweep_transmission(self, chi, raw, params):
+        key = (self._array_key(chi), self._array_key(raw["scan"]),
+               raw["k_vec"], raw["N"], raw["dipole"],
+               self._opacity_scale(raw, params),
+               float(params.get("cell_mm", self._REF["cell_mm"])))
+
+        def propagate():
+            return tuple(self._cache_array(array)
+                         for array in self._transmission(chi, raw, params))
+
+        return self._cached_sweep_value("_sweep_propagation_cache",
+                                        SWEEP_PROPAGATION_CACHE_SIZE, key, propagate)
+
     def _rf_coupling(self, params):
         """Explicit 40D--39F field/Rabi calibration used by AT and SIG paths."""
         dipole_ea0 = float(params.get(
@@ -1052,16 +1111,17 @@ class RydbergEITScheme(Scheme):
             -1j * (energies[:, :, None] - energies[:, None, :])).reshape(-1, 16)
         return coherent + atom.lindblad
 
+    @staticmethod
+    def _finite_if_dephasing(raw):
+        # Keep the finite-IF sum in its existing floating-point order.
+        ground = (raw["rydberg_dephasing_mhz"] + raw["temperature_dephasing_mhz"]
+                  + raw["density_dephasing_mhz"] + raw["transit_mhz"]) * MHZ
+        return ground, raw["rf_dephasing_mhz"] * MHZ
+
     def _superheterodyne_atomic_phasors(
             self, raw, params, x, transmission, static_indices=None):
         """Finite-IF atomic response before RF and detector calibration."""
-        ground_dephasing = (
-            raw["rydberg_dephasing_mhz"]
-            + raw["temperature_dephasing_mhz"]
-            + raw["density_dephasing_mhz"]
-            + raw["transit_mhz"]
-        ) * MHZ
-        atom = self._atom(ground_dephasing, raw["rf_dephasing_mhz"] * MHZ)
+        atom = self._atom(*self._finite_if_dephasing(raw))
         omega_if = max(float(params.get(
             "if_khz", self._REF["if_khz"])), 1.0e-12) * 1.0e3 * 2.0 * np.pi
         operator = self._absorption_quadrature_operator()
@@ -1121,52 +1181,24 @@ class RydbergEITScheme(Scheme):
 
     def _cached_superheterodyne_atomic_phasors(
             self, raw, params, x, transmission):
-        doppler_mode = str(params.get("doppler", self._REF["doppler"]))
-        static_indices = (
-            self._static_slope_indices(x, transmission)
-            if doppler_mode == "on" else None
-        )
-        key = (
-            doppler_mode,
-            None if static_indices is None else tuple(static_indices.tolist()),
-            float(params.get("if_khz", self._REF["if_khz"])),
-            float(params.get("mw_detuning_mhz", self._REF["mw_detuning_mhz"])),
-            self._scan_axis(params),
-            float(params.get("probe_detuning_mhz", self._REF["probe_detuning_mhz"])),
-            float(params.get("coupling_detuning_mhz", self._REF["coupling_detuning_mhz"])),
-            float(raw["probe_rabi_mhz"]), float(raw["coupling_rabi_mhz"]),
-            float(raw["lo_rabi_mhz"]), float(raw["rydberg_dephasing_mhz"]),
-            float(raw["temperature_dephasing_mhz"]),
-            float(raw["density_dephasing_mhz"]), float(raw["transit_mhz"]),
-            float(raw["rf_dephasing_mhz"]), int(raw["scan"].size),
-            float(raw["scan"][0]), float(raw["scan"][-1]),
-            float(raw["T"]) if doppler_mode == "on" else None,
-        )
-        with self._superhet_atomic_cache_lock:
-            cached = getattr(self, "_superhet_atomic_cache", None)
-            if not isinstance(cached, OrderedDict):
-                cached = OrderedDict()
-                self._superhet_atomic_cache = cached
-            try:
-                result = cached[key]
-            except KeyError:
-                pass
-            else:
-                cached.move_to_end(key)
-                return result
-        result = self._superheterodyne_atomic_phasors(
-            raw, params, x, transmission, static_indices=static_indices)
-        with self._superhet_atomic_cache_lock:
-            cached = self._superhet_atomic_cache
-            try:
-                existing = cached[key]
-            except KeyError:
-                cached[key] = result
-                if len(cached) > SUPERHET_ATOMIC_CACHE_SIZE:
-                    cached.popitem(last=False)
-                return result
-            cached.move_to_end(key)
-            return existing
+        doppler_on = params.get("doppler", self._REF["doppler"]) == "on"
+        # The Doppler path evaluates only the current propagated slope points.
+        # Cell/opacity edits reuse phasors when that exact index set is unchanged.
+        static_indices = self._static_slope_indices(x, transmission) if doppler_on else None
+        vapor = (raw["T"], constants.MASS_85RB, raw["k_vec"]) if doppler_on else None
+        ground_dephasing, rf_dephasing = self._finite_if_dephasing(raw)
+        key = (self._atomic_scan_key(raw, params, raw["scan"], ground_dephasing,
+                                     rf_dephasing, vapor),
+               None if static_indices is None else tuple(static_indices),
+               float(params.get("if_khz", self._REF["if_khz"])))
+
+        def solve():
+            indices, phasors, scope = self._superheterodyne_atomic_phasors(
+                raw, params, x, transmission, static_indices=static_indices)
+            return self._cache_array(indices), self._cache_array(phasors), scope
+
+        return self._cached_sweep_value("_superhet_atomic_cache",
+                                        SUPERHET_ATOMIC_CACHE_SIZE, key, solve)
 
     def _superheterodyne_readout(
             self, raw, params, x, transmission, atomic_response=None):
@@ -1358,11 +1390,12 @@ class RydbergEITScheme(Scheme):
             detail["status"] = convergence
         return detail
 
-    def _readout(self, raw, params, atomic_response=None):
+    def _readout(self, raw, params, atomic_response=None, *, sweep=False):
         """Cheap transmission/dispersion arrays + scalar metrics, with no
         matplotlib — the headless path tests and scans reuse without paying the
         figure-build cost. `observables` wraps this and draws the figure."""
-        x, T_trans, xphys = self._transmission(raw["chi_bar"], raw, params)
+        propagate = self._cached_sweep_transmission if sweep else self._transmission
+        x, T_trans, xphys = propagate(raw["chi_bar"], raw, params)
         center_mhz = float(raw.get("two_photon_resonance_scan_mhz", self._resonance_scan_mhz(params)))
         ic = int(np.argmin(np.abs(x - center_mhz)))
         eit_validity = (self._static_readout_validity(x, T_trans, center_mhz)
@@ -1862,7 +1895,7 @@ class RydbergEITScheme(Scheme):
                         pr, effective_opacity_participation=scenario["value"])
                     for key, chi_key in (("comp", "chi_bar"),
                                          ("uncomp", "chi_bar_uncomp")):
-                        x, transmission, _ = self._transmission(
+                        x, transmission, _ = self._cached_sweep_transmission(
                             raw[chi_key], raw, scenario_params)
                         width, contrast = self._eit_features(
                             x, transmission, center_mhz=self._resonance_scan_mhz(pr))
@@ -1972,7 +2005,7 @@ class RydbergEITScheme(Scheme):
                 for scenario in scenarios:
                     scenario_params = dict(
                         pr, effective_opacity_participation=scenario["value"])
-                    ro = self._readout(raw, scenario_params)
+                    ro = self._readout(raw, scenario_params, sweep=True)
                     x, transmission = ro["x"], ro["T_trans"]
                     center_mhz = self._resonance_scan_mhz(pr)
                     width, contrast = self._eit_features(x, transmission, center_mhz=center_mhz)
@@ -1981,16 +2014,14 @@ class RydbergEITScheme(Scheme):
                     scenario["widths_mhz"].append(float(width))
                     scenario["contrasts"].append(float(contrast))
                     scenario["resonance_transmission"].append(float(transmission[ic]))
-                    # Preserve the legacy three-decimal sweep values while
-                    # keeping numeric readout fields independent of UI strings.
-                    scenario["max_slope_per_mhz"].append(
-                        float(f"{ro['max_slope_per_mhz']:.3f}"))
-                    scenario["if_discriminator_per_mhz"].append(
-                        float(f"{ro['if_discriminator_per_mhz']:.3f}"))
+                    # Preserve the three-decimal sweep values from numeric readouts.
+                    for key in ("max_slope_per_mhz", "if_discriminator_per_mhz"):
+                        scenario[key].append(round(ro[key], 3))
                     at_scenario_params = dict(
                         at_params, effective_opacity_participation=scenario["value"])
                     at_ro = self._readout(
-                        at_raw, at_scenario_params, atomic_response=atomic_response)
+                        at_raw, at_scenario_params, atomic_response=atomic_response,
+                        sweep=True)
                     if at_ro["superhet"] is not None and atomic_response is None:
                         atomic_response = at_ro["superhet"]["atomic_response"]
                     sensitivity = at_ro["rydberg_readout"]["finite_if"]

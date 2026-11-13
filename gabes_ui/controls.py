@@ -58,15 +58,18 @@ def render_group_header(container, group):
     )
 
 
-def apply_recommended_defaults(scheme_name, scheme_obj, key):
-    """on_change for a control whose selection applies the matching
-    recommended_defaults set (so choosing it also resets that mode's knobs)."""
-    selection = st.session_state.get(key)
+def apply_recommended_defaults(scheme_name, scheme_obj, selector):
+    """Apply the selected recommendation, retaining opted-in saved controls."""
     cur = current_params(scheme_name, scheme_obj)
+    selection = cur.get(selector.name)
     sets = scheme_obj.recommended_defaults(cur) or {}
     defaults = sets.get(selection) or sets.get(cur.get("mode")) or {}
-    for k, v in defaults.items():
-        st.session_state[skey(scheme_name, k)] = v
+    preserved = ({sp.name for sp in scheme_obj.param_schema()
+                  if sp.hidden or sp.visible_if}
+                 if selector.preserve_conditional_defaults else set())
+    for name, value in defaults.items():
+        if name not in preserved:
+            st.session_state[skey(scheme_name, name)] = value
 
 
 def apply_default_set(scheme_name, scheme_obj, label):
@@ -167,7 +170,7 @@ def render_param(container, scheme_name, sp, scheme_obj=None):
     )
     on_change = None
     if getattr(sp, "applies_defaults", False) and scheme_obj is not None:
-        on_change = lambda: apply_recommended_defaults(scheme_name, scheme_obj, key)
+        on_change = lambda: apply_recommended_defaults(scheme_name, scheme_obj, sp)
     # A ScrubField shows its unit beside the value; the other widgets have
     # nowhere to put it, so they keep it in the label.
     label = sp.label + (f"  [{sp.unit}]" if sp.unit else "")

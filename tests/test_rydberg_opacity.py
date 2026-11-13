@@ -247,3 +247,76 @@ def test_scenarios_reuse_each_atomic_sweep_and_report_separate_optima(
         assert any("no finite range bound" in text.get_text()
                    for text in sensitivity_axis.texts)
     plt.close(figure)
+
+
+def test_heating_sweep_reuses_layers_for_live_readout_edits():
+    scheme = RydbergEITScheme()
+    params = scheme._defaults("AT electrometry")
+    grid = np.linspace(-12, 12, 101) * 2*np.pi*1e6
+    with (
+        patch.object(scheme, "_scan", return_value=grid),
+        patch.object(scheme, "_scan_chi", wraps=scheme._scan_chi) as static,
+        patch.object(scheme, "_superheterodyne_atomic_phasors",
+                     wraps=scheme._superheterodyne_atomic_phasors) as finite_if,
+        patch.object(scheme, "_transmission", wraps=scheme._transmission) as propagation,
+    ):
+        heating = scheme.extra_views()[1].compute
+        original = heating(params)
+        assert (static.call_count, finite_if.call_count, propagation.call_count) == (20, 10, 60)
+
+        readout_edit = dict(params, detector_quantum_efficiency=0.7,
+                            rf_angular_factor=0.9, sam_enabled="On")
+        changed = heating(readout_edit)
+        assert (static.call_count, finite_if.call_count, propagation.call_count) == (20, 10, 60)
+        assert changed["total_sensitivity_nv_cm_sqrt_hz"] != original["total_sensitivity_nv_cm_sqrt_hz"]
+
+        heating(dict(readout_edit, if_khz=41.0))
+        assert (static.call_count, finite_if.call_count, propagation.call_count) == (20, 20, 60)
+        heating(dict(readout_edit, cell_mm=52.0, effective_opacity_participation=0.002))
+        assert (static.call_count, finite_if.call_count, propagation.call_count) == (20, 20, 120)
+        assert heating(params) == original
+        assert (static.call_count, finite_if.call_count, propagation.call_count) == (20, 20, 120)
+
+    fresh = RydbergEITScheme()
+    with patch.object(fresh, "_scan", return_value=grid):
+        assert fresh.extra_views()[1].compute(readout_edit) == changed
+
+
+def test_atomic_cache_uses_active_exact_optical_inputs_and_protects_arrays():
+    scheme = RydbergEITScheme()
+    params = dict(scheme._defaults("AT electrometry"),
+                  probe_detuning_mhz=2.0, coupling_detuning_mhz=3.0)
+    with (
+        patch.object(scheme, "_scan_chi", wraps=scheme._scan_chi) as static,
+        patch.object(scheme, "_superheterodyne_atomic_phasors",
+                     wraps=scheme._superheterodyne_atomic_phasors) as finite_if,
+    ):
+        def readout(condition):
+            raw = scheme.compute(condition)
+            return raw, scheme._readout(raw, condition)["superhet"]["atomic_response"]
+
+        raw, response = readout(params)
+        saved = raw["chi_bar"].copy()
+        raw["chi_bar"][:] = 0
+        for array in response[:2]:
+            with pytest.raises(ValueError):
+                array.setflags(write=True)
+
+        unused_edit = dict(params, probe_detuning_mhz=9.0)
+        same, reused = readout(unused_edit)
+        assert same["fixed_probe_detuning_mhz"] == 9.0
+        assert reused is response
+        np.testing.assert_array_equal(same["chi_bar"], saved)
+        assert (static.call_count, finite_if.call_count) == (1, 1)
+
+        switched = dict(params, scan_axis="Coupling detuning")
+        other, _ = readout(switched)
+        assert other["two_photon_resonance_scan_mhz"] == -2.0
+        exact_edit = dict(switched, probe_detuning_mhz=2.0 + 1e-10)
+        readout(exact_edit)
+        assert (static.call_count, finite_if.call_count) == (3, 3)
+        restored, reused = readout(params)
+        assert restored["two_photon_resonance_scan_mhz"] == -3.0
+        assert reused is response
+        np.testing.assert_array_equal(restored["chi_bar"], saved)
+        assert (static.call_count, finite_if.call_count) == (3, 3)
