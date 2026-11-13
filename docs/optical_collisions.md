@@ -5,8 +5,16 @@ an opt-in reference. Enter the Ne partial pressure at the operating condition.
 The reported optical frequency shift is the change in atomic resonance
 frequency. The solver uses laser detuning minus that shift. For Lambda, the
 common optical shift cancels in the Raman detuning. The reported elastic
-optical decoherence rate is half the added homogeneous FWHM. The reference
-keeps natural radiative decay and branching separate from elastic collisions.
+optical decoherence rate is half the added homogeneous FWHM. The added Ne
+width uses an elastic coherence term and leaves the radiative rate and
+branching intact. OD's 85Rb D1 hyperfine reference retains its historical
+density-dependent effective decay width for self-broadening.
+
+Lambda's natural-Rb scalar medium evaluates the optical collision coefficients
+for its dominant 85Rb isotope. Its existing abundance-weighted density and
+mass still define the scalar medium. Use an isotope-specific setting for the
+other isotope's coefficients.
+
 In uniform SAS, the pump OBE and probe use the same homogeneous width and
 the same pressure-shifted resonance. The Doppler-width temperature is the
 gas temperature for optical source comparisons. Vapor density sets
