@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from gabes.lineshape import (fwhm_halfmax, fwhm_interp, halfwidth_from_center,
-                             level_crossing, subdoppler_feature)
+                             level_crossing, subdoppler_feature, subdoppler_refinement)
 from gabes.schemes import magneto
 from gabes.schemes.rydberg import RydbergEITScheme
 
@@ -64,3 +64,35 @@ def test_subdoppler_edges_bracket_a_narrow_dip_on_a_doppler_background():
     assert feature.left_half_height < 0.0 < feature.right_half_height
     # The running-median residual is somewhat narrower than the 0.04 dip.
     assert 0.02 < feature.fwhm <= 0.04
+
+
+@pytest.mark.parametrize("case", ["sloped", "noisy", "overlap"])
+def test_subdoppler_refinement_on_fixed_physical_window(case):
+    def measure(points):
+        x = np.linspace(-3., 3., points)
+        baseline = .8 + .02*x
+
+        def dip(center):
+            return .15*np.exp(-4*np.log(2)*((x-center)/.3)**2)
+
+        if case == "overlap":
+            signal = baseline - dip(-.17) - dip(.17)
+        else:
+            signal = baseline - dip(.15)
+        if case == "noisy":
+            signal += .018*np.random.default_rng(191).normal(size=points)
+        return subdoppler_refinement(x, signal, (-.5,.5), 1.5, polarity=-1)
+
+    coarse, fine = measure(201), measure(401)
+    if case != "sloped":
+        assert coarse["status"] == fine["status"] == "unresolved"
+        assert "flanks" not in coarse and "flanks" not in fine
+        return
+
+    assert coarse["status"] == fine["status"] == "resolved"
+    assert coarse["center"] == fine["center"] == pytest.approx(.15)
+    assert coarse["width"] == pytest.approx(fine["width"], rel=.005)
+    # Independent analytic derivative of the Gaussian and linear baseline.
+    expected_slope = .15*np.sqrt(8*np.log(2))/.3 * np.exp(-.5)
+    np.testing.assert_allclose([flank["slope"] for flank in fine["flanks"]],
+                               [.02-expected_slope, .02+expected_slope], rtol=.02)

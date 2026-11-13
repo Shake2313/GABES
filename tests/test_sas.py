@@ -822,3 +822,72 @@ def test_doppler_temperature_schema_is_advanced_and_gated():
         "constrain_doppler_temp": False}
     assert tie.advanced_group == released.advanced_group == "Cell temperatures"
     assert tie.recompute and released.recompute
+
+
+@pytest.mark.parametrize("pure_rb85", [False, True])
+def test_quantitative_export_requires_independent_sas_grid_convergence(pure_rb85, monkeypatch):
+    import json
+
+    from gabes_ui.export import build_export_payload
+
+    params = _params()
+    if pure_rb85:
+        params.update(species=RB85_KEY, line="D1")
+        params.update(SAS.recommended_defaults(params)["SAS default"])
+    compute = SAS.compute
+    points = []
+
+    def trace_compute(condition):
+        points.append(condition["scan_points"])
+        return compute(condition)
+
+    raw = compute(params)
+    monkeypatch.setattr(SAS, "compute", trace_compute)
+    view = SAS.headless_observables(raw, params)
+    assert [m["label"] for m in view["metrics"] if m.get("tier") == "hero"] == ["SAS resolution"]
+    args = dict(scheme=SAS, raw=raw, params=params, view=view, plot_payloads=[],
+                comparison_payload=None, cache_version=SAS.cache_version,
+                readout_cache_version="test")
+    initial = build_export_payload(**args)
+    assert points == []
+    assert "quantitative_subdoppler" not in initial["view"]["optical_readout"]
+
+    result = build_export_payload(**args, include_quantitative=True)
+    json.dumps(result, allow_nan=False)
+    assert points == [4001, 8001]
+    optical = result["view"]["optical_readout"]
+    quantitative = optical["quantitative_subdoppler"]
+    assert "quantitative_subdoppler" not in view["optical_readout"]
+    assert [check["points"] for check in quantitative["checks"]] == points
+    assert quantitative["coarse_status"] == "resolution-limited"
+    errors = quantitative["comparison"]["flank_slope_relative_errors"]
+    if pure_rb85:
+        assert quantitative["status"] == "converged"
+        assert quantitative["linewidth_mhz"] == pytest.approx(14.707, rel=.01)
+        assert quantitative["lock_slope_per_mhz"] == pytest.approx(.05062, rel=.01)
+        assert max(errors) <= .05
+    else:
+        assert max(errors) > .05
+        assert quantitative["status"] == "unresolved"
+        assert quantitative["linewidth_mhz"] is None
+        assert quantitative["lock_slope_per_mhz"] is None
+
+
+def test_quantitative_export_rejects_overlapping_discriminators(monkeypatch):
+    def compute(condition):
+        x = np.linspace(-45.,45.,condition["scan_points"])
+        center = .17
+        width = .3
+        signal = .8 + .002*x
+        for shift in (-center, center):
+            signal -= .15 * np.exp(-4*np.log(2)*((x-shift)/width)**2)
+        return dict(scan=x * 2*np.pi*1e6, mode="generic", alpha_unit=-np.log(signal))
+
+    monkeypatch.setattr(SAS, "compute", compute)
+    params = _params(pump_power_mw=1.0, line_strength=1.0, cell_mm=1000.0)
+    displayed = dict(x=np.linspace(-45.,45.,1401), x_unit="MHz",
+                     resolution=dict(status="resolved", center_mhz=0., width_mhz=.6, polarity=-1))
+    result = SAS.quantitative_export(params, displayed)
+    assert result["status"] == "unresolved"
+    assert result["linewidth_mhz"] is None and result["lock_slope_per_mhz"] is None
+    assert all("Competing" in check["reason"] for check in result["checks"])

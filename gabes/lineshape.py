@@ -40,6 +40,7 @@ class SubdopplerFeature:
     samples_per_fwhm: float = float("nan")
     scan_edge_distance: float = float("nan")
     amplitude: float = float("nan")
+    polarity: int | None = None
 
     @property
     def detected(self):
@@ -161,7 +162,8 @@ def halfwidth_from_center(B, y, frac=0.5):
     return float(abs(edge - B[ic]))
 
 
-def subdoppler_feature(x, signal, search_window=None, *, min_amplitude=1e-6):
+def subdoppler_feature(x, signal, search_window=None, *, min_amplitude=1e-6,
+                       background_width=None):
     """Diagnose the sharpest sampled sub-Doppler feature.
 
     A running-median background is removed before selecting the largest
@@ -186,16 +188,10 @@ def subdoppler_feature(x, signal, search_window=None, *, min_amplitude=1e-6):
     if not np.all(dx > 0.0):
         return SubdopplerFeature("unresolved", "The frequency axis must be strictly increasing.")
 
-    n = y.size
-    win = max(5, (n // 60) | 1)
-    win = min(win, n if n % 2 else n - 1)
-    pad = win // 2
-    ypad = np.pad(y, pad, mode="edge")
-    windows = np.lib.stride_tricks.sliding_window_view(ypad, win)
-    smooth = np.median(windows, axis=1)
-    residual = np.abs(y - smooth)
+    signed = _subdoppler_residual(x, y, background_width)
+    residual = np.abs(signed)
 
-    candidates = np.ones(n, dtype=bool)
+    candidates = np.ones(y.size, dtype=bool)
     if search_window is not None:
         lo, hi = map(float, search_window)
         if not np.isfinite(lo) or not np.isfinite(hi) or lo >= hi:
@@ -208,6 +204,7 @@ def subdoppler_feature(x, signal, search_window=None, *, min_amplitude=1e-6):
     ic = int(indices[np.argmax(residual[indices])])
     amplitude = float(residual[ic])
     center = float(x[ic])
+    polarity = int(np.sign(signed[ic]))
     if amplitude <= float(min_amplitude):
         return SubdopplerFeature(
             "unresolved", "No finite sub-Doppler residual exceeds the detection floor.",
@@ -220,7 +217,7 @@ def subdoppler_feature(x, signal, search_window=None, *, min_amplitude=1e-6):
         return SubdopplerFeature(
             "scan-edge-limited",
             "A half-height crossing is clipped by the displayed scan edge.",
-            center=center, scan_edge_distance=0.0, amplitude=amplitude)
+            center=center, scan_edge_distance=0.0, amplitude=amplitude, polarity=polarity)
     width = float(right - left)
     if not np.isfinite(width) or width <= 0.0:
         return SubdopplerFeature(
@@ -253,7 +250,82 @@ def subdoppler_feature(x, signal, search_window=None, *, min_amplitude=1e-6):
         samples_per_fwhm=float(samples_per_fwhm),
         scan_edge_distance=max(edge_distance, 0.0),
         amplitude=amplitude,
+        polarity=polarity,
     )
+
+
+def _subdoppler_residual(x, y, background_width):
+    """Signed running-median residual, optionally at a fixed physical width."""
+    n = y.size
+    if background_width is None:
+        win = (n // 60) | 1
+    else:
+        win = int(round(background_width / np.median(np.diff(x)))) + 1
+        win |= 1
+    win = min(max(5, win), n if n % 2 else n - 1)
+    pad = win // 2
+    windows = np.lib.stride_tricks.sliding_window_view(np.pad(y, pad, mode="edge"), win)
+    return y - np.median(windows, axis=1)
+
+
+def subdoppler_refinement(x, signal, feature_window, background_width, *, polarity=None):
+    """One quantitative check of a declared feature on an independently solved grid.
+
+    A resolved residual must match the selected sign and have a unique peak in
+    the fixed window. The lock slope is a local finite derivative of the actual
+    signal, evaluated separately on the two flanks. No thresholds are exposed
+    as scheme controls.
+    """
+    feature = subdoppler_feature(x, signal, search_window=feature_window,
+                                 background_width=background_width)
+    result = dict(status=feature.status, reason=feature.reason,
+                  center=feature.center, width=feature.fwhm,
+                  left=feature.left_half_height, right=feature.right_half_height,
+                  samples_per_fwhm=feature.samples_per_fwhm)
+    if not feature.resolved:
+        return result
+
+    x, y = np.asarray(x, dtype=float), np.asarray(signal, dtype=float)
+    local = (x >= feature_window[0]) & (x <= feature_window[1])
+    signed = _subdoppler_residual(x, y, background_width)
+    index = int(np.searchsorted(x, feature.center))
+    sign = feature.polarity
+    result["polarity"] = sign
+    if polarity is not None and sign != polarity:
+        result.update(status="unresolved", reason="Feature polarity changed under refinement.")
+        return result
+
+    # Adjacent peaks with substantial prominence cannot be assigned to one
+    # discriminator. Ignore small structure on the measured residual.
+    from scipy.signal import find_peaks
+    peaks, _ = find_peaks(sign * signed, height=0.5 * feature.amplitude,
+                          prominence=0.2 * feature.amplitude)
+    same_peak = np.abs(peaks - index) <= 1
+    competitors = peaks[local[peaks] & ~same_peak]
+    if competitors.size:
+        result.update(status="unresolved", reason="Competing sub-Doppler peaks in the fixed window.")
+        return result
+    curvature = np.diff(y[local], n=2)
+    noise = (float(np.median(np.abs(curvature - np.median(curvature)))) / np.sqrt(6.0)
+             if curvature.size else float("inf"))
+    result["local_noise_proxy"] = noise
+    if noise > 0.05 * feature.amplitude:
+        result.update(status="unresolved", reason="Local sample variation obscures the sub-Doppler derivative.")
+        return result
+
+    gradient = np.gradient(y, x)
+    flank = local & (np.abs(x - feature.center) <= feature.fwhm)
+    candidates = [np.flatnonzero(flank & (x < feature.center)),
+                  np.flatnonzero(flank & (x > feature.center))]
+    if not all(indices.size for indices in candidates):
+        result.update(status="unresolved", reason="The fixed window clips the derivative flanks.")
+        return result
+    edges = [int(indices[np.argmax(np.abs(gradient[indices]))]) for indices in candidates]
+    if sign * gradient[edges[0]] <= 0 or sign * gradient[edges[1]] >= 0:
+        result.update(status="unresolved", reason="The local slope does not have two opposing flanks.")
+        return result
+    result["flanks"] = [{"detuning": float(x[i]), "slope": float(gradient[i])} for i in edges]
+    return result
 
 
 def narrowest_subdoppler(x_ghz, T_trans):

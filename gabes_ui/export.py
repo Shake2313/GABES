@@ -221,7 +221,11 @@ def app_revision():
 
 def build_export_payload(*, scheme, raw, params, view, plot_payloads,
                          comparison_payload, cache_version, readout_cache_version,
-                         model_comparison=None, extra_view=None):
+                         model_comparison=None, extra_view=None, include_quantitative=False):
+    optical = view.get("optical_readout")
+    quantitative = getattr(scheme, "quantitative_export", None)
+    if include_quantitative and quantitative is not None and optical is not None:
+        optical = {**optical, "quantitative_subdoppler": quantitative(params, optical)}
     return {
         "generated_at_utc": datetime.utcnow().isoformat() + "Z",
         "app_revision": app_revision(),
@@ -240,7 +244,7 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
         "view": {
             "metrics": to_json_primitive(view.get("metrics", [])),
             "sidebar_readouts": to_json_primitive(view.get("sidebar_readouts", {})),
-            "optical_readout": to_json_primitive(view.get("optical_readout")),
+            "optical_readout": to_json_primitive(optical),
             "magneto_readout": to_json_primitive(view.get("magneto_readout")),
             "rydberg_readout": to_json_primitive(view.get("rydberg_readout")),
             "biphoton_evidence": to_json_primitive(view.get("biphoton_evidence")),
@@ -284,7 +288,7 @@ def render_export(container, *, scheme, raw, params, view, plot_payloads,
             scheme=scheme, raw=raw, params=params, view=view,
             plot_payloads=plot_payloads, comparison_payload=comparison_payload,
             cache_version=cache_version, readout_cache_version=readout_cache_version,
-            model_comparison=model_comparison, extra_view=extra_view,
+            model_comparison=model_comparison, extra_view=extra_view, include_quantitative=True,
         )
         return json.dumps(payload, indent=2, ensure_ascii=False,
                           allow_nan=False).encode("utf-8")

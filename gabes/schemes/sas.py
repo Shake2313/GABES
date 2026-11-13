@@ -42,7 +42,8 @@ from .. import (atoms, constants, doppler, kernels, observables, probe_saturatio
                vapor_cell)
 from ..constants import GAMMA, K_VEC
 from .. import core
-from ..lineshape import MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature
+from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
+                         subdoppler_refinement)
 from ..report import derived_table
 from .base import ParamSpec, Scheme
 
@@ -226,7 +227,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "9"            # explicit unsupported Cs self-broadening
+    cache_version = "10"           # line-specific pump saturation and readout provenance
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -450,6 +451,45 @@ class SASScheme(Scheme):
         if params.get("species", "Rb (natural)") == GENERIC:
             return self._compute_generic(params)
         return self._compute_species(params)
+
+    def quantitative_export(self, params, optical_readout):
+        """Check the selected feature on two denser, independently solved grids."""
+        if params["pump_power_mw"] <= 0:
+            return dict(status="not applicable", reason="Pump off.")
+        x = optical_readout["x"]
+        mhz_per_x = 1000.0 if optical_readout["x_unit"] == "GHz" else 1.0
+        coarse = optical_readout["resolution"]
+        center, width = coarse["center_mhz"], coarse["width_mhz"]
+        evidence = dict(
+            status="unresolved", linewidth_mhz=None, lock_slope_per_mhz=None,
+            lock_detuning_mhz=None, coarse_grid_points=len(x),
+            coarse_status=coarse["status"], coarse_center_mhz=center, checks=[],
+        )
+        if (center is None or width is None or width <= 0
+                or coarse["status"] == "scan-edge-limited"):
+            return dict(evidence, reason="The displayed scan has no usable feature identity.")
+        center /= mhz_per_x
+        width /= mhz_per_x
+        window = (center - width, center + width)
+        background_width = (float(x[-1] - x[0]) / 60.0)
+        evidence.update(
+            feature_window_mhz=[float(v * mhz_per_x) for v in window],
+            background_median_width_mhz=background_width * mhz_per_x,
+            width_relative_tolerance=0.05, slope_relative_tolerance=0.05,
+            center_shift_tolerance_fwhm=0.25, coarse_center_tolerance_fwhm=0.5,
+        )
+        for points in (4001, 8001):
+            condition = {**params, "scan_points": points}
+            with core.blas_single_thread():
+                raw = self.compute(condition)
+                alpha, _chi, length = _collected_response(raw, condition)
+            grid = raw["scan"] / (2 * np.pi) / (1e9 if mhz_per_x == 1000.0 else 1e6)
+            refined = subdoppler_refinement(
+                grid, observables.transmission(alpha, length), window, background_width,
+                polarity=coarse["polarity"],
+            )
+            evidence["checks"].append(_quantitative_check(refined, grid, mhz_per_x))
+        return _finish_quantitative_export(evidence)
 
     # ---- realistic multilevel OD/SAS model ----
     def _compute_species(self, params):
@@ -843,27 +883,8 @@ class SASScheme(Scheme):
     # observables  (dispatch)
     # =================================================================
     def observables(self, raw, params, include_figures=True):
-        L = params["cell_mm"] * 1e-3
-        # In the weak-probe branch α and Re χ are the two quadratures of one
-        # susceptibility, so the same line-strength calibration scales both.
-        alpha = raw["alpha_unit"] * params["line_strength"]
-        chi_real_unit = raw.get("chi_real_unit")
-        chi_real = (None if chi_real_unit is None
-                    else chi_real_unit * params["line_strength"])
+        alpha, chi_real, L = _collected_response(raw, params)
         if raw["mode"] == "species":
-            alpha_table = raw.get("probe_alpha_table_unit")
-            if alpha_table is not None:
-                # Cell length and line-strength remain cache-light controls: the
-                # heavy solve returns local alpha(I), and this short propagation
-                # step turns it into the collected finite-power transmission.
-                _transmission, alpha = (
-                    probe_saturation.propagate_gaussian_spectrum(
-                        raw["probe_intensity_log_grid"],
-                        alpha_table * params["line_strength"],
-                        alpha, L))
-                # AutoOD-Rb defines nonlinear collected transmission only.
-                # There is no unique phase index after radial/path variation.
-                chi_real = None
             return self._obs_species(
                 raw, params, alpha, chi_real, L, include_figures=include_figures)
         return self._obs_generic(
@@ -1119,6 +1140,72 @@ class SASScheme(Scheme):
 # =====================================================================
 # helpers
 # =====================================================================
+def _collected_response(raw, params):
+    """The same transmission input for display and export refinement."""
+    L = params["cell_mm"] * 1e-3
+    alpha = raw["alpha_unit"] * params["line_strength"]
+    chi_real_unit = raw.get("chi_real_unit")
+    chi_real = None if chi_real_unit is None else chi_real_unit * params["line_strength"]
+    alpha_table = raw.get("probe_alpha_table_unit") if raw["mode"] == "species" else None
+    if alpha_table is not None:
+        # The nonlinear model gives collected power but no unique phase index.
+        _transmission, alpha = probe_saturation.propagate_gaussian_spectrum(
+            raw["probe_intensity_log_grid"], alpha_table * params["line_strength"], alpha, L)
+        chi_real = None
+    return alpha, chi_real, L
+
+
+def _quantitative_check(refined, grid, mhz_per_x):
+    def frequency(key):
+        value = refined[key]
+        return float(value * mhz_per_x) if np.isfinite(value) else None
+
+    check = dict(
+        status=refined["status"], reason=refined["reason"],
+        points=int(grid.size), grid_step_mhz=float((grid[1] - grid[0]) * mhz_per_x),
+        center_mhz=frequency("center"), width_mhz=frequency("width"),
+        left_half_height_mhz=frequency("left"), right_half_height_mhz=frequency("right"),
+        samples_per_fwhm=refined["samples_per_fwhm"],
+    )
+    for key in ("polarity", "local_noise_proxy"):
+        if key in refined:
+            check[key] = refined[key]
+    if "flanks" in refined:
+        check["flanks"] = [dict(detuning_mhz=flank["detuning"] * mhz_per_x,
+                                slope_per_mhz=flank["slope"] / mhz_per_x)
+                            for flank in refined["flanks"]]
+    return check
+
+
+def _finish_quantitative_export(evidence):
+    first, second = evidence["checks"]
+    if not all(check["status"] == "resolved" for check in (first, second)):
+        return dict(evidence, reason="A refined grid did not resolve the fixed feature and both flanks.")
+    width = second["width_mhz"]
+    width_error = abs(first["width_mhz"] - width) / width
+    center_error = abs(first["center_mhz"] - second["center_mhz"]) / width
+    coarse_error = abs(evidence["coarse_center_mhz"] - second["center_mhz"]) / width
+    overlap = (max(first["left_half_height_mhz"], second["left_half_height_mhz"])
+               < min(first["right_half_height_mhz"], second["right_half_height_mhz"]))
+    slope_errors = [abs(a["slope_per_mhz"] - b["slope_per_mhz"]) / abs(b["slope_per_mhz"])
+                    for a, b in zip(first["flanks"], second["flanks"])]
+    evidence["comparison"] = dict(width_relative_error=width_error,
+                                  center_shift_fwhm=center_error,
+                                  coarse_center_shift_fwhm=coarse_error,
+                                  half_height_regions_overlap=overlap,
+                                  flank_slope_relative_errors=slope_errors)
+    if (not overlap or center_error > evidence["center_shift_tolerance_fwhm"]
+            or coarse_error > evidence["coarse_center_tolerance_fwhm"]
+            or width_error > evidence["width_relative_tolerance"]
+            or max(slope_errors) > evidence["slope_relative_tolerance"]):
+        return dict(evidence, reason="Refined feature identity, linewidth or flank slopes did not converge.")
+    flank = max(second["flanks"], key=lambda item: abs(item["slope_per_mhz"]))
+    return dict(evidence, status="converged", linewidth_mhz=width,
+                lock_slope_per_mhz=abs(flank["slope_per_mhz"]),
+                lock_detuning_mhz=flank["detuning_mhz"],
+                reason="Independent grids agree on the fixed feature and both derivative flanks.")
+
+
 def _optical_readout(x, x_unit, alpha, L, params, *, effective=False):
     """Typed attenuation values shared by plots, headless readout and export."""
     return dict(
@@ -1506,6 +1593,7 @@ def _feature_resolution(feature, mhz_per_x, scope):
         "center_mhz": measured(feature.center, mhz_per_x) if feature else None,
         "width_mhz": measured(feature.fwhm, mhz_per_x) if feature else None,
         "samples_per_fwhm": measured(feature.samples_per_fwhm) if feature else None,
+        "polarity": feature.polarity if feature else None,
     }
 
 
