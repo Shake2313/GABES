@@ -4538,7 +4538,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P2",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-09-10_scheme-1_od-sas.md",
         "docs/daily_report/2026-09-15_scheme-1_od-sas.md",
@@ -4583,7 +4583,8 @@
         "source": "docs/checklist.json#_external_code_review_2026_10_30",
         "adoption_status": "user_approved_checklist_supplement_only",
         "note": "⟦AI⟧ 배경 처리와 해상도 gate는 이미 구현되어 있다. 기존 완료 항목을 재개하지 않고 열린 정량 export·고정창 수렴 항목에 난해한 파형의 검증 범위만 보강한다."
-      }
+      },
+      "implementation_2026_11_13": "⟦AI⟧ a00401a defers independent 4001/8001-point solves to explicit quantitative JSON export, with fixed physical window and feature identity. The coarse hero gate is preserved. The pure Rb85 D1 preset widths 14.766086 to 14.706747 MHz, max flank change 2.75%, converged lock slope 0.0506201/MHz. Default natural-Rb flank errors 5.65%/8.73% and overlapping features export null. Sloped/noisy/overlap fixtures and strict JSON verified."
     },
     {
       "id": "od-sas-csv-branch-selection",
