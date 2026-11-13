@@ -5322,7 +5322,7 @@
           ]
         }
       ],
-      "implementation_2026_11_13": "⟦AI⟧ Exact-Maxwell Sim Gold preliminary dense comparison solved 85 of 401 base coordinates in Fast. Shared valid rows meet the tested numeric tolerances (gain 0.03981%, Jasperse 0.008704 dB, Passive L1 0.008393 dB max). At +393.25 MHz the interpolated branch marks Passive L1 unavailable and the dense branch marks it available for Floquet 2 and 3. Certificate is open; require eligibility parity and independent dense checks at off-grid calibration and selected coordinates."
+      "implementation_2026_11_13": "⟦AI⟧ Exact-Maxwell Sim Gold preliminary dense comparison solved 85 of 401 base coordinates in Fast. Shared valid rows meet the tested numeric tolerances (gain 0.03981%, Jasperse 0.008704 dB, Passive L1 0.008393 dB max). At +393.25 MHz the interpolated branch marks Passive L1 unavailable and the dense branch marks it available for Floquet 2 and 3. Expanded independent dense comparison at a29b7dc covered 12 cases, two Floquet orders and off-grid points. Native complex response and gain passed (max 0.388464% and 0.152027%); Passive L1 eligibility differs at Gold and cold/weak, and native Jasperse reached 0.09460 dB. Exact mapped lab comparisons reached 4.4829 dB and native Balanced reproduced the discrepancy. Certificate remains open for adaptive eligibility and common off-grid calibration interpolation."
     },
     {
       "id": "biphoton-angle-trace-vectorization",
