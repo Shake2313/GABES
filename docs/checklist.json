@@ -5229,7 +5229,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "in_progress",
       "source_reports": [
         "docs/daily_report/2026-09-14_scheme-5_fwm.md",
         "docs/daily_report/2026-09-19_scheme-5_fwm.md",
@@ -5321,7 +5321,8 @@
             "review_note"
           ]
         }
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ Exact-Maxwell Sim Gold preliminary dense comparison solved 85 of 401 base coordinates in Fast. Shared valid rows meet the tested numeric tolerances (gain 0.03981%, Jasperse 0.008704 dB, Passive L1 0.008393 dB max). At +393.25 MHz the interpolated branch marks Passive L1 unavailable and the dense branch marks it available for Floquet 2 and 3. Certificate is open; require eligibility parity and independent dense checks at off-grid calibration and selected coordinates."
     },
     {
       "id": "biphoton-angle-trace-vectorization",
@@ -5400,7 +5401,8 @@
         "⟦AI⟧ Extensive quantum thermal-campaign tests are a separate artifact and do not automatically cover this historical phenomenological report."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ docs/fwm_thermal_excess_noise_report/scripts/generate_analysis.py and data/analysis_summary.json exist; rg in tests/tools found no named fwm_thermal_excess report check.; Extensive quantum thermal-campaign tests are a separate artifact and do not automatically cover this historical phenomenological report."
+      "problem": "⟦AI⟧ docs/fwm_thermal_excess_noise_report/scripts/generate_analysis.py and data/analysis_summary.json exist; rg in tests/tools found no named fwm_thermal_excess report check.; Extensive quantum thermal-campaign tests are a separate artifact and do not automatically cover this historical phenomenological report.",
+      "implementation_2026_11_13": "⟦AI⟧ Proposed transfer to the archive registry because the report and its evidence are archive-owned. All 16 report files match the pre-split tag byte-for-byte and the diagnostic claim remains false. Of 45 recorded source hashes, 30 match archived Git bytes or their CRLF form; 15 require provenance reconciliation before a replay claim. Transfer is pending; no main test is needed for this archive report."
     },
     {
       "id": "fwm-propagation-cache-partition",
