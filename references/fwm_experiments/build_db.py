@@ -14,6 +14,8 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+LEGACY_CSV = "fwm_squeezing_paper_parameters.csv"
+LEGACY_AUDIT = "legacy_csv_audit.json"
 VALUE_TYPES = {"reported", "approximate", "range", "lower_bound", "upper_bound", "derived", "digitized", "not_reported"}
 UNIT_ALIASES = {"µW": "uW", "μW": "uW", "µm": "um", "μm": "um", "°C": "degC", "%": "percent"}
 GAIN_QUANTITIES = {"probe_gain", "conjugate_gain", "reported_gain"}
@@ -26,6 +28,41 @@ CANONICAL_INPUTS = {
 def read_records():
     return [json.loads(p.read_text(encoding="utf-8-sig"))
             for p in sorted((ROOT / "papers").glob("*.json"))]
+
+
+def read_legacy_audit():
+    return json.loads((ROOT / LEGACY_AUDIT).read_text(encoding="utf-8"))
+
+
+def validate_legacy_audit(papers, audit, legacy):
+    errors = []
+    legacy_columns = set(legacy[0][5:])
+    legacy_rows = {row[0] for row in legacy[1:] if row}
+    indexed = {p["paper_id"]: p for p in papers if p.get("legacy_column") in legacy_columns}
+    findings = audit["findings"]
+    source = audit["legacy_source"]
+    if source["path"] != LEGACY_CSV or not source["source_url"]:
+        errors.append("legacy audit source identity missing or incorrect")
+    if hashlib.sha256((ROOT / LEGACY_CSV).read_bytes()).hexdigest() != source["sha256"]:
+        errors.append("legacy CSV checksum mismatch")
+    if indexed.keys() != findings.keys():
+        errors.append("legacy audit must cover exactly the migrated papers")
+    for paper_id in indexed.keys() & findings.keys():
+        paper = indexed[paper_id]
+        experiment_ids = {exp["experiment_id"] for exp in paper["experiments"]}
+        source_ids = {item["source_id"] for item in paper["sources"]}
+        if not findings[paper_id]:
+            errors.append(f"{paper_id}: no legacy audit findings")
+        for finding in findings[paper_id]:
+            if (not finding["experiment_ids"] or not set(finding["experiment_ids"]) <= experiment_ids
+                    or not finding["legacy_rows"] or not set(finding["legacy_rows"]) <= legacy_rows
+                    or finding["source_id"] not in source_ids or not finding["locator"] or not finding["note"]):
+                errors.append(f"{paper_id}: legacy audit entry has missing or invalid evidence links")
+    for context in audit["comparison_contexts"]:
+        paper = indexed.get(context["paper_id"], {})
+        if context["experiment_id"] not in {exp["experiment_id"] for exp in paper.get("experiments", [])}:
+            errors.append(f"{context['paper_id']}: legacy comparison context has an unknown experiment")
+    return errors
 
 
 def quantities(exp):
@@ -76,7 +113,7 @@ def readiness(paper, exp):
     }
 
 
-def validate(papers):
+def validate(papers, legacy_audit=None):
     errors, warnings = [], []
     ids, experiments, total, sources = set(), set(), 0, 0
     for paper in papers:
@@ -144,23 +181,26 @@ def validate(papers):
                     errors.append(f"{labelq}: derived value lacks formula")
                 if q.get("quantity") in {"opd_gabes", "tpd_gabes"} and not q.get("reference"):
                     errors.append(f"{labelq}: canonical detuning lacks convention")
-    # Historical CSV retained only for the migrated ten-paper coverage check.
-    legacy_path = ROOT / "fwm_squeezing_paper_parameters.csv"
-    with legacy_path.open(encoding="utf-8-sig", newline="") as stream:
-        legacy = list(csv.reader(stream))[0][5:]
+    with (ROOT / LEGACY_CSV).open(encoding="utf-8-sig", newline="") as stream:
+        legacy = list(csv.reader(stream))
+    legacy_columns = set(legacy[0][5:])
     retained = {p.get("legacy_column") for p in papers}
-    missing = sorted(set(legacy) - retained)
+    missing = sorted(legacy_columns - retained)
     if missing:
         errors.append("legacy papers absent: " + ", ".join(missing))
+    if legacy_audit is None:
+        legacy_audit = read_legacy_audit()
+    errors.extend(validate_legacy_audit(papers, legacy_audit, legacy))
     return {
         "schema_version": 1, "status": "PASS" if not errors else "FAIL",
-        "validation_date": "2026-10-23", "paper_count": len(papers),
+        "validation_date": "2026-11-13", "paper_count": len(papers),
         "experiment_count": len(experiments), "quantity_count": total,
-        "source_count": sources, "legacy_papers_expected": len(legacy),
-        "legacy_papers_retained": len(set(legacy) & retained),
+        "source_count": sources, "legacy_papers_expected": len(legacy_columns),
+        "legacy_papers_retained": len(legacy_columns & retained),
+        "legacy_papers_audited": len(legacy_audit["findings"]),
         "inclusion_counts": dict(Counter(p.get("scope", {}).get("inclusion") for p in papers)),
         "errors": errors, "warnings": warnings,
-        "scope": "Structure, references, source bytes and legacy coverage; scientific spot checks recorded separately.",
+        "scope": "Structure, references, source bytes and legacy audit links.",
     }
 
 
@@ -224,9 +264,12 @@ def main():
     parser.add_argument("--check", action="store_true", help="Validate without rewriting generated views")
     args = parser.parse_args()
     papers = read_records()
-    receipt = validate(papers)
+    legacy_audit = read_legacy_audit()
+    receipt = validate(papers, legacy_audit)
     if not args.check:
-        payload = {"schema_version": 1, "as_of": "2026-10-23", "purpose": "Literature evidence, before calibration development", "unit_aliases": UNIT_ALIASES, "papers": papers}
+        payload = {"schema_version": 1, "as_of": "2026-11-13",
+                   "purpose": "Literature evidence, before calibration development",
+                   "unit_aliases": UNIT_ALIASES, "papers": papers, "legacy_csv_audit": legacy_audit}
         (ROOT / "database.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         export_tables(papers)
         build_html(papers, receipt)
@@ -234,8 +277,9 @@ def main():
         members = sorted((ROOT / "papers").glob("*.json")) + [ROOT / n for n in (
             "SCHEMA.md", "schema.json", "build_db.py", "viewer.html", "README.md",
             "database.json", "papers.csv", "experiments.csv", "observations.csv", "index.html",
+            LEGACY_CSV, LEGACY_AUDIT,
             "REVIEW.md", "REVIEW_recent.json", "SEARCH.md", "search_new.json", "verify_db.py")]
-        manifest = {"as_of": "2026-10-23", "files": {
+        manifest = {"as_of": "2026-11-13", "files": {
             p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
             for p in members if p.is_file()}, "sources": {
             s["path"]: s.get("sha256") for paper in papers for s in paper["sources"] if s.get("path")}}

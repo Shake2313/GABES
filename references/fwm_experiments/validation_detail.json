@@ -1,5 +1,5 @@
 {
-  "date": "2026-10-23",
+  "date": "2026-11-13",
   "origin": "AI focused data verification",
   "status": "PASS",
   "checks": [
@@ -9,20 +9,21 @@
       "detail": {
         "schema_version": 1,
         "status": "PASS",
-        "validation_date": "2026-10-23",
+        "validation_date": "2026-11-13",
         "paper_count": 17,
         "experiment_count": 61,
-        "quantity_count": 1104,
+        "quantity_count": 1108,
         "source_count": 22,
         "legacy_papers_expected": 10,
         "legacy_papers_retained": 10,
+        "legacy_papers_audited": 10,
         "inclusion_counts": {
           "primary": 15,
           "context_only": 2
         },
         "errors": [],
         "warnings": [],
-        "scope": "Structure, references, source bytes and legacy coverage; scientific spot checks recorded separately."
+        "scope": "Structure, references, source bytes and legacy audit links."
       }
     },
     {
@@ -40,6 +41,11 @@
     },
     {
       "id": "combined_json_lossless",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "id": "legacy_audit_json_lossless",
       "status": "PASS",
       "detail": null
     },
@@ -63,8 +69,8 @@
       "id": "observations.csv_row_count",
       "status": "PASS",
       "detail": {
-        "expected": 1104,
-        "actual": 1104
+        "expected": 1108,
+        "actual": 1108
       }
     },
     {
@@ -124,10 +130,10 @@
     }
   ],
   "value_type_counts": {
-    "approximate": 185,
+    "approximate": 186,
     "reported": 602,
-    "derived": 119,
-    "not_reported": 156,
+    "derived": 121,
+    "not_reported": 157,
     "range": 26,
     "lower_bound": 8,
     "upper_bound": 8

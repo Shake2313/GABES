@@ -298,34 +298,34 @@
       ],
       "results": [
         {
-          "quantity": "probe_gain",
+          "quantity": "reported_gain",
           "value": 20,
           "unit": "1",
           "value_type": "approximate",
-          "basis": "amplified output probe / input seed",
+          "basis": "4WM gain as reported",
           "reference": null,
-          "plane": "",
+          "plane": "not_reported",
           "source_id": "main",
           "locator": "PDF p. 4, Fig. 2 caption",
-          "evidence": "The cited run reports probe gain using amplified output probe / input seed.",
-          "notes": ""
+          "evidence": "The caption reports the 4WM gain for this condition.",
+          "notes": "No measured power-ratio reference plane is given."
         },
         {
-          "quantity": "output_probe_power",
+          "quantity": "output_power_unspecified_arm",
           "value": 129,
           "unit": "uW",
           "value_type": "approximate",
-          "basis": "",
+          "basis": "output power stated for this seed setting",
           "reference": null,
-          "plane": "output; exact loss plane unspecified",
+          "plane": "output; arm and loss plane not specified in the caption",
           "source_id": "main",
           "locator": "PDF p. 4, Fig. 2 caption",
-          "evidence": "The cited run reports output probe power.",
-          "notes": ""
+          "evidence": "Figure 2 reports the approximate output for the corresponding seed setting.",
+          "notes": "The other number is from a different seed-power run. A same-run probe/conjugate pair is unknown."
         }
       ],
       "notes": [
-        "Output 129 and 17 uW are alternative seed-power experiments; they are not a probe/conjugate pair. Electronic noise is not subtracted."
+        "The 6.4 uW and 0.9 uW seed settings have separate reported output powers. The caption does not identify the arm or a same-condition output pair. Electronic noise is not subtracted."
       ],
       "seed_mode": "single_seed"
     },
@@ -582,34 +582,34 @@
       ],
       "results": [
         {
-          "quantity": "probe_gain",
+          "quantity": "reported_gain",
           "value": 20,
           "unit": "1",
           "value_type": "approximate",
-          "basis": "amplified output probe / input seed",
+          "basis": "4WM gain as reported",
           "reference": null,
-          "plane": "",
+          "plane": "not_reported",
           "source_id": "main",
           "locator": "PDF p. 4, Fig. 2 caption",
-          "evidence": "The cited run reports probe gain using amplified output probe / input seed.",
-          "notes": ""
+          "evidence": "The caption reports the 4WM gain for this condition.",
+          "notes": "No measured power-ratio reference plane is given."
         },
         {
-          "quantity": "output_probe_power",
+          "quantity": "output_power_unspecified_arm",
           "value": 17,
           "unit": "uW",
           "value_type": "approximate",
-          "basis": "",
+          "basis": "output power stated for this seed setting",
           "reference": null,
-          "plane": "output; exact loss plane unspecified",
+          "plane": "output; arm and loss plane not specified in the caption",
           "source_id": "main",
           "locator": "PDF p. 4, Fig. 2 caption",
-          "evidence": "The cited run reports output probe power.",
-          "notes": ""
+          "evidence": "Figure 2 reports the approximate output for the corresponding seed setting.",
+          "notes": "The other number is from a different seed-power run. A same-run probe/conjugate pair is unknown."
         }
       ],
       "notes": [
-        "Output 129 and 17 uW are alternative seed-power experiments; they are not a probe/conjugate pair. Electronic noise is not subtracted."
+        "The 6.4 uW and 0.9 uW seed settings have separate reported output powers. The caption does not identify the arm or a same-condition output pair. Electronic noise is not subtracted."
       ],
       "seed_mode": "single_seed"
     },
@@ -853,17 +853,17 @@
       ],
       "results": [
         {
-          "quantity": "probe_gain",
+          "quantity": "reported_gain",
           "value": 5,
           "unit": "1",
           "value_type": "reported",
-          "basis": "reported 4WM intensity gain",
+          "basis": "4WM gain as reported",
           "reference": null,
-          "plane": "",
+          "plane": "not_reported",
           "source_id": "main",
           "locator": "PDF p. 4, Fig. 3 caption",
-          "evidence": "The cited run reports probe gain using reported 4WM intensity gain.",
-          "notes": ""
+          "evidence": "The caption reports the 4WM gain for this condition.",
+          "notes": "No measured power-ratio reference plane is given."
         }
       ],
       "notes": [
@@ -1111,17 +1111,17 @@
       ],
       "results": [
         {
-          "quantity": "probe_gain",
+          "quantity": "reported_gain",
           "value": 10,
           "unit": "1",
           "value_type": "reported",
-          "basis": "reported 4WM intensity gain",
+          "basis": "4WM gain as reported",
           "reference": null,
-          "plane": "",
+          "plane": "not_reported",
           "source_id": "main",
           "locator": "PDF p. 4, Fig. 3 caption",
-          "evidence": "The cited run reports probe gain using reported 4WM intensity gain.",
-          "notes": ""
+          "evidence": "The caption reports the 4WM gain for this condition.",
+          "notes": "No measured power-ratio reference plane is given."
         }
       ],
       "notes": [

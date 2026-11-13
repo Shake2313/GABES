@@ -23,6 +23,7 @@ Canonical records: `papers/<paper_id>.json`, UTF-8. Generated CSV, HTML and comb
     "experiment_id": "main",
     "label": "Figure or operating-point name",
     "kind": "operating_point",
+    "measurement_path": "free_space",
     "conditions": [],
     "results": [],
     "notes": []
@@ -41,7 +42,9 @@ Each condition/result is an evidence-bearing quantity:
 
 Allowed value types: `reported`, `approximate`, `range`, `lower_bound`, `upper_bound`, `derived`, `digitized`, `not_reported`. A range uses `value: null, lower: ..., upper: ...`. Missing quantities use `value: null, value_type: not_reported`; never zero or an assumed default. An optional `uncertainty` object gives `value`, `unit`, `kind` and `confidence` as reported; an unreported error bar stays absent.
 
-Retain original definitions in `basis`, `reference` and `plane`. Gain quantities: `probe_gain`, `conjugate_gain`, `reported_gain`, `gain_coefficient`; do not treat a squeezing-derived ideal gain as a measured gain. Results: `squeezing_measured`, `squeezing_electronic_noise_subtracted`, `squeezing_loss_corrected`, `squeezing_slope`, `noise_ratio`, `output_probe_power`, `output_conjugate_power`, `bandwidth`, etc. Conditions: `opd_reported`, `tpd_reported`, `pump_probe_spacing`, `temperature`, `cell_length`, `pump_power`, `seed_power`, `pump_beam_size`, `seed_beam_size`, `crossing_angle`, `detector_qe`, `optical_transmission`, `detection_efficiency`, `analysis_frequency`, `resolution_bandwidth`, `video_bandwidth`, etc.
+An experiment can declare an observed optical path, such as `free_space` or `fiber_output`. If the source does not establish the path, leave the property absent. Experiment-level `seed_mode` overrides paper-level seeding.
+
+Retain original definitions in `basis`, `reference` and `plane`. Gain quantities: `probe_gain`, `conjugate_gain`, `reported_gain`, `gain_coefficient`; do not treat a squeezing-derived ideal gain as a measured gain. Results: `squeezing_measured`, `squeezing_electronic_noise_subtracted`, `squeezing_loss_corrected`, `squeezing_slope`, `noise_ratio`, `output_probe_power`, `output_conjugate_power`, `output_power_unspecified_arm`, `bandwidth`, etc. Conditions: `opd_reported`, `tpd_reported`, `pump_probe_spacing`, `temperature`, `cell_length`, `pump_power`, `seed_power`, `pump_beam_size`, `seed_beam_size`, `crossing_angle`, `detector_qe`, `optical_transmission`, `detection_efficiency`, `analysis_frequency`, `resolution_bandwidth`, `video_bandwidth`, etc.
 
 Derived quantities retain their input record and include `derivation: {"formula": "...", "inputs": ["quantity", "..."]}`. Standardized quantities use `opd_gabes` (GHz, pump minus 85Rb F=2→F′=3), `tpd_gabes` (MHz, seed=pump−3035.732439 MHz+δ), `pump_radius`/`seed_radius` (µm, 1/e² intensity radius). Convert beam diameter/waist only when its definition is established. Ambiguous excited-state reference or detuning sign does not receive a guessed canonical number.
 
@@ -50,3 +53,9 @@ Each numeric record needs a source and a page/section/figure locator. Evidence i
 Inclusion: `primary` for the requested system/observable, `context_only` for retained legacy papers with a different observable or seeding arrangement requiring separate treatment, `excluded` for screened nonmatching work. Preserve natural-isotope cells but label their mixture. `publication.status` distinguishes preprints. Related papers from the same apparatus use optional `apparatus_group` at paper level for later group-wise validation.
 
 No fit, train/test assignment or claimed prediction is created in this data-building stage. All inspected papers are an explored literature pool. A future untouched test set requires a separate predeclared collection/freeze; leave-one-paper/apparatus-out cross-validation is possible but is not untouched external validation.
+
+## ⟦AI⟧ Legacy CSV audit
+
+`legacy_csv_audit.json` is reproduced in `database.json` under `legacy_csv_audit`. A finding names affected historical row IDs, canonical experiment IDs and an exact locator on the paper's named source. Join `paper_id` to `papers` and `source_id` to that paper's source entries for the DOI, version, URL and checksum. The canonical quantities carry their reported, approximate, derived or missing status and any reported uncertainty. Each finding lists unresolved evidence explicitly.
+
+`comparison_contexts` links measurement classes to canonical experiments. The class label identifies a measurement setup. Use its observations to determine which quantities the source actually reports for that condition. `historical_gold_fits` lists each archived fit's targets and excluded quantities separately from the paper observations. The historical CSV remains the byte-for-byte compatibility input.

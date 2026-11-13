@@ -272,6 +272,26 @@
           "locator": "PDF p. 2 (179), noise-versus-power measurement",
           "evidence": "The cited source gives this analysis frequency for the experiment or apparatus described here.",
           "notes": ""
+        },
+        {
+          "quantity": "detection_efficiency",
+          "value": 65.6,
+          "unit": "%",
+          "value_type": "derived",
+          "basis": "detector QE times post-medium optical transmission",
+          "reference": null,
+          "plane": "vapor to detector",
+          "source_id": "main",
+          "locator": "PDF p. 2 (179), loss correction paragraph",
+          "evidence": "The stated 82% detector QE and 80% transmission are used for the loss correction.",
+          "notes": "Keeps the two component measurements distinct. It does not include unpumped in-cell absorption.",
+          "derivation": {
+            "formula": "100 * 0.82 * 0.80",
+            "inputs": [
+              "detector_qe",
+              "optical_transmission"
+            ]
+          }
         }
       ],
       "results": [

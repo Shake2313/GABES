@@ -320,7 +320,8 @@
       ],
       "notes": [
         "Flip mirrors bypass the output fibers. Electronic-noise subtraction is not specified."
-      ]
+      ],
+      "measurement_path": "free_space"
     },
     {
       "experiment_id": "after_fiber",
@@ -567,11 +568,45 @@
           "locator": "PDF p.3, Sec.III",
           "evidence": "The cited run reports squeezing measured.",
           "notes": ""
+        },
+        {
+          "unit": "dB",
+          "reference": "noise power relative to shot noise",
+          "plane": "modeled after-fiber comparison",
+          "source_id": "main",
+          "locator": "PDF pp. 3-4, Results and Fig. 4",
+          "basis": "conditional 10% symmetric optical loss",
+          "quantity": "squeezing_expected_reported",
+          "value": -6.3,
+          "value_type": "approximate",
+          "evidence": "The authors give this expected value at 1 MHz.",
+          "notes": "Author calculation. It differs from applying linear vacuum loss to the stated rounded inputs."
+        },
+        {
+          "unit": "dB",
+          "reference": "noise power relative to shot noise",
+          "plane": "modeled after-fiber comparison",
+          "source_id": "main",
+          "locator": "PDF pp. 3-4, Results and Fig. 4",
+          "basis": "conditional 10% symmetric optical loss",
+          "quantity": "squeezing_expected_vacuum_loss",
+          "value": -5.66244,
+          "value_type": "derived",
+          "evidence": "Independent vacuum-loss arithmetic using the published before-fiber result and stated comparison loss.",
+          "notes": "Conditional calculation from rounded inputs. The reported after-fiber result is -4.4 dB, 1.26244 dB above this calculation.",
+          "derivation": {
+            "formula": "10 log10(0.9 * 10^(-7.2/10) + 0.1)",
+            "inputs": [
+              "before_fiber/squeezing_measured",
+              "Fig. 4: 10% assumed optical loss"
+            ]
+          }
         }
       ],
       "notes": [
         "Output fiber ends are not AR coated. Actual extra noise includes uncorrelated spatial modes; cannot represent the entire change as ordinary vacuum loss."
-      ]
+      ],
+      "measurement_path": "fiber_output"
     },
     {
       "experiment_id": "pump_optimum_range",

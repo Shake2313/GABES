@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "as_of": "2026-10-23",
+  "as_of": "2026-11-13",
   "purpose": "Literature evidence, before calibration development",
   "unit_aliases": {
     "µW": "uW",
@@ -3536,7 +3536,8 @@
           ],
           "notes": [
             "Flip mirrors bypass the output fibers. Electronic-noise subtraction is not specified."
-          ]
+          ],
+          "measurement_path": "free_space"
         },
         {
           "experiment_id": "after_fiber",
@@ -3783,11 +3784,45 @@
               "locator": "PDF p.3, Sec.III",
               "evidence": "The cited run reports squeezing measured.",
               "notes": ""
+            },
+            {
+              "unit": "dB",
+              "reference": "noise power relative to shot noise",
+              "plane": "modeled after-fiber comparison",
+              "source_id": "main",
+              "locator": "PDF pp. 3-4, Results and Fig. 4",
+              "basis": "conditional 10% symmetric optical loss",
+              "quantity": "squeezing_expected_reported",
+              "value": -6.3,
+              "value_type": "approximate",
+              "evidence": "The authors give this expected value at 1 MHz.",
+              "notes": "Author calculation. It differs from applying linear vacuum loss to the stated rounded inputs."
+            },
+            {
+              "unit": "dB",
+              "reference": "noise power relative to shot noise",
+              "plane": "modeled after-fiber comparison",
+              "source_id": "main",
+              "locator": "PDF pp. 3-4, Results and Fig. 4",
+              "basis": "conditional 10% symmetric optical loss",
+              "quantity": "squeezing_expected_vacuum_loss",
+              "value": -5.66244,
+              "value_type": "derived",
+              "evidence": "Independent vacuum-loss arithmetic using the published before-fiber result and stated comparison loss.",
+              "notes": "Conditional calculation from rounded inputs. The reported after-fiber result is -4.4 dB, 1.26244 dB above this calculation.",
+              "derivation": {
+                "formula": "10 log10(0.9 * 10^(-7.2/10) + 0.1)",
+                "inputs": [
+                  "before_fiber/squeezing_measured",
+                  "Fig. 4: 10% assumed optical loss"
+                ]
+              }
             }
           ],
           "notes": [
             "Output fiber ends are not AR coated. Actual extra noise includes uncorrelated spatial modes; cannot represent the entire change as ordinary vacuum loss."
-          ]
+          ],
+          "measurement_path": "fiber_output"
         },
         {
           "experiment_id": "pump_optimum_range",
@@ -7332,6 +7367,26 @@
               "locator": "PDF p. 2 (179), noise-versus-power measurement",
               "evidence": "The cited source gives this analysis frequency for the experiment or apparatus described here.",
               "notes": ""
+            },
+            {
+              "quantity": "detection_efficiency",
+              "value": 65.6,
+              "unit": "%",
+              "value_type": "derived",
+              "basis": "detector QE times post-medium optical transmission",
+              "reference": null,
+              "plane": "vapor to detector",
+              "source_id": "main",
+              "locator": "PDF p. 2 (179), loss correction paragraph",
+              "evidence": "The stated 82% detector QE and 80% transmission are used for the loss correction.",
+              "notes": "Keeps the two component measurements distinct. It does not include unpumped in-cell absorption.",
+              "derivation": {
+                "formula": "100 * 0.82 * 0.80",
+                "inputs": [
+                  "detector_qe",
+                  "optical_transmission"
+                ]
+              }
             }
           ],
           "results": [
@@ -9818,6 +9873,19 @@
               "notes": "",
               "lower": 40,
               "upper": 500
+            },
+            {
+              "quantity": "detection_efficiency",
+              "value": null,
+              "unit": "%",
+              "value_type": "not_reported",
+              "basis": "",
+              "reference": null,
+              "plane": "not_reported",
+              "source_id": "main",
+              "locator": "PDF pp. 7-8, Experimental setup and Fig. 5",
+              "evidence": "No value for this operating condition is reported in the cited text.",
+              "notes": "Unknown. No default or inference from the other reported quantities."
             }
           ],
           "results": [
@@ -10386,7 +10454,8 @@
             }
           ],
           "notes": [
-            "Seed is varied;10uW belongs to the optimum run, not every point of this sweep. Author comparison refers to Fig.2(b), apparently a cross-reference inconsistency."
+            "Seed is varied;10uW belongs to the optimum run, not every point of this sweep. Author comparison refers to Fig.2(b), apparently a cross-reference inconsistency.",
+            "The 0.135 ratio and the authors' approximate -8 dB are retained alongside the arithmetic -8.696662 dB. The slope is near 1 MHz, separate from the direct spectrum and abstract frequency."
           ]
         }
       ],
@@ -16168,34 +16237,34 @@
           ],
           "results": [
             {
-              "quantity": "probe_gain",
+              "quantity": "reported_gain",
               "value": 20,
               "unit": "1",
               "value_type": "approximate",
-              "basis": "amplified output probe / input seed",
+              "basis": "4WM gain as reported",
               "reference": null,
-              "plane": "",
+              "plane": "not_reported",
               "source_id": "main",
               "locator": "PDF p. 4, Fig. 2 caption",
-              "evidence": "The cited run reports probe gain using amplified output probe / input seed.",
-              "notes": ""
+              "evidence": "The caption reports the 4WM gain for this condition.",
+              "notes": "No measured power-ratio reference plane is given."
             },
             {
-              "quantity": "output_probe_power",
+              "quantity": "output_power_unspecified_arm",
               "value": 129,
               "unit": "uW",
               "value_type": "approximate",
-              "basis": "",
+              "basis": "output power stated for this seed setting",
               "reference": null,
-              "plane": "output; exact loss plane unspecified",
+              "plane": "output; arm and loss plane not specified in the caption",
               "source_id": "main",
               "locator": "PDF p. 4, Fig. 2 caption",
-              "evidence": "The cited run reports output probe power.",
-              "notes": ""
+              "evidence": "Figure 2 reports the approximate output for the corresponding seed setting.",
+              "notes": "The other number is from a different seed-power run. A same-run probe/conjugate pair is unknown."
             }
           ],
           "notes": [
-            "Output 129 and 17 uW are alternative seed-power experiments; they are not a probe/conjugate pair. Electronic noise is not subtracted."
+            "The 6.4 uW and 0.9 uW seed settings have separate reported output powers. The caption does not identify the arm or a same-condition output pair. Electronic noise is not subtracted."
           ],
           "seed_mode": "single_seed"
         },
@@ -16452,34 +16521,34 @@
           ],
           "results": [
             {
-              "quantity": "probe_gain",
+              "quantity": "reported_gain",
               "value": 20,
               "unit": "1",
               "value_type": "approximate",
-              "basis": "amplified output probe / input seed",
+              "basis": "4WM gain as reported",
               "reference": null,
-              "plane": "",
+              "plane": "not_reported",
               "source_id": "main",
               "locator": "PDF p. 4, Fig. 2 caption",
-              "evidence": "The cited run reports probe gain using amplified output probe / input seed.",
-              "notes": ""
+              "evidence": "The caption reports the 4WM gain for this condition.",
+              "notes": "No measured power-ratio reference plane is given."
             },
             {
-              "quantity": "output_probe_power",
+              "quantity": "output_power_unspecified_arm",
               "value": 17,
               "unit": "uW",
               "value_type": "approximate",
-              "basis": "",
+              "basis": "output power stated for this seed setting",
               "reference": null,
-              "plane": "output; exact loss plane unspecified",
+              "plane": "output; arm and loss plane not specified in the caption",
               "source_id": "main",
               "locator": "PDF p. 4, Fig. 2 caption",
-              "evidence": "The cited run reports output probe power.",
-              "notes": ""
+              "evidence": "Figure 2 reports the approximate output for the corresponding seed setting.",
+              "notes": "The other number is from a different seed-power run. A same-run probe/conjugate pair is unknown."
             }
           ],
           "notes": [
-            "Output 129 and 17 uW are alternative seed-power experiments; they are not a probe/conjugate pair. Electronic noise is not subtracted."
+            "The 6.4 uW and 0.9 uW seed settings have separate reported output powers. The caption does not identify the arm or a same-condition output pair. Electronic noise is not subtracted."
           ],
           "seed_mode": "single_seed"
         },
@@ -16723,17 +16792,17 @@
           ],
           "results": [
             {
-              "quantity": "probe_gain",
+              "quantity": "reported_gain",
               "value": 5,
               "unit": "1",
               "value_type": "reported",
-              "basis": "reported 4WM intensity gain",
+              "basis": "4WM gain as reported",
               "reference": null,
-              "plane": "",
+              "plane": "not_reported",
               "source_id": "main",
               "locator": "PDF p. 4, Fig. 3 caption",
-              "evidence": "The cited run reports probe gain using reported 4WM intensity gain.",
-              "notes": ""
+              "evidence": "The caption reports the 4WM gain for this condition.",
+              "notes": "No measured power-ratio reference plane is given."
             }
           ],
           "notes": [
@@ -16981,17 +17050,17 @@
           ],
           "results": [
             {
-              "quantity": "probe_gain",
+              "quantity": "reported_gain",
               "value": 10,
               "unit": "1",
               "value_type": "reported",
-              "basis": "reported 4WM intensity gain",
+              "basis": "4WM gain as reported",
               "reference": null,
-              "plane": "",
+              "plane": "not_reported",
               "source_id": "main",
               "locator": "PDF p. 4, Fig. 3 caption",
-              "evidence": "The cited run reports probe gain using reported 4WM intensity gain.",
-              "notes": ""
+              "evidence": "The caption reports the 4WM gain for this condition.",
+              "notes": "No measured power-ratio reference plane is given."
             }
           ],
           "notes": [
@@ -17057,5 +17126,369 @@
         "⟦AI⟧ Delta sign remains unnormalized. Gain targets are distinct from the ideal conjugate G-1 formula; no measured conjugate gain is inferred."
       ]
     }
-  ]
+  ],
+  "legacy_csv_audit": {
+    "schema_version": 1,
+    "origin": "⟦AI⟧ primary-source audit, 2026-11-13",
+    "legacy_source": {
+      "path": "fwm_squeezing_paper_parameters.csv",
+      "source_url": "https://github.com/Shake2313/GABES-archive/blob/387549130d5d2926759c667826a6c650a5b0fe95/archive/fwm_squeezing_paper_parameters.csv",
+      "sha256": "028bd42e3d04f9811594312a24abe1fdeac67562f4a2e3f378f4a6a1731315b1"
+    },
+    "findings": {
+      "sim_2025_scirep": [
+        {
+          "experiment_ids": [
+            "fig2_rb85_gain_scan",
+            "fig3a_rb85_best_ids"
+          ],
+          "legacy_rows": [
+            "pump_waist_um_1e2_radius",
+            "probe_waist_um_1e2_radius",
+            "fwm_gain_primary",
+            "output_probe_power_uw",
+            "output_conjugate_power_uw"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 3-4, apparatus, Figs. 2 and 3a",
+          "note": "The pump and seed sizes are 530 and 330 um, 1/e^2 intensity radii. Gain about 16 uses the 10 uW gain-scan seed. Gain about 15 is reported for the 8 uW squeezing point. The old 15.5 midpoint is not a measured gain. The rounded 111 and 109 uW powers give 13.875 and 13.625 relative to 8 uW, respectively.",
+          "unresolved": []
+        },
+        {
+          "experiment_ids": [
+            "fig3a_rb85_best_ids",
+            "fig3b_power_slope"
+          ],
+          "legacy_rows": [
+            "optical_loss_pct",
+            "detector_qe_pct",
+            "total_detection_loss_pct",
+            "squeezing_measured_db",
+            "squeezing_corrected_or_slope_db",
+            "squeezing_slope_ratio"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 4-5, Fig. 3 and loss paragraph",
+          "note": "Direct IDS is -7.8 dB. Power-slope IDS is 0.134 (about -8.7 dB), with its own conditions. The authors report 5.5(2)% optical and 8.0(2)% detection-system losses, with 13.5(2)% total. The historical product of 0.945 and 0.92 is a different calculation from their total efficiency of 0.865.",
+          "unresolved": [
+            "standalone detector QE",
+            "intrinsic IDS inferred from the two different measurement classes"
+          ]
+        }
+      ],
+      "mccormick_2007_ol": [
+        {
+          "experiment_ids": [
+            "red_seed_fig2",
+            "available_probe_envelope"
+          ],
+          "legacy_rows": [
+            "cell_length_mm",
+            "probe_seed_power_uw_primary",
+            "optical_loss_pct",
+            "detector_qe_pct",
+            "total_detection_loss_pct",
+            "squeezing_measured_db",
+            "squeezing_corrected_or_slope_db"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 1-2 (178-179), Brewster cell, Figs. 2-3 and loss correction",
+          "note": "The final optical path is about 9 mm, superseding the unsupported 19 mm legacy value. The setup maximum 200 uW is not the Fig. 2 optimum seed. Post-medium 80% optics and 82% detector QE give a derived 65.6% external efficiency, separate from 7% in-cell probe absorption. Direct IDS and fitted slope are each -3.5 dB. The authors loss-correct to -8.1 dB.",
+          "unresolved": [
+            "seed power at the Fig. 2 optimum"
+          ]
+        },
+        {
+          "experiment_ids": [
+            "red_seed_fig2"
+          ],
+          "legacy_rows": [
+            "cell_length_mm"
+          ],
+          "source_id": "preprint",
+          "locator": "PDF p. 1, Brewster-cell description",
+          "note": "The preprint gives about 8 mm. Keep this as a version discrepancy.",
+          "unresolved": []
+        }
+      ],
+      "mccormick_2008_pra": [
+        {
+          "experiment_ids": [
+            "nominal_gain9",
+            "low_frequency_fig4",
+            "best_inferred_region"
+          ],
+          "legacy_rows": [
+            "fwm_gain_primary",
+            "fwm_gain_min",
+            "fwm_gain_max",
+            "output_probe_power_uw",
+            "output_conjugate_power_uw",
+            "total_detection_loss_pct",
+            "squeezing_corrected_or_slope_db",
+            "optical_loss_pct",
+            "detector_qe_pct"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 2-4, Fig. 2, effective-gain definition and Fig. 4",
+          "note": "Effective gain includes a window correction. The inferred intrinsic gain range 9-15 is a different quantity. The 305 and 290 uW powers belong to the low-frequency Fig. 4 condition, not the 100 uW nominal-gain measurement. The paper gives 95.5(2.0)% optical-path transmission and 94.5(2.0)% photodiode efficiency, combining them as 90(3)% total detection efficiency.",
+          "unresolved": [
+            "seed power at the Fig. 4 condition"
+          ]
+        }
+      ],
+      "vogl_2012_spie": [
+        {
+          "experiment_ids": [
+            "typical_source"
+          ],
+          "legacy_rows": [
+            "tpd_mhz_gabes",
+            "fwm_gain_primary",
+            "fwm_gain_min",
+            "fwm_gain_max",
+            "analysis_freq_low_khz",
+            "analysis_freq_high_khz"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 1-3, setup, Sec. 3 and Figs. 1-2",
+          "note": "The body describes blue seeding. The schematic appears to show the opposite branch, so no signed GABES delta is assigned. Reported gain is a range 4-10. Its midpoint 7 is not a measured gain. Fig. 2 labels zero span at 800 kHz while the text says 800 MHz.",
+          "unresolved": [
+            "signed GABES two-photon detuning",
+            "total detection efficiency"
+          ]
+        }
+      ],
+      "liu_2011_ol": [
+        {
+          "experiment_ids": [
+            "main_400mw",
+            "low_frequency_fig3",
+            "bandwidth_sweep",
+            "bandwidth_100mw",
+            "bandwidth_700mw"
+          ],
+          "legacy_rows": [
+            "pump_power_mw_primary",
+            "pump_power_mw_min",
+            "pump_power_mw_max",
+            "output_probe_power_uw",
+            "output_conjugate_power_uw",
+            "fwm_gain_primary",
+            "detector_qe_pct",
+            "total_detection_loss_pct",
+            "squeezing_bandwidth_mhz_min",
+            "squeezing_bandwidth_mhz_max"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 1-3 (2979-2981), setup and Figs. 2-4",
+          "note": "The 400 mW noise run is separate from the 100-700 mW bandwidth sweep with about 5.5-16.5 MHz endpoints. Approximate 80/70 uW outputs and 10 uW seed yield derived 8/7 ratios. The 96% detector QE and 90% pump-off probe transmission describe different planes.",
+          "unresolved": [
+            "total detection efficiency"
+          ]
+        }
+      ],
+      "wu_2019_oe": [
+        {
+          "experiment_ids": [
+            "fig2_high_seed",
+            "fig2_low_seed",
+            "fig3_angle03",
+            "fig3_angle05"
+          ],
+          "legacy_rows": [
+            "experiment_mode",
+            "pump_power_mw_primary",
+            "probe_seed_power_uw_primary",
+            "fwm_gain_primary",
+            "output_probe_power_uw",
+            "output_conjugate_power_uw",
+            "detector_qe_pct",
+            "total_detection_loss_pct"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 3-4, setup and Figs. 2-3 captions",
+          "note": "Fig. 2 reports output 129 uW for a 6.4 uW seed and 17 uW for a 0.9 uW seed, each with gain about 20 and pump 420 mW. These are separate single-seed runs. The caption does not identify the output arm or reference plane. Fig. 3 is a 750 mW dual-seed run. Detector QE is 95%.",
+          "unresolved": [
+            "Fig. 2 output arm and power reference plane",
+            "matched probe/conjugate power pairs",
+            "total detection efficiency"
+          ]
+        }
+      ],
+      "dearaujo_2024_oe": [
+        {
+          "experiment_ids": [
+            "optimum_delay_homodyne",
+            "sub_hz_homodyne"
+          ],
+          "legacy_rows": [
+            "experiment_mode",
+            "pump_power_mw_primary",
+            "probe_seed_power_uw_primary",
+            "fwm_gain_primary",
+            "squeezing_measured_db"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 3-6, setup and Figs. 2-4",
+          "note": "Vacuum-seeded homodyne quadrature belongs to a different measurement class from seeded direct IDS. Approximately 800 mW pump before splitting gives approximately 400 mW per arm. The sub-Hz result with electronic-noise subtraction is a separate condition.",
+          "unresolved": [
+            "comparable seeded IDS gain"
+          ]
+        }
+      ],
+      "allen_2026_oe": [
+        {
+          "experiment_ids": [
+            "fig3_optimum",
+            "stability_initial",
+            "five_hour_stability"
+          ],
+          "legacy_rows": [
+            "probe_seed_power_uw_primary",
+            "output_conjugate_power_uw",
+            "fwm_gain_primary",
+            "squeezing_measured_db",
+            "squeezing_corrected_or_slope_db",
+            "squeezing_slope_ratio"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 8, 12-14, Fig. 3 and Sec. 3.3",
+          "note": "The Fig. 3 direct result is -8.2 dB at 218 uW conjugate output and 12 uW input seed. The ratio 218/12 is not probe gain. The Fig. 3 slope ratio is 0.131 (about -8.8 dB). The retuned five-hour mean is a separate stability measurement.",
+          "unresolved": [
+            "probe gain and 1/e^2 radii at the measured optimum"
+          ]
+        }
+      ],
+      "jain_2025_ol": [
+        {
+          "experiment_ids": [
+            "before_fiber",
+            "after_fiber"
+          ],
+          "legacy_rows": [
+            "experiment_mode",
+            "optical_loss_pct",
+            "total_detection_loss_pct",
+            "squeezing_measured_db",
+            "squeezing_after_channel_db",
+            "squeezing_corrected_or_slope_db"
+          ],
+          "source_id": "main",
+          "locator": "PDF pp. 3-4, Results and Fig. 4",
+          "note": "Direct measured IDS is -7.2 dB before fiber and -4.4 dB after fiber. The authors cite coupling above 90% and expect -6.3 dB for 10% loss. Applying symmetric vacuum loss at exactly 10% to -7.2 dB gives -5.66244 dB, recorded separately from both the reported expectation and the measurements.",
+          "unresolved": [
+            "total detector-referenced efficiency",
+            "quantitative contribution of the author-proposed mode-mismatch mechanisms"
+          ]
+        }
+      ],
+      "monsa_2026_preprint": [
+        {
+          "experiment_ids": [
+            "fig5_best",
+            "abstract_best",
+            "fig6_slope"
+          ],
+          "legacy_rows": [
+            "pump_waist_um_1e2_radius",
+            "probe_waist_um_1e2_radius",
+            "fwm_gain_primary",
+            "output_probe_power_uw",
+            "output_conjugate_power_uw",
+            "total_detection_loss_pct",
+            "squeezing_measured_db",
+            "squeezing_corrected_or_slope_db",
+            "squeezing_slope_ratio"
+          ],
+          "source_id": "main",
+          "locator": "v1 PDF pp. 1, 7-9, abstract and Figs. 5-6",
+          "note": "Fig. 5 gives about -8 dB over 40-500 kHz, approximate gain 15 and detected 150/120 uW powers. The abstract labels about -8 dB at 0.8 MHz separately. Fig. 6 gives slope ratio 0.135 near 1 MHz and describes about -8 dB. The same ratio converts to -8.696662 dB. Retain the stated and converted values separately.",
+          "unresolved": [
+            "total detection efficiency",
+            "pump and seed 1/e^2 radii"
+          ]
+        }
+      ]
+    },
+    "comparison_contexts": [
+      {
+        "paper_id": "sim_2025_scirep",
+        "experiment_id": "fig3a_rb85_best_ids",
+        "measurement_class": "single_seed_direct_ids"
+      },
+      {
+        "paper_id": "wu_2019_oe",
+        "experiment_id": "fig3_angle03",
+        "measurement_class": "dual_seed_ids"
+      },
+      {
+        "paper_id": "wu_2019_oe",
+        "experiment_id": "fig3_angle05",
+        "measurement_class": "dual_seed_ids"
+      },
+      {
+        "paper_id": "dearaujo_2024_oe",
+        "experiment_id": "sub_hz_homodyne",
+        "measurement_class": "vacuum_seeded_homodyne"
+      },
+      {
+        "paper_id": "jain_2025_ol",
+        "experiment_id": "before_fiber",
+        "measurement_class": "before_fiber_ids"
+      },
+      {
+        "paper_id": "jain_2025_ol",
+        "experiment_id": "after_fiber",
+        "measurement_class": "fiber_output_ids"
+      }
+    ],
+    "historical_gold_fits": [
+      {
+        "fit_class": "gain_only",
+        "source_url": "https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/squeezing_report/v7_science/results.json",
+        "targets": [
+          {
+            "quantity": "probe_gain",
+            "value": 15,
+            "unit": "1",
+            "value_type": "approximate"
+          }
+        ],
+        "excluded": [
+          "conjugate_gain",
+          "squeezing_measured",
+          "squeezing_slope"
+        ],
+        "input_seed_uw": 8,
+        "residual_scale": 0.42504821908473966,
+        "note": "Single nominal gain target. Conjugate gain and conditional noise are model outputs."
+      },
+      {
+        "fit_class": "mean_output_only",
+        "source_url": "https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/squeezing_report/v7_science/theory_results.json",
+        "targets": [
+          {
+            "quantity": "output_probe_power",
+            "value": 111,
+            "unit": "uW",
+            "value_type": "approximate"
+          },
+          {
+            "quantity": "output_conjugate_power",
+            "value": 109,
+            "unit": "uW",
+            "value_type": "approximate"
+          }
+        ],
+        "excluded": [
+          "probe_gain_nominal",
+          "squeezing_measured",
+          "squeezing_slope"
+        ],
+        "input_seed_uw": 8,
+        "note": "Two rounded output-power targets with known seed. Their normalized gains are arithmetic ratios. The observed -7.8 dB is a comparison and does not enter the fit."
+      }
+    ]
+  }
 }

@@ -11,6 +11,7 @@
 - **[검색·비교 열람본](index.html)**: 논문 원제·포함 범위·운전점·수치·원문 위치 확인. 인터넷 없이 열람 가능. 원문 웹 링크에는 연결 필요.
 - **[운전점 비교 CSV](experiments.csv)**: 실험 한 행. 같은 논문의 최적점·스캔·다른 장치 구성을 별도 기록.
 - **[전체 수치 CSV](observations.csv)**: 수치 한 행. 정의·기준면·수치 유형·원문 위치·source SHA 포함.
+- **[Legacy source audit](legacy_csv_audit.json)** links the copied CSV rows to primary-source conditions, typed comparison contexts and separate v7 fit targets. It is included in the combined JSON.
 - **[논문 목록](papers.csv)** / **[전체 JSON](database.json)** / **[논문별 원본 JSON](papers/)**.
 - **[구조·검증 결과](validation.json)** / **[스키마](SCHEMA.md)**.
 

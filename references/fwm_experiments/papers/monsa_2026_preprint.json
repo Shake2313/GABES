@@ -256,6 +256,19 @@
           "notes": "",
           "lower": 40,
           "upper": 500
+        },
+        {
+          "quantity": "detection_efficiency",
+          "value": null,
+          "unit": "%",
+          "value_type": "not_reported",
+          "basis": "",
+          "reference": null,
+          "plane": "not_reported",
+          "source_id": "main",
+          "locator": "PDF pp. 7-8, Experimental setup and Fig. 5",
+          "evidence": "No value for this operating condition is reported in the cited text.",
+          "notes": "Unknown. No default or inference from the other reported quantities."
         }
       ],
       "results": [
@@ -824,7 +837,8 @@
         }
       ],
       "notes": [
-        "Seed is varied;10uW belongs to the optimum run, not every point of this sweep. Author comparison refers to Fig.2(b), apparently a cross-reference inconsistency."
+        "Seed is varied;10uW belongs to the optimum run, not every point of this sweep. Author comparison refers to Fig.2(b), apparently a cross-reference inconsistency.",
+        "The 0.135 ratio and the authors' approximate -8 dB are retained alongside the arithmetic -8.696662 dB. The slope is near 1 MHz, separate from the direct spectrum and abstract frequency."
       ]
     }
   ],

@@ -7,7 +7,9 @@ import hashlib
 import json
 from collections import Counter
 
-from build_db import ROOT, UNIT_ALIASES, quantities, read_records, readiness, validate
+from build_db import (
+    ROOT, UNIT_ALIASES, quantities, read_legacy_audit, read_records, readiness, validate,
+)
 
 
 def main():
@@ -17,7 +19,8 @@ def main():
     def check(name, okay, detail=None):
         checks.append({"id": name, "status": "PASS" if okay else "FAIL", "detail": detail})
 
-    receipt = validate(papers)
+    legacy_audit = read_legacy_audit()
+    receipt = validate(papers, legacy_audit)
     check("canonical_structure_sources_and_legacy", receipt["status"] == "PASS", receipt)
 
     import jsonschema
@@ -38,6 +41,7 @@ def main():
 
     payload = json.loads((ROOT / "database.json").read_text(encoding="utf-8"))
     check("combined_json_lossless", payload["papers"] == papers)
+    check("legacy_audit_json_lossless", payload["legacy_csv_audit"] == legacy_audit)
     counts = {"papers.csv": len(papers), "experiments.csv": sum(len(p["experiments"]) for p in papers),
               "observations.csv": sum(1 for p in papers for e in p["experiments"] for _ in quantities(e))}
     tables = {}
@@ -93,7 +97,7 @@ def main():
     dual = [readiness(wu, e)["single_seed_operating_point"] for e in wu["experiments"] if e.get("seed_mode") == "dual_seed"]
     check("single_and_dual_seed_not_merged", bool(single) and all(single) and not any(dual))
 
-    result = {"date": "2026-10-23", "origin": "AI focused data verification", "status": "PASS" if all(c["status"] == "PASS" for c in checks) else "FAIL",
+    result = {"date": "2026-11-13", "origin": "AI focused data verification", "status": "PASS" if all(c["status"] == "PASS" for c in checks) else "FAIL",
               "checks": checks, "value_type_counts": dict(Counter(q["value_type"] for p in papers for e in p["experiments"] for _, _, q in quantities(e))),
               "limits": "No simulation, fit, untouched prediction or exhaustive numerical digitization is tested."}
     (ROOT / "validation_detail.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
