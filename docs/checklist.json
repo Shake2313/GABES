@@ -4807,7 +4807,7 @@
       ],
       "depends_on": [],
       "problem": "⟦AI⟧ Current _superheterodyne_atomic_phasors still builds one Liouvillian per scan value in a Python list; independent default fixture affine broadcast is array_equal with max abs error 0.; Current _superheterodyne_readout creates detector/noise/sensitivity objects per each of up to 801 points.",
-      "implementation_2026_11_13": "⟦AI⟧ aa1e03e batches finite-IF affine assembly and detector postprocessing. Matrices and atomic phasors bit-identical on four direct fixtures; across 2216 readout leaves worst relative 4.65e-13 in refinement diagnostics with displayed text identical. Default cold 40.0 to 8.7 ms and warm 10.2 to 0.8 ms. Doppler cold approximately 84 ms both. 107 focused tests passed."
+      "implementation_2026_11_13": "⟦AI⟧ aa1e03e batches finite-IF affine assembly and detector postprocessing. Matrices and atomic phasors bit-identical on four direct fixtures; across 2216 readout leaves worst relative 4.65e-13 in refinement diagnostics with displayed text identical. Default cold 40.0 to 8.7 ms and warm 10.2 to 0.8 ms. Doppler cold approximately 84 ms both. Follow-up 3468214 preserves scalar magnitude exactly. Expanded validation: 84008 leaves bit-identical across 76 default/slider-end cases and four extra views. 153 focused tests passed."
     },
     {
       "id": "rydberg-csv-acquisition-order",
