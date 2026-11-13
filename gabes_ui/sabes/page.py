@@ -23,7 +23,6 @@ to the cell are the same solve.
 """
 from dataclasses import fields, replace
 from html import escape
-from threading import RLock
 
 import numpy as np
 import streamlit as st
@@ -34,6 +33,7 @@ from gabes.schemes import fwm
 
 from sabes import bridge, detection as detection_model, instruments, layout
 from gabes_ui.controls import skey
+from gabes_ui.plotcard import PLOT_LOCK, render_fig
 from gabes_ui.sabes.components import canvas as canvas_module
 from gabes_ui.sabes.render import build_spec, legend_rows
 from sabes.beamline import (SetupSettings, solve_seed_polarizer_deg,
@@ -53,11 +53,6 @@ FWM_READOUT_KEYS = (
     "noise_model", "experimental_gain_calibration", "gain_calibration_model",
     "jasperse_loss_pct", "seed_classical_rin_scaled",
 )
-
-# Matplotlib's font and layout caches are process-global and Streamlit can
-# overlap reruns, so figure construction is serialised the same way the
-# GABES app does it.
-_PLOT_LOCK = RLock()
 
 #: Every knob, keyed by name. One definition serves the optic dialog and the
 #: sidebar, so the two cannot drift apart -- which matters now that almost
@@ -184,7 +179,8 @@ def _cached_solve(solve_items, cache_version):
 @st.cache_data(show_spinner=False, max_entries=64)
 def _cached_observables(raw, param_items, cache_version):
     scheme = fwm.FWMScheme()
-    return scheme.observables(raw, dict(param_items))
+    with PLOT_LOCK:
+        return scheme.observables(raw, dict(param_items))
 
 
 def _key(name):
@@ -732,23 +728,26 @@ def _render_trace(trace):
 
     from gabes.plot_style import apply_gabes_plot_style
 
-    with _PLOT_LOCK:
+    with PLOT_LOCK:
         figure, axis = plt.subplots(figsize=(7.2, 3.0))
-        for name, values in trace.series.items():
-            if trace.kind == "stem":
-                axis.vlines(trace.x, 0 if min(values) >= 0 else min(values),
-                            values, linewidth=2.0)
-                axis.plot(trace.x, values, "o", markersize=4, label=name)
-            else:
-                axis.plot(trace.x, values, linewidth=1.4, label=name)
-        axis.set_xlabel(_axis_label(trace.x_label, trace.x_unit))
-        axis.set_ylabel(_axis_label(trace.y_label, trace.y_unit))
-        if len(trace.series) > 1:
-            axis.legend(fontsize=8, loc="best")
-        axis.grid(alpha=0.3)
-        apply_gabes_plot_style(figure)
-        st.pyplot(figure)
-        plt.close(figure)
+        try:
+            for name, values in trace.series.items():
+                if trace.kind == "stem":
+                    axis.vlines(trace.x, 0 if min(values) >= 0 else min(values),
+                                values, linewidth=2.0)
+                    axis.plot(trace.x, values, "o", markersize=4, label=name)
+                else:
+                    axis.plot(trace.x, values, linewidth=1.4, label=name)
+            axis.set_xlabel(_axis_label(trace.x_label, trace.x_unit))
+            axis.set_ylabel(_axis_label(trace.y_label, trace.y_unit))
+            if len(trace.series) > 1:
+                axis.legend(fontsize=8, loc="best")
+            axis.grid(alpha=0.3)
+            apply_gabes_plot_style(figure)
+            st.pyplot(figure)
+        finally:
+            plt.close(figure)
+
 
 
 def _axis_label(label, unit):
@@ -1112,10 +1111,12 @@ def render(host=None):
             raw, tuple(sorted(params.items(), key=lambda kv: kv[0])),
             fwm.FWMScheme().cache_version)
         figure = observables.get("figure")
-        if figure is not None and host is not None:
-            host.render_fig(figure)
-        elif figure is not None:
-            st.pyplot(figure)
+        if figure is not None:
+            if host is None:
+                render_fig(figure)
+            else:
+                with PLOT_LOCK:
+                    host.render_fig(figure)
 
     with tabs[2]:
         st.markdown(

@@ -5,8 +5,10 @@ title as a caption, experimental CSV overlay in a side panel, and the tables,
 diagnostics and heavy extra views behind the More pills
 (docs/ui_redesign/decisions.md D8).
 
-The matplotlib lock lives here because this module owns every figure the app
-builds; `streamlit_app.py` borrows it for the one call it makes itself.
+PLOT_LOCK protects process-wide Matplotlib state for GABES and SABES. The
+callers hold it for observables that build figures. This module holds it for
+artist access, copy, drawing and cleanup; the SABES page also uses it for
+instrument traces. Cached solvers run separately.
 """
 import copy
 import hashlib
@@ -96,15 +98,18 @@ def _cached_experimental_csv(
 
 
 def _close_fig(fig):
-    import matplotlib.pyplot as plt
-    plt.close(fig)
+    with PLOT_LOCK:
+        plt.close(fig)
 
 
 def render_fig(fig):
-    """Style, draw, then release a figure (matplotlib figures leak if not closed)."""
-    apply_gabes_plot_style(fig)
-    st.pyplot(fig)
-    _close_fig(fig)
+    """Style, draw and release a figure under the app's Matplotlib lock."""
+    with PLOT_LOCK:
+        try:
+            apply_gabes_plot_style(fig)
+            st.pyplot(fig)
+        finally:
+            _close_fig(fig)
 
 
 def _diagnostic_value(obj, *names, default=None):
@@ -165,12 +170,13 @@ def _render_experimental_comparison(view, scheme_name, panel):
     if not descriptor or fig is None:
         return
 
-    axis_index = int(descriptor.get("axis_index", 0))
-    if not 0 <= axis_index < len(fig.axes):
-        return
-    axis = fig.axes[axis_index]
-    xlim = tuple(float(v) for v in axis.get_xlim())
-    ylim = tuple(float(v) for v in axis.get_ylim())
+    with PLOT_LOCK:
+        axis_index = int(descriptor.get("axis_index", 0))
+        if not 0 <= axis_index < len(fig.axes):
+            return
+        axis = fig.axes[axis_index]
+        xlim = tuple(float(v) for v in axis.get_xlim())
+        ylim = tuple(float(v) for v in axis.get_ylim())
     # Relative extrema data span 0–1 even when the theory's absorption is weak.
     # Include that range so the automatic correction cannot hide the CSV floor.
     ylim = (min(ylim[0], -0.05), max(ylim[1], 1.05))
@@ -723,9 +729,10 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
                 label_visibility="collapsed") or labels[0]
             st.session_state[last_key] = selected
         page_fig = dict(pages)[selected]
-        caption = _pop_figure_title(page_fig, clear=False)
-        description = _plot_description(page_fig, scheme, selected, caption, params,
-                                        view.get("metrics", ()))
+        with PLOT_LOCK:
+            caption = _pop_figure_title(page_fig, clear=False)
+            description = _plot_description(page_fig, scheme, selected, caption, params,
+                                            view.get("metrics", ()))
         # Mount the caption before the image; never leave an empty placeholder
         # while a new figure is rendered and sent to the browser.
         if caption:
@@ -738,7 +745,8 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
     with tools:
         focus_key = skey(scheme.name, f"_resonance_zoom_{selected}")
         window_key = f"{focus_key}_window"
-        candidate = resonance_window(page_fig, scheme.name, raw, view)
+        with PLOT_LOCK:
+            candidate = resonance_window(page_fig, scheme.name, raw, view)
         focus_unavailable = candidate is None and st.session_state.get(focus_key, False)
         if candidate is None:
             st.session_state[focus_key] = False
@@ -750,7 +758,9 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
         if focus_on:
             # Calibrated FWM curves insert a knot at the selected point. That
             # display-only change must not move the focused viewing window.
-            signature = interaction_context if interaction_context is not None else focus_signature(page_fig)
+            with PLOT_LOCK:
+                signature = (interaction_context if interaction_context is not None
+                             else focus_signature(page_fig))
             saved = st.session_state.get(window_key)
             if saved is None or saved[0] != signature:
                 saved = (signature, candidate)
@@ -772,8 +782,9 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
         else:
             comparison_payload = None
 
-    plot_payloads = ui_export.collect_view_plot_payloads(view, fig)
-    _pop_figure_title(page_fig)
+    with PLOT_LOCK:
+        plot_payloads = ui_export.collect_view_plot_payloads(view, fig)
+        _pop_figure_title(page_fig)
     with plot_area:
         # Keep this row mounted in both modes so toggling zoom does not move the
         # plot, associated controls or side-by-side diagram.
@@ -834,15 +845,18 @@ def _render_comparison_fragment(view, scheme, spec_by_name, raw, params,
             "figure": view.get("figure"),
             "figure_views": view.get("figure_views", []),
         }))
-        _render_plot_and_export(
-            local_view, scheme, spec_by_name, raw, params,
-            cache_version, readout_cache_version,
-        )
-        # Closed figures retain their data and can still seed the next clone.
-        for figure in [view.get("figure"), *(
-                item.get("figure") for item in view.get("figure_views", []))]:
-            if figure is not None:
-                _close_fig(figure)
+        try:
+            _render_plot_and_export(
+                local_view, scheme, spec_by_name, raw, params,
+                cache_version, readout_cache_version,
+            )
+        finally:
+            # Closed figures retain their data and can still seed the next clone.
+            for item in (view, local_view):
+                for figure in [item.get("figure"), *(
+                        page.get("figure") for page in item.get("figure_views", []))]:
+                    if figure is not None:
+                        _close_fig(figure)
 
 
 def render_plot_section(view, scheme, spec_by_name, raw, params,
@@ -896,5 +910,6 @@ def render_more(view, scheme, params, cache_version):
                     (key, params[key]) for key in extra_keys if key in params))
                 with st.spinner("Running…"):
                     data = _cached_extra(scheme.name, obj.key, extra_items, cache_version)
-                render_fig(obj.render(data, params) if obj.render_with_params
-                            else obj.render(data))
+                with PLOT_LOCK:
+                    render_fig(obj.render(data, params) if obj.render_with_params
+                               else obj.render(data))
