@@ -139,7 +139,11 @@ def test_recompute_context_keeps_original_args_and_mutable_copies(context):
     raw = fwm.compute_spectrum(**dict(context, branches=branches, excess_noise_model=noise),
                                pump_stark_fraction=.25)
     saved = raw["stark_recompute_context"]
-    assert set(saved) == set(inspect.signature(fwm.compute_spectrum).parameters)-{"pump_stark_fraction"}
+    signature = inspect.signature(fwm.compute_spectrum).parameters
+    omitted_defaults = {"extra_probe_points_GHz": (), "angular_transverse_order": 0,
+                        "angular_transverse_cutoff": 5.0}
+    assert set(saved) == set(signature) - {"pump_stark_fraction", *omitted_defaults}
+    assert {key: signature[key].default for key in omitted_defaults} == omitted_defaults
     assert saved["branches"] == [-1]
     assert saved["branches"] is not branches
     assert saved["excess_noise_model"] is not noise
@@ -152,6 +156,15 @@ def test_recompute_context_keeps_original_args_and_mutable_copies(context):
     replayed = fwm.compute_spectrum(**saved, pump_stark_fraction=.25)
     for key in ("G_s", "G_c", "T_field_small_signal"):
         np.testing.assert_array_equal(raw[key], replayed[key])
+
+
+def test_stark_recompute_retains_explicit_probe_coordinates(context):
+    coordinate = 0.5 * (context["scan_min"] + context["scan_max"]) + 1.2345e-4
+    raw = fwm.compute_spectrum(**context, extra_probe_points_GHz=(coordinate,))
+    assert raw["stark_recompute_context"]["extra_probe_points_GHz"] == (coordinate,)
+    corrected = fwm.compute_spectrum(**raw["stark_recompute_context"], pump_stark_fraction=.25)
+    np.testing.assert_array_equal(raw["probe_axis_GHz"], corrected["probe_axis_GHz"])
+    assert coordinate in corrected["probe_axis_GHz"]
 
 
 def test_zero_pump_spectrum_is_exact_identity(context):
