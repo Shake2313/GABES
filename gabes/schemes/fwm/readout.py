@@ -431,7 +431,8 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
         "readout_certification_scope": (
             "LAB_AND_UNCALIBRATED_EXACT_COORDINATES"
             if coordinate_status in {"NATIVE_SOURCE_GRID", "DENSE_POLE_READOUT_COORDINATES"}
-            and (not gain_active or lab_calibration) else "UNCERTIFIED_CALIBRATION_OR_SOURCE"),
+            and not phase_view and (not gain_active or lab_calibration)
+            else "UNCERTIFIED_CALIBRATION_OR_SOURCE"),
         "noise_operating_point": noise_point,
         "jasperse_readout": experimental_noise if experimental_noise is not None else passive_readout,
         "experimental_jasperse_readout": experimental_noise,

@@ -207,6 +207,10 @@ def test_opt_in_exact_readout_recovers_native_passive_eligibility_without_changi
         np.testing.assert_array_equal(exact["gain_curve"][key], expected["gain_curve"][key])
     np.testing.assert_array_equal(exact["passive_l1_readout"]["NF_dB"],
                                   expected["passive_l1_readout"]["NF_dB"])
+    phase = fwm.seeded_operating_readout(raw, dict(
+        params, exact_readout_coordinates=True, squeezing_view=fwm.SQUEEZING_QUADRATURE_PHASE))
+    assert phase["readout_coordinate_status"] == "DENSE_POLE_READOUT_COORDINATES"
+    assert phase["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
 
 
 def test_opt_in_lab_warp_uses_exact_mapped_gains_and_reuses_source_on_detector_change():

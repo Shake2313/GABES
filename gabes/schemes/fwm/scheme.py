@@ -1191,7 +1191,7 @@ class FWMScheme(Scheme):
             f"{raw.get('response_estimator', {}).get('display_probe_points', '—')} |\n"
             f"| Maxwell average | "
             f"{raw.get('response_estimator', {}).get('velocity_average', 'unavailable')} |\n"
-            f"| Displayed readout coordinates | {selected['readout_coordinate_status']} |\n"
+            f"| Atomic readout source coordinates | {selected['readout_coordinate_status']} |\n"
             f"| Displayed readout scope | {selected['readout_certification_scope']} |\n"
             f"| Noise-trace status | {raw.get('squeezing_status', 'unavailable')} |\n"
             f"| Transit reset γ_t / 2π | "
