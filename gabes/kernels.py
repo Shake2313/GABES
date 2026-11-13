@@ -1027,7 +1027,7 @@ def velocity_interp_mean(detuning, kv, weights, axis, tables):
 @njit(cache=True, parallel=True)
 def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
                        lorentz_scale, hwhm_sq, axis, tables, slopes, reservoir,
-                       pumped, thermal_needed):
+                       pumped, thermal_needed, same_direction):
     ns = detuning.size
     nv = kv.size
     nt = omega.size
@@ -1056,7 +1056,7 @@ def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
                             value = slopes[s, lv, k] * (x - axis[k]) + tables[s, lv, k]
                         total += reservoir[i, s] * value
                     pop[lv] = total
-            base = d_i - kv[j]
+            base = d_i + kv[j] if same_direction else d_i - kv[j]
             for t in range(nt):
                 arg = base - omega[t]
                 denom = arg * arg + hwhm_sq
@@ -1079,7 +1079,8 @@ def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
 
 
 def sas_velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
-                      axis=None, tables=None, reservoir=None, thermal_needed=False):
+                      axis=None, tables=None, reservoir=None, thermal_needed=False,
+                      *, same_direction=False):
     """
     Per-transition Doppler sums of the OD/SAS probe response, without the
     (scan, velocity) temporaries:
@@ -1095,7 +1096,8 @@ def sas_velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground
     np.interp's bracket and edge values, so every factor is the elementwise
     value of the NumPy path; only the order of the velocity sum differs.
     `tables=None` is the pump-off case W = 1 (thermal is then `absorptive`).
-    `reservoir=None` is one unconditioned source.
+    `reservoir=None` is one unconditioned source. `same_direction=True` uses
+    the pump's velocity sign for the optical readout of pump attenuation.
     """
     detuning = np.ascontiguousarray(detuning, dtype=np.float64)
     pumped = tables is not None
@@ -1120,5 +1122,5 @@ def sas_velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground
         np.ascontiguousarray(e_pos, dtype=np.int64),
         np.ascontiguousarray(p_ground, dtype=np.float64),
         hwhm / np.pi, hwhm ** 2, axis, tables, slopes, reservoir,
-        pumped, bool(thermal_needed and pumped))
+        pumped, bool(thermal_needed and pumped), bool(same_direction))
     return absorptive, dispersive, (thermal if pumped else absorptive)

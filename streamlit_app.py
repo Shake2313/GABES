@@ -111,10 +111,9 @@ def _cached_model_comparison(scheme_name, param_items, cache_version, readout_ve
                              _current_raw, _current_view):
     """Cache small sweeps by committed inputs; reuse the active single-condition solve."""
     active_scheme = schemes.get(scheme_name)
-    solve_keys = active_scheme.recompute_keys()
 
     def resolve_raw(condition):
-        items = tuple(sorted((key, condition[key]) for key in solve_keys))
+        items = tuple(sorted((key, condition[key]) for key in active_scheme.solve_param_keys(condition)))
         return _cached_compute(scheme_name, items, cache_version)
 
     return active_scheme.model_comparison(dict(param_items), resolve_raw=resolve_raw,
@@ -300,13 +299,19 @@ def render_spectra():
                              derived_slots=derived_slots)
         render_update_status(scheme.name)
 
-    recompute_items = tuple(sorted((k, params[k]) for k in scheme.recompute_keys()))
+    recompute_items = tuple(sorted((k, params[k]) for k in scheme.solve_param_keys(params)))
     cache_version = scheme.cache_version
     from gabes_ui.spectral_sweep import cancel_inactive_sweeps, reusable_solution
     cancel_inactive_sweeps(st.session_state, scheme.name)
     retained = reusable_solution(st.session_state.get("spectral-workspace-"+scheme.name),
                                  scheme, params, READOUT_CACHE_VERSION) if comparing else None
-    raw = retained[0] if retained is not None else _cached_compute(scheme.name, recompute_items, cache_version)
+    from gabes.schemes.sas_axial import AxialInputError
+    try:
+        raw = retained[0] if retained is not None else _cached_compute(
+            scheme.name, recompute_items, cache_version)
+    except AxialInputError as error:
+        st.error(str(error))
+        return
     param_items = tuple(sorted(params.items()))
     if comparing:
         view = retained[1] if retained is not None and retained[1] is not None else scheme.headless_observables(raw, params)
@@ -330,7 +335,7 @@ def render_spectra():
         if comparison["schema"] == "gabes-spectral-comparison-v1":
             from gabes_ui.spectral_compare import render_spectral_section
             def resolve_condition(condition):
-                items = tuple(sorted((k, condition[k]) for k in scheme.recompute_keys()))
+                items = tuple(sorted((k, condition[k]) for k in scheme.solve_param_keys(condition)))
                 return _cached_compute(scheme.name, items, cache_version)
             render_spectral_section(comparison, scheme=scheme, raw=raw, params=params,
                                     view=view, readout_version=READOUT_CACHE_VERSION,

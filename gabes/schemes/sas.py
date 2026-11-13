@@ -46,6 +46,7 @@ from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
                          subdoppler_refinement)
 from ..report import derived_table
 from .base import ParamSpec, Scheme
+from . import sas_axial
 
 PROBE_RABI = 1e-3                       # weak probe, in units of Γ
 PROBE_PASSIVITY_INTERIOR = 1e-8         # avoid an artificial exact-zero fixed point
@@ -227,7 +228,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "10"           # line-specific pump saturation and readout provenance
+    cache_version = "11"           # segmented weak-probe reference
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -357,6 +358,34 @@ class SASScheme(Scheme):
             ParamSpec("splitting", "Generic: excited splitting", "Atomic", 60.0,
                       5.0, 200.0, 1.0, "Γ", advanced=True, hidden=True,
                       help="Internal legacy Generic mode only."),
+            ParamSpec("cell_propagation", "Cell propagation", "Cell & beams", "Uniform",
+                      choices=("Uniform", sas_axial.SEGMENTED), advanced=True,
+                      advanced_group="Axial reference",
+                      help="Segmented reference uses the beam-path temperature as its "
+                           "axial midpoint and requires 0 µW probe. Pumped coated cells "
+                           "require the uniform model."),
+            ParamSpec("axial_segments", "Axial segments", "Cell & beams", sas_axial.DEFAULT_SEGMENTS,
+                      1, 16, 1, advanced=True, advanced_group="Axial reference",
+                      visible_if={"cell_propagation": sas_axial.SEGMENTED},
+                      help="The reference compares this count against twice as many segments."),
+            ParamSpec("axial_temperature_span_c", "Axial temperature change", "Cell & beams", 0.0,
+                      -60.0, 60.0, 0.5, "°C", advanced=True, advanced_group="Axial reference",
+                      visible_if={"cell_propagation": sas_axial.SEGMENTED},
+                      help="Linear probe-exit minus probe-entrance temperature. "
+                           "Both endpoints must be at or above the cold spot."),
+            ParamSpec("axial_center_field_ut", "Axial center field", "Cell & beams", 0.0,
+                      -100.0, 100.0, 1.0, "µT", advanced=True, advanced_group="Axial reference",
+                      visible_if={"cell_propagation": sas_axial.SEGMENTED},
+                      help="Longitudinal field at the cell center. Magnetic line shifts "
+                           "retain hyperfine-lumped populations."),
+            ParamSpec("axial_field_span_ut", "Axial field change", "Cell & beams", 0.0,
+                      -200.0, 200.0, 2.0, "µT", advanced=True, advanced_group="Axial reference",
+                      visible_if={"cell_propagation": sas_axial.SEGMENTED},
+                      help="Linear probe-exit minus probe-entrance magnetic field."),
+            ParamSpec("axial_pump_depletion", "Axial pump depletion", "Pump", False,
+                      control="checkbox", advanced=True, advanced_group="Axial reference",
+                      visible_if={"cell_propagation": sas_axial.SEGMENTED},
+                      help="Propagate the pump from the probe exit toward the probe entrance."),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
         ]
@@ -447,9 +476,23 @@ class SASScheme(Scheme):
         return pump_power_comparison(self, params, resolve_raw=resolve_raw,
                                      current_raw=current_raw, current_view=current_view)
 
+    def solve_param_keys(self, params):
+        keys = super().solve_param_keys(params)
+        if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
+            return keys + ("cell_mm", "line_strength")
+        return tuple(key for key in keys if not key.startswith("axial_"))
+
     def compute(self, params):
+        segmented = params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED
         if params.get("species", "Rb (natural)") == GENERIC:
+            if segmented:
+                raise sas_axial.AxialInputError("Segmented reference requires an isotope-resolved D-line species.")
             return self._compute_generic(params)
+        if segmented:
+            components, reference, *_ = _isotope_composition(params)
+            return sas_axial.compute(params, uniform=self._compute_species,
+                                     components=components, reference=reference,
+                                     response=self._component_response)
         return self._compute_species(params)
 
     def quantitative_export(self, params, optical_readout):
@@ -713,7 +756,7 @@ class SASScheme(Scheme):
             }
         return result
 
-    def _component_response(self, b, scan, T):
+    def _component_response(self, b, scan, T, *, axial_optics=False, pump_attenuation=False):
         """(α, Re χ, finite-probe transition profiles) for one isotope.
 
         Both quadratures come from the same complex line profile
@@ -778,11 +821,24 @@ class SASScheme(Scheme):
                 tables = pops[:, levels].T[None]
         finite_probe = b.get("probe_saturation_max", 0.0) > 0.0
         sums = kernels.sas_velocity_sums if kernels.available() else _velocity_sums
-        absorptive, dispersive, thermal = sums(
-            DS, kv, wt, om, hwhm,
-            [levels.index(g) for g in man.g_idx], [levels.index(e) for e in man.e_idx],
-            np.asarray(man.p_ground)[man.g_idx], axis=None if pump_off else deff,
-            tables=tables, reservoir=reservoir, thermal_needed=finite_probe)
+        ground = man.g_idx
+        excited = man.e_idx
+        if axial_optics:
+            om, parent, weights = sas_axial.zeeman_components(man, b["field_ut"])
+            ground, excited = ground[parent], excited[parent]
+        sum_inputs = (DS, kv, wt, om, hwhm,
+                      [levels.index(g) for g in ground], [levels.index(e) for e in excited],
+                      np.asarray(man.p_ground)[ground])
+        sum_options = dict(axis=None if pump_off else deff, tables=tables,
+                           reservoir=reservoir, thermal_needed=finite_probe)
+        absorptive, dispersive, thermal = sums(*sum_inputs, **sum_options)
+        if axial_optics:
+            pump_absorption = (sums(*sum_inputs, **sum_options, same_direction=True)[0]
+                               if pump_attenuation and not pump_off else absorptive)
+            integrated = weights * np.asarray([
+                Aline[(man.Fg[g], man.Fe[e - ng])] for g, e in zip(ground, excited)])
+            return (integrated @ absorptive, -(integrated / k) @ dispersive,
+                    integrated @ pump_absorption)
 
         alpha = np.zeros(scan.size)
         chi_real = np.zeros(scan.size)
@@ -917,6 +973,14 @@ class SASScheme(Scheme):
         coating = raw.get("paraffin_population_memory")
         if coating is not None:
             optical_readout["paraffin_population_memory"] = coating
+        axial = sas_axial.readout(raw, params, x, T_trans) if "axial_cell" in raw else None
+        if axial is not None:
+            optical_readout["axial_cell"] = axial
+            if axial["status"] != "exact_uniform_limit":
+                optical_readout["attenuation_scope"] = (
+                    "Axially integrated weak-probe Beer-Lambert intensity attenuation.")
+                if axial["status"] == "refinement_limited":
+                    optical_readout["attenuation_scope"] += " Axial refinement limit reached."
 
         fig = None
         figure_views = []
@@ -959,12 +1023,20 @@ class SASScheme(Scheme):
 
         feature = subdoppler_feature(x, T_trans) if pump_on else None
         optical_readout["resolution"] = _feature_resolution(feature, 1000.0, "whole_spectrum")
+        axial_limited = axial is not None and axial["status"] == "refinement_limited"
+        if pump_on and axial_limited:
+            optical_readout["resolution"].update(
+                status="axial-refinement-limited", reason="Axial convergence tolerance was exceeded.",
+                width_mhz=None)
         peak_metric, depth_metric = _attenuation_peak_metrics(optical_readout)
         broad_metric = _gaussian_doppler_metric(raw["dopp_fwhm"], raw)
         if pump_on:
             status_metric, feature_metrics = _subdoppler_metrics(
                 feature, mhz_per_x=1000.0)
-            if feature.resolved:
+            if axial_limited:
+                metrics = [dict(label="SAS resolution", value="axial refinement limited",
+                                kind="status", tier="hero")]
+            elif feature.resolved:
                 metrics = _lock_readout_metrics(
                     x, T_trans, mhz_per_x=1000.0,
                     feature_at=feature.center, feature_fwhm=feature.fwhm)
@@ -1020,6 +1092,35 @@ class SASScheme(Scheme):
                 ("Calibration scope", coating["calibration_status"]),
                 ("Coating throughput correction", "none"),
             ]))
+        if axial is not None:
+            metrics.append(dict(label="Axial reference", value=axial["status"].replace("_", " "),
+                                kind="status", help="Each refinement allows 1% in normalized spectra and "
+                                "pump output, and 0.01 in absolute probe transmission."))
+            details = [("Axial segments", str(axial["segment_count"])),
+                       ("Pump depletion", "on" if axial["pump_depletion"] else "off"),
+                       ("Minimum pump output / input", (
+                           f"{axial['minimum_pump_output_fraction']:.3f}"
+                           if axial["pump_depletion"] else None)),
+                       ("Temperature profile", axial["temperature_source"]),
+                       ("Field profile", axial["field_source"]),
+                       ("Magnetic model", axial["field_model"])]
+            for key, label in (("uniform", "Uniform"), ("undepleted", "Undepleted")):
+                delta = axial.get(f"difference_from_{key}")
+                if delta is not None:
+                    details.append((f"{label} comparison: maximum transmission difference",
+                                    f"{delta['transmission_absolute_max']:.4g}"))
+                    if delta["matched_subdoppler_contrast_change"] is not None:
+                        details.append((f"{label} comparison: sub-Doppler contrast change",
+                                        f"{delta['matched_subdoppler_contrast_change']:+.4g}"))
+                    if key == "undepleted":
+                        dips = delta["matched_lamb_dips"]
+                        if dips:
+                            largest = max(dips, key=lambda dip: abs(dip["depth_change"]))
+                            details.append((f"Lamb-dip depth change ({largest['transition']})",
+                                            f"{largest['depth_change']:+.4g}"))
+                        else:
+                            details.append(("Lamb-dip depth change", "No matched resolved line-centered dip"))
+            tables.append(derived_table(details, title="Segmented cell reference"))
         if finite_probe:
             _, _, qualifier = _probe_scope_text(raw, params)
             tables.append({
@@ -1311,9 +1412,11 @@ def _velocity_correlated_average(prepared_population, probe_profile, weights):
 
 
 def _velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
-                   axis=None, tables=None, reservoir=None, thermal_needed=False):
+                   axis=None, tables=None, reservoir=None, thermal_needed=False,
+                   *, same_direction=False):
     """NumPy path of `kernels.sas_velocity_sums`: same arguments, same sums."""
-    probe_base = detuning[:, None] - kv[None, :]             # probe arg base
+    probe_base = (detuning[:, None] + kv[None, :] if same_direction
+                  else detuning[:, None] - kv[None, :])
     prepared = None
     if tables is not None:
         flat_deff = (detuning[:, None] + kv[None, :]).ravel()   # pump Δ_eff

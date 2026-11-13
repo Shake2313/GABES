@@ -105,6 +105,12 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "probe_model_scope": probe_scope.get("value"),
             "probe_model_note": probe_scope.get("help"),
         })
+        if "axial_cell" in readout:
+            axial = readout["axial_cell"]
+            series[-1]["axial_cell"] = {key: axial[key] for key in (
+                "status", "segment_count", "pump_depletion", "field_source", "temperature_source")}
+            if "difference_from_undepleted" in axial:
+                series[-1]["axial_cell"]["difference_from_undepleted"] = axial["difference_from_undepleted"]
     return {
         "schema": SCHEMA, "scheme": scheme.name,
         "x": frequency_mhz.tolist(),

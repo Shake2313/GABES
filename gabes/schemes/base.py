@@ -181,6 +181,10 @@ class Scheme(ABC):
         return tuple(s.name for s in self.param_schema()
                      if s.recompute and s.control != "derived_slider")
 
+    def solve_param_keys(self, params):
+        """Inputs consumed by the heavy solve for the selected configuration."""
+        return self.recompute_keys()
+
     def defaults(self):
         # Derived slider rows display observables, never input parameters.
         return {s.name: s.default for s in self.param_schema()

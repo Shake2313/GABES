@@ -323,9 +323,10 @@ class SegmentedBeerLambert:
 
 
 def integrate_beer_lambert(
-    z_m: Sequence[float], alpha_per_m: np.ndarray | Sequence[float]
+    z_m: Sequence[float], alpha_per_m: np.ndarray | Sequence[float], *,
+    sample_location: str = "endpoints",
 ) -> SegmentedBeerLambert:
-    """Integrate local absorption coefficients along ``z`` by trapezoids.
+    """Integrate endpoint coefficients by trapezoids or segment midpoint values.
 
     The first axis of ``alpha_per_m`` is axial.  Trailing axes (for example a
     detuning scan) are preserved.  Negative coefficients are allowed so the same
@@ -336,12 +337,16 @@ def integrate_beer_lambert(
     alpha = np.asarray(alpha_per_m, dtype=float)
     if z.ndim != 1 or z.size < 2 or np.any(np.diff(z) <= 0.0):
         raise ValueError("z_m must be a strictly increasing 1-D array.")
-    if alpha.ndim < 1 or alpha.shape[0] != z.size:
-        raise ValueError("alpha_per_m first dimension must match z_m.")
+    if sample_location not in ("endpoints", "midpoints"):
+        raise ValueError("sample_location must be 'endpoints' or 'midpoints'.")
+    expected = z.size if sample_location == "endpoints" else z.size - 1
+    if alpha.ndim < 1 or alpha.shape[0] != expected:
+        raise ValueError("alpha_per_m first dimension must match z_m sampling.")
     if not np.all(np.isfinite(z)) or not np.all(np.isfinite(alpha)):
         raise ValueError("z_m and alpha_per_m must contain only finite values.")
     dz_shape = (z.size - 1,) + (1,) * (alpha.ndim - 1)
-    segment_od = 0.5 * (alpha[:-1] + alpha[1:]) * np.diff(z).reshape(dz_shape)
+    segment_alpha = 0.5 * (alpha[:-1] + alpha[1:]) if sample_location == "endpoints" else alpha
+    segment_od = segment_alpha * np.diff(z).reshape(dz_shape)
     total_od_array = np.sum(segment_od, axis=0)
     segment_t = np.exp(-segment_od)
     total_t_array = np.exp(-total_od_array)
