@@ -678,30 +678,30 @@ class SinglePairMagnetoReference(Scheme):
         if valid and Om > 0:
             # H₀(bz) = H_xy + bz·H_z is affine in the longitudinal field, and
             # comm_super is linear, so L0(bz) = C_xy + bz·C_z. Build the constant
-            # pieces once (no per-B-point kron) and form the whole B-scan stack of
-            # Liouvillians by a scalar broadcast. Bit-for-bit the same matrices as
-            # the old loop.
+            # pieces once (no per-B-point kron). Only direct solves need a
+            # broadcast stack of Liouvillians for their selected field rows.
             H_xy = self._hamiltonian(atom, (b_x, b_y, 0.0), gFg, gFe, Om, drive)
             H_z = self._hamiltonian(atom, (0.0, 0.0, 1.0), gFg, gFe, 0.0,
                                     {+1: 0.0, -1: 0.0})
             C_xy = core.build_liouvillian(H_xy, atom)
             C_z = core.comm_super(H_z)                       # drive-free → reusable
-            L0_all = C_xy[None, :, :] + b_z[:, None, None] * C_z[None, :, :]
-            Cd_xy = Ld_all = None
+            Cd_xy = None
             if cell_type == CELL_PARAFFIN:
                 Hd_xy = self._hamiltonian(atom_dark, (b_x, b_y, 0.0), gFg, gFe,
                                           0.0, {+1: 0.0, -1: 0.0})
                 Cd_xy = core.build_liouvillian(Hd_xy, atom_dark)
-                Ld_all = Cd_xy[None, :, :] + b_z[:, None, None] * C_z[None, :, :]
 
             def solve(rows, deff):
                 """(conditional light-region ρ, occupation) of B rows at detunings deff."""
-                if cell_type == CELL_PARAFFIN:
+                field_term = b_z[rows, None, None] * C_z[None, :, :]
+                light = C_xy[None, :, :] + field_term
+                if Cd_xy is not None:
+                    dark = Cd_xy[None, :, :] + field_term
+                    del field_term
                     return self._steady_state_two_region(
-                        L0_all[rows], Ld_all[rows], deff, atom.S_v, atom.n_levels,
-                        gamma_out, gamma_in)
-                return self._steady_state_buffer(
-                    L0_all[rows], deff, atom.S_v, atom.n_levels), None
+                        light, dark, deff, atom.S_v, atom.n_levels, gamma_out, gamma_in)
+                del field_term
+                return self._steady_state_buffer(light, deff, atom.S_v, atom.n_levels), None
 
             if doppler_on:
                 def grid_average(rows):
