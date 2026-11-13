@@ -16,8 +16,8 @@ validation. Ported pieces:
 
 This module is *data only* and is the ⁸⁵Rb D1 view of `species`, which is
 the single source of the vapor pressure, density and β. Kept here: the exact
-rational C_F² table, the AutoOD-origin line shifts, and Γ from the legacy
-`constants.GAMMA` (5.746 MHz, not the species record's 5.750 MHz).
+rational C_F² table and the AutoOD-origin line shifts. The linewidth uses
+the shared Steck Rb-85 D1 value (5.750 MHz).
 The Voigt lineshape itself is still produced by the OBE Doppler kernel in
 `schemes/absorption.py` (a genuine OBE solve, no analytic wofz / scipy);
 hyperfine.py supplies the validated line table, the relative/absolute
