@@ -12,7 +12,7 @@ import pytest
 from gabes.collisions import REFERENCE_COLLISIONS
 from gabes.core import blas_single_thread
 from gabes.schemes import get
-from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL
+from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL, ODScheme
 from gabes_ui import export, plotcard
 from gabes_ui.spectral_compare import comparison_plots
 from gabes_ui.spectral_sweep import assemble_dataset
@@ -85,7 +85,7 @@ def test_lazy_extra_view_export_runs_only_when_requested(monkeypatch):
     monkeypatch.setattr(plotcard.st, "pills", lambda *_args, **_kwargs: "Test scan")
     app = AppTest.from_string("""
         from gabes.schemes import get
-from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL
+from gabes.schemes.absorption import LAMBDA_JOINT_MAXWELL, ODScheme
         from gabes_ui.plotcard import render_more
         import streamlit as st
         scheme = get("lambda")
@@ -126,7 +126,7 @@ def test_sweep_exports_status_before_first_row_and_keeps_curve_provenance():
                     doppler="on", beam_angle_mrad=0.7), "lambda_readout"),
 ])
 def test_optical_reference_exports_view_evidence_in_strict_json(scheme_name, reference, expected_key):
-    scheme = get(scheme_name)
+    scheme = ODScheme() if scheme_name == "od" else get(scheme_name)
     params = dict(scheme.defaults(), doppler="off")
     if scheme_name == "od":
         params["model"] = "single 2-level"
