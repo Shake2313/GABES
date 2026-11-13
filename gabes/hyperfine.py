@@ -49,7 +49,7 @@ N_GROUND_SUBLEVELS = 12                       # 2(2I+1)
 # Ground HF = 3035.732 MHz (F=2 above F=3 by that), excited HF (D1) = 361.58 MHz.
 _DE8587 = 1065.646e6
 _GROUND_HF = constants.NU_GROUND_HF           # 3.035732439e9
-_EXC_HF = constants.NU_EXCITED_HF_D1          # 361.58e6
+_EXC_HF = constants.NU_EXCITED_HF_D1          # 361.581e6
 LINE_SHIFT_HZ = {
     (3, 3): _DE8587,
     (3, 2): _DE8587 - _EXC_HF,
