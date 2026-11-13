@@ -74,6 +74,50 @@ def test_operating_point_accepts_primary_diagnostic_without_legacy_key():
     assert point["physical_squeezing_dB"] is None
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+def test_seeded_gain_budget_preserves_passive_absorption_and_labels_legacy_floor(legacy):
+    center = fwm.branch_center_GHz(0.9, -1)
+    raw = fwm.compute_spectrum(
+        0.9, P_pump=0.0, T=393.15, coarse_points=5, fine_points=0,
+        scan_min=center-0.02, scan_max=center+0.02, velocity_step=20.0,
+        velocity_cutoff=3.0, legacy_mean_field_fixture=legacy)
+    budget = raw["gain_budget"]
+    np.testing.assert_array_equal(budget["small_signal"]["G_s"], raw["G_s_smallsignal"])
+    np.testing.assert_array_equal(budget["pre_cap"]["G_s"], raw["G_s_smallsignal"])
+    np.testing.assert_array_equal(budget["final_cap"]["G_s"], raw["G_s_smallsignal"])
+    assert np.all(budget["final_cap"]["G_s"] < 1.0)
+    assert not budget["posthoc_pump_cap"]["probe_reduced"].any()
+    assert np.all(budget["historical_probe_floor"]["probe_raised"] == legacy)
+    expected = np.ones(5) if legacy else budget["final_cap"]["G_s"]
+    np.testing.assert_array_equal(budget["displayed"]["G_s"], expected)
+    np.testing.assert_array_equal(raw["G_s"], expected)
+    np.testing.assert_array_equal(raw["G_c"], budget["final_cap"]["G_c"])
+    np.testing.assert_array_equal(budget["pre_cap"]["probe_W"],
+                                  budget["pre_cap"]["G_s"]*raw["input_seed_power_W"])
+    assert not raw["claim_gate"]["physical_claims_allowed"]
+    assert not raw["legacy_gain_diagnostic"]["physical_squeezing_claim_allowed"]
+    assert raw["legacy_gain_diagnostic"]["noise_dB"] is raw["S_dB"]
+    point = fwm.operating_point(raw, 0.0)
+    assert point["gain_budget"]["displayed"]["G_s"] == point["G_s"]
+
+
+def test_ultra_gain_budget_distinguishes_depleted_propagation_from_final_cap():
+    center = fwm.branch_center_GHz(0.9, -1)
+    raw = fwm.compute_spectrum(
+        0.9, T=423.15, P_pump=0.6, P_probe=100e-6,
+        coarse_points=7, fine_points=0, scan_min=center-0.035, scan_max=center+0.035,
+        phase_detail=fwm.PHASE_ULTRA, response_method=fwm.RESPONSE_POLE,
+        velocity_step=5.0, velocity_cutoff=3.0)
+    budget = raw["gain_budget"]
+    assert budget["dynamic_depletion"]["enabled"]
+    assert np.any(budget["dynamic_depletion"]["probe_changed"])
+    assert np.any(budget["posthoc_pump_cap"]["probe_reduced"])
+    assert not budget["historical_probe_floor"]["probe_raised"].any()
+    np.testing.assert_array_equal(budget["displayed"]["G_s"], budget["final_cap"]["G_s"])
+    np.testing.assert_allclose(np.abs(raw["T_canonical_small_signal"][:, 0, 0])**2,
+                               budget["small_signal"]["G_s"])
+
+
 def test_seeded_claim_gate_blocks_quantitative_gain_and_physical_squeezing():
     gate = fwm.seeded_validation_claim_gate(
         canonical_mode_status="conditional: matched waist",

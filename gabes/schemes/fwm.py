@@ -3312,13 +3312,23 @@ def compute_spectrum(D_GHz, *,
         G_s = G_s_smallsignal
         G_c = G_c_smallsignal
 
-    # The propagation above is linear in the (undepleted) pump. At high density
-    # it overshoots the energy the pump can supply, so apply a post-hoc Manley-Rowe
-    # cap.  This preserves an energy ledger but is not a self-consistent depleted
-    # three-field solve and therefore does not validate the absolute gain.
-    G_s, G_c = observables.pump_depletion_saturation(
-        G_s, G_c, P_pump, P_probe,
-        legacy_probe_floor=legacy_mean_field_fixture)
+    # The pre-cap gains are the output of the chosen propagation model.
+    # Keep this stage distinct from the undepleted canonical transfer and
+    # the post-hoc pump-budget heuristic.
+    pre_cap_s, pre_cap_c = G_s, G_c
+    capped_s, capped_c = observables.pump_depletion_saturation(
+        pre_cap_s, pre_cap_c, P_pump, P_probe)
+    legacy_floor_mask = (capped_s < 1.0) if legacy_mean_field_fixture else np.zeros_like(
+        capped_s, dtype=bool)
+    G_s = np.where(legacy_floor_mask, 1.0, capped_s) if legacy_mean_field_fixture else capped_s
+    G_c = capped_c
+    dynamic_depletion = phase_detail == PHASE_ULTRA
+    gain_stages = {
+        "small_signal": (G_s_smallsignal, G_c_smallsignal),
+        "pre_cap": (pre_cap_s, pre_cap_c),
+        "final_cap": (capped_s, capped_c),
+        "displayed": (G_s, G_c),
+    }
     hardened_noise = None
     pump_scatter_kappa_used = HARDENED_PUMP_SCATTER_KAPPA
     if phase_detail == PHASE_ULTRA:
@@ -3433,6 +3443,33 @@ def compute_spectrum(D_GHz, *,
         "G_s": G_s,
         "G_c": G_c,
         "gain_referred_noise_dB": gain_referred_noise_db,
+        "legacy_gain_diagnostic": {
+            "noise_dB": gain_referred_noise_db,
+            "model": ("effective hardened mean-field noise" if hardened_noise is not None
+                      else "historical two-gain algebra"),
+            "physical_squeezing_claim_allowed": False,
+        },
+        "gain_budget": {
+            "power_plane": "atomic medium exit, before exit window",
+            "gain_reference": "input probe power at the atomic medium entrance",
+            "power_definition": "each gain multiplied by input_seed_power_W",
+            **{stage: {"G_s": probe, "G_c": conjugate,
+                       "probe_W": probe * P_probe, "conjugate_W": conjugate * P_probe}
+               for stage, (probe, conjugate) in gain_stages.items()},
+            "dynamic_depletion": {
+                "enabled": dynamic_depletion,
+                "probe_changed": (pre_cap_s != G_s_smallsignal) & dynamic_depletion,
+                "conjugate_changed": (pre_cap_c != G_c_smallsignal) & dynamic_depletion,
+            },
+            "posthoc_pump_cap": {
+                "probe_reduced": capped_s < pre_cap_s,
+                "conjugate_reduced": capped_c < pre_cap_c,
+            },
+            "historical_probe_floor": {
+                "enabled": bool(legacy_mean_field_fixture),
+                "probe_raised": legacy_floor_mask,
+            },
+        },
         # Deliberately unavailable until the frequency-dependent microscopic
         # Langevin drift/diffusion and detector transfer are implemented.
         "physical_squeezing_dB": None,
@@ -3471,7 +3508,7 @@ def compute_spectrum(D_GHz, *,
         "input_seed_plane": "atomic medium entrance, after entrance window",
         "output_gain_plane": "atomic medium exit, before exit window",
         "smallsignal_output_gain_plane": "atomic medium exit, before exit window",
-        "displayed_gains_posthoc_saturated": True,
+        "displayed_gains_posthoc_saturated": True,  # compatibility: the stage was evaluated
         "pump_depletion_cap": 1.0 + 0.5 * P_pump / max(P_probe, 1e-30),
         "phase_detail": phase_detail,
         "model_fidelity": model_fidelity or phase_detail,
@@ -3578,6 +3615,13 @@ def operating_point(spectrum, delta_mhz, branch=-1):
     ):
         if source in spectrum:
             out[target] = float(np.interp(probe_GHz, x, spectrum[source]))
+    budget = spectrum.get("gain_budget")
+    if budget is not None:
+        out["gain_budget"] = {
+            stage: {arm: float(np.interp(probe_GHz, x, gains))
+                    for arm, gains in budget[stage].items()}
+            for stage in ("small_signal", "pre_cap", "final_cap", "displayed")
+        }
     if spectrum.get("delta_k_z") is not None:
         out["delta_k_z"] = float(np.interp(probe_GHz, x, spectrum["delta_k_z"]))
     if spectrum.get("delta_k_z_vacuum") is not None:
@@ -5032,6 +5076,13 @@ class FWMScheme(Scheme):
                 "| Gain during phase scan | Current operating-point values; independent of LO phase |\n"
                 f"| Quadrature model scope | {phase_scan['scope']} |\n"
             )
+        gain_budget_rows = ""
+        if "gain_budget" in op:
+            labels = {"small_signal": "Small-signal", "pre_cap": "Propagation output before cap",
+                      "final_cap": "After pump cap", "displayed": "Displayed atomic-model"}
+            for stage, label in labels.items():
+                gains = op["gain_budget"][stage]
+                gain_budget_rows += f"| {label} G_s / G_c | {gains['G_s']:.6g} / {gains['G_c']:.6g} |\n"
         operating_table = (
             f"| Quantity | Value |\n|---|---|\n"
             f"| ⁸⁵Rb density | {raw['N_atoms']:.3e} /m³ |\n"
@@ -5044,6 +5095,7 @@ class FWMScheme(Scheme):
             f"{noise_rows}"
             f"{measured_rows}"
             f"| Operating probe detuning | {op['probe_GHz']:.4f} GHz |\n"
+            f"{gain_budget_rows}"
             f"| Cell length | {raw.get('cell_length_m', L_CELL)*1e3:.1f} mm |\n"
             f"| Pump waist | {raw.get('w_pump_m', W_PUMP)*1e6:.0f} µm |\n"
             f"| Seed waist | {raw.get('w_probe_m', W_PROBE)*1e6:.0f} µm |\n"
