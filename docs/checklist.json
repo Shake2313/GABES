@@ -1279,7 +1279,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "in_progress",
       "user_decision_2026_11_13": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision. Here: the non-parallel two-dimensional joint Maxwell average.",
       "acceptance_criteria": [
         "For a deterministic Doppler-off fixture, changing beam angle from 0 to 10 mrad leaves complex chi arrays equal under rtol=1e-12 and atol=1e-14.",
@@ -1319,7 +1319,8 @@
         }
       ],
       "review_note": "⟦AI⟧ 0→10mrad에서 과거2.942% 오차 수정; 세 regime·compiled/direct 및 독립 Hamiltonian10사례 PASS. 2-D joint Maxwell은 무료 교정이 아니며 별도 수렴/runtime 검증 필요.",
-      "last_reviewed_at": "2026-10-19"
+      "last_reviewed_at": "2026-10-19",
+      "implementation_2026_11_13": "⟦AI⟧ 5a05612 adds isotope-specific signed collinear probe-minus-coupling k and retains a scalar approximation for angled beams until Wave 2. EIT/CPT keep 601 points and refine the central grid. Default widths 0.156180/0.804614 MHz and group indices 113280/95141 match 12001-point results within 0.024%; group delay 5.668/0.952 us. Existing displayed width was 0.46/0.92460 MHz. Requires 8 samples per FWHM and one FWHM edge clearance; experimental visibility not assessed. Warm samples about 12.0/8.0 ms vs 12.4/11.6 ms. 57 focused tests passed. Joint non-parallel 2D Maxwell is Wave 2."
     },
     {
       "id": "rydberg-extra-view-dependency-correctness",
@@ -4764,7 +4765,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P3",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-08-12_scheme-3_rydberg-eit.md",
         "docs/daily_report/2026-08-22_scheme-3_rydberg-eit.md",
@@ -4803,7 +4804,8 @@
         "⟦AI⟧ Current _superheterodyne_readout creates detector/noise/sensitivity objects per each of up to 801 points."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ Current _superheterodyne_atomic_phasors still builds one Liouvillian per scan value in a Python list; independent default fixture affine broadcast is array_equal with max abs error 0.; Current _superheterodyne_readout creates detector/noise/sensitivity objects per each of up to 801 points."
+      "problem": "⟦AI⟧ Current _superheterodyne_atomic_phasors still builds one Liouvillian per scan value in a Python list; independent default fixture affine broadcast is array_equal with max abs error 0.; Current _superheterodyne_readout creates detector/noise/sensitivity objects per each of up to 801 points.",
+      "implementation_2026_11_13": "⟦AI⟧ aa1e03e batches finite-IF affine assembly and detector postprocessing. Matrices and atomic phasors bit-identical on four direct fixtures; across 2216 readout leaves worst relative 4.65e-13 in refinement diagnostics with displayed text identical. Default cold 40.0 to 8.7 ms and warm 10.2 to 0.8 ms. Doppler cold approximately 84 ms both. 107 focused tests passed."
     },
     {
       "id": "rydberg-csv-acquisition-order",
