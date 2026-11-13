@@ -51,7 +51,9 @@ def test_angular_algebra_has_one_home():
 
 
 def test_steck_density_is_the_second_convention():
-    assert atoms.rb85_density is species.rb85_steck_density
+    assert atoms.rb85_density is species.rb85_natural_density
+    assert atoms.rb85_density(363.15) == (
+        species.RB85.abundance * species.number_density(species.RB85, 363.15))
     ratio = [species.rb85_steck_density(T) / species.number_density(species.RB85, T)
              for T in np.linspace(313.15, 393.15, 9)]
     assert 0.50 < min(ratio) and max(ratio) < 0.60

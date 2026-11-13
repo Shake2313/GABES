@@ -228,4 +228,4 @@ def get(name):
 
 
 # Back-compat name (archive/fwm_obe.py, older scripts); defined in `species`.
-rb85_density = species.rb85_steck_density
+rb85_density = species.rb85_natural_density

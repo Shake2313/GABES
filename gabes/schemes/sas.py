@@ -753,7 +753,7 @@ class SASScheme(Scheme):
         v, wt = doppler.velocity_grid(T_doppler, dv=3.0, cutoff_sigma=3.5)
         kv = K_VEC * v
         N = vapor_cell.cold_spot_limited_density(
-            species.rb85_steck_density(T_density), T_density, T_doppler)
+            species.rb85_natural_density(T_density), T_density, T_doppler)
 
         off_span = float(np.abs(offsets).max())
         half = max(3.5 * dopp_fwhm, off_span + 0.4 * dopp_fwhm, 10 * gamma_eff)

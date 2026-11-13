@@ -2993,8 +2993,8 @@ def compute_spectrum(D_GHz, *,
     Oc_ref = Os
 
     # Pure-85Rb CRC vapor density, consistent with the AutoOD-validated
-    # absorption path (`hyperfine.number_density`). The other (natural-abundance,
-    # Steck) `atoms.rb85_density` understated N for the enriched FWM cell.
+    # absorption path (`hyperfine.number_density`). The natural-abundance
+    # share from `atoms.rb85_density` is for a different cell composition.
     N_atoms = hyperfine.number_density(T)
     Delta = 2 * np.pi * D_GHz * 1e9
 

@@ -257,13 +257,17 @@ def number_density(iso, T):
     return _density_from_logP(logP, T)
 
 
+def rb85_natural_density(T):
+    """85Rb density in natural Rb vapor using the shared CRC pressure fit."""
+    return RB85.abundance * number_density(RB85, T)
+
+
 def rb85_steck_density(T):
     """
     ⁸⁵Rb number density [/m³] from the Steck Rb liquid-phase vapor-pressure fit
     (T > 312.46 K) times the natural ⁸⁵Rb abundance. A second, older convention:
-    0.50–0.59 × `number_density(RB85, T)` over 313–393 K. Kept for the Λ/Rydberg
-    Generic medium, OD single-line and SAS Generic paths (checklist
-    `atomic-data-legacy-value-unification`).
+    0.50–0.59 × `number_density(RB85, T)` over 313–393 K. Retained for historical
+    calculations that explicitly request the Steck pressure fit.
     """
     logP = 15.88253 - 4529.635 / T + 0.00058663 * T - 2.99138 * np.log10(T)
     return RB85.abundance * _density_from_logP(logP, T)
