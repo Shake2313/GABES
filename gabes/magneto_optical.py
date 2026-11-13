@@ -10,6 +10,8 @@ import threading
 
 import numpy as np
 
+from .species import MHZ
+
 
 _MAX_COEFFICIENTS = 8
 _COEFFICIENTS = OrderedDict()
@@ -148,7 +150,7 @@ def prepare_optical_coefficients(atom, polarization):
     return prepared
 
 
-def assemble_optical_generator(atom, resolvents, polarization, omega_scale_squared):
+def assemble_optical_generator(atom, resolvents, polarization, omega_scale_squared, *, elastic_hwhm=0.0):
     """Assemble the same full complex generator using fixed angular operators."""
     nv = len(resolvents[0])
     result = np.zeros((nv, atom.dimension, atom.dimension), complex)
@@ -160,7 +162,13 @@ def assemble_optical_generator(atom, resolvents, polarization, omega_scale_squar
         count = r.shape[-1]
         if not count:
             continue
-        pairs = (r[:, :, None]*r[:, None, :].conj()).reshape(nv, count*count)
-        weights = np.concatenate((pairs, r.real), axis=1)
+        pairs = r[:, :, None] * r[:, None, :].conj()
+        if elastic_hwhm:
+            energies = atom.excited_energy_mhz[block.excited_indices] * MHZ
+            # Excited populations/coherences relax at the natural rate. Their
+            # weak-drive source has both broadened optical-coherence legs.
+            beat = energies[:, None] - energies[None, :]
+            pairs *= 1 + 2 * elastic_hwhm / (atom.gamma + 1j * beat)
+        weights = np.concatenate((pairs.reshape(nv, count*count), r.real), axis=1)
         result[:, block.rows, block.columns] = omega_scale_squared*(weights@block.coefficients)
     return result

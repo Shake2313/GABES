@@ -7,13 +7,14 @@ import math
 
 import numpy as np
 
-from . import atoms, constants, doppler, hyperfine, observables
+from . import constants, doppler, hyperfine, observables
 from .constants import GAMMA, K_VEC
 
 _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
 
-def hyperfine_alpha_obe(scan, params, line_strength, *, solve_chi, probe_rabi):
+def hyperfine_alpha_obe(scan, params, line_strength, *, solve_chi, probe_rabi,
+                        atom, buffer_gamma, shift_rad_s):
     """
     Realistic 85Rb D1 absorption coefficient α(scan) [1/m]: an incoherent sum of
     the four hyperfine transitions (Fg∈{2,3}→Fe∈{2,3}), each a Doppler-broadened
@@ -35,9 +36,7 @@ def hyperfine_alpha_obe(scan, params, line_strength, *, solve_chi, probe_rabi):
           if line_strength is None else float(line_strength))
 
     N = hyperfine.number_density(T)
-    buffer_gamma = constants.neon_buffer_broadening(params.get("ne_pressure_torr", 0.0))
     gamma_eff = hyperfine.self_broadened_gamma(N) + buffer_gamma
-    atom = atoms.two_level(gamma=gamma_eff)
 
     def build_H0(_s):
         H = np.zeros((2, 2), dtype=complex)
@@ -48,7 +47,7 @@ def hyperfine_alpha_obe(scan, params, line_strength, *, solve_chi, probe_rabi):
     dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
     width = dopp_fwhm if doppler_on else gamma_eff
 
-    shifts = {k: 2 * np.pi * v for k, v in hyperfine.LINE_SHIFT_HZ.items()}
+    shifts = {k: 2 * np.pi * v + shift_rad_s for k, v in hyperfine.LINE_SHIFT_HZ.items()}
     smin, smax = min(shifts.values()), max(shifts.values())
 
     # One unit-area Voigt shape on a fine grid covering (scan − shift) ± wings.

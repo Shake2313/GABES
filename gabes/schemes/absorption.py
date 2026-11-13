@@ -19,7 +19,7 @@ the Doppler width and the 85Rb number density (hence the absorption scale).
 """
 import numpy as np
 
-from .. import atoms, beam, constants, doppler, hyperfine, observables, species
+from .. import atoms, beam, collisions, constants, doppler, hyperfine, observables, species
 from ..constants import GAMMA, K_VEC, OMEGA_D1
 from .. import affine_doppler, core
 from ..linear_hyperfine import hyperfine_alpha_obe
@@ -35,8 +35,40 @@ KHZ = 2 * np.pi * 1e3
 _TABLE_STEP = GAMMA / 30.0          # Δ_eff sampling for the Doppler χ̄ table
 
 
-def _ne_buffer_gamma(params):
-    return constants.neon_buffer_broadening(params.get("ne_pressure_torr", 0.0))
+def _ne_optics(params, T, isotope="Rb85", line="D1"):
+    mode = params.get("optical_collision_model", collisions.LEGACY_COLLISIONS)
+    return collisions.pressure_effects(
+        isotope, line, params.get("ne_pressure_torr", 0.0), T, mode=mode)
+
+
+def _ne_reference_selected(params):
+    return params.get("optical_collision_model") == collisions.REFERENCE_COLLISIONS
+
+
+def _collision_model_spec(default=collisions.LEGACY_COLLISIONS):
+    return ParamSpec("optical_collision_model", "Optical collisions", "Cell & beams",
+                     default, choices=collisions.COLLISION_CHOICES, advanced=True,
+                     help="The opt-in Ne reference applies measured elastic width and a "
+                          "signed optical line shift. It reports source uncertainty.")
+
+
+def _collision_rows(raw):
+    report = raw.get("optical_collisions")
+    if report is None:
+        return []
+    return [
+        ("Optical collision model", report["status"]),
+        ("Optical line shift", f"{report['shift_mhz']:+.3f} MHz"),
+        ("Added homogeneous FWHM", f"{report['fwhm_mhz']:.3f} MHz"),
+        *(("Reference scope", warning) for warning in report["warnings"]),
+    ]
+
+
+def _od_atom(natural_and_self, effects, reference):
+    if reference:
+        atom = atoms.two_level(gamma=natural_and_self)
+        return atom.with_optical_dephasing(effects.optical_dephasing_rad_s)
+    return atoms.two_level(gamma=natural_and_self + effects.fwhm_rad_s)
 
 
 def _solve_chi_avg(atom, build_H0, probe_coh, scan, params, h_dep,
@@ -92,8 +124,17 @@ def _solve_chi_avg(atom, build_H0, probe_coh, scan, params, h_dep,
 
 
 def _hyperfine_alpha(scan, params, line_strength=None):
-    return hyperfine_alpha_obe(scan, params, line_strength, solve_chi=_solve_chi_avg,
-                               probe_rabi=PROBE_RABI)
+    T = params["temp_c"] + 273.15
+    effects = _ne_optics(params, T)
+    reference = _ne_reference_selected(params)
+    gamma_self = hyperfine.self_broadened_gamma(hyperfine.number_density(T))
+    atom = _od_atom(gamma_self, effects, reference)
+    alpha, components, info = hyperfine_alpha_obe(
+        scan, params, line_strength, solve_chi=_solve_chi_avg, probe_rabi=PROBE_RABI,
+        atom=atom, buffer_gamma=effects.fwhm_rad_s, shift_rad_s=effects.shift_rad_s)
+    if reference:
+        info["optical_collisions"] = effects.readout()
+    return alpha, components, info
 
 
 # =========================================================
@@ -101,6 +142,7 @@ def _hyperfine_alpha(scan, params, line_strength=None):
 # =========================================================
 class ODScheme(Scheme):
     name = "od"
+    cache_version = "ne-optical-reference-v1"
     cluster = "A — Absorption"
     title = "Optical absorption (OD)"
     supports_headless_observables = True
@@ -128,10 +170,10 @@ class ODScheme(Scheme):
                       recompute=False),
             ParamSpec("doppler", "Doppler (vapor motion)", "Numerics", "on",
                       choices=("on", "off"), advanced=True),
+            _collision_model_spec(),
             ParamSpec("ne_pressure_torr", "Ne buffer pressure", "Cell & beams", 0.0,
                       0.0, 200.0, 1.0, "Torr", advanced=True,
-                      help="Fixed-neon pressure broadening only; pressure shift and "
-                      "Dicke narrowing are not included."),
+                      help="Ne partial pressure at the operating temperature."),
         ]
 
     def presets(self):
@@ -150,10 +192,12 @@ class ODScheme(Scheme):
         sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
         N = hyperfine.number_density(T)
-        gamma_eff = hyperfine.self_broadened_gamma(N) + _ne_buffer_gamma(params)
+        effects = _ne_optics(params, T)
+        gamma_eff = hyperfine.self_broadened_gamma(N) + effects.fwhm_rad_s
         width = dopp_fwhm if params["doppler"] == "on" else gamma_eff
 
-        shifts = np.array([2 * np.pi * v for v in hyperfine.LINE_SHIFT_HZ.values()])
+        shifts = np.array([2 * np.pi * v + effects.shift_rad_s
+                           for v in hyperfine.LINE_SHIFT_HZ.values()])
         margin = max(2 * np.pi * 1.5e9, 6 * width)
         lo, hi = shifts.min() - margin, shifts.max() + margin
         n = int(np.clip((hi - lo) / (width / 8.0), 1201, 8000))
@@ -171,6 +215,7 @@ class ODScheme(Scheme):
         L = params["cell_mm"] * 1e-3            # navigate-only knob: read live
         OD = observables.optical_density(alpha, L)
         T_trans = observables.transmission(alpha, L)
+        shift_hz = raw.get("optical_collisions", {}).get("shift_mhz", 0.0) * 1e6
 
         fig = None
         if include_figures:
@@ -188,8 +233,8 @@ class ODScheme(Scheme):
             axOD.set_xlabel("Detuning  [GHz]  (ref: 87Rb F=2→F′=2)")
             for (Fg, Fe), sh in hyperfine.LINE_SHIFT_HZ.items():
                 for a in (axT, axOD):
-                    a.axvline(sh / 1e9, color="gray", ls=":", lw=0.7)
-                axOD.annotate(f"{Fg}→{Fe}′", (sh / 1e9, 0), xytext=(0, 2),
+                    a.axvline((sh + shift_hz) / 1e9, color="gray", ls=":", lw=0.7)
+                axOD.annotate(f"{Fg}→{Fe}′", ((sh + shift_hz) / 1e9, 0), xytext=(0, 2),
                               textcoords="offset points", ha="center", va="bottom",
                               fontsize=7, color="gray")
             fig.tight_layout()
@@ -205,7 +250,7 @@ class ODScheme(Scheme):
                  help="Gaussian (Doppler) width of each hyperfine line."),
         ]
         rows = "".join(
-            f"| {Fg}→{Fe}′ | {hyperfine.LINE_SHIFT_HZ[(Fg, Fe)]/1e9:.3f} | "
+            f"| {Fg}→{Fe}′ | {(hyperfine.LINE_SHIFT_HZ[(Fg, Fe)] + shift_hz)/1e9:.3f} | "
             f"{hyperfine.CF2[(Fg, Fe)]:.4f} |\n"
             for (Fg, Fe) in hyperfine.TRANSITIONS)
         derived = derived_table([
@@ -217,36 +262,47 @@ class ODScheme(Scheme):
             ("Ne buffer pressure", f"{params.get('ne_pressure_torr', 0.0):.0f} Torr"),
             ("Ne broadening / 2π", f"{buffer_mhz:.3f} MHz"),
             ("Natural Γ / 2π", f"{GAMMA_MHZ:.3f} MHz"),
+            *_collision_rows(raw),
         ])
         lines = ("| Line | Center [GHz] | C_F² |\n|---|---|---|\n" + rows)
-        return dict(metrics=metrics, figure=fig, tables=[
+        view = dict(metrics=metrics, figure=fig, tables=[
             derived,
             {"title": "Hyperfine lines (relative strength)", "markdown": lines}])
+        if "optical_collisions" in raw:
+            view["optical_collisions"] = raw["optical_collisions"]
+        return view
 
     # ---- single bare 2-level line (validation backbone) ----
     def _compute_single(self, params):
         T = params["temp_c"] + 273.15
         sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
-        buffer_gamma = _ne_buffer_gamma(params)
+        effects = _ne_optics(params, T)
+        reference = _ne_reference_selected(params)
+        buffer_gamma = effects.fwhm_rad_s
         gamma_eff = GAMMA + buffer_gamma
         half = (max(10 * gamma_eff, 3.5 * dopp_fwhm)
                 if params["doppler"] == "on" else 12 * gamma_eff)
-        scan = np.linspace(-half, half, 601)
+        centered_scan = np.linspace(-half, half, 601)
+        scan = centered_scan + effects.shift_rad_s
 
-        atom = atoms.two_level(gamma=gamma_eff)
+        atom = _od_atom(GAMMA, effects, reference)
 
         def build_H0(_s):
             H = np.zeros((2, 2), dtype=complex)
             H[0, 1] = H[1, 0] = PROBE_RABI * GAMMA / 2
             return H
 
-        chi_bar = _solve_chi_avg(atom, build_H0, (1, 0), scan, params, h_dep=False)
+        chi_bar = _solve_chi_avg(
+            atom, build_H0, (1, 0), centered_scan, params, h_dep=False)
         N = species.rb85_natural_density(T)
-        return dict(model="single", scan=scan, chi_bar=chi_bar, N=N, T=T,
-                    L=params.get("cell_mm", 10.0) * 1e-3, ls=1.0,
-                    sigma_v=sigma_v, dopp_fwhm=dopp_fwhm,
-                    gamma_eff=gamma_eff, buffer_gamma=buffer_gamma)
+        raw = dict(model="single", scan=scan, chi_bar=chi_bar, N=N, T=T,
+                   L=params.get("cell_mm", 10.0) * 1e-3, ls=1.0,
+                   sigma_v=sigma_v, dopp_fwhm=dopp_fwhm,
+                   gamma_eff=gamma_eff, buffer_gamma=buffer_gamma)
+        if reference:
+            raw["optical_collisions"] = effects.readout()
+        return raw
 
     def _observables_single(self, raw, params, include_figures=True):
         x = raw["scan"] / (2 * np.pi) / 1e6                      # MHz
@@ -256,6 +312,7 @@ class ODScheme(Scheme):
         L = params["cell_mm"] * 1e-3           # navigate-only knob: read live
         OD = observables.optical_density(alpha, L)
         T_trans = observables.transmission(alpha, L)
+        shift_hz = raw.get("optical_collisions", {}).get("shift_mhz", 0.0) * 1e6
 
         fig = None
         if include_figures:
@@ -272,7 +329,7 @@ class ODScheme(Scheme):
             axOD.set_ylabel("Optical density  (−log₁₀T)")
             axOD.set_xlabel("Probe detuning  [MHz]")
             for a in (axT, axOD):
-                a.axvline(0, color="gray", ls=":", lw=0.8)
+                a.axvline(shift_hz / 1e6, color="gray", ls=":", lw=0.8)
             fig.tight_layout()
 
         fwhm_mhz = fwhm_halfmax(x, OD)
@@ -292,8 +349,12 @@ class ODScheme(Scheme):
             ("σ_v (1-D)", f"{raw['sigma_v']:.1f} m/s"),
             ("Doppler FWHM", f"{raw['dopp_fwhm']/(2*np.pi)/1e6:.1f} MHz"),
             ("Natural Γ / 2π", f"{GAMMA_MHZ:.3f} MHz"),
+            *_collision_rows(raw),
         ])
-        return dict(metrics=metrics, figure=fig, tables=[derived])
+        view = dict(metrics=metrics, figure=fig, tables=[derived])
+        if "optical_collisions" in raw:
+            view["optical_collisions"] = raw["optical_collisions"]
+        return view
 
     def compute(self, params):
         if params.get("model", "85Rb D1 hyperfine") == "single 2-level":
@@ -368,7 +429,7 @@ LAMBDA_MAX_ANGLE_MRAD = 20.0
 
 class LambdaScheme(Scheme):
     cluster = "A — Absorption"
-    cache_version = "physical-units-v7-joint-maxwell-reference"
+    cache_version = "physical-units-v8-ne-optical-reference"
     defaults_version = "physical-units-v3"
     supports_headless_observables = True
     model_comparison_parameter = "coupling_power_mw"
@@ -474,6 +535,11 @@ class LambdaScheme(Scheme):
                       help="Ground-state coherence relaxation (buffer-gas collisions); "
                            "sets the EIT/CPT linewidth floor. Same quantity as the "
                            "magneto buffer ground relaxation."),
+            _collision_model_spec(),
+            ParamSpec("ne_pressure_torr", "Ne buffer pressure", "Cell & beams", 0.0,
+                      0.0, 200.0, 1.0, "Torr", advanced=True,
+                      visible_if={"optical_collision_model": collisions.REFERENCE_COLLISIONS},
+                      help="Ne partial pressure at the operating temperature."),
             ParamSpec("temp_c", "Temperature", "Cell & beams", d["temp"], 20.0, 200.0, 1.0, "°C"),
             ParamSpec("cell_mm", "Cell length", "Cell & beams", d["cell"], 0.5, 200.0, 0.5, "mm",
                       recompute=False),
@@ -593,16 +659,26 @@ class LambdaScheme(Scheme):
         if joint_selected and doppler_on and not 0.0 <= angle_mrad <= LAMBDA_MAX_ANGLE_MRAD:
             raise ValueError(f"Joint Maxwell beam angle must be in [0, {LAMBDA_MAX_ANGLE_MRAD:g}] mrad.")
         two_photon_k_ratio = self._two_photon_k_ratio(params, medium)
+        reference = _ne_reference_selected(params)
+        effects = None
+        if reference:
+            components = species.SPECIES.get(medium["key"], [(species.RB85, 1.0)])
+            isotope = max(components, key=lambda component: component[1])[0]
+            line = "D1" if medium["key"] == LAMBDA_GENERIC else medium["line"]
+            effects = _ne_optics(params, medium["T"], isotope.name, line)
+        elastic_hwhm = effects.optical_dephasing_rad_s if effects is not None else 0.0
+        shift = effects.shift_rad_s if effects is not None else 0.0
         atom = atoms.lambda3(
             gamma_gg=gg_khz * KHZ, gamma=gamma,
-            two_photon_doppler_ratio=two_photon_k_ratio)
+            two_photon_doppler_ratio=two_photon_k_ratio).with_optical_dephasing(elastic_hwhm)
         Oc = Oc_mhz * MHZ
         Dc = Dc_mhz * MHZ
         probe = PROBE_RABI * gamma
 
         def build_H0(s):
             H = np.zeros((3, 3), dtype=complex)
-            H[1, 1] = Dc - s                      # two-photon detuning
+            H[1, 1] = Dc - s                      # common optical shift cancels in Raman detuning
+            H[2, 2] = shift
             H[0, 2] = H[2, 0] = probe / 2
             H[1, 2] = H[2, 1] = Oc / 2
             return H
@@ -626,6 +702,8 @@ class LambdaScheme(Scheme):
                     coupling_diameter_mm=float(params.get(
                         "coupling_diameter_mm", LAMBDA_COUPLING_DIAMETER_REF_MM)),
                     beam_angle_mrad=angle_mrad, two_photon_k_ratio=two_photon_k_ratio)
+        if effects is not None:
+            raw["optical_collisions"] = effects.readout()
         if joint_selected:
             if not doppler_on:
                 raw["joint_doppler"] = dict(status="doppler_off")
@@ -635,12 +713,12 @@ class LambdaScheme(Scheme):
                 raw["scalar_chi_bar"] = chi_bar
                 raw["chi_bar"], raw["joint_doppler"] = self._joint_doppler(
                     scan, medium, angle_mrad, build_H0,
-                    gg_khz * KHZ, probe, scan_shift)
+                    gg_khz * KHZ, probe, scan_shift, elastic_hwhm=elastic_hwhm)
         return raw
 
     @classmethod
     def _joint_doppler(cls, scan, medium, angle_mrad, build_H0, ground_relaxation,
-                       probe, scan_shift):
+                       probe, scan_shift, *, elastic_hwhm=0.0):
         k_probe, k_coupling = cls._wave_numbers(medium)
         theta = angle_mrad * 1e-3
         longitudinal = float(doppler.noncollinear_raman_shift_rad_s(
@@ -649,6 +727,7 @@ class LambdaScheme(Scheme):
             1.0, 0.0, k_probe, k_coupling, theta))
         atom = atoms.lambda3(gamma_gg=ground_relaxation, gamma=medium["gamma"],
                              two_photon_doppler_ratio=longitudinal / k_probe)
+        atom = atom.with_optical_dephasing(elastic_hwhm)
 
         def conditional_scan(vx):
             def shifted_hamiltonian(detuning):
@@ -727,6 +806,9 @@ class LambdaScheme(Scheme):
             regime=m, experimental_visibility="not assessed",
             window=window,
         )
+        if "optical_collisions" in raw:
+            readout["optical_collisions"] = raw["optical_collisions"]
+            details.extend(_collision_rows(raw))
         if joint is not None:
             status = joint["status"]
             readout["joint_doppler"] = joint

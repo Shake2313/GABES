@@ -25,7 +25,7 @@ def _hyperfine_g(I, J, F, gj, gi):
 
 
 def _full_obe_rotation(atom, delta_mhz, intensity_mw_cm2, *, field_ut,
-                       reset_rate, density, length):
+                       reset_rate, density, length, elastic_hwhm=0.0):
     """Return full rotation and its exact zero-intensity linear background."""
     iso = species.RB87
     ng, ne = len(atom.ground), len(atom.excited)
@@ -66,6 +66,12 @@ def _full_obe_rotation(atom, delta_mhz, intensity_mw_cm2, *, field_ut,
             liouvillian += (np.kron(jump, jump.conj())
                             - 0.5 * np.kron(loss, eye)
                             - 0.5 * np.kron(eye, loss.T))
+    if elastic_hwhm:
+        projector = np.diag(np.r_[np.zeros(ng), np.ones(ne)])
+        liouvillian += 2 * elastic_hwhm * (
+            np.kron(projector, projector)
+            - 0.5 * np.kron(projector, eye)
+            - 0.5 * np.kron(eye, projector))
     thermal = np.zeros((n, n))
     thermal[:ng, :ng] = np.eye(ng) / ng
     liouvillian += reset_rate * (
@@ -86,7 +92,7 @@ def _full_obe_rotation(atom, delta_mhz, intensity_mw_cm2, *, field_ut,
     # optical coherence has this independent scalar solution to the full OBE.
     # Include the reset-induced optical decoherence, as in the full generator.
     optical_energy = energies[ng:][None, :] - energies[:ng, None]
-    denominator = optical_energy - 1j * (atom.gamma / 2 + reset_rate)
+    denominator = optical_energy - 1j * (atom.gamma / 2 + reset_rate + elastic_hwhm)
     linear_prefactor = density * atom.dipole_sq / (constants.EPS_0 * constants.HBAR * ng)
     chi_linear = {q: linear_prefactor * np.sum(atom.dipoles[q] ** 2 / denominator)
                   for q in (-1, 1)}
@@ -111,3 +117,21 @@ def test_effective_nonlinear_rotation_matches_selected_full_obe_points(detuning_
     # amplitude or detuning calibration is applied.
     assert abs(nonlinear) > 1e-13
     assert effective == pytest.approx(nonlinear, rel=0.01)
+
+
+def test_elastic_reference_preserves_full_obe_nonlinear_pumping():
+    atom = build_multilevel_atom("Rb87", "D1")
+    intensity = 1e-4
+    detuning, shift = 100., -11.
+    settings = dict(field_ut=1e-3, reset_rate=100., density=1e15, length=.1,
+                    elastic_hwhm=50 * species.MHZ)
+    full, background = _full_obe_rotation(atom, detuning - shift, intensity, **settings)
+    effective = multilevel_response(
+        [detuning], isotope="Rb87", line="D1", intensity_mw_cm2=intensity,
+        b_ut=settings["field_ut"], gamma_out_hz=0, doppler=False,
+        ground_relaxation_hz=settings["reset_rate"], optical_shift_mhz=shift,
+        elastic_hwhm=settings["elastic_hwhm"], density_m3=settings["density"],
+        cell_length_m=settings["length"],
+    )["rotation_rad"][0, 0]
+    assert abs(full - background) > 1e-13
+    assert effective == pytest.approx(full - background, rel=.02)

@@ -115,7 +115,7 @@ def _polarization(qwp_deg):
 
 
 def velocity_quadrature(atom, laser_from_centroid_mhz, temp_k, *, order=6, doppler=True,
-                        cutoff_sigma=6.0, extra_shifts_mhz=()):
+                        cutoff_sigma=6.0, extra_shifts_mhz=(), elastic_hwhm=0.0):
     """Resonance-centered composite Gauss-Legendre Maxwell quadrature.
 
     Integration variable is optical Doppler shift kv/(2*pi), in MHz. Knots
@@ -129,7 +129,7 @@ def velocity_quadrature(atom, laser_from_centroid_mhz, temp_k, *, order=6, doppl
     if not doppler:
         return np.array([0.0]), np.array([1.0]), 0.0
     sigma = atom.frequency_hz/constants.C_LIGHT * math.sqrt(constants.KB*temp_k/atom.mass) / 1e6
-    hwhm = atom.gamma/(2*species.MHZ)
+    hwhm = (0.5 * atom.gamma + elastic_hwhm) / species.MHZ
     cutoff_sigma = float(cutoff_sigma)
     shifts = np.asarray(extra_shifts_mhz, dtype=float).ravel()
     if not np.isfinite(cutoff_sigma) or cutoff_sigma <= 0 or not np.isfinite(shifts).all():
@@ -175,7 +175,7 @@ def _left_right(K):
     return left, right
 
 
-def _optical_terms(atom, laser_eff_mhz, intensity_mw_cm2, polarization):
+def _optical_terms(atom, laser_eff_mhz, intensity_mw_cm2, polarization, *, elastic_hwhm=0.0):
     field = float(beam.field_amplitude(intensity_mw_cm2*10))     # mW/cm² → W/m²
     omega_scale = math.sqrt(atom.dipole_sq)*field/constants.HBAR
     excitation = sum(polarization[q]*atom.dipoles[q].T for q in (-1, 1))
@@ -185,11 +185,12 @@ def _optical_terms(atom, laser_eff_mhz, intensity_mw_cm2, polarization):
     for bi, (gs, rs) in enumerate(zip(atom.ground_slices, atom.reduced_slices)):
         det = (laser_eff_mhz[:, None] - (atom.excited_energy_mhz[None, :]
                - atom.ground_energy_mhz[bi]))*species.MHZ
-        R = 1/(-det-0.5j*atom.gamma)
+        R = 1/(-det - 1j * (0.5 * atom.gamma + elastic_hwhm))
         Y = R[:, :, None]*V[None, :, gs]
         eliminated.append(Y)
         resolvents.append(R)
-    L = assemble_optical_generator(atom, resolvents, polarization, omega_scale**2)
+    L = assemble_optical_generator(
+        atom, resolvents, polarization, omega_scale**2, elastic_hwhm=elastic_hwhm)
     return L, eliminated, resolvents, excitation
 
 
@@ -403,7 +404,8 @@ def multilevel_response(detunings_mhz, *, isotope="Rb85", line="D1", ground_f=No
                         ground_relaxation_hz=1.0, wall_relaxation_hz=1.0,
                         pure_dephasing_hz=0.0, velocity_mixing="complete",
                         velocity_points=6, doppler=True, qwp_deg=0.0,
-                        density_m3=None, density_scale=1.0, solver_basis="auto"):
+                        density_m3=None, density_scale=1.0, solver_basis="auto",
+                        elastic_hwhm=0.0, optical_shift_mhz=0.0):
     """Return local susceptibilities and homogeneous-path transmission/rotation.
 
     Every numerical output curve has shape (len(b_ut), len(detunings_mhz)),
@@ -429,13 +431,14 @@ def multilevel_response(detunings_mhz, *, isotope="Rb85", line="D1", ground_f=No
     settings = np.array([intensity_mw_cm2, temp_c, cell_length_m, gamma_out_hz,
                          gamma_in_hz, ground_relaxation_hz, wall_relaxation_hz,
                          pure_dephasing_hz, density_scale, qwp_deg,
-                         b_x_ut, b_y_ut], dtype=float)
+                         b_x_ut, b_y_ut, elastic_hwhm, optical_shift_mhz], dtype=float)
     if (delta.ndim != 1 or fields.ndim != 1 or not delta.size or not fields.size
             or not np.all(np.isfinite(delta)) or not np.all(np.isfinite(fields))
             or not np.all(np.isfinite(settings)) or temp_c <= -273.15):
         raise ValueError("finite one-dimensional axes and physical finite settings required")
     if min(intensity_mw_cm2, cell_length_m, gamma_out_hz, gamma_in_hz,
-           ground_relaxation_hz, wall_relaxation_hz, pure_dephasing_hz, density_scale) < 0:
+           ground_relaxation_hz, wall_relaxation_hz, pure_dephasing_hz,
+           density_scale, elastic_hwhm) < 0:
         raise ValueError("intensity, length, rates and density scale must be nonnegative")
     if ground_relaxation_hz <= 0 or wall_relaxation_hz <= 0:
         raise ValueError("positive population-reset rates are needed for a unique steady state")
@@ -472,11 +475,14 @@ def multilevel_response(detunings_mhz, *, isotope="Rb85", line="D1", ground_f=No
     counts = []
     with core.blas_single_thread():
         for di, detuning in enumerate(delta):
+            laser = centroid + detuning - optical_shift_mhz
             shifts, weights, sigma = velocity_quadrature(
-                atom, centroid+detuning, temp_k, order=velocity_points, doppler=doppler)
+                atom, laser, temp_k, order=velocity_points, doppler=doppler,
+                elastic_hwhm=elastic_hwhm)
             counts.append(shifts.size)
             optical, eliminated, resolvents, excitation = _optical_terms(
-                atom, centroid+detuning-shifts, intensity_mw_cm2, polarization)
+                atom, laser-shifts, intensity_mw_cm2, polarization,
+                elastic_hwhm=elastic_hwhm)
             solve_optical = optical if coordinates is None else coordinates.generator(optical)
             virtual_bound = max(float(np.max(np.linalg.eigvalsh(
                 np.einsum("vei,vej->vij", Y.conj(), Y)))) for Y in eliminated)

@@ -11,7 +11,7 @@ The registry contains the default 85Rb D1 double-Λ model. Factory functions als
 construct two-level, three-level Λ, and saturated-absorption models; the SAS
 species builder supplies isotope-specific hyperfine manifolds.
 """
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 
 import numpy as np
 
@@ -76,6 +76,26 @@ class AtomModel:
             kwargs["name"] = name
         clone = type(self)(**kwargs)
         declared = {f.name for f in fields(self)}
+        for key, value in vars(self).items():
+            if key not in declared:
+                setattr(clone, key, value)
+        return clone
+
+    def with_optical_dephasing(self, rate):
+        """Add common excited-manifold phase noise at optical HWHM rate [s^-1].
+
+        A single projector preserves excited-manifold internal coherences and
+        leaves population decay and spontaneous emission branching untouched.
+        """
+        rate = float(rate)
+        if not np.isfinite(rate) or rate < 0.0:
+            raise ValueError("optical dephasing must be finite and nonnegative")
+        if rate == 0.0:
+            return self
+        projector = np.zeros((self.n_levels, self.n_levels))
+        projector[self.excited, self.excited] = np.sqrt(2.0 * rate)
+        clone = replace(self, collapse_ops=self.collapse_ops + (projector,))
+        declared = {item.name for item in fields(self)}
         for key, value in vars(self).items():
             if key not in declared:
                 setattr(clone, key, value)

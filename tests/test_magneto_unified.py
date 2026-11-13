@@ -137,13 +137,14 @@ def test_both_axes_share_conditions_and_identical_operating_point(backend):
     assert backend[-1][1]["b_y_ut"] == pytest.approx(.001)
 
 
-def test_buffer_switch_selects_single_region_without_ignored_pressure_knob(backend):
+def test_buffer_switch_keeps_manual_rates_until_opt_in(backend):
     sc = UnifiedMagnetoScheme()
     p = dict(sc.defaults(), cell_type=BUFFER, ground_relaxation_hz=4000.)
     raw = sc.compute(p)
     assert raw["conditions"]["gamma_out_hz"] == raw["conditions"]["gamma_in_hz"] == 0
     assert raw["conditions"]["ground_relaxation_hz"] == 4000.
-    assert "ne_pressure_torr" not in sc.defaults()
+    assert not sc.defaults()["use_ne_optical_reference"]
+    assert "elastic_hwhm" not in raw["conditions"]
     scope = sc.headless_observables(raw, p)["magneto_readout"]["cell_scope"]
     assert "pressure broadening" in scope and "omitted" in scope
 
