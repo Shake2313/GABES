@@ -1723,7 +1723,7 @@
       ],
       "priority": "P1",
       "effort": "small",
-      "status": "in_progress",
+      "status": "done",
       "why": "⟦AI⟧ IN PROGRESS within the remaining declared trust scope. Readout/cache portions already completed are recorded separately; existing microscopic covariance/experimental dependencies remain open.",
       "acceptance_criteria": [
         "The source result separates the small-signal transfer T_small_signal and its raw gains from post-hoc power-budget-capped gains. Only the former may define a linear-map photon-flux gap or commutator diagnostic; capped gains remain an energy-budget heuristic until a nonlinear depletion map is propagated.",
@@ -1799,7 +1799,8 @@
           },
           "new_fields": []
         }
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ 537f247 exports source, before-cap, after-cap and floor gain and power ledgers with independent stage masks and selected-point provenance. Legacy S_dB remains a diagnostic compatibility alias. The separate dense Fast certificate remains tracked."
     },
     {
       "id": "fwm-balanced-readout-covariance-correction",
@@ -2986,7 +2987,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "user_decision_2026_11_13": "User decision 2026-11-13: SABES follows the FWM selected noise model (default Experimental Jasperse) and its calibrated gains instead of forcing Passive L1 and raw gains, and its export records the selected model and its evidence. SABES displayed values change. ⟦AI⟧ Quantify the SABES readout shift at the defaults in the commit and here.",
       "depends_on": [
         "fwm-gain-only-trust-boundary"
@@ -3044,7 +3045,8 @@
             "review_note"
           ]
         }
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ 9ce38cc uses the FWM-selected noise model, interpolated operating point and active gain calibration. On the exact-h/Steck parent the default lab profile gains shift 13.52375/12.71056 to 12.88859/12.06656; NF shifts about -0.0071 dB. 50413 raw atomic and 4312 FWM readout entries are bit-identical, with model-specific SABES readout changes. AppTest verified default and saved model choice. The zero-seed TA endpoint remains unavailable in both versions."
     },
     {
       "id": "sabes-calibration-trust-schema",
@@ -3763,7 +3765,8 @@
             "ElecSus exports CSV data and figures and saves and reloads parameter configurations from its GUI, and its library entry point returns named arrays selected by an outputs list (elecsus_methods.calculate, libs/spectra.output_list)."
           ]
         }
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ ca8e86c exposes named arrays from the exact renderer payload, lazy extra-view result export, FWM branch claims, and empty/partial sweep status. Lambda parameter round-trip met rtol 1e-12/atol 1e-15. Focused checks 41 passed. Scheme-wide native headless curve production remains open."
     },
     {
       "id": "fwm-reference-parameter-provenance",
@@ -4801,7 +4804,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P2",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-08-12_scheme-3_rydberg-eit.md",
         "docs/daily_report/2026-08-22_scheme-3_rydberg-eit.md",
@@ -4841,7 +4844,8 @@
         "⟦AI⟧ The completed experimental-csv-calibration-and-sweep-direction item concerns OD/SAS, so its done status does not close this Rydberg gap."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ rydberg_experimental_csv sorts and median-merges x duplicates before returning provenance; TraceProvenance has no reversal or branch fields.; Synthetic -1,0,1,0,-1 sweep becomes x=[-1,0,1], signal=[5,4.5,3], with no assumptions/warning; branch information is lost."
+      "problem": "⟦AI⟧ rydberg_experimental_csv sorts and median-merges x duplicates before returning provenance; TraceProvenance has no reversal or branch fields.; Synthetic -1,0,1,0,-1 sweep becomes x=[-1,0,1], signal=[5,4.5,3], with no assumptions/warning; branch information is lost.",
+      "implementation_2026_11_13": "⟦AI⟧ 266090e reuses the shared pre-sort sweep classifier, records reversals and per-direction sample counts, and flags the loss of hysteresis in median-merged compatibility arrays. PSD retains frequency-sort semantics. Combined main test run: 222 passed, 1 optional AutoOD skip."
     },
     {
       "id": "magneto-paraffin-exchange-dephasing-contract",
@@ -5314,7 +5318,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P3",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-08-24_scheme-5_fwm.md",
         "docs/daily_report/2026-08-29_scheme-5_fwm.md",
@@ -5348,7 +5352,8 @@
         "⟦AI⟧ Report5x–12x ratios apply to a sub-millisecond trace; total solve/runtime gain is small and unmeasured."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ _biphoton_observables still calls phase_mismatch_vector in181-angle Python loop; phase_mismatch_vector_grid exists.; Report5x–12x ratios apply to a sub-millisecond trace; total solve/runtime gain is small and unmeasured."
+      "problem": "⟦AI⟧ _biphoton_observables still calls phase_mismatch_vector in181-angle Python loop; phase_mismatch_vector_grid exists.; Report5x–12x ratios apply to a sub-millisecond trace; total solve/runtime gain is small and unmeasured.",
+      "implementation_2026_11_13": "⟦AI⟧ ffe8683 batches angle component construction while preserving scalar hypot rounding. 16086 phase-mismatch/weight points and 8055 full readout/figure snapshot entries bit-identical over three topologies and angle endpoints. Focused tests: 18 passed."
     },
     {
       "id": "fwm-diagnostic-report-smoke",
@@ -5732,7 +5737,7 @@
       "origin": "ai_review_of_external_feedback",
       "priority": "P2",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "adoption_status": "user_approved_implementation_2026_11_13",
       "problem": "⟦AI⟧ 실수·복소 LU의 피벗 역수 계산에 특이/비유한 실패 상태와 해당 kernel·배치 계산점 정보를 전달하는 명시적 계약이 부족하다. 상위 FWM 비유한값·수렴 검증은 이미 존재하므로, 모든 스킴이 잘못된 값을 조용히 게시한다는 주장과 구분한다. 이번 검수는 정적 대조이며 실패 재현은 미실행이다.",
       "acceptance_criteria": [
@@ -5754,7 +5759,8 @@
         "⟦AI⟧ kernels._lu_factor/_lu_solve 및 real twin에 1/pivot 계산이 있으며, Gemini가 지칭한 _lu_factor_solve_3x3/4x4 함수명은 현 코드에 없다. 완료된 상위 수렴 gate를 재개하는 항목이 아니다."
       ],
       "review_source": "docs/checklist.json#_external_code_review_2026_10_30",
-      "last_reviewed_at": "2026-10-30"
+      "last_reviewed_at": "2026-10-30",
+      "implementation_2026_11_13": "⟦AI⟧ 8e86926 reports failing real/complex LU batch indices deterministically as LinAlgError, preserving pivot arithmetic and existing fallbacks. 85 compiled-path tests passed on main, 56 passed/5 skipped with Numba disabled in isolation. Representative 91-point FWM gains and NF were bit-identical. Include affected GC solver checks after the next public engine pin update."
     },
     {
       "id": "shared-rendering-synchronization-coverage",
@@ -5763,7 +5769,7 @@
       "origin": "ai_review_of_external_feedback",
       "priority": "P2",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "adoption_status": "user_approved_implementation_2026_11_13",
       "problem": "⟦AI⟧ GABES는 plotcard.PLOT_LOCK을 사용하고 SABES는 별도 _PLOT_LOCK을 사용한다. SABES _cached_observables와 Spectrum 그림 표시 경로에는 동일한 보호 범위가 명시되어 있지 않다. 공유 Matplotlib 상태에 대한 정적 보호 범위 점검 과제이며, 실제 race/crash나 락 경합 병목을 재현했다는 뜻은 아니다.",
       "acceptance_criteria": [
@@ -5788,7 +5794,8 @@
         "⟦AI⟧ streamlit_app._cached_observables는 PLOT_LOCK으로 보호된다. SABES의 별도 lock은 일부 trace 그림에 사용되지만 _cached_observables/Spectrum에는 같은 범위가 드러나지 않는다. 완료된 headless 분리와 별개의 점검이다."
       ],
       "review_source": "docs/checklist.json#_external_code_review_2026_10_30",
-      "last_reviewed_at": "2026-10-30"
+      "last_reviewed_at": "2026-10-30",
+      "implementation_2026_11_13": "⟦AI⟧ 377d297 shares the reentrant render/cleanup lock between plotcard and SABES. 66 focused concurrent/render and SABES tests passed in isolation and in combined integration. Default SABES AppTest passed. Direct GABES AppTest reproduces the parent Streamlit v2 Guide component issue."
     },
     {
       "id": "fwm-legacy-gain-replay-retirement",
