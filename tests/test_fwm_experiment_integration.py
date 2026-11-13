@@ -45,6 +45,8 @@ def test_experimental_nf_fills_the_screenshot_gap_and_preserves_cached_model(exp
     view = scheme.headless_observables(raw, params)
     assert view["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
     assert view["experimental_gain_calibration"]["applied"]
+    assert "updated source model" in view["metrics"][1]["delta"]
+    assert "Updated atomic model with the frozen fit coefficients" in view["tables"][0]["markdown"]
     assert view["experimental_jasperse_readout"] is not None
     point = view["noise_operating_point"]
     assert np.isfinite(point["NF"]) and point["NF"] > 0.0

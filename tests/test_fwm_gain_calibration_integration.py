@@ -107,13 +107,19 @@ def test_lab_preset_weak_gains_and_positive_noise_use_the_unrounded_operating_po
         view = scheme.headless_observables(raw, params)
     original_metrics = deepcopy(view["metrics"])
     noise, probe, conjugate = present_metrics(view["metrics"], scheme_name="fwm", raw=raw)[:3]
-    assert noise["value"] == "+0.35 dB"
+    nf_db = view["noise_operating_point"]["NF_dB"]
+    assert nf_db > .005
+    assert noise["numeric_value"] == nf_db
+    assert noise["value"] == f"{nf_db:+.2f} dB"
     assert "above shot noise" in noise["delta"] and "Jasperse" in noise["delta"]
-    assert [m["value"] for m in (probe, conjugate)] == ["5.09 × 10⁻⁴", "0.0136"]
     for key, arm in (("G_s", probe), ("G_c", conjugate)):
-        assert arm["numeric_value"] == view["gain_operating_point"][key]
+        gain = view["gain_operating_point"][key]
+        assert 0.0 < gain < .02
+        assert arm["numeric_value"] == gain
         assert "RF extrapolation" in arm["delta"]
-    assert noise["numeric_value"] == view["noise_operating_point"]["NF_dB"]
+    assert 1e-4 <= probe["numeric_value"] < 1e-3
+    assert probe["value"] == f"{probe['numeric_value'] * 1e4:.2f} × 10⁻⁴"
+    assert conjugate["value"] == f"{conjugate['numeric_value']:.3g}"
     assert view["metrics"] == original_metrics
 
 

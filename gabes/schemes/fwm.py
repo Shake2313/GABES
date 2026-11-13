@@ -3573,6 +3573,18 @@ def compute_spectrum(D_GHz, *,
             noncollinear_doppler_reference_provenance()),
         "floquet_convergence": floquet_convergence,
         "response_estimator": response_estimator,
+        "gain_source_model": {
+            "response_method": response_estimator["method"],
+            "scan_points": int(probe_axis_GHz.size),
+            "velocity_measure": velocity_measure,
+            "velocity_cutoff_sigma": None if exact_velocity else float(velocity_cutoff),
+            "velocity_step_mps": float(velocity_step),
+            "floquet_order": int(floquet_order),
+            "phase_detail": phase_detail,
+            "linewidth_hz": float(constants.GAMMA_2PI),
+            "rb85_mass_kg": float(constants.MASS_85RB),
+            "d1_excited_splitting_hz": float(constants.NU_EXCITED_HF_D1),
+        },
         "gain_closure": gain_closure,
         "floquet_order": floquet_order,
         "floquet_convergence_enforced": bool(enforce_floquet_convergence),
@@ -4091,7 +4103,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v26-maxwell"
+    cache_version = "fwm-experimental-jasperse-gain-v27-source-model"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -4916,9 +4928,12 @@ class FWMScheme(Scheme):
                 status_label = ("Measured RF range" if point["within_measured_support"] else "RF extrapolation")
                 if point["context_changed"]:
                     status_label += " · changed conditions"
+                if experimental_gain["source_model_differences"]:
+                    status_label += " · updated source model"
                 gain_help = (
                     "Empirically corrected pump-on output / pump-off seed reference. "
-                    "The model continues beyond the 10/13 measured interval.")
+                    "The frozen fit used an older atomic model. Its coefficients continue "
+                    "to apply to the current model beyond the 10/13 measured interval.")
             for index, key, arm in ((1, "G_s", "probe"), (2, "G_c", "conjugate")):
                 metrics[index] = _power_gain_metric(
                     (f"Zeeman pump + χ {arm} gain" if zeeman_gain else
@@ -4993,6 +5008,18 @@ class FWMScheme(Scheme):
                     "| Calibrated gain basis | Pump-on arm output / measured pump-off seed output |\n"
                     "| Continuation | Applied outside measurement support and across changed operating conditions |\n"
                 )
+                if experimental_gain["source_model_differences"]:
+                    measured_rows += (
+                        "| Source model | Updated atomic model with the frozen fit coefficients |\n"
+                        "| Fit scope | Exact agreement at the 23 training points applies to the frozen source arrays |\n"
+                    )
+                deviation = experimental_gain["nominal_node_deviation"]
+                if deviation is not None:
+                    errors = deviation["max_relative_error"]
+                    measured_rows += (
+                        f"| Max deviation at the {deviation['point_count']} training points "
+                        f"(probe / conjugate) | {errors['probe']:.2%} / {errors['conjugate']:.2%} |\n"
+                    )
         if phase_view:
             def quadrature_metric(label, key):
                 value = phase_scan[key]

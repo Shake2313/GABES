@@ -84,6 +84,20 @@ _OBSERVATIONS = measured.observations()
 _NODES = measured.internal_delta_mhz_from_eom(_OBSERVATIONS["eom_MHz"])
 _NOMINAL = measured.nominal_context()
 _GAIN_QUANTITY = "pump-on arm output / measured pump-off seed detector output"
+# The archived fit script builds the Balanced spectrum from the historical
+# solver. The exact measured-node identity is with the recorded input arrays.
+_FROZEN_SOURCE_MODEL = {
+    "response_method": "pole_residue",
+    "scan_points": 401,
+    "velocity_measure": "truncated",
+    "velocity_cutoff_sigma": 4.0,
+    "velocity_step_mps": 1.0,
+    "floquet_order": 3,
+    "phase_detail": "ultra",
+    "linewidth_hz": 5.746e6,
+    "rb85_mass_kg": 1.4100e-25,
+    "d1_excited_splitting_hz": 361.58e6,
+}
 
 
 def profile():
@@ -93,6 +107,8 @@ def profile():
         "measurement_date": "2026-10-13",
         "source_workbook_sha256": measured.SOURCE_WORKBOOK_SHA256,
         "calibration_record": "analysis/fwm_experiment_20261022/gain_profile.json",
+        "calibration_record_commit": "4fbf04b7b39a4ea71612ac8d306d4ce964224aad",
+        "frozen_source_model": dict(_FROZEN_SOURCE_MODEL),
         "nominal_context": copy.deepcopy(_NOMINAL),
         "eom_support_MHz": list(measured.EOM_SUPPORT_MHZ),
         "internal_delta_support_mhz": [float(_NODES[0]), float(_NODES[-1])],
@@ -106,7 +122,7 @@ def profile():
         "outside_atomic_scan": "positive continuation to unseeded vacuum/conjugate=0 and probe=1",
         "context_policy": "changed operating conditions retain calibration and are marked as extrapolation",
         "independent_validation": False,
-        "node_agreement": "23-point development fit by construction, not a predictive validation result",
+        "node_agreement": "Exact 23-point development fit on the frozen source arrays only",
         "canonical_transfer_modified": False,
         "noise_covariance_calibrated": False,
         "arms": copy.deepcopy(_ARMS),
@@ -185,6 +201,11 @@ def evaluate(raw, delta_mhz, *, enabled=True):
     tolerance = 64*np.finfo(float).eps*max(1.0, float(np.max(np.abs(_NODES))))
     within = (delta >= _NODES[0]-tolerance) & (delta <= _NODES[-1]+tolerance)
     changed = _context_changes(raw)
+    source_model = raw.get("gain_source_model")
+    source_model_differences = None if source_model is None else [
+        key for key, frozen_value in _FROZEN_SOURCE_MODEL.items()
+        if key in source_model and source_model[key] != frozen_value
+    ]
     result = {
         "applied": bool(enabled),
         "internal_delta_mhz": delta.copy(),
@@ -192,6 +213,8 @@ def evaluate(raw, delta_mhz, *, enabled=True):
         "within_measured_support": within,
         "context_changed": bool(changed),
         "changed_context_inputs": changed,
+        "source_model": None if source_model is None else dict(source_model),
+        "source_model_differences": source_model_differences,
         "status": ("DISABLED" if not enabled else
                    "EMPIRICAL_CALIBRATION_CHANGED_CONDITIONS" if changed else "EMPIRICAL_CALIBRATION"),
         "point_status": np.where(within, "CALIBRATED_MEASUREMENT_REGION", "EXTRAPOLATED_FREQUENCY"),
@@ -224,6 +247,17 @@ def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
         # would otherwise introduce unnecessary roundoff in a disabled toggle.
         result["G_s"] = np.array(raw["G_s"], copy=True)
         result["G_c"] = np.array(raw["G_c"], copy=True)
+    result["nominal_node_deviation"] = None
+    if enabled and not result["context_changed"] and result["source_model"] is not None:
+        fitted_nodes = evaluate(raw, _NODES)
+        result["nominal_node_deviation"] = {
+            "scope": "training nodes at nominal apparatus settings; no acceptance threshold",
+            "point_count": int(_NODES.size),
+            "max_relative_error": {
+                arm: float(np.max(np.abs(fitted_nodes[key] / _OBSERVATIONS[f"{arm}_ratio"] - 1)))
+                for arm, key in (("probe", "G_s"), ("conjugate", "G_c"))
+            },
+        }
     if selected_delta_mhz is not None:
         selected = evaluate(raw, float(selected_delta_mhz), enabled=enabled)
         result["selected_point"] = {

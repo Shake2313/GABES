@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from scipy.interpolate import PchipInterpolator
 
 from gabes import fwm_experiment_gain as practical
 from gabes import fwm_measured_gain as measured
@@ -43,6 +44,8 @@ def test_nominal_model_calibration_recovers_raw_measurements_and_moves_peaks(nom
         peak = dense[np.argmax(corrected[key])]
         assert 1.7 <= peak <= 3.1
     assert not result["context_changed"]
+    assert result["source_model"] is None
+    assert result["source_model_differences"] is None
 
 
 def test_affine_fit_and_frozen_coefficients_have_reproducible_source_metadata():
@@ -52,6 +55,11 @@ def test_affine_fit_and_frozen_coefficients_have_reproducible_source_metadata():
     assert profile["source_workbook_sha256"] == measured.SOURCE_WORKBOOK_SHA256
     assert not profile["independent_validation"]
     assert not profile["noise_covariance_calibrated"]
+    assert profile["calibration_record_commit"].startswith("4fbf04b")
+    assert profile["frozen_source_model"]["scan_points"] == len(record["reference_model_G_s"])
+    assert profile["frozen_source_model"]["velocity_measure"] == "truncated"
+    assert profile["frozen_source_model"]["velocity_cutoff_sigma"] == 4.0
+    assert profile["frozen_source_model"]["linewidth_hz"] == 5.746e6
     for arm in ("probe", "conjugate"):
         fitted = profile["arms"][arm]
         assert fitted["gain_scale"] > 0
@@ -139,8 +147,8 @@ def test_invalid_inputs_are_reported_instead_of_generating_finite_fake_gains(nom
         practical.calibrate_spectrum(dict(nominal_raw, G_s=-nominal_raw["G_s"]), enabled=True)
 
 
-def test_live_atomic_solver_matches_calibration_and_changed_physics_stays_active():
-    from gabes.schemes.fwm import FIDELITY_BALANCED, FWMScheme
+def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_deviation(nominal_raw):
+    from gabes.schemes.fwm import FIDELITY_BALANCED, FWMScheme, seeded_operating_readout
 
     scheme = FWMScheme()
     context = measured.nominal_context()
@@ -153,14 +161,33 @@ def test_live_atomic_solver_matches_calibration_and_changed_physics_stays_active
     nodes = measured.internal_delta_mhz_from_eom(observed["eom_MHz"])
     raw = scheme.compute(params)
     nominal = practical.evaluate(raw, nodes)
-    # This integration check deliberately uses a fresh current atomic solve,
-    # rather than only the archived nominal arrays used by the unit tests.
-    np.testing.assert_allclose(nominal["G_s"], observed["probe_ratio"], rtol=.01)
-    np.testing.assert_allclose(nominal["G_c"], observed["conjugate_ratio"], rtol=.01)
+    selected = seeded_operating_readout(raw, dict(params, experimental_gain_calibration=True))
+    calibration = selected["experimental_gain_calibration"]
+    assert calibration["applied"] and not calibration["context_changed"]
+    assert calibration["source_model"]["velocity_measure"] == "exact"
+    assert {"velocity_measure", "linewidth_hz", "rb85_mass_kg", "d1_excited_splitting_hz"}.issubset(
+        calibration["source_model_differences"])
+    diagnostic = calibration["nominal_node_deviation"]
+    assert diagnostic["point_count"] == 23
+    assert not calibration["profile"]["independent_validation"]
+    live_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
+    frozen_axis = nominal_raw["probe_axis_GHz"] * 1e3
+    for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
+        positions = nominal["source_delta_mhz"][arm]
+        live_sample = np.exp(PchipInterpolator(live_axis, np.log(raw[key]))(positions))
+        frozen_sample = np.exp(PchipInterpolator(frozen_axis, np.log(nominal_raw[key]))(positions))
+        observed_ratio = observed[f"{arm}_ratio"]
+        np.testing.assert_allclose(nominal[key] / observed_ratio, live_sample / frozen_sample,
+                                   rtol=2e-13)
+        assert diagnostic["max_relative_error"][arm] == pytest.approx(
+            np.max(np.abs(nominal[key] / observed_ratio - 1)))
     changed_raw = scheme.compute(dict(params, pump_mw=350., temp_c=118.))
     changed = practical.calibrate_spectrum(changed_raw, enabled=True, selected_delta_mhz=150.)
     assert changed["applied"] and changed["context_changed"]
     assert changed["selected_point"]["available"]
-    assert not np.allclose(changed["G_s"], practical.calibrate_spectrum(raw, enabled=True)["G_s"])
+    assert changed["nominal_node_deviation"] is None
+    assert changed["source_model_differences"] == calibration["source_model_differences"]
+    assert not np.allclose(changed["G_s"], calibration["G_s"])
+    assert practical.calibrate_spectrum(raw, enabled=False)["nominal_node_deviation"] is None
     assert np.all(np.isfinite(changed["G_s"]))
     assert np.all(np.isfinite(changed["G_c"]))

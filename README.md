@@ -37,6 +37,13 @@ The gain toggle corrects peak position, width and both arm gains using the 23
 measured points. It continues the current model outside the measured interval
 and after changing operating conditions; extrapolation is labelled.
 Both probe and conjugate gain curves are shown with calibration on or off.
+The lab coefficients were fitted to an archived 401-point Balanced spectrum
+with a 4σ Maxwell cutoff and earlier ⁸⁵Rb D1 constants. The same coefficients
+now act on the current source spectrum. At the nominal apparatus settings in
+Balanced with the exact Maxwell average, the largest deviations at the 23
+training points are 4.92% for probe and 3.87% for conjugate. The operating-point
+report displays these deviations as diagnostics. Exact agreement at the training
+points applies to the archived fit input.
 The [FWM literature database](references/fwm_experiments/README.md) records the
 published operating conditions and their sources.
 For the new multi-paper model, enable **Empirical gain calibration**, then select
