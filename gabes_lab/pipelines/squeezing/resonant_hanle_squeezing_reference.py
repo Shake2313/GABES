@@ -26,6 +26,7 @@ import argparse
 import json
 import math
 import os
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -392,7 +393,6 @@ def hanle_params(detuning_mhz: float, args: argparse.Namespace,
         "transverse_field_angle_deg": args.transverse_angle_deg,
         "line_strength": args.hanle_line_strength,
         "doppler": "on",
-        "velocity_classes": args.velocity_classes,
         "scan_points": args.scan_points,
     }
     return params
@@ -1652,7 +1652,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--qwp-deg", type=float, default=0.0)
     p.add_argument("--b-max-ut", type=float, default=2.0)
     p.add_argument("--scan-points", type=int, default=201)
-    p.add_argument("--velocity-classes", type=int, default=13)
+    p.add_argument("--velocity-classes", type=int, default=None,
+                   help="Deprecated compatibility option. Hanle uses exact Maxwell averaging.")
     p.add_argument("--wall-ms", type=float, default=3.0)
     p.add_argument("--transit-khz", type=float, default=80.0)
     p.add_argument("--dark-return-khz", type=float, default=1.0)
@@ -1718,7 +1719,12 @@ def parse_args() -> argparse.Namespace:
                    help="Fit search half-span around B scale=1.")
     p.add_argument("--hanle-calibration-scale-points", type=int,
                    default=41)
-    return apply_json_config(p.parse_args())
+    args = apply_json_config(p.parse_args())
+    if args.velocity_classes is not None:
+        print("Deprecated: --velocity-classes is ignored by the exact Maxwell Hanle model.",
+              file=sys.stderr)
+    del args.velocity_classes
+    return args
 
 
 def main() -> None:
@@ -1728,6 +1734,7 @@ def main() -> None:
                                  historical_velocity_grid=args.historical_velocity_grid)
     run = start_run("squeezing/resonant_hanle_reference", out=args.out or None,
                     config={**vars(args), **settings,
+                            "hanle_velocity_measure": "exact Maxwell pole mean with guarded fallback",
                             "velocity_measure": velocity_measure(
                                 RESPONSE_METHOD, settings["velocity_step"], settings["velocity_cutoff"])})
     configs = make_source_configs()

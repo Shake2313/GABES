@@ -126,3 +126,20 @@ def test_hanle_calibration_fit_recovers_b_axis_and_affine_signal():
     assert np.isclose(fit["b_offset_ut"], true_offset, atol=0.0051)
     assert fit["normalized_rms"] < 1e-9
     assert fit["r2"] > 0.999999
+
+
+@pytest.mark.parametrize("source", ["cli", "json"])
+def test_retired_hanle_velocity_classes_are_accepted_and_disclosed(source, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("sys.argv", ["hanle"])
+    default = ref.parse_args()
+    assert capsys.readouterr().err == ""
+    if source == "cli":
+        monkeypatch.setattr("sys.argv", ["hanle", "--velocity-classes", "5"])
+    else:
+        cfg = tmp_path / "config.json"
+        cfg.write_text('{"velocity_classes": 5}', encoding="utf-8")
+        monkeypatch.setattr("sys.argv", ["hanle", "--config-json", str(cfg)])
+    legacy = ref.parse_args()
+    assert "is ignored by the exact Maxwell Hanle model" in capsys.readouterr().err
+    assert "velocity_classes" not in vars(legacy)
+    assert ref.hanle_params(0.0, legacy) == ref.hanle_params(0.0, default)
