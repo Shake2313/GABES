@@ -153,6 +153,17 @@ def _context_changes(raw):
     return changes
 
 
+def source_detunings(delta_mhz, *, enabled=True):
+    """Return the atomic detunings sampled for each lab calibration arm."""
+    delta = np.asarray(delta_mhz, dtype=float)
+    return {
+        arm: (fit["source_center_delta_mhz"]
+              + fit["frequency_scale"] * (delta - fit["measured_peak_delta_mhz"]))
+        if enabled else delta
+        for arm, fit in _ARMS.items()
+    }
+
+
 def evaluate(raw, delta_mhz, *, enabled=True):
     """Evaluate corrected gains at arbitrary internal detunings, including tails.
 
@@ -187,10 +198,10 @@ def evaluate(raw, delta_mhz, *, enabled=True):
         "profile": profile(),
         "gain_quantity": _GAIN_QUANTITY,
     }
+    source_positions = source_detunings(delta, enabled=enabled)
     for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
         fit = _ARMS[arm]
-        positions = (fit["source_center_delta_mhz"]
-                     +fit["frequency_scale"]*(delta-fit["measured_peak_delta_mhz"])) if enabled else delta
+        positions = source_positions[arm]
         sample, outside = _sample_model(axis, raw[key], positions, arm=arm)
         if enabled:
             bounded = np.clip(delta, _NODES[0], _NODES[-1])

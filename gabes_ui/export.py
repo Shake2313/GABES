@@ -256,6 +256,8 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
             "gain_operating_point": to_json_primitive(view.get("gain_operating_point")),
             "psr_readout": to_json_primitive(view.get("psr_readout")),
             "experimental_gain_calibration": to_json_primitive(view.get("experimental_gain_calibration")),
+            **{key: view[key] for key in ("readout_coordinate_status", "readout_certification_scope")
+               if key in view},
             "noise_operating_point": to_json_primitive(view.get("noise_operating_point")),
             "noise_model": view.get("noise_model"),
             "measured_gain_reference": to_json_primitive(view.get("measured_gain_reference")),

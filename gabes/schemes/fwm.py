@@ -14,6 +14,7 @@ callers.  ``FWMScheme`` wraps them for the generic Streamlit front-end.
 """
 import copy
 import functools
+import json
 import math
 from dataclasses import dataclass
 
@@ -21,7 +22,7 @@ import numpy as np
 
 from .. import (adaptive_scan, atoms, beam, constants, detection, doppler, fwm_gain_closure,
                fwm_stark_response,
-               fwm_measured_gain,
+               fwm_experiment_gain, fwm_measured_gain,
                gain_reference,
                hyperfine, kernels, observables, pole_doppler, species)
 from ..constants import K_VEC, OMEGA_HF, OMEGA_EXCITED_HF, rabi_freq
@@ -2887,7 +2888,7 @@ def compute_spectrum(D_GHz, *,
                      detection_efficiency=None,
                      L=L_CELL,
                      coarse_points=None, fine_points=None, window_mhz=None,
-                     scan_min=None, scan_max=None,
+                     scan_min=None, scan_max=None, extra_probe_points_GHz=(),
                      velocity_step=None, velocity_cutoff=None,
                      velocity_measure="truncated",
                      branch=DEFAULT_BRANCH, branches=None,
@@ -2936,7 +2937,8 @@ def compute_spectrum(D_GHz, *,
     fwm_gain_closure.reject_retired_replay(
         gain_closure_enabled, legacy_gain_calibration_fixture)
     stark_recompute_context = copy.deepcopy({
-        key: value for key, value in locals().items() if key != "pump_stark_fraction"})
+        key: value for key, value in locals().items()
+        if key != "pump_stark_fraction" and (key != "extra_probe_points_GHz" or np.size(value))})
     branch = _single_branch(branch, branches)
     floquet_order = int(floquet_order)
     if floquet_order < 1:
@@ -3026,6 +3028,13 @@ def compute_spectrum(D_GHz, *,
     probe_axis_GHz = probe_scan_axis_GHz(
         D_GHz, coarse_points, fine_points, window_mhz, scan_min, scan_max,
         branches=(branch,))
+    extra = np.asarray(extra_probe_points_GHz, dtype=float)
+    if (extra.ndim != 1 or np.any(~np.isfinite(extra))
+            or np.any(extra < probe_axis_GHz[0]) or np.any(extra > probe_axis_GHz[-1])
+            or np.any(np.abs(extra - D_GHz) <= PUMP_OVERLAP_EXCLUSION_MHZ * 1e-3)):
+        raise ValueError("extra probe points must be finite and within the sampled probe span")
+    if extra.size:
+        probe_axis_GHz = np.unique(np.r_[probe_axis_GHz, extra])
     k_pump_vac, k_probe_vac, k_conj_vac = seeded_option_a_wavenumbers(
         D_GHz, probe_axis_GHz, legacy_centroid=legacy_mean_field_fixture)
     omega_probe = constants.C_LIGHT * k_probe_vac
@@ -4005,31 +4014,96 @@ def _experimental_noise_selected(readout, raw, delta_mhz):
     return point
 
 
+@functools.lru_cache(maxsize=8)
+def _focused_readout_reference(encoded_context, extra_probe_points):
+    """Dense pole solve for explicit coordinates, cached independently of detection."""
+    return compute_spectrum(**json.loads(encoded_context),
+                            extra_probe_points_GHz=extra_probe_points)
+
+
+def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration):
+    if not raw.get("focused_readout_reference"):
+        return raw, "CACHED_GRID_INTERPOLATION"
+    expected = raw.get("gain_budget", {}).get("displayed", {})
+    if not all(key in expected and np.array_equal(raw[key], expected[key]) for key in ("G_s", "G_c")):
+        return raw, "CACHED_GRID_OVERRIDE"
+    context = dict(raw["stark_recompute_context"])
+    native = np.asarray(raw["probe_axis_GHz"])
+    center = raw["raman_center_minus_GHz"]
+    def in_span(delta):
+        points = center + np.asarray(delta, dtype=float) * 1e-3
+        return points[(points >= native[0]) & (points <= native[-1])
+                      & (np.abs(points - raw["D_GHz"]) > PUMP_OVERLAP_EXCLUSION_MHZ * 1e-3)]
+
+    extra = in_span([tpd])
+    if lab_calibration:
+        measured_nodes = fwm_measured_gain.internal_delta_mhz_from_eom(
+            fwm_measured_gain.observations()["eom_MHz"])
+        warp = fwm_experiment_gain.source_detunings(np.r_[gain_axis, measured_nodes])
+        extra = np.concatenate((extra, *(in_span(delta) for delta in warp.values())))
+    extra = tuple(np.setdiff1d(extra, native).tolist())
+    estimator = raw["response_estimator"]
+    if estimator["method"] == RESPONSE_GRID:
+        return raw, "GRID_FALLBACK_INTERPOLATION"
+    if not extra and estimator.get("interpolation") == "none":
+        return raw, "NATIVE_SOURCE_GRID"
+    context.update(response_method=RESPONSE_POLE,
+                   pump_stark_fraction=raw.get("pump_stark_response", {}).get("fraction", 1.0))
+    source = _focused_readout_reference(json.dumps(context, sort_keys=True, allow_nan=False), extra)
+    status = ("DENSE_GRID_FALLBACK" if source["response_estimator"]["method"] == RESPONSE_GRID
+              else "DENSE_POLE_READOUT_COORDINATES")
+    return source, status
+
+
+def _seeded_readout_rows(result, rows, source_size):
+    """Select native rows while keeping nested provenance aligned to the readout."""
+    projected = {}
+    for key, value in result.items():
+        if isinstance(value, dict):
+            value = _seeded_readout_rows(value, rows, source_size)
+        elif isinstance(value, np.ndarray) and value.shape[:1] == (source_size,):
+            value = value[rows]
+        projected[key] = value
+    return projected
+
+
 def seeded_operating_readout(raw, params, *, include_passive=False):
     """Resolve FWM gain and NF selections without figures or absorption solves."""
     tpd = params["tpd"]
     phase_view = params.get("squeezing_view") == SQUEEZING_QUADRATURE_PHASE
-    op = operating_point(raw, tpd, branch=-1)
     gain_model = params.get("gain_calibration_model", MODEL_LAB)
-    literature_gain = gain_model in (MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
-    experimental_gain = calibrate_experimental_gain(
-        raw, enabled=params.get("experimental_gain_calibration", False),
-        selected_delta_mhz=tpd, model=gain_model)
-    gain_active = experimental_gain["applied"]
+    gain_requested = params.get("experimental_gain_calibration", False)
+    lab_calibration = gain_requested and gain_model == MODEL_LAB
     gain_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
+    if gain_requested:
+        gain_axis = np.unique(np.r_[gain_axis, tpd])
+        if lab_calibration:
+            support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
+                np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
+            gain_axis = np.unique(np.r_[gain_axis, np.linspace(*support, 221)])
+    source = raw
+    coordinate_status = "CACHED_GRID_INTERPOLATION"
+    if params.get("exact_readout_coordinates", False):
+        source, coordinate_status = _focused_readout_source(raw, tpd, gain_axis,
+                                                            lab_calibration=lab_calibration)
+    op = operating_point(source, tpd, branch=-1)
+    native_indices = np.searchsorted(source["probe_axis_GHz"], raw["probe_axis_GHz"])
+    experimental_gain = calibrate_experimental_gain(
+        raw, enabled=gain_requested, selected_delta_mhz=tpd, model=gain_model)
+    if lab_calibration and source is not raw:
+        exact_gain = calibrate_experimental_gain(
+            source, enabled=True, selected_delta_mhz=tpd, model=gain_model)
+        exact_gain = _seeded_readout_rows(exact_gain, native_indices,
+                                         source["probe_axis_GHz"].size)
+        exact_gain["exact_nominal_node_deviation"] = exact_gain["nominal_node_deviation"]
+        exact_gain["nominal_node_deviation"] = experimental_gain["nominal_node_deviation"]
+        experimental_gain = exact_gain
+    gain_active = experimental_gain["applied"]
     displayed_gain = experimental_gain
     noise_raw = raw
     if gain_active:
-        # Include the committed point for curve/metric agreement. Only the
-        # lab profile has the measured 1-MHz feature needing a denser grid.
-        if literature_gain:
-            gain_axis = np.unique(np.r_[gain_axis, tpd])
-        else:
-            support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
-                np.array(fwm_measured_gain.EOM_SUPPORT_MHZ)))
-            gain_axis = np.unique(np.r_[gain_axis, np.linspace(*support, 221), tpd])
         displayed_gain = evaluate_experimental_gain(
-            raw, gain_axis, enabled=True, model=gain_model)
+            source if lab_calibration else raw, gain_axis, enabled=True, model=gain_model)
         noise_raw = dict(raw, probe_axis_GHz=raw["raman_center_minus_GHz"]+gain_axis*1e-3)
         omega = np.asarray(raw.get("omega_probe_rad_s", constants.OMEGA_D1))
         if omega.ndim:
@@ -4041,19 +4115,41 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
 
     noise_model = (NOISE_EXPERIMENTAL_JASPERSE if phase_view else
                    params.get("noise_model", NOISE_PASSIVE_L1))
+    if source is not raw and not gain_active:
+        displayed_gs, displayed_gc = (source[key][native_indices] for key in ("G_s", "G_c"))
+        noise_raw = dict(raw, G_s=displayed_gs, G_c=displayed_gc)
     passive_readout = None
     passive_op = None
     experimental_noise = None
     if ("T_canonical_small_signal" in raw
             and (include_passive or noise_model == NOISE_PASSIVE_L1)):
-        passive_readout = _seeded_passive_l1_readout(raw, params)
-        passive_op = _passive_l1_selected(passive_readout, raw, op["probe_GHz"])
+        point_readout = _seeded_passive_l1_readout(source, params)
+        passive_op = _passive_l1_selected(point_readout, source, op["probe_GHz"])
+        passive_readout = point_readout
+        if source is not raw:
+            passive_readout = _seeded_readout_rows(point_readout, native_indices,
+                                                  source["probe_axis_GHz"].size)
     noise_point = passive_op
     if noise_model == NOISE_EXPERIMENTAL_JASPERSE:
         experimental_noise = experimental_jasperse_readout(
             noise_raw, params, gains=displayed_gain if gain_active else None)
         experimental_noise["internal_delta_mhz"] = gain_axis
         noise_point = _experimental_noise_selected(experimental_noise, raw, tpd)
+        if not gain_active and source is not raw:
+            selected_idx = np.searchsorted(source["probe_axis_GHz"], op["probe_GHz"])
+            if (selected_idx < source["probe_axis_GHz"].size
+                    and source["probe_axis_GHz"][selected_idx] == op["probe_GHz"]):
+                point_source = dict(source, omega_probe_rad_s=source["omega_probe_rad_s"][selected_idx])
+                point_gain = {key: source[key][selected_idx] for key in ("G_s", "G_c")}
+                point_noise = experimental_jasperse_readout(point_source, params, gains=point_gain)
+                noise_point = {
+                    "NF": float(point_noise["NF"]), "NF_dB": float(point_noise["NF_dB"]),
+                    "available": bool(np.isfinite(point_noise["NF"])),
+                    "model": NOISE_EXPERIMENTAL_JASPERSE,
+                    "inference_approximate": bool(point_noise["inference_approximate"]),
+                    "fit_relative_residual": float(point_noise["fit_relative_residual"]),
+                    **{key: float(point_noise[key]) for key in ("G_s", "G_c", "input_G_s", "input_G_c")},
+                }
 
     gain_point = {
         "G_s": float(displayed_point["G_s"]),
@@ -4075,6 +4171,11 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
         },
         "experimental_gain_calibration": experimental_gain,
         "noise_model": noise_model,
+        "readout_coordinate_status": coordinate_status,
+        "readout_certification_scope": (
+            "LAB_AND_UNCALIBRATED_EXACT_COORDINATES"
+            if coordinate_status in {"NATIVE_SOURCE_GRID", "DENSE_POLE_READOUT_COORDINATES"}
+            and (not gain_active or lab_calibration) else "UNCERTIFIED_CALIBRATION_OR_SOURCE"),
         "noise_operating_point": noise_point,
         "jasperse_readout": experimental_noise if experimental_noise is not None else passive_readout,
         "experimental_jasperse_readout": experimental_noise,
@@ -4103,7 +4204,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v27-source-model"
+    cache_version = "fwm-experimental-jasperse-gain-v28-exact-readout"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -4228,6 +4329,12 @@ class FWMScheme(Scheme):
                       visible_if=seeded,
                       help="Apply the selected empirical gain model. Correction continues "
                            "outside its data range and after changing operating conditions."),
+            ParamSpec("exact_readout_coordinates", "Exact source coordinates", "Numerics", False,
+                      control="checkbox", recompute=False, advanced=True, visible_if=seeded,
+                      help="Use a cached dense reference for focused gain and noise, including the "
+                           "selected detuning and the 10/13 lab model's mapped source points. "
+                           "The first calculation takes longer. The adaptive atomic scan stays separate. "
+                           "Other empirical gain models keep their existing sampling."),
             ParamSpec("gain_calibration_model", "Gain calibration model",
                       "Detection & scaling", MODEL_LAB,
                       choices=GAIN_CALIBRATION_MODELS, recompute=False,
@@ -4634,7 +4741,7 @@ class FWMScheme(Scheme):
             raise ValueError(
                 "probe_uw and seed_wanted_sideband_uw disagree; use one "
                 "wanted-sideband power at the bridge boundary")
-        return compute_spectrum(
+        raw = compute_spectrum(
             params["opd"],
             T=params["temp_c"] + 273.15,
             P_pump=params["pump_mw"] * 1e-3,
@@ -4685,6 +4792,8 @@ class FWMScheme(Scheme):
                 "eom_seed_spectrum_application", "unapplied"),
             branch=DEFAULT_BRANCH,
         )
+        raw["focused_readout_reference"] = velocity_measure == "exact"
+        return raw
 
     def observables(self, raw, params, include_figures=True):
         if raw.get("kind") == "biphoton":
@@ -5020,6 +5129,13 @@ class FWMScheme(Scheme):
                         f"| Max deviation at the {deviation['point_count']} training points "
                         f"(probe / conjugate) | {errors['probe']:.2%} / {errors['conjugate']:.2%} |\n"
                     )
+                exact_deviation = experimental_gain.get("exact_nominal_node_deviation")
+                if exact_deviation is not None:
+                    errors = exact_deviation["max_relative_error"]
+                    measured_rows += (
+                        f"| Exact-coordinate deviation at the {exact_deviation['point_count']} training points "
+                        f"(probe / conjugate) | {errors['probe']:.2%} / {errors['conjugate']:.2%} |\n"
+                    )
         if phase_view:
             def quadrature_metric(label, key):
                 value = phase_scan[key]
@@ -5234,6 +5350,8 @@ class FWMScheme(Scheme):
             f"{raw.get('response_estimator', {}).get('display_probe_points', '—')} |\n"
             f"| Maxwell average | "
             f"{raw.get('response_estimator', {}).get('velocity_average', 'unavailable')} |\n"
+            f"| Displayed readout coordinates | {selected['readout_coordinate_status']} |\n"
+            f"| Displayed readout scope | {selected['readout_certification_scope']} |\n"
             f"| Noise-trace status | {raw.get('squeezing_status', 'unavailable')} |\n"
             f"| Transit reset γ_t / 2π | "
             f"{raw.get('transit_reset_rate_rad_s', np.nan)/(2*np.pi*1e3):.3f} kHz |\n"
@@ -5269,6 +5387,8 @@ class FWMScheme(Scheme):
             "experimental_gain_calibration": experimental_gain,
             "noise_operating_point": noise_point,
             "noise_model": noise_model,
+            "readout_coordinate_status": selected["readout_coordinate_status"],
+            "readout_certification_scope": selected["readout_certification_scope"],
             "dressed_cell_absorption": cell_absorption,
             "sidebar_readouts": sidebar_readouts,
             "measured_gain_reference": measured_reference,
