@@ -91,6 +91,21 @@ These practical approximations are separate from Grand Challenge acceptance.
 | C | **Polarization squeezing (PSR)** | Rb85/Rb87 D1/D2 atomic self-rotation slope with conditional Gaussian polarization noise; phase and optical-detuning scans, distributed absorption, detector loss and explicit assumed atomic excess noise. [Model and applicability](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/psr/README.md) |
 | D — Wave mixing | **FWM** | seeded 85Rb D1 double-Λ gains, optional 10/13 experimental peak/width/gain calibration, effective Jasperse two-arm noise, and a selectable passive L1 diagnostic; generic SFWM biphoton source estimates (`g²_SI(τ)`, CAR, rates, phase matching, velocity-class waveform) |
 
+Optional reference calculations are documented in the [User's Guide](docs/Userguide/GABES_User_Guide_v2.html).
+OD/SAS has a segmented weak-probe cell model for graded conditions and pump
+depletion. Uniform pump-off OD supports physical CSV fitting after explicit
+frequency and transmission calibration. Λ offers a joint Maxwell reference
+for angled beams. OD/SAS, Λ and Magneto expose a [measured Ne optical
+reference](docs/optical_collisions.md). Magneto also offers a [quenching
+finite cylinder relaxation estimate](docs/buffer_cell_relaxation.md).
+FWM **Exact source coordinates** uses a dense source for focused intensity
+difference readouts within its documented scope. The finite-seed angular
+Doppler extra view evaluates the minus branch over a bounded scan. Both are
+numerical reference modes with separate experimental applicability.
+
+Run `python -m gabes_lab.tools.current_scheme_examples` for reproducible
+headless OD, CPT and Rydberg examples with input and source provenance.
+
 Roadmap (parking lot): group-index / slow-light readout (OD/SAS now returns the
 dispersive refractive index, but no group quantity), Raman gain, higher-order
 wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
@@ -163,7 +178,7 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
     primitive), `rydberg.py` (Rydberg-EIT electrometry), `sas.py`
     (the merged **Absorption OD/SAS** scheme on `species.py`),
     `magneto.py` (Hanle/EIA/NMOR),
-    `fwm.py`, `__init__.py` (registry).
+    `fwm/` (seeded, biphoton, phase, readout and scheme modules), `__init__.py` (registry).
 - `streamlit_app.py` — generic UI. Renders only the selected scheme's
   `param_schema()`; caches the heavy solve on `recompute` knobs only (so
   navigate-only knobs like the FWM two-photon detuning update instantly).
