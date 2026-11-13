@@ -30,7 +30,8 @@ def pump_hamiltonian(power=1., waist=950e-6):
 
 def test_ground_gap_assignment_and_counterterm_sign():
     result = stark.ground_gap_shift(pump_hamiltonian(), -1.04858*2*np.pi*1e9)
-    assert result["shift_mhz"] == pytest.approx(-176.5515489041, abs=1e-7)
+    # Dressed gap for the current Steck Rb-85 D1 linewidth and splitting.
+    assert result["shift_mhz"] == pytest.approx(-176.7871477200, abs=1e-7)
     assert len(set(result["ground_eigenstate_indices"])) == 2
     assert not result["assignment_ambiguous"]
     atom = fwm.collisional_atom(362.15)
@@ -38,7 +39,7 @@ def test_ground_gap_assignment_and_counterterm_sign():
                               fraction=.1, pump_power_W=1.)
     assert metadata["counterterm_mhz"] == pytest.approx(.9*result["shift_mhz"])
     assert metadata["counterterm_mhz"] < 0.
-    assert metadata["corrected_gap_shift_mhz"] == pytest.approx(-23.1374298106, abs=1e-7)
+    assert metadata["corrected_gap_shift_mhz"] == pytest.approx(-23.1763323957, abs=1e-7)
     assert metadata["corrected_gap_shift_mhz"] != pytest.approx(.1*result["shift_mhz"])
     assert "not an exact" in metadata["correction_scope"]
     assert json.loads(json.dumps(metadata, allow_nan=False)) == metadata

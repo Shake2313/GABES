@@ -840,7 +840,7 @@ def test_beam_geometry_knobs_default_to_the_legacy_constants():
         scan_tolerance_log10_gain=res.get(
             "scan_tolerance_log10_gain", fwm.SCAN_TOLERANCE_LOG10_GAIN),
         scan_start_stride=res.get("scan_start_stride", fwm.SCAN_START_STRIDE),
-        branch=-1)
+        velocity_measure=params["velocity_measure"], branch=-1)
     for key in ("probe_axis_GHz", "G_s", "G_c", "S_dB"):
         assert np.array_equal(np.asarray(raw[key]), np.asarray(legacy[key])), \
             f"{key} drifted when the geometry became a knob"
