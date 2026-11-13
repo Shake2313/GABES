@@ -198,12 +198,11 @@ def _magnetic_generator(isotope, line, axis="z"):
     """Ground commutator derivative dL/dB_axis, with B in SI Tesla."""
     atom = build_multilevel_atom(isotope, line)
     result = np.zeros((atom.dimension, atom.dimension), complex)
-    ai = {"x": 0, "y": 1, "z": 2}[axis]
+    unit_field = {"x": (1, 0, 0), "y": (0, 1, 0), "z": (0, 0, 1)}[axis]
     for gs, rs, gf in zip(atom.ground_slices, atom.reduced_slices, atom.ground_g):
         f = atom.ground[gs.start][0]
-        angular = zeeman.angular_momentum_matrices(f)[ai]
-        hamiltonian = constants.MU_B/constants.HBAR*gf*angular
-        n = len(angular)
+        hamiltonian = zeeman.zeeman_hamiltonian(f, gf, unit_field)
+        n = len(hamiltonian)
         result[rs, rs] = -1j*(np.kron(hamiltonian, np.eye(n))
                                     - np.kron(np.eye(n), hamiltonian.T))
     result.flags.writeable = False

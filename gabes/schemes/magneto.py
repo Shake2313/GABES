@@ -770,13 +770,10 @@ class SinglePairMagnetoReference(Scheme):
         n = atom.n_levels
         ng = len(atom.ground)
         H = np.zeros((n, n), dtype=complex)
-        bx, by, bz = b_vec_t
-        Fgx, Fgy, Fgz = zeeman.angular_momentum_matrices((ng - 1) / 2)
-        Fex, Fey, Fez = zeeman.angular_momentum_matrices((len(atom.excited) - 1) / 2)
-        ground_block = constants.MU_B * gFg / constants.HBAR * (bx * Fgx + by * Fgy + bz * Fgz)
-        excited_block = constants.MU_B * gFe / constants.HBAR * (bx * Fex + by * Fey + bz * Fez)
-        H[:ng, :ng] = ground_block
-        H[ng:, ng:] = excited_block
+        H[:ng, :ng] = zeeman.zeeman_hamiltonian(
+            (ng - 1) / 2, gFg, b_vec_t, multiply_g_before_hbar=True)
+        H[ng:, ng:] = zeeman.zeeman_hamiltonian(
+            (len(atom.excited) - 1) / 2, gFe, b_vec_t, multiply_g_before_hbar=True)
         for q in (+1, -1):
             Omq = Om * drive.get(q, 0.0)
             if abs(Omq) < 1e-30:

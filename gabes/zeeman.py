@@ -37,6 +37,21 @@ def angular_momentum_matrices(F):
     return Fx, Fy, Fz
 
 
+def zeeman_hamiltonian(F, g_f, field_t, *, multiply_g_before_hbar=False):
+    """Linear Zeeman Hamiltonian in angular-frequency units for a field in tesla.
+
+    The single-pair reference preserves its historical scalar evaluation order.
+    A one-ulp difference can move pole diagnostics and displayed near-zero values.
+    """
+    fx, fy, fz = angular_momentum_matrices(F)
+    bx, by, bz = field_t
+    if multiply_g_before_hbar:
+        larmor_per_t = (constants.MU_B * g_f) / constants.HBAR
+    else:
+        larmor_per_t = (constants.MU_B / constants.HBAR) * g_f
+    return larmor_per_t * (bx * fx + by * fy + bz * fz)
+
+
 @functools.lru_cache(maxsize=16)
 def zeeman_manifold(Fg, Fe, gamma=None, gamma_gg=None, g_ratio=1.0,
                     transit_rate=0.0, optical_dephasing=0.0):
