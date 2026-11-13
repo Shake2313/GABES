@@ -17,7 +17,7 @@ from functools import partial
 import numpy as np
 
 from ._arrays import readonly_float_array
-from ._csv_numeric import decode_csv_text, sort_and_median_duplicates
+from ._csv_numeric import decode_csv_text, sort_and_median_duplicates, sweep_structure
 
 
 MAX_FILE_BYTES = 10 * 1024 * 1024
@@ -242,7 +242,7 @@ def load_experimental_csv(
     raw_bytes = _coerce_bytes(data)
     text, encoding = decode_csv_text(raw_bytes, ExperimentalCSVError)
     source_x, source_y, counts = _parse_first_two_columns(text)
-    branch_slices, direction_labels, reversal_count = _sweep_structure(source_x)
+    branch_slices, direction_labels, reversal_count = sweep_structure(source_x)
     detuning, raw_signal = _sort_and_merge(source_x, source_y)
     if detuning.size < MIN_UNIQUE_POINTS:
         raise ExperimentalCSVError(
@@ -422,63 +422,6 @@ def _parse_first_two_columns(
     except csv.Error as exc:
         raise ExperimentalCSVError(f"Malformed CSV: {exc}") from exc
     return np.asarray(xs, dtype=float), np.asarray(ys, dtype=float), counts
-
-
-def _sweep_structure(
-    x: np.ndarray,
-) -> tuple[tuple[slice, ...], np.ndarray, int]:
-    """Classify acquisition-order samples before any sorting or merging.
-
-    Each valid source sample belongs to exactly one monotonic branch. A turning
-    point reached by a nonzero step stays with the incoming branch; when the
-    instrument repeats the turning-point x value, the extra equal-x sample is
-    assigned to the outgoing branch. Equal steps elsewhere inherit the nearest
-    movement direction and never create a reversal by themselves.
-    """
-
-    values = np.asarray(x, dtype=float)
-    n_samples = int(values.size)
-    if n_samples == 0:
-        return (), np.empty(0, dtype=np.int8), 0
-    if n_samples == 1:
-        return (slice(0, 1),), np.zeros(1, dtype=np.int8), 0
-
-    edge_direction = np.sign(np.diff(values)).astype(np.int8)
-    moving_edges = edge_direction[edge_direction != 0]
-    if moving_edges.size == 0:
-        labels = np.zeros(n_samples, dtype=np.int8)
-        return (slice(0, n_samples),), labels, 0
-
-    reversal_count = int(np.count_nonzero(moving_edges[1:] != moving_edges[:-1]))
-    next_movement = np.zeros(n_samples, dtype=np.int8)
-    next_seen = 0
-    for edge_index in range(edge_direction.size - 1, -1, -1):
-        if edge_direction[edge_index] != 0:
-            next_seen = int(edge_direction[edge_index])
-        next_movement[edge_index] = next_seen
-    labels = np.empty(n_samples, dtype=np.int8)
-    labels[0] = moving_edges[0]
-    previous = int(labels[0])
-    for sample_index in range(1, n_samples):
-        incoming = int(edge_direction[sample_index - 1])
-        if incoming:
-            labels[sample_index] = incoming
-            previous = incoming
-            continue
-
-        # A duplicate at a turn belongs to the outgoing branch; an ordinary
-        # duplicate on a monotonic sweep stays with that same direction.
-        outgoing = int(next_movement[sample_index]) or previous
-        labels[sample_index] = outgoing if outgoing != previous else previous
-        previous = int(labels[sample_index])
-
-    boundaries = np.flatnonzero(labels[1:] != labels[:-1]) + 1
-    starts = np.concatenate(([0], boundaries))
-    stops = np.concatenate((boundaries, [n_samples]))
-    branches = tuple(
-        slice(int(start), int(stop)) for start, stop in zip(starts, stops)
-    )
-    return branches, labels, reversal_count
 
 
 def _direction_name(direction: int) -> str:

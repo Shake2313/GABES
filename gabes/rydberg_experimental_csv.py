@@ -20,7 +20,7 @@ from typing import Sequence
 import numpy as np
 
 from ._arrays import readonly_float_array as _readonly
-from ._csv_numeric import decode_csv_text, sort_and_median_duplicates
+from ._csv_numeric import decode_csv_text, sort_and_median_duplicates, sweep_structure
 
 
 MAX_RYDBERG_CSV_BYTES = 25 * 1024 * 1024
@@ -30,6 +30,16 @@ MIN_TRACE_POINTS = 3
 
 class RydbergCSVError(ValueError):
     """Raised when a Rydberg experimental trace cannot be imported safely."""
+
+
+@dataclass(frozen=True)
+class SweepAcquisition:
+    """Counts for finite source samples, in acquisition order before median merge."""
+
+    reversal_count: int
+    forward_sample_count: int
+    reverse_sample_count: int
+    stationary_sample_count: int
 
 
 @dataclass(frozen=True)
@@ -50,6 +60,7 @@ class TraceProvenance:
     nonfinite_rows: int
     duplicate_rows_merged: int
     assumptions: tuple[str, ...]
+    sweep_acquisition: SweepAcquisition | None = None
 
 
 @dataclass(frozen=True)
@@ -199,6 +210,7 @@ def _parse_columns(
     y_aliases: Sequence[str],
     x_column: int | str | None,
     y_column: int | str | None,
+    is_parameter_sweep: bool = False,
 ) -> _ParsedColumns:
     data, name = _read_source(source, source_name)
     text, encoding = decode_csv_text(data, RydbergCSVError)
@@ -312,6 +324,15 @@ def _parse_columns(
     y = np.asarray(y_values, dtype=float)
     if x.size == 0:
         raise RydbergCSVError("CSV contains no finite numeric data in selected columns.")
+    acquisition = None
+    if is_parameter_sweep:
+        _, directions, reversals = sweep_structure(x)
+        acquisition = SweepAcquisition(
+            reversal_count=reversals,
+            forward_sample_count=int(np.count_nonzero(directions > 0)),
+            reverse_sample_count=int(np.count_nonzero(directions < 0)),
+            stationary_sample_count=int(np.count_nonzero(directions == 0)),
+        )
     unique_x, merged_y = sort_and_median_duplicates(x, y)
     duplicates = int(x.size - unique_x.size)
     if unique_x.size < MIN_TRACE_POINTS:
@@ -333,6 +354,12 @@ def _parse_columns(
     assumptions = []
     if header is None:
         assumptions.append("No header recognized; selected columns by index.")
+    if acquisition is not None and acquisition.reversal_count:
+        assumptions.append(
+            "Acquisition reversals were detected. The returned trace is sorted by x; "
+            "duplicate x values are median-merged across directions. Hysteresis "
+            "cannot be recovered from this trace; use the original CSV for branch analysis."
+        )
     provenance = TraceProvenance(
         source_name=name,
         sha256=hashlib.sha256(data).hexdigest(),
@@ -348,6 +375,7 @@ def _parse_columns(
         nonfinite_rows=int(nonfinite),
         duplicate_rows_merged=duplicates,
         assumptions=tuple(assumptions),
+        sweep_acquisition=acquisition,
     )
     return _ParsedColumns(
         x=_readonly(unique_x),
@@ -437,6 +465,7 @@ def load_eit_csv(
         y_aliases=("transmission", "eit signal", "photodiode", "voltage", "signal"),
         x_column=x_column,
         y_column=signal_column,
+        is_parameter_sweep=True,
     )
     unit = detuning_unit or _unit_from_label(
         parsed.x_label, ("GHz", "MHz", "kHz", "Hz")
@@ -475,6 +504,7 @@ def load_rf_sweep_csv(
         y_aliases=("response", "beat", "amplitude", "voltage", "signal", "splitting"),
         x_column=drive_column,
         y_column=response_column,
+        is_parameter_sweep=True,
     )
     quantity = str(drive_quantity).strip().lower().replace(" ", "_")
     provenance = parsed.provenance
@@ -703,6 +733,7 @@ __all__ = [
     "RFSweepTrace",
     "RydbergCSVError",
     "TraceProvenance",
+    "SweepAcquisition",
     "load_eit_csv",
     "load_psd_csv",
     "load_rf_sweep_csv",

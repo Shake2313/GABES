@@ -5,6 +5,7 @@ import pytest
 
 from gabes.rydberg_experimental_csv import (
     RydbergCSVError,
+    SweepAcquisition,
     load_eit_csv,
     load_psd_csv,
     load_rf_sweep_csv,
@@ -29,9 +30,32 @@ def test_eit_loader_finds_header_merges_duplicates_and_records_provenance():
     assert trace.provenance.source_name == "heating_40C.csv"
     assert trace.provenance.sha256 == hashlib.sha256(payload).hexdigest()
     assert trace.provenance.duplicate_rows_merged == 1
+    assert trace.provenance.sweep_acquisition == SweepAcquisition(0, 0, 4, 0)
     assert trace.provenance.nonfinite_rows == 1
     assert trace.provenance.ignored_rows >= 4  # metadata, header, and bad row
     assert not trace.detuning_mhz.flags.writeable
+
+
+@pytest.mark.parametrize("load_trace", [load_eit_csv, load_rf_sweep_csv])
+def test_parameter_sweep_records_reversal_and_hysteresis_loss(load_trace):
+    payload = b"-1,1\n0,2\n1,3\n1,4\n0,7\n-1,9\n"
+    trace = load_trace(payload)
+    result = (trace.detuning_mhz, trace.signal) if load_trace is load_eit_csv else (
+        trace.drive, trace.response)
+    np.testing.assert_array_equal(result[0], [-1, 0, 1])
+    np.testing.assert_array_equal(result[1], [5, 4.5, 3.5])
+    assert trace.provenance.sweep_acquisition == SweepAcquisition(1, 3, 3, 0)
+    assert trace.provenance.sha256 == hashlib.sha256(payload).hexdigest()
+    assert any("Hysteresis" in note for note in trace.provenance.assumptions)
+
+
+def test_unordered_psd_uses_frequency_sort_without_sweep_diagnostics():
+    trace = load_psd_csv(b"Frequency [Hz],Noise ASD [nV/sqrt(Hz)]\n1,2\n3,4\n2,3\n1,6\n")
+    np.testing.assert_array_equal(trace.frequency_hz, [1, 2, 3])
+    np.testing.assert_allclose(trace.asd, [4e-9, 3e-9, 4e-9])
+    assert trace.provenance.duplicate_rows_merged == 1
+    assert trace.provenance.sweep_acquisition is None
+    assert not any("Hysteresis" in note for note in trace.provenance.assumptions)
 
 
 def test_no_header_unit_assumption_is_explicit():
