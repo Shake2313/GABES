@@ -683,7 +683,7 @@
       ],
       "priority": "P1",
       "effort": "large",
-      "status": "ready",
+      "status": "in_progress",
       "user_decision_2026_11_13": "User decision 2026-11-13: for collisional broadening and shift coefficients, take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning. Pressure shift enters as an opt-in reference mode first; switching a default is a separate decision.",
       "acceptance_criteria": [
         "Each collisional coefficient type used by the listed OD/SAS, Magneto, and Lambda paths has the physically required gas/species/line keys and validity domain, plus source, units, sign, and uncertainty.",
@@ -712,7 +712,8 @@
           "docs/daily_report/reconciliation_2026-10-19/schemes_1_2.json#collision-contract",
           "docs/daily_report/reconciliation_2026-10-19/schemes_3_4.json#shared-physical-extensions"
         ]
-      }
+      },
+      "implementation_2026_11_13": "⟦AI⟧ 3b6f070 removed the unsupported Rb beta from Cs. Primary measurements in Jabbour et al. Table 2, combined with inter-study spread, give inferred 22.97%/21.79% uncertainty for Cs D1/D2, exceeding 20%. At 40 C omitted width is 0.011973 MHz; max transmission changes 4.02e-4/1.30e-4. At 200 C omitted width 124.01 MHz. All 450 Rb leaves and FWM baseline unchanged. Other coefficients and opt-in pressure shift remain Wave 2. Source https://doi.org/10.1016/0022-4073(95)00115-2."
     },
     {
       "id": "species-line-rabi-and-saturation-provenance",
@@ -737,7 +738,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "user_decision_2026_11_13": "User decision 2026-11-13: convert OD/SAS pump power with the line-specific Steck effective far-detuned π-polarized saturation intensity for each isotope and line (the convention of the current 4.484 mW/cm²); the probe keeps the closed two-level πhcΓ/(3λ³). Rb D1 stays nearly unchanged; D2 and Cs move. ⟦AI⟧ The code does not state the convention of 4.484 mW/cm²; confirm it against the Steck tables before landing and report back instead of choosing if it differs. Cite each value; own value commit.",
       "consolidation_2026_11_05": "⟦AI⟧ The conversion now has one implementation (beam.peak_intensity, beam.two_level_rabi; item beam-rabi-conversion-consolidation). This item's value step is the I_sat argument: species.pump_rabi_from_power still passes the Rb-85 D1 constants.I_SAT for every species and line, while the OD/SAS probe saturation already uses the line's closed two-level value probe_saturation.closed_two_level_saturation_intensity. SAS results move, so it lands after the in-flight gabes/schemes/sas.py work.",
       "acceptance_criteria": [
@@ -756,7 +757,8 @@
         "evidence": [
           "docs/daily_report/reconciliation_2026-10-19/schemes_1_2.json#pump-rabi-provenance"
         ]
-      }
+      },
+      "implementation_2026_11_13": "⟦AI⟧ OD/SAS uses Steck v2.3.4 Table 7 effective far-detuned pi pump I_sat in mW/cm^2: Rb85/Rb87 D1 4.4876(43), D2 2.50399(73), Cs D1 2.5055(65), D2 1.6573(42). The inherited 4.484 lies within the stated Rb D1 uncertainty. Probe still uses the closed-two-level scale. 132 cases captured. Default max pointwise absorption changes at most 0.0071 m^-1 for named Rb D1, 12.52 for Rb D2, 17.17 for Cs D1 and 49.69 for Cs D2. All pump-off sampled absorption arrays and recaptured FWM baseline bit-identical. Both AutoOD anchors tested. Source https://steck.us/alkalidata/."
     },
     {
       "id": "sas-subdoppler-readout-trust",
@@ -5491,7 +5493,7 @@
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
       "effort": "medium",
-      "status": "in_progress",
+      "status": "done",
       "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: adopt the Steck species record everywhere (Γ/2π 5.750 MHz, isotope mass 84.911789738 u, excited splitting 3·A(5P1/2) = 361.581 MHz, ground g_J 2.00233113); give the Generic and single-line paths the CRC vapor pressure with an explicit isotope composition (natural abundance or pure) in place of the Steck liquid fit × abundance; source a Cs self-broadening coefficient instead of reusing the Rb β. ⟦AI⟧ One commit per value, each with tests/baseline_focused.npz recaptured and the FWM/Λ/OD/SAS shifts quantified. Γ and mass move FWM, so they start after the in-flight gabes/schemes/fwm.py work lands. Expected sizes: Γ +0.07 %, mass +4.7e-6, Generic and single-line density ×1.22–1.45 for a natural cell over 313–393 K.",
       "problem": "⟦AI⟧ The 2026-10-30 atomic-data single-source refactor (angular.py leaf; hyperfine as the 85Rb D1 view of species) kept every value bit-identical, so these value splits remain: constants.GAMMA_2PI 5.746 MHz (FWM/Λ/OD and the hyperfine view) vs species RB85/RB87 gamma_D1 5.750 MHz (SAS/magneto); MASS_85RB 1.4100e-25 kg vs 84.911789738 u (+4.7e-6); NU_EXCITED_HF_D1 361.58 MHz vs 3·A(5P1/2) = 361.581 MHz; species.rb85_steck_density (Steck liquid fit × natural abundance; Λ/Rydberg Generic medium, OD single-line, SAS Generic) is 0.50–0.59 × number_density(RB85) (CRC, every other path) over 313–393 K; species.self_broadening applies the Rb β to Cs; species.GJ_S12_LEGACY 2.002331070 (magneto ground g_J) vs the Steck gJ_S 2.00233113 (−3.0e-8).",
@@ -5514,7 +5516,8 @@
       "mass_2026_11_13": "⟦AI⟧ 85Rb mass unified at 84.911789738 u, -4.652e-6 relative. Default FWM max absolute gain shifts 0.00329/0.00332 and NF 7.40e-5 dB. OD alpha changed by at most 7.05e-4 m^-1; default SAS and Lambda transmission identical. FWM compatibility baseline recaptured. Focused tests: 170 passed, including both AutoOD anchors.",
       "excited_splitting_2026_11_13": "⟦AI⟧ 85Rb D1 excited splitting follows the shared Steck A, 361.580 to 361.581 MHz (+2.766e-6). Default FWM max absolute gain shifts 0.00411/0.00415, NF 1.80e-5 dB. OD alpha shifts by up to 1.70e-4 m^-1; default SAS and Lambda transmission identical. FWM compatibility baseline recaptured. Focused tests: 142 passed.",
       "ground_gj_2026_11_13": "⟦AI⟧ Main 3d5b8b7 uses each isotope Steck ground g_J (Rb 2.00233113, Cs retains its isotope-specific record). Rb87 F=2 g_F 0.49983641145 to 0.49983642645; 131 cases and 291641 union snapshot leaves. Default public transmission, rotation and rotation slope shifts normalized to peak were 3.33e-11, 1.96e-8 and 3.81e-8; reference default chi 3.83e-9 relative, T(0) -7.29e-10 absolute. Default displayed PSN remains 8.78 fT/sqrt(Hz). At +50 uT bias an availability status changes; its resulting SNR is 1.27e-11. FWM baseline recapture byte-identical. Sealed fixtures use their original bytes; active checks supply the Steck input explicitly.",
-      "density_2026_11_13": "⟦AI⟧ Generic Lambda and SAS and the OD single-line path now use natural 85Rb share 0.7217 of total CRC Rb pressure. Ratio to old density 1.433 at 313.15 K and 1.221 at 393.15 K. Sample default Generic OD peak decadic OD 1.593 to 2.213, Generic Lambda peak transmission 0.475 to 0.356, Generic SAS max absorption 146.80 to 210.34 m^-1. Current Rydberg and FWM already use their own pure-isotope CRC conventions; FWM baseline recapture byte-identical. 129 focused tests passed, including both AutoOD anchors."
+      "density_2026_11_13": "⟦AI⟧ Generic Lambda and SAS and the OD single-line path now use natural 85Rb share 0.7217 of total CRC Rb pressure. Ratio to old density 1.433 at 313.15 K and 1.221 at 393.15 K. Sample default Generic OD peak decadic OD 1.593 to 2.213, Generic Lambda peak transmission 0.475 to 0.356, Generic SAS max absorption 146.80 to 210.34 m^-1. Current Rydberg and FWM already use their own pure-isotope CRC conventions; FWM baseline recapture byte-identical. 129 focused tests passed, including both AutoOD anchors.",
+      "cs_broadening_2026_11_13": "⟦AI⟧ 3b6f070 marks Cs self-broadening unsupported and omits the term for both lines. Source spread plus measurement uncertainty exceeds 20 percent for both; see collisional-coefficient-provenance-and-pressure-shift. The 52-case capture and 109 focused on-main checks passed. This closes the remaining atomic-data legacy value actions."
     },
     {
       "id": "cell-temperature-density-convention",
