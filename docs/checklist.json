@@ -3447,7 +3447,7 @@
       ],
       "priority": "P2",
       "effort": "large",
-      "status": "ready",
+      "status": "done",
       "depends_on": [
         "experimental-csv-calibration-and-sweep-direction"
       ],
@@ -3500,7 +3500,8 @@
         "docs/daily_report/2026-10-06_scheme-2_lambda-coherence.md",
         "docs/daily_report/2026-10-11_scheme-2_lambda-coherence.md",
         "docs/daily_report/2026-10-16_scheme-2_lambda-coherence.md"
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ 529bc22 and a12ec61 fit one absolutely calibrated raw sweep on the original retained frequency samples. Pump-off uniform weak-probe OD with bounded cold-spot temperature, length, extra FWHM and frequency offset; fixed line strength. Explicit UI action, distinct global/local stages, local uncertainty and separate optional disjoint holdout. Synthetic noisy T/width/offset within one estimated standard error, holdout RMS 0.001127; freeing cell length flags temperature/length correlation -0.9997. Main 94 passed, 1 optional AutoOD skip. Pumped SAS is excluded from the bounded fit scope."
     },
     {
       "id": "od-sas-isotope-fraction-and-element-coverage",
@@ -5368,42 +5369,6 @@
       "depends_on": [],
       "problem": "⟦AI⟧ _biphoton_observables still calls phase_mismatch_vector in181-angle Python loop; phase_mismatch_vector_grid exists.; Report5x–12x ratios apply to a sub-millisecond trace; total solve/runtime gain is small and unmeasured.",
       "implementation_2026_11_13": "⟦AI⟧ ffe8683 batches angle component construction while preserving scalar hypot rounding. 16086 phase-mismatch/weight points and 8055 full readout/figure snapshot entries bit-identical over three topologies and angle endpoints. Focused tests: 18 passed."
-    },
-    {
-      "id": "fwm-diagnostic-report-smoke",
-      "area": "docs/fwm_thermal_excess_noise_report/ + tests",
-      "title": "⟦AI⟧ 조건부 excess-noise 보고서의 경량 schema·재생성 검사",
-      "origin": "ai_review_of_automated_feedback",
-      "priority": "P2",
-      "effort": "small",
-      "status": "ready",
-      "source_reports": [
-        "docs/daily_report/2026-08-29_scheme-5_fwm.md"
-      ],
-      "source_documents": [
-        "docs/daily_report/reconciliation_2026-10-19/README.md"
-      ],
-      "acceptance_criteria": [
-        "⟦AI⟧ Small deterministic/schema check preserves claim gates, finite values, hashes/input provenance and model version; avoid full expensive regeneration in routine suite."
-      ],
-      "last_reviewed_at": "2026-10-19",
-      "daily_review_2026_10_19": {
-        "origin": "ai_recheck",
-        "status": "triaged",
-        "findings": [
-          "FWM-30"
-        ],
-        "evidence": [
-          "docs/daily_report/reconciliation_2026-10-19/scheme_5.json#FWM-30"
-        ]
-      },
-      "evidence": [
-        "⟦AI⟧ docs/fwm_thermal_excess_noise_report/scripts/generate_analysis.py and data/analysis_summary.json exist; rg in tests/tools found no named fwm_thermal_excess report check.",
-        "⟦AI⟧ Extensive quantum thermal-campaign tests are a separate artifact and do not automatically cover this historical phenomenological report."
-      ],
-      "depends_on": [],
-      "problem": "⟦AI⟧ docs/fwm_thermal_excess_noise_report/scripts/generate_analysis.py and data/analysis_summary.json exist; rg in tests/tools found no named fwm_thermal_excess report check.; Extensive quantum thermal-campaign tests are a separate artifact and do not automatically cover this historical phenomenological report.",
-      "implementation_2026_11_13": "⟦AI⟧ Proposed transfer to the archive registry because the report and its evidence are archive-owned. All 16 report files match the pre-split tag byte-for-byte and the diagnostic claim remains false. Of 45 recorded source hashes, 30 match archived Git bytes or their CRLF form; 15 require provenance reconciliation before a replay claim. Transfer is pending; no main test is needed for this archive report."
     },
     {
       "id": "fwm-propagation-cache-partition",
