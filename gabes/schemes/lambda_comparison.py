@@ -179,6 +179,14 @@ def coupling_comparison(scheme, params, *, resolve_raw, current_raw=None, curren
             margin = max(margin, max((abs(m["x"]-c["parameter"]["value"]) for c in curves
                                      for m in c["markers"]), default=0.))
         display["window"] = [min(detunings)-margin, max(detunings)+margin]
+    joint_active = any(curve.get("joint_doppler", {}).get("status") in
+                       ("converged", "not_converged") for curve in curves)
+    model_note = (
+        "Calculated three-level Λ response using joint Maxwell averaging for nonparallel beams. "
+        "The selected regime identifies the preset."
+        if joint_active else
+        "Calculated scalar three-level Λ response; a selected regime is a preset, not an EIT/ATS classifier."
+    )
     result = dict(schema="gabes-spectral-comparison-v1", scheme=scheme.name, mode=mode, axis=axis,
                   title=mode.upper()+" · "+("Detuning map" if detuning_map else spec.label+" comparison"),
                   series=curves, panels=panels, summary=summary, display=display,
@@ -190,10 +198,10 @@ def coupling_comparison(scheme, params, *, resolve_raw, current_raw=None, curren
                               interpolation="none", default_parameter=float(params[key]),
                               contrast_definition="T at two-photon resonance minus the minimum T of the complete native scan",
                               width_definition="Existing sample-bracketed half-height width; clipped widths withheld"),
-                  notes=["Calculated scalar three-level Λ response; a selected regime is a preset, not an EIT/ATS classifier.",
+                  notes=[model_note,
                          "Each condition retains its own 601-point frequency grid. Zoom does not improve native resolution.",
                          "Contrast and FWHM use the minimum transmission of that condition's complete scan as background."])
-    if any("joint_doppler" in curve for curve in curves):
+    if joint_active:
         result["notes"].append("Joint Maxwell curves that reach the quadrature limit are provisional.")
     if key == "coupling_power_mw":
         # Supplied by the scheme's existing beam conversion, not a new UI physics model.

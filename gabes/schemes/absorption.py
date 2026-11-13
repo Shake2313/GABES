@@ -854,8 +854,9 @@ class LambdaScheme(Scheme):
                                "resolvable central contrast exists in the displayed spectrum.")),
                     dict(label="AT splitting", value="—",
                          numeric_value=None, unit="MHz",
-                         help="Withheld because the spectrum does not contain a "
-                              "resolved Autler-Townes doublet."),
+                         help=("Joint Maxwell refinement exceeded its bound."
+                               if joint_failed else "Withheld because the spectrum "
+                               "does not contain a resolved Autler-Townes doublet.")),
                     dict(label="Expected ≈ Ω_c", value=f"{expected:.1f} MHz",
                          numeric_value=float(expected), unit="MHz",
                          help="Coupling Rabi frequency Ω_c/2π."),
