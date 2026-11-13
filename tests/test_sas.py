@@ -62,6 +62,28 @@ def test_pump_off_skips_pump_population_solve():
     assert np.all(np.isfinite(raw["alpha_unit"]))
 
 
+@pytest.mark.parametrize("line", ["D1", "D2"])
+@pytest.mark.parametrize(("pump", "probe", "pressure"), [(0.0, 0.0, 0.0), (2.0, 20.0, 10.0)])
+def test_cesium_self_broadening_is_omitted_and_reported(line, pump, probe, pressure):
+    params = _params(species=CS_KEY, line=line, temp_c=120.0, scan_points=401,
+                     pump_power_mw=pump, probe_power_uw=probe, ne_pressure_torr=pressure)
+    raw = SAS.compute(params)
+    view = SAS.headless_observables(raw, params)
+    natural_gamma = species.CS133.line(line)[2] * species.MHZ
+    assert raw["gamma_eff_max"] == natural_gamma + constants.neon_buffer_broadening(pressure)
+    record = raw["self_broadening"]
+    assert record["status"] == "unsupported"
+    assert record["isotope"] == "Cs133"
+    assert record["line"] == line
+    assert record["coefficient_rad_s_m3"] is None
+    assert record["applied_fwhm_rad_s"] == 0.0
+    assert view["optical_readout"]["self_broadening"] == record
+    status = next(metric for metric in view["metrics"] if metric["label"] == "Self-broadening")
+    assert status["kind"] == "status"
+    assert status["value"] == f"Unsupported for Cs {line}"
+    assert np.isfinite(raw["alpha_unit"]).all()
+
+
 def test_generic_pump_off_skips_pump_population_solve():
     params = _params(
         species=GENERIC, transitions="two lines", pump_power_mw=0.0)

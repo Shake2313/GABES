@@ -34,6 +34,15 @@ def test_hyperfine_is_a_bitwise_view_of_species():
         constants.GAMMA + species.self_broadening(species.RB85, N))
 
 
+def test_self_broadening_omits_unsupported_cesium_coefficient():
+    densities = np.array([0., 1e15, 2e19, 1e22])
+    np.testing.assert_array_equal(species.self_broadening(species.CS133, densities),
+                                  np.zeros_like(densities))
+    assert species.self_broadening(species.CS133, 1e22) == 0.0
+    np.testing.assert_array_equal(species.self_broadening(species.RB85, densities),
+                                  species.BETA_SELF * densities)
+
+
 def test_data_layer_imports_without_level_schemes():
     probe = ("import sys, gabes.hyperfine; "
              "print(sorted(m for m in sys.modules if m.startswith('gabes')))")

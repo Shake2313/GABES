@@ -176,11 +176,8 @@ def _probe_scope_text(raw, params):
             "mF state and polarization dependence are not resolved.")
         if raw["line"] == "D1":
             detail += " D1 also has no closed hyperfine cycling transition."
-        if raw["species"] == "¹³³Cs":
-            detail += (
-                " The homogeneous width also inherits the existing Rb "
-                "self-broadening coefficient, so Cs finite-power results "
-                "are especially provisional.")
+        if raw.get("self_broadening"):
+            detail += " The Cs–Cs self-broadening contribution is omitted."
         if pump_on:
             detail += (
                 " The pump-prepared populations are frozen before this "
@@ -228,7 +225,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "8"            # configurable Rb composition + stable centroid
+    cache_version = "9"            # explicit unsupported Cs self-broadening
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -596,7 +593,7 @@ class SASScheme(Scheme):
         # single k reported here only turns that susceptibility into a phase, so
         # the reference isotope's value is enough (isotope shifts are ~1e-7 of k).
         k_ref = float(2 * np.pi * nu_ref / constants.C_LIGHT)
-        return dict(mode="species", scan=scan, alpha_unit=alpha,
+        result = dict(mode="species", scan=scan, alpha_unit=alpha,
                     chi_real_unit=chi_real, k_vec=k_ref,
                     dopp_fwhm=dopp_fwhm, buffer_gamma=buffer_gamma,
                     gamma_eff_max=gamma_max, markers=markers,
@@ -630,6 +627,18 @@ class SASScheme(Scheme):
                     paraffin_coated=paraffin_coated,
                     paraffin_t1_s=(PARAFFIN_REFERENCE_T1_S
                                    if paraffin_coated else None))
+        if iso_ref.name == species.CS133.name:
+            result["self_broadening"] = {
+                "status": "unsupported",
+                "isotope": iso_ref.name,
+                "line": line,
+                "coefficient_rad_s_m3": None,
+                "applied_fwhm_rad_s": 0.0,
+                "source_doi": "10.1016/0022-4073(95)00115-2",
+                "source_scope": "Jabbour et al. (1995), Table 2 and quoted uncertainties",
+                "reason": "The uncertainty including inter-study spread exceeds 20%.",
+            }
+        return result
 
     def _component_response(self, b, scan, T):
         """(α, Re χ, finite-probe transition profiles) for one isotope.
@@ -909,6 +918,16 @@ class SASScheme(Scheme):
         metrics.extend(_dispersion_metrics(chi_real, raw.get("k_vec"), L))
         metrics.extend(_probe_saturation_metrics(raw, params, L))
         metrics.extend(_temperature_metrics(raw))
+        self_broadening = raw.get("self_broadening")
+        if self_broadening:
+            optical_readout["self_broadening"] = self_broadening
+            metrics.append(dict(
+                label="Self-broadening", value=f"Unsupported for Cs {raw['line']}",
+                kind="status",
+                help="The Cs–Cs width contribution is omitted. The natural width "
+                     "and configured buffer-gas broadening still apply. "
+                     + self_broadening["reason"],
+            ))
         if raw.get("rb_composition") == RB_COMPOSITION_CUSTOM:
             fraction = float(raw["rb85_fraction"])
             metrics.append(dict(

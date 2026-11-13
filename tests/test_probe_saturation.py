@@ -337,7 +337,8 @@ def test_generalized_cs_probe_readout_declares_provenance_limits():
     assert metrics["Probe model scope"] == "Generalized estimate"
     assert "generalized closed-two-level estimate" in model_text
     assert "no matching finite-power reference" in model_text
-    assert "Rb self-broadening coefficient" in model_text
+    assert "Cs–Cs self-broadening contribution is omitted" in model_text
+    assert metrics["Self-broadening"] == "Unsupported for Cs D1"
     assert "D1 also has no closed hyperfine cycling transition" in model_text
 
 
