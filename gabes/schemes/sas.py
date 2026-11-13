@@ -492,7 +492,10 @@ class SASScheme(Scheme):
         return _finish_quantitative_export(evidence)
 
     # ---- realistic multilevel OD/SAS model ----
-    def _compute_species(self, params):
+    def _compute_species(self, params, *, scan_rad_s=None, extra_homogeneous_fwhm_hz=0.0):
+        extra_fwhm = float(extra_homogeneous_fwhm_hz)
+        if not np.isfinite(extra_fwhm) or extra_fwhm < 0.0:
+            raise ValueError("Extra homogeneous FWHM must be finite and nonnegative.")
         line = params["line"]
         comps, iso_ref, composition, rb85_fraction, composition_matched = (
             _isotope_composition(params))
@@ -529,6 +532,8 @@ class SASScheme(Scheme):
                 species.number_density(iso, T_density), T_density, T_doppler) * weight
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
             gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
+            if extra_fwhm:
+                gamma_eff += 2.0 * np.pi * extra_fwhm
             saturation_intensity = (
                 probe_saturation.closed_two_level_saturation_intensity(
                     man.nu0, man.gamma))
@@ -546,8 +551,17 @@ class SASScheme(Scheme):
         omega_all = np.concatenate(omega_all)
 
         margin = max(3.5 * dopp_fwhm, 6.0 * gamma_scan_max)
-        scan = np.linspace(omega_all.min() - margin, omega_all.max() + margin,
-                           int(params["scan_points"]))
+        if scan_rad_s is None:
+            scan = np.linspace(omega_all.min() - margin, omega_all.max() + margin,
+                               int(params["scan_points"]))
+        else:
+            scan = np.asarray(scan_rad_s, dtype=float)
+            if scan.ndim != 1 or not scan.size or not np.isfinite(scan).all():
+                raise ValueError("The frequency axis must be a nonempty, finite 1-D array.")
+            if probe_power > 0.0:
+                steps = np.diff(scan)
+                if not steps.size or steps[0] <= 0.0 or not np.allclose(steps, steps[0], rtol=1e-9, atol=0.0):
+                    raise ValueError("Finite-probe propagation requires an increasing, uniform frequency axis.")
 
         alpha = np.zeros(scan.size)
         chi_real = np.zeros(scan.size)
