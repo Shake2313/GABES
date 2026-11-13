@@ -95,6 +95,36 @@
        - 아카이브 쪽 추적 파일 삭제, ignore 파일 이동.
     9. `coarse.jsonl`을 Release에 올리고 `external.json`에 기록.
     10. Codex 자동화와 GC 세션을 아카이브 폴더로 연결. README·User Guide의 앱 주소를 고쳐 main에 push.
+- 2026-11-13: **S6 완료: main 검증** (Codex 레인 1–5와 Claude 몫. Codex 보고는 사용자가 전달).
+  - ⟦AI⟧ 전체 pytest(Codex, 6eedf20을 고정한 worktree): 2,309 통과 / 1 skip / 0 실패, 510 s.
+    - skip은 로컬 `archive/AutoOD/ReferenceOD.csv`가 있어야 도는 검사.
+    - 공유 작업본의 수집 수 2,388 = 고정본 2,310 + git이 무시하는 로컬 `references/AutoOD-Rb` 사본의 78. 이 78개는 수집만 확인함.
+    - 그 뒤 커밋 f3f91f6·b4d6edb·ac3082a·42517b9는 문서, 스킬 스크립트, 테스트의 직접 실행 블록, 링크만 바꿈. 집중 검사로 덮음(AGENTS의 통과 결과 재사용 규칙).
+  - ⟦AI⟧ 스캐너 전후 실행(Codex): `theory_max`·`v6_tolerance`를 04a21ac와 6eedf20에서 기본값으로 실행.
+    - `theory_max` 1,464점(옛 185.6 s / 새 192.0 s), `v6_tolerance` 중심점과 69점(41.8 s / 12.4 s).
+    - NPZ·PNG 바이트 동일. snapshot 비교 11·38 항목 일치. 새 `run.json`은 complete이고 출력 해시 4개 확인.
+  - ⟦AI⟧ b4d6edb frontier 스킬 스캐너:
+    - 기본 출력이 `runs/`의 실행 폴더와 `run.json` 기록으로 바뀜.
+    - 이 스크립트는 2026-07-14 b72adab에서 `fwm.FIDELITY_HIGH`가 없어진 뒤 import 단계부터 실패하던 상태였음.
+    - Fine 모드는 `FIDELITY_BALANCED`+`PHASE_FINE`으로 연결. 엔진의 옛 라벨 이전 규칙(`_FIDELITY_LEGACY`: High→Balanced)과 같은 매핑.
+    - 2×2 Ultra 격자 전후 NPZ·PNG 바이트 동일(snapshot 28 항목). Fine 1점 실행 통과. 직접 실행, `test_regression` import, 아카이브 인용은 그대로.
+  - ⟦AI⟧ ac3082a R7 정리: 테스트 23개 모듈에서 테스트만 돌리던 `__main__` 블록 삭제(+0 −204).
+    - 수집 ID 452개가 전후 같음. 그 파일들 452/452 통과(66.7 s).
+    - baseline 생성기, Hanle 진단, 봉인된 Magneto 검증기 2개는 직접 실행 진입점을 유지함.
+  - ⟦AI⟧ 문서·경로(Codex): 추적 Markdown/HTML 62개 점검.
+    - main 상대 링크 318개: 315개는 그 자리에서, 템플릿 링크 3개는 설치 위치 기준으로 해결됨.
+    - 고정된 아카이브 URL 40개 모두 해결됨.
+    - 42517b9: readout 감사 요약에서 옮겨진 스타일시트 링크 1개를 고침.
+    - 남은 22개는 옛 출력물 인용(UI 리디자인 log 20, readout 감사 요약 2). 로컬 아카이브 작업본에는 있지만 분리 태그와 아카이브 HEAD 추적 파일에는 없음. 인용은 그대로 둠.
+  - ⟦AI⟧ User Guide 빌드: 이미지 11개를 인라인, 0.38 s. 결과가 커밋된 파일과 같음(CRLF 정규화 뒤).
+  - ⟦AI⟧ Claude 몫:
+    - 로컬 앱의 첫 화면(SAS), FWM(−8.22 dB, G_s ≈ 395), SABES 광학 테이블이 그려짐. 콘솔·서버 오류 0, 정적 안내서 HTTP 200.
+    - 메모리의 옛 경로 8줄 중 6줄을 새 경로로 고침. 역사 서술 2줄은 그대로 둠. Codex 설정에는 고칠 경로가 없었음.
+  - ⟦AI⟧ `.git/packed-refs.lock`(0 B, 11-12 22:51)이 Codex 작업 뒤에도 남아 있었음. git 프로세스가 없는 것을 확인하고 지움.
+  - 남은 일:
+    - main push. 사용자 결정이며, push하면 Streamlit 앱이 다시 배포됨.
+    - push 뒤 Codex가 아카이브 engine 고정 커밋을 f333a50에서 c67d884가 들어간 공개 커밋으로 올리고 GC 검사를 돌림: 측정 이득 기록, Stark/Zeeman 출처 영수증, GC foundation·atomic-noise·field-noise·readout 감사. 옛 affine replay 묶음은 `pre-split-2026-11-09`에서 돌림.
+    - checklist `variable-audit-paper-db-source`는 사용자 결정 대기.
 - 2026-11-12: **S5 4단계 완료: AGENTS 규칙과 `gabes_lab/README.md` → S5 종료** (사용자 "4단계 진행").
   - ⟦AI⟧ AGENTS.md에 `Development code (gabes_lab)` 절을 넣음.
     - 사용자 요청 한 줄(2026-11-09, 철칙 아님) 아래에 ⟦AI⟧ 규칙 bullet 3개(8줄).
@@ -480,7 +510,7 @@ R8 문구. 개정 방향은 사용자 승인, 문구는 ⟦AI⟧ 초안. `Preser
 | S3 | GitHub 이름 변경 → 아카이브 비공개. `git filter-repo`로 main 경로 추출 → 새 `GABES` push. Split Manifest(경로 목록, commit-map) 생성. Streamlit Cloud 재연결. README·User Guide URL 갱신. | 완료 2026-11-11 |
 | S4 | 아카이브: main 경로 제거, submodule `engine/`, R8 적용. 분리 태그에서 `tests/quantum`·GC 검증기 재실행. | 완료 2026-11-11 (d1a74d8, f9d1130: 아카이브 HEAD 1,373 통과 / 0 실패, 옛 배치 검사 8개는 분리 태그에서 재현) |
 | S5 | main 통합 (이전 P2–P5) | 완료 2026-11-12: 1단계 UI 파일럿, 2단계 `gabes_lab`·pytest 전용, 3단계 블록, 4단계 AGENTS 규칙·`gabes_lab/README.md` |
-| S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 진행 중: Codex 레인 1–5, 레인 6(아카이브 engine 고정)은 push 뒤 |
+| S6 | 검증: main full pytest, 앱 기동·SABES 렌더, User Guide 빌드, md 링크, 스킬·메모리 옛 경로 갱신 | 완료 2026-11-13 (6eedf20 전체 2,309 통과). push 뒤 아카이브 engine 고정 갱신과 GC 검사(Codex) |
 
 S5 세부:
 
