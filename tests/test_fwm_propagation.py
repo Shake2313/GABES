@@ -1,6 +1,7 @@
 """Physics-limit tests for seeded-FWM propagation and normalization."""
 
 import numpy as np
+import pytest
 from scipy.integrate import solve_ivp
 from scipy.linalg import expm
 
@@ -197,7 +198,8 @@ def test_unequal_mode_q_recovers_canonical_bogoliubov_map():
                                expected_power_gain, rtol=1e-15, atol=1e-15)
 
 
-def test_stored_literature_chi_matches_independent_option_a_golden():
+@pytest.mark.parametrize("historical", [False, True], ids=["current-SI", "historical"])
+def test_stored_literature_chi_matches_independent_option_a_golden(monkeypatch, historical):
     """Independent SI/expm anchor for sign, normalization, Q, and full T."""
     reduced = np.array([
         -2.825216423278075e-11 - 3.156193807767438e-13j,
@@ -205,6 +207,8 @@ def test_stored_literature_chi_matches_independent_option_a_golden():
         -4.6424201142453104e-11 + 1.6459703154104033e-13j,
         -1.132757317884393e-11 + 8.098427191674804e-14j,
     ])
+    if historical:
+        monkeypatch.setattr(constants, "HBAR", 1.054571817e-34)
     density = 2.149563741450344e19
     line_strength = 0.74 / 12.0
     k_probe = 7903541.441086388
@@ -243,14 +247,24 @@ def test_stored_literature_chi_matches_independent_option_a_golden():
     np.testing.assert_allclose(
         diagnostics["transfer_canonical"][0], T_canonical_literal,
         rtol=2e-13, atol=2e-13)
+    probe_literal = abs(T_canonical_literal[0, 0])**2
+    conjugate_flux_literal = abs(T_canonical_literal[1, 0])**2
+    expected = [probe_literal,
+                conjugate_flux_literal * omega_conj / omega_probe,
+                conjugate_flux_literal, probe_literal - conjugate_flux_literal]
+    if historical:
+        # Keep the original anchor under its original normalization.
+        np.testing.assert_allclose(
+            expected,
+            [1054.3059596473247, 1061.885343068735,
+             1061.8682017387723, -7.562242091447615],
+            rtol=2e-13, atol=2e-12)
     np.testing.assert_allclose(
         [diagnostics["probe_power_gain"][0],
          diagnostics["conjugate_power_gain"][0],
          diagnostics["conjugate_photon_flux_gain"][0],
          diagnostics["photon_flux_gap"][0]],
-        [1054.3059596473247, 1061.885343068735,
-         1061.8682017387723, -7.562242091447615],
-        rtol=2e-13, atol=2e-12)
+        expected, rtol=2e-13, atol=2e-12)
 
 
 def test_manley_rowe_cap_is_energy_bounded_and_not_a_linear_map():

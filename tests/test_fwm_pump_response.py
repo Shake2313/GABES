@@ -3,8 +3,15 @@
 import numpy as np
 import pytest
 
-from gabes import core
+from gabes import constants, core
 from gabes.schemes import fwm
+
+
+def _historical_atomic_data(monkeypatch):
+    """Restore the inputs of the stored pre-adoption response anchors."""
+    monkeypatch.setattr(constants, "GAMMA", 2.0 * np.pi * 5.746e6)
+    monkeypatch.setattr(constants, "MASS_85RB", 1.4100e-25)
+    monkeypatch.setattr(fwm, "OMEGA_EXCITED_HF", 2.0 * np.pi * 361.58e6)
 
 
 def _fixture():
@@ -15,7 +22,10 @@ def _fixture():
     return pump, atom, delta, deff
 
 
-def test_static_pump_state_matches_independent_svd_null_vector():
+@pytest.mark.parametrize("historical", [False, True], ids=["current", "historical"])
+def test_static_pump_state_matches_independent_svd_null_vector(monkeypatch, historical):
+    if historical:
+        _historical_atomic_data(monkeypatch)
     pump, atom, delta, deff = _fixture()
     reference = fwm.pump_only_weak_response_reference(
         pump, pump, delta, deff, atom=atom)
@@ -29,10 +39,11 @@ def test_static_pump_state_matches_independent_svd_null_vector():
     diagonal = np.arange(fwm.N_LEVELS) * (fwm.N_LEVELS + 1)
     null = null / np.sum(null[diagonal])
     np.testing.assert_allclose(rho.reshape(-1), null, rtol=2e-11, atol=2e-12)
-    np.testing.assert_allclose(
-        np.real(np.diag(rho)),
-        [0.11574137, 0.84317396, 0.01515365, 0.02593102],
-        rtol=4e-8, atol=4e-9)
+    if historical:
+        np.testing.assert_allclose(
+            np.real(np.diag(rho)),
+            [0.11574137, 0.84317396, 0.01515365, 0.02593102],
+            rtol=4e-8, atol=4e-9)
     assert reference.diagnostics["max_pump_normalized_residual"] < 1e-12
     assert reference.diagnostics["max_pump_trace_error"] < 1e-12
     assert reference.diagnostics["max_pump_hermiticity_error"] < 1e-12
@@ -108,7 +119,10 @@ def test_plus_branch_reference_fails_closed_until_frame_is_corrected():
             np.eye(fwm.N_LEVELS) / fwm.N_LEVELS, n_f=3, branch=+1)
 
 
-def test_weak_nambu_response_golden_residual_and_frequency_separation():
+@pytest.mark.parametrize("historical", [False, True], ids=["current", "historical"])
+def test_weak_nambu_response_golden_residual_and_frequency_separation(monkeypatch, historical):
+    if historical:
+        _historical_atomic_data(monkeypatch)
     pump, atom, delta, deff = _fixture()
     analysis = 2.0 * np.pi * np.array([0.0, 0.1e6, 4.0e6])
     reference = fwm.pump_only_weak_response_reference(
@@ -117,14 +131,15 @@ def test_weak_nambu_response_golden_residual_and_frequency_separation():
     expected_relative = -fwm.OMEGA_HF + delta[None, :] + analysis[:, None]
     np.testing.assert_allclose(reference.relative_frequency_rad_s,
                                expected_relative, rtol=0.0, atol=0.0)
-    np.testing.assert_allclose(
-        [reference.chi_ss[0, 0, 0], reference.chi_cs[0, 0, 0],
-         reference.chi_sc[0, 0, 0], reference.chi_cc[0, 0, 0]],
-        [-1.9081848375005e-11 - 2.4043614344959e-13j,
-         -4.1419996461365e-11 + 1.3207594099432e-13j,
-         -4.1419991825958e-11 - 8.1815140174397e-14j,
-         -8.9363859101550e-12 + 7.0338967135415e-14j],
-        rtol=2e-12, atol=2e-23)
+    if historical:
+        np.testing.assert_allclose(
+            [reference.chi_ss[0, 0, 0], reference.chi_cs[0, 0, 0],
+             reference.chi_sc[0, 0, 0], reference.chi_cc[0, 0, 0]],
+            [-1.9081848375005e-11 - 2.4043614344959e-13j,
+             -4.1419996461365e-11 + 1.3207594099432e-13j,
+             -4.1419991825958e-11 - 8.1815140174397e-14j,
+             -8.9363859101550e-12 + 7.0338967135415e-14j],
+            rtol=2e-12, atol=2e-23)
     assert reference.diagnostics["max_response_normalized_residual"] < 1e-12
     assert reference.diagnostics["max_response_trace_error"] < 1e-12
     assert reference.provenance["analysis_frequency"].startswith("independent")
