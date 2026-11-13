@@ -147,6 +147,23 @@ class DetectorNoiseBudget:
     total_noise_current_asd_a_per_sqrt_hz: float
 
 
+def balanced_current_noise_asd(i_sig, i_ref, weight, rin, corr, electronic_asd,
+                               dark_sig=0.0, dark_ref=0.0):
+    """One-sided shot, RIN, technical and total current ASDs, elementwise."""
+    # One-sided Schottky current-noise PSD S_i = 2 e I for independent arms.
+    shot_variance_density = shot_noise_current_psd(
+        i_sig + dark_sig + weight * weight * (i_ref + dark_ref))
+    shot_asd = np.sqrt(np.maximum(shot_variance_density, 0.0))
+
+    rin_variance_density = rin * rin * (
+        i_sig * i_sig + weight * weight * i_ref * i_ref
+        - 2.0 * weight * corr * i_sig * i_ref)
+    rin_asd = np.sqrt(np.maximum(rin_variance_density, 0.0))
+    technical_asd = np.hypot(rin_asd, electronic_asd)
+    total_asd = np.hypot(shot_asd, technical_asd)
+    return shot_asd, rin_asd, technical_asd, total_asd
+
+
 def balanced_detector_noise(detector):
     """Calculate PSN, technical, and total one-sided current-noise ASDs."""
     if not isinstance(detector, BalancedDetector):
@@ -159,21 +176,10 @@ def balanced_detector_noise(detector):
     dark_ref = 0.0 if ref is None else float(ref.dark_current_a)
     weight = float(detector.reference_weight)
 
-    # One-sided Schottky current-noise PSD S_i = 2 e I for independent arms.
-    shot_variance_density = shot_noise_current_psd(
-        i_sig + dark_sig + weight * weight * (i_ref + dark_ref))
-    shot_asd = np.sqrt(max(shot_variance_density, 0.0))
-
-    rin = float(detector.relative_intensity_noise_per_sqrt_hz)
-    corr = float(detector.rin_correlation)
-    rin_variance_density = rin * rin * (
-        i_sig * i_sig + weight * weight * i_ref * i_ref
-        - 2.0 * weight * corr * i_sig * i_ref)
-    rin_asd = np.sqrt(max(rin_variance_density, 0.0))
-    electronic_asd = float(
-        detector.electronic_noise_current_asd_a_per_sqrt_hz)
-    technical_asd = np.hypot(rin_asd, electronic_asd)
-    total_asd = np.hypot(shot_asd, technical_asd)
+    electronic_asd = float(detector.electronic_noise_current_asd_a_per_sqrt_hz)
+    shot_asd, rin_asd, technical_asd, total_asd = balanced_current_noise_asd(
+        i_sig, i_ref, weight, float(detector.relative_intensity_noise_per_sqrt_hz),
+        float(detector.rin_correlation), electronic_asd, dark_sig, dark_ref)
     return DetectorNoiseBudget(
         signal_photocurrent_a=i_sig,
         reference_photocurrent_a=i_ref,

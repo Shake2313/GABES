@@ -567,21 +567,82 @@ def test_finite_if_reference_stays_at_declared_balance_detuning(monkeypatch):
     params = dict(params, coupling_detuning_mhz=2.0, detector_reference_power_ratio=1.25)
     raw = scheme.compute(params)
     detector_reference_powers = []
-    original = rydberg.electrometry.balanced_detector_noise
+    original = rydberg.detection.balanced_current_noise_asd
 
-    def record_reference(detector):
-        detector_reference_powers.append(detector.reference.optical_power_w)
-        return original(detector)
+    def record_reference(signal, reference, *args, **kwargs):
+        detector_reference_powers.append(reference)
+        return original(signal, reference, *args, **kwargs)
 
-    monkeypatch.setattr(rydberg.electrometry, "balanced_detector_noise", record_reference)
+    monkeypatch.setattr(rydberg.detection, "balanced_current_noise_asd", record_reference)
     x, transmission, _ = scheme._transmission(raw["chi_bar"], raw, params)
     finite_if = scheme._superheterodyne_readout(raw, params, x, transmission)
     assert finite_if["reference_balance_detuning_mhz"] == -2.0
-    assert len(detector_reference_powers) > 10
+    assert len(detector_reference_powers) >= 2
     assert len(set(detector_reference_powers)) == 1
     assert finite_if["reference_detector_power_w"] == pytest.approx(
         1.25 * params["detector_path_efficiency"] * raw["probe_power_uw"] * 1e-6
         * np.interp(-2.0, x, transmission))
+
+
+@pytest.mark.parametrize("mode,options", [
+    ("AT electrometry", {}),
+    ("AT electrometry", {"mw_detuning_mhz": 1.25, "if_khz": 3.0}),
+    ("AT electrometry", {"temp_c": 75.0, "coupling_detuning_mhz": -16.0}),
+    ("AT electrometry", {"scan_axis": "Coupling detuning", "probe_detuning_mhz": 13.0}),
+])
+def test_finite_if_affine_matrix_and_phasor_match_direct(mode, options):
+    from gabes.schemes import rydberg
+    scheme = RydbergEITScheme()
+    p = dict(scheme._defaults(mode), **options)
+    raw = scheme.compute(p)
+    g = sum(raw[key] for key in ("rydberg_dephasing_mhz", "temperature_dephasing_mhz",
+                                "density_dephasing_mhz", "transit_mhz")) * rydberg.MHZ
+    atom = scheme._atom(g, raw["rf_dephasing_mhz"] * rydberg.MHZ)
+    scan = raw["scan"]
+    direct = np.asarray([rydberg.core.build_liouvillian(
+        scheme._hamiltonian_at_scan_detuning(raw, p, value), atom) for value in scan])
+    affine = scheme._finite_if_liouvillians(atom, raw, p, scan)
+    np.testing.assert_array_equal(affine, direct)
+    operator = scheme._absorption_quadrature_operator()
+    omega = p["if_khz"] * 1e3 * 2.0 * np.pi
+    expected = rydberg.electrometry.weak_signal_response_from_liouvillian(
+        direct, 4, omega, signal_transition=(2, 3)).real_observable_phasor_per_angular_rabi(operator)
+    x, transmission, _ = scheme._transmission(raw["chi_bar"], raw, p)
+    _, phasors, _ = scheme._superheterodyne_atomic_phasors(raw, p, x, transmission)
+    np.testing.assert_array_equal(phasors, expected)
+
+
+@pytest.mark.parametrize("ratio,corr", [(0.0, 1.0), (1.25, 0.83), (0.85, -0.25)])
+def test_finite_if_vector_noise_matches_scalar_detector(ratio, corr):
+    from gabes.schemes import rydberg
+    scheme = RydbergEITScheme()
+    p = dict(scheme._defaults("AT electrometry"), detector_reference_power_ratio=ratio,
+             detector_rin_correlation=corr, detector_rin_per_sqrt_hz=2e-7,
+             detector_electronic_noise_pa_sqrt_hz=0.17)
+    raw = scheme.compute(p)
+    x, transmission, _ = scheme._transmission(raw["chi_bar"], raw, p)
+    result = scheme._superheterodyne_readout(raw, p, x, transmission)
+    convert = result["detector_responsivity_a_per_w"]
+    ref = (rydberg.electrometry.PhotodiodeChannel(
+        result["reference_detector_power_w"], convert) if ratio else None)
+    expected = []
+    for index, phasor in enumerate(result["current_phasors_a_per_v_m"]):
+        if not abs(phasor) > 0:
+            expected.append([np.inf, np.inf, np.inf])
+            continue
+        signal_power = raw["probe_power_uw"] * 1e-6 * p["detector_path_efficiency"] * transmission[index]
+        detector = rydberg.electrometry.BalancedDetector(
+            rydberg.electrometry.PhotodiodeChannel(signal_power, convert), ref,
+            result["reference_balance_weight"], p["detector_electronic_noise_pa_sqrt_hz"] * 1e-12,
+            p["detector_rin_per_sqrt_hz"], corr)
+        budget = rydberg.electrometry.balanced_detector_noise(detector)
+        sensitivity = rydberg.electrometry.electrometry_sensitivity(budget, float(abs(phasor)))
+        expected.append([sensitivity.psn_field_asd_v_m_per_sqrt_hz,
+                         sensitivity.technical_field_asd_v_m_per_sqrt_hz,
+                         sensitivity.total_field_asd_v_m_per_sqrt_hz])
+    actual = np.column_stack([
+        result[f"{kind}_field_asd_v_m_per_sqrt_hz"] for kind in ("psn", "technical", "total")])
+    np.testing.assert_allclose(actual, expected, rtol=5e-15)
 
 
 def test_separated_temperature_uses_effective_motion_and_cold_spot_pressure():

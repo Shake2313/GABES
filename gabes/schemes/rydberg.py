@@ -21,7 +21,7 @@ from collections import OrderedDict
 import numpy as np
 from scipy.signal import peak_prominences
 
-from .. import affine_doppler, atoms, beam, constants, core, observables, species
+from .. import affine_doppler, atoms, beam, constants, core, detection, observables, species
 from .. import rydberg_electrometry as electrometry
 from .. import rydberg_experiment as rydberg_experiment
 from .. import rydberg_opacity as opacity
@@ -1030,6 +1030,28 @@ class RydbergEITScheme(Scheme):
         """Compatibility alias: argument follows the selected optical scan axis."""
         return cls._hamiltonian_at_scan_detuning(raw, params, detuning_rad_s)
 
+    def _finite_if_liouvillians(self, atom, raw, params, scan):
+        """Build the exact affine detuning dependence in one broadcast."""
+        reference = self._hamiltonian_at_scan_detuning(raw, params, 0.0)
+        probe_scan = self._scan_axis(params) == "Probe detuning"
+        fixed_key = "coupling_detuning_mhz" if probe_scan else "probe_detuning_mhz"
+        fixed = float(params.get(fixed_key, self._REF[fixed_key])) * MHZ
+        two_photon = scan + fixed if probe_scan else fixed + scan
+        microwave = float(params.get("mw_detuning_mhz", 0.0)) * MHZ
+        energies = np.column_stack((np.zeros_like(scan),
+                                    -scan if probe_scan else np.full_like(scan, -fixed),
+                                    -two_photon, -two_photon - microwave))
+        # Preserve the subtraction order in core.comm_super. Subtracting
+        # affine Liouvillian coefficients directly loses exact cancellation
+        # when both levels share the scan shift and the microwave is detuned.
+        for i in range(4):
+            reference[i, i] = 0.0
+        coherent = np.broadcast_to(core.comm_super(reference), (scan.size, 16, 16)).copy()
+        diagonal = np.arange(16)
+        coherent[:, diagonal, diagonal] = (
+            -1j * (energies[:, :, None] - energies[:, None, :])).reshape(-1, 16)
+        return coherent + atom.lindblad
+
     def _superheterodyne_atomic_phasors(
             self, raw, params, x, transmission, static_indices=None):
         """Finite-IF atomic response before RF and detector calibration."""
@@ -1072,11 +1094,8 @@ class RydbergEITScheme(Scheme):
             optimization_scope = "static-slope points; coherent Doppler average"
         else:
             indices = np.arange(raw["scan"].size, dtype=int)
-            liouvillian = np.asarray([
-                core.build_liouvillian(
-                    self._hamiltonian_at_scan_detuning(raw, params, detuning), atom)
-                for detuning in raw["scan"]
-            ])
+            liouvillian = self._finite_if_liouvillians(
+                atom, raw, params, raw["scan"])
             response = electrometry.weak_signal_response_from_liouvillian(
                 liouvillian, 4, omega_if, signal_transition=(2, 3))
             absorption_phasors = (
@@ -1221,24 +1240,28 @@ class RydbergEITScheme(Scheme):
                 noise, float(abs(current_phasor)))
         current_phasors = electrometry.current_responsivity_from_atomic_phasor(
             transmission_phasor_per_rabi, current_scale, rf_coupling)
-        candidates = []
-        total_field_asd = np.full(indices.size, np.inf, dtype=float)
-        for local_index, (global_index, current_phasor) in enumerate(
-                zip(indices, current_phasors)):
-            responsivity = float(abs(current_phasor))
-            if not np.isfinite(responsivity) or responsivity <= 0.0:
-                candidates.append(None)
-                continue
-            signal_power_w, noise, sensitivity = at_detector(
-                transmission[global_index], current_phasor)
-            total_field_asd[local_index] = sensitivity.total_field_asd_v_m_per_sqrt_hz
-            candidates.append((current_phasor, signal_power_w, noise, sensitivity))
-        local_best = int(np.nanargmin(total_field_asd))
-        best_index = int(indices[local_best])
-        best = candidates[local_best]
-        if best is None:
+        responsivity = np.abs(current_phasors)
+        valid = np.isfinite(responsivity) & (responsivity > 0.0)
+        if not valid.any():
             return None
-        current_phasor, signal_power_w, noise, sensitivity = best
+        current = (incident_power_w * path_efficiency * transmission[indices][valid]
+                   * detector_responsivity)
+        reference_current = reference_channel.photocurrent_a if reference_channel is not None else 0.0
+        shot, _, technical, total = detection.balanced_current_noise_asd(
+            current, reference_current, reference_weight,
+            detector_inputs["relative_intensity_noise_per_sqrt_hz"],
+            detector_inputs["rin_correlation"], detector_inputs["electronic_noise_current_asd_a_per_sqrt_hz"])
+        psn_field_asd = np.full(indices.size, np.inf, dtype=float)
+        technical_field_asd = np.full(indices.size, np.inf, dtype=float)
+        total_field_asd = np.full(indices.size, np.inf, dtype=float)
+        psn_field_asd[valid] = shot / responsivity[valid]
+        technical_field_asd[valid] = technical / responsivity[valid]
+        total_field_asd[valid] = total / responsivity[valid]
+        local_best = int(np.argmin(total_field_asd))
+        best_index = int(indices[local_best])
+        if not valid[local_best]:
+            return None
+        current_phasor = current_phasors[local_best]
         response_axis = x[indices]
         validity, offset = self._finite_if_validity(response_axis, total_field_asd)
         optimum_detuning = float(self._interpolate_sample(response_axis, local_best, offset))
@@ -1247,7 +1270,7 @@ class RydbergEITScheme(Scheme):
         if offset:
             optimum_transmission = max(0.0, optimum_transmission)
             current_phasor = self._interpolate_sample(current_phasors, local_best, offset)
-            signal_power_w, noise, sensitivity = at_detector(optimum_transmission, current_phasor)
+        signal_power_w, noise, sensitivity = at_detector(optimum_transmission, current_phasor)
         enbw_hz = float(params.get(
             "measurement_enbw_hz", self._REF["measurement_enbw_hz"]))
         optimum_dp, optimum_dc = self._optical_detunings_at_scan(
@@ -1255,12 +1278,8 @@ class RydbergEITScheme(Scheme):
         return dict(
             response_detuning_mhz=x[indices],
             current_phasors_a_per_v_m=current_phasors,
-            psn_field_asd_v_m_per_sqrt_hz=np.asarray([
-                candidate[3].psn_field_asd_v_m_per_sqrt_hz if candidate is not None else np.inf
-                for candidate in candidates]),
-            technical_field_asd_v_m_per_sqrt_hz=np.asarray([
-                candidate[3].technical_field_asd_v_m_per_sqrt_hz if candidate is not None else np.inf
-                for candidate in candidates]),
+            psn_field_asd_v_m_per_sqrt_hz=psn_field_asd,
+            technical_field_asd_v_m_per_sqrt_hz=technical_field_asd,
             scan_axis=self._scan_axis(params),
             transmission_phasor_per_angular_rabi=transmission_phasor_per_rabi,
             optimum_index=best_index,
