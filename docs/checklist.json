@@ -3661,7 +3661,7 @@
       ],
       "priority": "P2",
       "effort": "large",
-      "status": "ready",
+      "status": "done",
       "user_decision_2026_11_13": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.",
       "consolidation_2026_11_05": "⟦AI⟧ The shared layer for this item is vapor_cell (item vapor-cell-consolidation): axial_cell_profile gives T(z) and the cold-spot-limited n(z) and integrate_beer_lambert the per-segment and total optical depth for any trailing scan axes; reuse them rather than adding a SAS-local slicer.",
       "acceptance_criteria": [
@@ -3709,7 +3709,8 @@
         "docs/daily_report/2026-10-06_scheme-2_lambda-coherence.md",
         "docs/daily_report/2026-10-11_scheme-2_lambda-coherence.md",
         "docs/daily_report/2026-10-16_scheme-2_lambda-coherence.md"
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ 2d5766f adds opt-in graded axial Beer-Lambert and counterpropagating pump depletion. Existing Uniform results match across 7183 leaves in 63 conditions. At 85Rb D1, 4001 points, 40 C reservoir / 50 C beam, 0.5 mW, min pump exit/input 0.67297, max transmission change 0.03413. 4-to-8 segment peak-normalized difference <=0.018%, pump table 6-to-11 <=0.15%. Supported weak probe, uncoated pumped cells and low-field longitudinal Zeeman shifts with lumped populations."
     },
     {
       "id": "app-result-export-and-provenance",
@@ -5324,7 +5325,7 @@
           ]
         }
       ],
-      "implementation_2026_11_13": "⟦AI⟧ Exact-Maxwell Sim Gold preliminary dense comparison solved 85 of 401 base coordinates in Fast. Shared valid rows meet the tested numeric tolerances (gain 0.03981%, Jasperse 0.008704 dB, Passive L1 0.008393 dB max). At +393.25 MHz the interpolated branch marks Passive L1 unavailable and the dense branch marks it available for Floquet 2 and 3. Expanded independent dense comparison at a29b7dc covered 12 cases, two Floquet orders and off-grid points. Native complex response and gain passed (max 0.388464% and 0.152027%); Passive L1 eligibility differs at Gold and cold/weak, and native Jasperse reached 0.09460 dB. Exact mapped lab comparisons reached 4.4829 dB and native Balanced reproduced the discrepancy. Certificate remains open for adaptive eligibility and common off-grid calibration interpolation."
+      "implementation_2026_11_13": "⟦AI⟧ Exact-Maxwell Sim Gold preliminary dense comparison solved 85 of 401 base coordinates in Fast. Shared valid rows meet the tested numeric tolerances (gain 0.03981%, Jasperse 0.008704 dB, Passive L1 0.008393 dB max). At +393.25 MHz the interpolated branch marks Passive L1 unavailable and the dense branch marks it available for Floquet 2 and 3. Expanded independent dense comparison at a29b7dc covered 12 cases, two Floquet orders and off-grid points. Native complex response and gain passed (max 0.388464% and 0.152027%); Passive L1 eligibility differs at Gold and cold/weak, and native Jasperse reached 0.09460 dB. Exact mapped lab comparisons reached 4.4829 dB and native Balanced reproduced the discrepancy. Certificate remains open for adaptive eligibility and common off-grid calibration interpolation. af62348 adds an opt-in exact displayed source path. Twelve frozen cases pass both Floquet orders against independent dense points including mapped lab calibration and selected coordinates. Maximum curve NF error 8.04e-13 dB, normalized displayed/selected gain error 1.58e-13, zero state mismatches. Adaptive cached-grid readout remains uncertified and retains existing defaults pending a value decision; lab nominal exact-coordinate deviations are 26.25%/17.70% versus cached 4.92%/3.87%. No fit coefficients changed."
     },
     {
       "id": "biphoton-angle-trace-vectorization",
