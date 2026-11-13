@@ -277,8 +277,8 @@ def test_velocity_average_keeps_pump_and_probe_in_the_same_class():
 
 
 # ---------------------------------------------------- pump off (OD) fidelity
-def test_pump_off_reproduces_autood_85rb_d1():
-    """Pump = 0, ⁸⁵Rb D1 reproduces the AutoOD-validated OD scheme to <1 %."""
+def test_pump_off_closes_against_internal_od_85rb_d1():
+    """Pump-off area and peak agree with the independently implemented OD model."""
     raw = SAS.compute(_params(species=RB85_KEY, line="D1", pump_power_mw=0.0,
                               temp_c=90.0, cell_mm=12.5))
     od = ODScheme()
@@ -286,8 +286,8 @@ def test_pump_off_reproduces_autood_85rb_d1():
                      "temp_c": 90.0, "cell_mm": 12.5, "doppler": "on"})
     int_ratio = _tz(raw["alpha_unit"], raw["scan"]) / _tz(ro["alpha"], ro["scan"])
     peak_ratio = raw["alpha_unit"].max() / ro["alpha"].max()
-    assert abs(int_ratio - 1.0) < 0.01
-    assert abs(peak_ratio - 1.0) < 0.01
+    assert abs(int_ratio - 1.0) < 1e-3
+    assert abs(peak_ratio - 1.0) < 1e-3
 
 
 def test_paraffin_coating_has_no_direct_pump_off_optical_loss():
