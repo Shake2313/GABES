@@ -145,7 +145,7 @@ def validate(papers):
                 if q.get("quantity") in {"opd_gabes", "tpd_gabes"} and not q.get("reference"):
                     errors.append(f"{labelq}: canonical detuning lacks convention")
     # Historical CSV retained only for the migrated ten-paper coverage check.
-    legacy_path = ROOT.parents[1] / "archive" / "fwm_squeezing_paper_parameters.csv"
+    legacy_path = ROOT / "fwm_squeezing_paper_parameters.csv"
     with legacy_path.open(encoding="utf-8-sig", newline="") as stream:
         legacy = list(csv.reader(stream))[0][5:]
     retained = {p.get("legacy_column") for p in papers}

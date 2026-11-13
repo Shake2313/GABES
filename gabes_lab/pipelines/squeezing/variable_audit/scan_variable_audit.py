@@ -688,7 +688,7 @@ def sec_stray():
 # Reference DB
 # ==========================================================================
 def sec_paper_db():
-    path = REPO / "archive" / "fwm_squeezing_paper_parameters.csv"
+    path = REPO / "references" / "fwm_experiments" / "fwm_squeezing_paper_parameters.csv"
     with open(path, encoding="utf-8-sig", newline="") as fh:
         rows = list(csv.reader(fh))
     head, body = rows[0], rows[1:]

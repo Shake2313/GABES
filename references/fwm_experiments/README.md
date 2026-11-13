@@ -4,6 +4,8 @@
 
 ⟦AI⟧ 2026-10-30: 사용자 요청으로 레거시 CSV를 `archive/`에 원본 그대로 보관. 현재 문헌 DB는 이 폴더. CSV는 과거 분석 재현·10편 이관 확인에만 사용. [이동·복구 기록](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/archive/fwm_squeezing_csv_migration_2026-10-30.json).
 
+⟦AI⟧ 2026-11-13: `scan_variable_audit` uses the local [historical table](fwm_squeezing_paper_parameters.csv) to reproduce the paper audit. The bytes come from `archive/fwm_squeezing_paper_parameters.csv` in GABES-archive at [3875491](https://github.com/Shake2313/GABES-archive/blob/387549130d5d2926759c667826a6c650a5b0fe95/archive/fwm_squeezing_paper_parameters.csv). SHA-256 `028bd42e3d04f9811594312a24abe1fdeac67562f4a2e3f378f4a6a1731315b1`.
+
 ## 열람
 
 - **[검색·비교 열람본](index.html)**: 논문 원제·포함 범위·운전점·수치·원문 위치 확인. 인터넷 없이 열람 가능. 원문 웹 링크에는 연결 필요.
