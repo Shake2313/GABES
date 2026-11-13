@@ -2268,14 +2268,15 @@ def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders):
 
 
 def _pole_scan_response(systems, *, orders, delta_axis, probe_axis_GHz, Delta,
+                        gaussian_sigma=None,
                         Delta_eff_axis, idx_lo, frac, weights, adaptive, score,
                         tolerance_dB, tolerance_log10_gain, start_stride,
                         guard, grid_rows):
     """Maxwell-averaged (ss, cs, sc, cc) responses from pole–residue rows.
 
-    The velocity sum uses exactly the measure of the grid path: the uniform
-    Maxwell weights spread onto the Δ_eff nodes by the same linear
-    interpolation fractions.  With ``adaptive`` the probe axis is refined by
+    The untruncated measure uses the analytic Gaussian pole mean. The
+    historical measure spreads the truncated Maxwell weights onto the same
+    Δ_eff grid nodes by linear interpolation. With ``adaptive`` the probe axis is refined by
     bisection, the averaged complex responses are spline-interpolated between
     solved rows, and refinement is judged in the readout (``score``).
 
@@ -2313,8 +2314,11 @@ def _pole_scan_response(systems, *, orders, delta_axis, probe_axis_GHz, Delta,
                     for arr in (result.lam, result.res, result.c0))
             for store, arr in zip(poles[key], (result.lam, result.res, result.c0)):
                 store[rows] = arr
-            means[key] = (result.discrete_mean(Delta_eff_axis, node_weights)
-                          / systems[key][1])
+            if gaussian_sigma is None:
+                mean = result.discrete_mean(Delta_eff_axis, node_weights)
+            else:
+                mean = result.gaussian_mean(Delta, gaussian_sigma)
+            means[key] = mean / systems[key][1]
         for order in orders:
             probe_seed, conj_seed = means[(1, order)], means[(2, order)]
             stored[order][rows] = np.column_stack(
@@ -2406,8 +2410,8 @@ def _pole_scan_response(systems, *, orders, delta_axis, probe_axis_GHz, Delta,
     estimator = {
         "method": RESPONSE_POLE_ADAPTIVE if adaptive else RESPONSE_POLE,
         "velocity_average": (
-            "exact pole–residue sum over the same truncated Maxwell nodes "
-            "(one eigendecomposition per solved probe detuning)"),
+            "analytic untruncated Maxwell pole mean" if gaussian_sigma is not None
+            else "exact pole-residue sum over the truncated Maxwell nodes"),
         "solved_probe_points": int(nodes.size),
         "display_probe_points": int(n_points),
         "solved_probe_indices": tuple(int(i) for i in nodes),
@@ -2879,6 +2883,7 @@ def compute_spectrum(D_GHz, *,
                      coarse_points=None, fine_points=None, window_mhz=None,
                      scan_min=None, scan_max=None,
                      velocity_step=None, velocity_cutoff=None,
+                     velocity_measure="truncated",
                      branch=DEFAULT_BRANCH, branches=None,
                      phase_detail=PHASE_LEGACY,
                      pump_probe_angle_deg=SEEDED_PHASE_ANGLE_DEG,
@@ -2917,6 +2922,8 @@ def compute_spectrum(D_GHz, *,
     ``legacy_mean_field_fixture=True`` additionally restores the old optical
     carrier origin and unity floor on absorbed probe gains for frozen fixtures.
     Normal calls preserve absorption and use the transition-referenced carrier.
+    Set ``velocity_measure="exact"`` for the untruncated Maxwell mean with
+    the pole solver. Untiered callers default to their historical grid.
     Input seed power and small-signal gains refer to the atomic medium
     boundaries; entrance/exit windows and detector optics are not in that map.
     """
@@ -3026,10 +3033,19 @@ def compute_spectrum(D_GHz, *,
         w_conj_effective = float(w_conj)
         canonical_mode_status = "explicit probe and conjugate collected-mode waists"
     area_conj = float(observables.gaussian_mode_area(w_conj_effective))
+    if velocity_measure not in ("exact", "truncated"):
+        raise ValueError("velocity_measure must be exact or truncated")
+    exact_velocity = velocity_measure == "exact"
+    if exact_velocity and response_method == RESPONSE_GRID:
+        raise ValueError("The exact Maxwell measure requires a pole response method")
+    gaussian_sigma = (K_VEC * np.sqrt(constants.KB * T / constants.MASS_85RB)
+                      if exact_velocity else None)
     velocity_step = VELOCITY_STEP_MPS if velocity_step is None else velocity_step
     velocity_cutoff = VELOCITY_CUTOFF_SIGMA if velocity_cutoff is None else velocity_cutoff
+    # The grid is a numerical fallback when the exact pole form is rejected.
+    fallback_cutoff = max(8.0, velocity_cutoff) if exact_velocity else velocity_cutoff
     v_grid, weights = doppler.velocity_grid(
-        T, dv=velocity_step, cutoff_sigma=velocity_cutoff)
+        T, dv=velocity_step, cutoff_sigma=fallback_cutoff)
     Delta_eff_axis = doppler.build_Delta_eff_axis(Delta, Delta, v_grid)
 
     delta_axis = two_photon_detuning_from_probe_scan(probe_axis_GHz, D_GHz, branch)
@@ -3172,6 +3188,7 @@ def compute_spectrum(D_GHz, *,
         high_response, lower_order_response, response_estimator = _pole_scan_response(
             pole_systems, orders=response_orders, delta_axis=delta_axis,
             probe_axis_GHz=probe_axis_GHz, Delta=Delta,
+            gaussian_sigma=gaussian_sigma,
             Delta_eff_axis=Delta_eff_axis, idx_lo=idx_lo, frac=frac,
             weights=weights, adaptive=response_method == RESPONSE_POLE_ADAPTIVE,
             score=score_readout, tolerance_dB=scan_tolerance_dB,
@@ -3189,6 +3206,12 @@ def compute_spectrum(D_GHz, *,
                 "analytic Voigt (Faddeeva), untruncated Maxwell; reference line "
                 f"weights {convention}")
     response_estimator["velocity_classes"] = int(v_grid.size)
+    response_estimator["velocity_measure"] = velocity_measure
+    if exact_velocity:
+        response_estimator["fallback_velocity_cutoff_sigma"] = float(fallback_cutoff)
+        if pole_systems is None:
+            response_estimator["velocity_average"] = (
+                f"Maxwell grid fallback ({fallback_cutoff:g} sigma); analytic pole form unavailable")
     atomic_high_response = (chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg)
     delta_k_z = None
     delta_k_z_vacuum = None
@@ -3510,6 +3533,7 @@ def compute_spectrum(D_GHz, *,
         "input_pump_power_W": float(P_pump),
         "temperature_K": float(T),
         "velocity_cutoff_sigma": float(velocity_cutoff),
+        "velocity_measure": velocity_measure,
         "input_seed_plane": "atomic medium entrance, after entrance window",
         "output_gain_plane": "atomic medium exit, before exit window",
         "smallsignal_output_gain_plane": "atomic medium exit, before exit window",
@@ -3680,9 +3704,17 @@ FWM_FIDELITY = {
                             velocity_cutoff=4.0, phase_detail=PHASE_ULTRA,
                             response_method=RESPONSE_POLE),
     FIDELITY_ULTRA:    dict(coarse_points=401, velocity_step=1.0,
-                            velocity_cutoff=4.0, phase_detail=PHASE_ULTRA),
+                            velocity_cutoff=4.0, phase_detail=PHASE_ULTRA,
+                            response_method=RESPONSE_POLE),
 }
 RESOLUTION = FWM_FIDELITY
+
+
+def _tier_response_method(fidelity, velocity_measure, *, full_scan=False):
+    if fidelity == FIDELITY_ULTRA and velocity_measure == "truncated":
+        return RESPONSE_GRID
+    method = FWM_FIDELITY[fidelity]["response_method"]
+    return RESPONSE_POLE if full_scan else method
 
 # Old saved fidelity labels → current labels. Settings-preserving where a tier
 # survived (old Balanced/High kept their solver settings under the new names);
@@ -4053,7 +4085,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v25-quadrature-phase"
+    cache_version = "fwm-experimental-jasperse-gain-v26-maxwell"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -4365,6 +4397,10 @@ class FWMScheme(Scheme):
                       choices=tuple(FWM_FIDELITY.keys()), advanced=True,
                       choice_labels=FIDELITY_LABELS, visible_if=seeded,
                       help="Controls the scan grid and propagation refinements."),
+            ParamSpec("velocity_measure", "Maxwell velocity measure", "Numerics", "exact",
+                      choices=("exact", "truncated"), advanced=True, visible_if=seeded,
+                      choice_labels={"exact": "Exact Maxwell", "truncated": "Historical 4σ"},
+                      help="Use the untruncated pole mean or replay the previous 4-sigma grid."),
             ParamSpec("floquet_order", "Floquet order", "Numerics",
                       SEEDED_FLOQUET_ORDER, choices=(3, 4, 5), advanced=True,
                       visible_if=seeded, hidden=True,
@@ -4573,6 +4609,7 @@ class FWMScheme(Scheme):
         center = branch_center_GHz(params["opd"], -1)
         fidelity = normalize_fidelity(params["resolution"])
         res = FWM_FIDELITY[fidelity]
+        velocity_measure = params.get("velocity_measure", "exact")
         wanted_seed_uw = params["probe_uw"]
         alias_seed_uw = params.get("seed_wanted_sideband_uw", wanted_seed_uw)
         if not np.isclose(alias_seed_uw, wanted_seed_uw, rtol=0.0, atol=1e-12):
@@ -4601,7 +4638,8 @@ class FWMScheme(Scheme):
             coarse_points=res["coarse_points"], fine_points=0,
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
             velocity_step=res["velocity_step"],
-            velocity_cutoff=res.get("velocity_cutoff", 3.0),
+            velocity_cutoff=res["velocity_cutoff"],
+            velocity_measure=velocity_measure,
             phase_detail=res["phase_detail"],
             pump_probe_angle_deg=params.get("seeded_angle_deg", SEEDED_PHASE_ANGLE_DEG),
             model_fidelity=fidelity,
@@ -4610,7 +4648,7 @@ class FWMScheme(Scheme):
             legacy_mean_field_fixture=params.get("legacy_mean_field_fixture", False),
             floquet_order=params.get("floquet_order", SEEDED_FLOQUET_ORDER),
             enforce_floquet_convergence=True,
-            response_method=res.get("response_method", RESPONSE_GRID),
+            response_method=_tier_response_method(fidelity, velocity_measure),
             scan_tolerance_dB=res.get("scan_tolerance_dB", SCAN_TOLERANCE_DB),
             scan_tolerance_log10_gain=res.get(
                 "scan_tolerance_log10_gain", SCAN_TOLERANCE_LOG10_GAIN),
@@ -5654,6 +5692,7 @@ class FWMScheme(Scheme):
         def _compute_full(params):
             fidelity = normalize_fidelity(params.get("resolution", FIDELITY_FAST))
             fidelity_settings = FWM_FIDELITY[fidelity]
+            velocity_measure = params.get("velocity_measure", "exact")
             return full_spectrum(
                 params["opd"], params["temp_c"] + 273.15,
                 params["pump_mw"], params["probe_uw"], params["line_strength"],
@@ -5678,13 +5717,10 @@ class FWMScheme(Scheme):
                 legacy_mean_field_fixture=params.get(
                     "legacy_mean_field_fixture", False),
                 velocity_step=fidelity_settings["velocity_step"],
-                velocity_cutoff=fidelity_settings.get("velocity_cutoff", 3.0),
-                # Dense 0.4 MHz windows can hold ~2 MHz gain structure that an
-                # interpolated display misses; both pole tiers solve every point.
-                response_method=(
-                    RESPONSE_GRID if fidelity_settings.get(
-                        "response_method", RESPONSE_GRID) == RESPONSE_GRID
-                    else RESPONSE_POLE),
+                velocity_cutoff=fidelity_settings["velocity_cutoff"],
+                velocity_measure=velocity_measure,
+                # The 0.4 MHz resonance windows need a solve at every display point.
+                response_method=_tier_response_method(fidelity, velocity_measure, full_scan=True),
                 scan_tolerance_dB=fidelity_settings.get(
                     "scan_tolerance_dB", SCAN_TOLERANCE_DB),
                 scan_tolerance_log10_gain=fidelity_settings.get(
@@ -5873,6 +5909,7 @@ def full_spectrum(D_GHz, T_K, P_pump_mW, P_probe_uW, line_strength, loss_pct,
                    measured_gain_calibration=False,
                    seed_input_assumption="",
                    velocity_step=4.0, velocity_cutoff=3.0,
+                   velocity_measure="truncated",
                    response_method=RESPONSE_GRID,
                    scan_tolerance_dB=SCAN_TOLERANCE_DB,
                    scan_tolerance_log10_gain=SCAN_TOLERANCE_LOG10_GAIN,
@@ -5921,6 +5958,7 @@ def full_spectrum(D_GHz, T_K, P_pump_mW, P_probe_uW, line_strength, loss_pct,
         eom_seed_spectrum_application=eom_seed_spectrum_application,
         coarse_points=301, fine_points=401,
         velocity_step=velocity_step, velocity_cutoff=velocity_cutoff,
+        velocity_measure=velocity_measure,
         response_method=response_method, scan_tolerance_dB=scan_tolerance_dB,
         scan_tolerance_log10_gain=scan_tolerance_log10_gain,
         scan_start_stride=scan_start_stride)
