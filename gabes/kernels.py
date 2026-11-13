@@ -44,6 +44,25 @@ except ImportError:                                     # pragma: no cover
     prange = range
 
 
+_LU_OK = 0
+_LU_SINGULAR = 1
+_LU_NONFINITE = 2
+
+
+def _check_lu_batch(kernel, failures, **axes):
+    """Report the first failed point in input order, independent of worker scheduling."""
+    rows = np.flatnonzero(failures[:, 0])
+    if rows.size:
+        i = int(rows[0])
+        status, j, harmonic = map(int, failures[i])
+        indices = (i, j)
+        points = ", ".join(f"{name}[{index}]={axis[index]}"
+                           for (name, axis), index in zip(axes.items(), indices))
+        reason = "singular (zero pivot)" if status == _LU_SINGULAR else "non-finite matrix or solution"
+        stage = f", harmonic={harmonic}" if harmonic else ""
+        raise np.linalg.LinAlgError(f"{kernel}: {reason} at {points}{stage}")
+
+
 def available():
     """True if the compiled fast path can be used."""
     return NUMBA_AVAILABLE
@@ -71,12 +90,18 @@ def _lu_factor(A, piv):
                 tmp = A[k, j]
                 A[k, j] = A[p, j]
                 A[p, j] = tmp
-        inv = 1.0 / A[k, k]
+        pivot = A[k, k]
+        if not (math.isfinite(pivot.real) and math.isfinite(pivot.imag)):
+            return _LU_NONFINITE
+        if pivot == 0.0:
+            return _LU_SINGULAR
+        inv = 1.0 / pivot
         for i in range(k + 1, n):
             lik = A[i, k] * inv
             A[i, k] = lik
             for j in range(k + 1, n):
                 A[i, j] -= lik * A[k, j]
+    return _LU_OK
 
 
 @njit(cache=True)
@@ -104,6 +129,10 @@ def _lu_solve(A, piv, B):
         inv = 1.0 / A[i, i]
         for j in range(K):
             B[i, j] *= inv
+            value = B[i, j]
+            if not (math.isfinite(value.real) and math.isfinite(value.imag)):
+                return _LU_NONFINITE
+    return _LU_OK
 
 
 @njit(cache=True)
@@ -130,12 +159,18 @@ def _lu_factor_real(A, piv):
                 tmp = A[k, j]
                 A[k, j] = A[p, j]
                 A[p, j] = tmp
-        inv = 1.0 / A[k, k]
+        pivot = A[k, k]
+        if not (math.isfinite(pivot.real) and math.isfinite(pivot.imag)):
+            return _LU_NONFINITE
+        if pivot == 0.0:
+            return _LU_SINGULAR
+        inv = 1.0 / pivot
         for i in range(k + 1, n):
             lik = A[i, k] * inv
             A[i, k] = lik
             for j in range(k + 1, n):
                 A[i, j] -= lik * A[k, j]
+    return _LU_OK
 
 
 @njit(cache=True)
@@ -163,6 +198,10 @@ def _lu_solve_real(A, piv, B):
         inv = 1.0 / A[i, i]
         for j in range(K):
             B[i, j] *= inv
+            value = B[i, j]
+            if not (math.isfinite(value.real) and math.isfinite(value.imag)):
+                return _LU_NONFINITE
+    return _LU_OK
 
 
 def floquet_chi_grid(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_axis,
@@ -183,14 +222,16 @@ def floquet_chi_grid(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_axis,
     cp, cm = np.asarray(Cp), np.asarray(Cm)
     real_axes = all(np.isrealobj(a) and np.isfinite(a).all()
                     for a in (delta_axis, deff_axis, omega_hf, branch))
-    symmetric = (real_axes and all(a.shape == (M, M) and
-        np.array_equal(a, a.conj()[perm][:, perm]) for a in coefficients)
-        and cp.shape == cm.shape == (M, M)
+    symmetric = (real_axes and all(a.shape == (M, M) and np.isfinite(a).all()
+        and np.array_equal(a, a.conj()[perm][:, perm]) for a in coefficients)
+        and cp.shape == cm.shape == (M, M) and np.isfinite(cp).all()
         and np.array_equal(cm, cp.conj()[perm][:, perm]))
     if not symmetric:
-        return _floquet_chi_grid_general(
+        probe, conjugate, failures = _floquet_chi_grid_general(
             L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_axis,
             omega_hf, branch, w_probe, w_conj, n_levels, n_f)
+        _check_lu_batch("floquet_chi_grid_general", failures, delta=delta_axis, deff=deff_axis)
+        return probe, conjugate
 
     U = core.hermitian_basis(n_levels)
     Uh = U.conj().T
@@ -198,13 +239,15 @@ def floquet_chi_grid(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_axis,
     # imaginary transform roundoff is not a physical approximation.
     real_coefficients = [np.ascontiguousarray((Uh @ a @ U).real)
                          for a in coefficients]
-    return _floquet_chi_grid_hermitian(
+    probe, conjugate, failures = _floquet_chi_grid_hermitian(
         *real_coefficients, np.ascontiguousarray(Uh @ cp @ U),
         np.ascontiguousarray(delta_axis, dtype=np.float64),
         np.ascontiguousarray(deff_axis, dtype=np.float64),
         float(omega_hf), float(branch),
         np.ascontiguousarray(np.asarray(w_probe) @ U),
         np.ascontiguousarray(np.asarray(w_conj) @ U), n_levels, n_f)
+    _check_lu_batch("floquet_chi_grid_hermitian", failures, delta=delta_axis, deff=deff_axis)
+    return probe, conjugate
 
 
 @njit(cache=True, parallel=True)
@@ -217,6 +260,7 @@ def _floquet_chi_grid_hermitian(L0_base, C_delta, S_v, Cp, delta_axis,
     M = n_levels * n_levels
     probe = np.empty((delta_axis.size, deff_axis.size), np.complex128)
     conjugate = np.empty_like(probe)
+    failures = np.zeros((delta_axis.size, 3), np.int64)
     for i in prange(delta_axis.size):
         delta = delta_axis[i]
         ob = omega_hf + branch * delta
@@ -248,11 +292,19 @@ def _floquet_chi_grid_hermitian(L0_base, C_delta, S_v, Cp, delta_axis,
                                 value += np.conj(Cp[r, k])*R[k, col]
                         A[r, col] = value
                         rhs_matrix[r, col] = Cp[r, col]
-                _lu_factor(A, piv)
-                _lu_solve(A, piv, rhs_matrix)
+                status = _lu_factor(A, piv)
+                if status == _LU_OK:
+                    status = _lu_solve(A, piv, rhs_matrix)
+                if status != _LU_OK:
+                    failures[i, 0] = status
+                    failures[i, 1], failures[i, 2] = j, harmonic
+                    break
                 for r in range(M):
                     for col in range(M):
                         R[r, col] = -rhs_matrix[r, col]
+
+            if failures[i, 0] != _LU_OK:
+                break
 
             # L_eff = L + C+ R1* + C- R1 = L + 2 Re(C- R1).
             # The first n Hermitian basis vectors are population projectors,
@@ -269,8 +321,13 @@ def _floquet_chi_grid_hermitian(L0_base, C_delta, S_v, Cp, delta_axis,
             for r in range(M):
                 rhs[r, 0] = 0.0
             rhs[0, 0] = 1.0
-            _lu_factor_real(Aeff, piv)
-            _lu_solve_real(Aeff, piv, rhs)
+            status = _lu_factor_real(Aeff, piv)
+            if status == _LU_OK:
+                status = _lu_solve_real(Aeff, piv, rhs)
+            if status != _LU_OK:
+                failures[i, 0] = status
+                failures[i, 1], failures[i, 2] = j, 0
+                break
 
             probe_value = 0.0 + 0.0j
             conj_value = 0.0 + 0.0j
@@ -282,7 +339,7 @@ def _floquet_chi_grid_hermitian(L0_base, C_delta, S_v, Cp, delta_axis,
                 conj_value += w_conj[r]*rho1
             probe[i, j] = probe_value
             conjugate[i, j] = conj_value
-    return probe, conjugate
+    return probe, conjugate, failures
 
 
 @njit(cache=True, parallel=True)
@@ -317,6 +374,7 @@ def _floquet_chi_grid_general(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_ax
     M = n_levels * n_levels
     chi_probe = np.empty((n_d, n_de), np.complex128)
     chi_conj = np.empty((n_d, n_de), np.complex128)
+    failures = np.zeros((n_d, 3), np.int64)
 
     for i in prange(n_d):
         delta = delta_axis[i]
@@ -353,11 +411,19 @@ def _floquet_chi_grid_general(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_ax
                             value += feedback
                         A[r, c] = value
                         rhs_matrix[r, c] = Cp[r, c]
-                _lu_factor(A, piv)
-                _lu_solve(A, piv, rhs_matrix)
+                status = _lu_factor(A, piv)
+                if status == _LU_OK:
+                    status = _lu_solve(A, piv, rhs_matrix)
+                if status != _LU_OK:
+                    failures[i, 0] = status
+                    failures[i, 1], failures[i, 2] = j, harmonic
+                    break
                 for r in range(M):
                     for c in range(M):
                         Rchain[idx, r, c] = -rhs_matrix[r, c]
+
+            if failures[i, 0] != _LU_OK:
+                break
 
             # Negative chain: Q_h maps rho_(h+1) -> rho_h.
             for harmonic in range(-n_f, 0):
@@ -375,11 +441,19 @@ def _floquet_chi_grid_general(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_ax
                             value += feedback
                         A[r, c] = value
                         rhs_matrix[r, c] = Cm[r, c]
-                _lu_factor(A, piv)
-                _lu_solve(A, piv, rhs_matrix)
+                status = _lu_factor(A, piv)
+                if status == _LU_OK:
+                    status = _lu_solve(A, piv, rhs_matrix)
+                if status != _LU_OK:
+                    failures[i, 0] = status
+                    failures[i, 1], failures[i, 2] = j, harmonic
+                    break
                 for r in range(M):
                     for c in range(M):
                         Qchain[idx, r, c] = -rhs_matrix[r, c]
+
+            if failures[i, 0] != _LU_OK:
+                break
 
             # Effective zero-harmonic block L0 + Cp Q_-1 + Cm R_+1.
             for r in range(M):
@@ -398,8 +472,13 @@ def _floquet_chi_grid_general(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_ax
                 rhs[r, 0] = 0.0
             rhs[0, 0] = 1.0
 
-            _lu_factor(Aeff, piv)
-            _lu_solve(Aeff, piv, rhs)               # rhs = ρ₀
+            status = _lu_factor(Aeff, piv)
+            if status == _LU_OK:
+                status = _lu_solve(Aeff, piv, rhs)
+            if status != _LU_OK:
+                failures[i, 0] = status
+                failures[i, 1], failures[i, 2] = j, 0
+                break
 
             for r in range(M):                      # rho_+1 = R_1 rho_0
                 acc = 0.0 + 0.0j
@@ -415,7 +494,7 @@ def _floquet_chi_grid_general(L0_base, C_delta, S_v, Cp, Cm, delta_axis, deff_ax
             chi_probe[i, j] = cp_acc
             chi_conj[i, j] = cc_acc
 
-    return chi_probe, chi_conj
+    return chi_probe, chi_conj, failures
 
 
 @njit(cache=True, parallel=True)
@@ -429,6 +508,7 @@ def _magneto_buffer_grid_real(L0_all, deff, S_v, n_levels):
     nv = deff.size
     M = n_levels * n_levels
     out = np.empty((nB, nv, M), np.float64)
+    failures = np.zeros((nB, 3), np.int64)
     for b in prange(nB):
         A = np.empty((M, M), np.float64)
         rhs = np.empty((M, 1), np.float64)
@@ -445,11 +525,16 @@ def _magneto_buffer_grid_real(L0_all, deff, S_v, n_levels):
             for r in range(M):
                 rhs[r, 0] = 0.0
             rhs[0, 0] = 1.0
-            _lu_factor_real(A, piv)
-            _lu_solve_real(A, piv, rhs)
+            status = _lu_factor_real(A, piv)
+            if status == _LU_OK:
+                status = _lu_solve_real(A, piv, rhs)
+            if status != _LU_OK:
+                failures[b, 0] = status
+                failures[b, 1], failures[b, 2] = j, 0
+                break
             for r in range(M):
                 out[b, j, r] = rhs[r, 0]
-    return out
+    return out, failures
 
 
 def magneto_buffer_grid(L0_all, deff, S_v, n_levels):
@@ -469,8 +554,9 @@ def magneto_buffer_grid(L0_all, deff, S_v, n_levels):
     Uh = U.conj().T
     L0_r = np.ascontiguousarray(np.real(Uh @ L0_all @ U))   # batched BLAS matmul
     S_vr = np.ascontiguousarray(np.real(Uh @ S_v @ U))
-    r = _magneto_buffer_grid_real(
+    r, failures = _magneto_buffer_grid_real(
         L0_r, np.ascontiguousarray(deff, dtype=np.float64), S_vr, n_levels)
+    _check_lu_batch("magneto_buffer_grid", failures, field_row=range(nB), deff=deff)
     rho_vec = r @ U.T                                       # real r → complex vec(ρ)
     return rho_vec.reshape(nB, nv, n_levels, n_levels)
 
@@ -490,6 +576,7 @@ def _magneto_two_region_grid_real(L_light0, L_dark0, deff, S_v,
     M = n_levels * n_levels
     M2 = 2 * M
     out = np.empty((nB, nv, M), np.float64)
+    failures = np.zeros((nB, 3), np.int64)
     for b in prange(nB):
         A = np.zeros((M2, M2), np.float64)           # reused across the v loop
         rhs = np.zeros((M2, 1), np.float64)
@@ -514,11 +601,16 @@ def _magneto_two_region_grid_real(L_light0, L_dark0, deff, S_v,
             for r in range(M2):                      # reset RHS (solved in place)
                 rhs[r, 0] = 0.0
             rhs[0, 0] = 1.0
-            _lu_factor_real(A, piv)
-            _lu_solve_real(A, piv, rhs)              # rhs now holds the solution
+            status = _lu_factor_real(A, piv)
+            if status == _LU_OK:
+                status = _lu_solve_real(A, piv, rhs)
+            if status != _LU_OK:
+                failures[b, 0] = status
+                failures[b, 1], failures[b, 2] = j, 0
+                break
             for r in range(M):                       # light block only
                 out[b, j, r] = rhs[r, 0]
-    return out
+    return out, failures
 
 
 def magneto_two_region_grid(L_light0, L_dark0, deff, S_v,
@@ -548,9 +640,10 @@ def magneto_two_region_grid(L_light0, L_dark0, deff, S_v,
     L_light_r = np.ascontiguousarray(np.real(Uh @ L_light0 @ U))   # batched BLAS
     L_dark_r = np.ascontiguousarray(np.real(Uh @ L_dark0 @ U))
     S_vr = np.ascontiguousarray(np.real(Uh @ S_v @ U))
-    r = _magneto_two_region_grid_real(
+    r, failures = _magneto_two_region_grid_real(
         L_light_r, L_dark_r, np.ascontiguousarray(deff, dtype=np.float64),
         S_vr, float(gamma_out), float(gamma_in), n_levels)
+    _check_lu_batch("magneto_two_region_grid", failures, field_row=range(nB), deff=deff)
     rho_vec = r @ U.T                                              # real → vec(ρ)
     return rho_vec.reshape(nB, nv, n_levels, n_levels)
 
@@ -568,6 +661,7 @@ def _affine_scan_chi_real(base, A_coef, B_coef, scan, kv, weights, w_coh, n_leve
     nv = kv.size
     M = n_levels * n_levels
     out = np.empty(ns, np.complex128)
+    failures = np.zeros((ns, 3), np.int64)
     for i in prange(ns):
         s = scan[i]
         A = np.empty((M, M), np.float64)
@@ -586,14 +680,19 @@ def _affine_scan_chi_real(base, A_coef, B_coef, scan, kv, weights, w_coh, n_leve
             for r in range(M):
                 rhs[r, 0] = 0.0
             rhs[0, 0] = 1.0
-            _lu_factor_real(A, piv)
-            _lu_solve_real(A, piv, rhs)
+            status = _lu_factor_real(A, piv)
+            if status == _LU_OK:
+                status = _lu_solve_real(A, piv, rhs)
+            if status != _LU_OK:
+                failures[i, 0] = status
+                failures[i, 1], failures[i, 2] = j, 0
+                break
             coh = 0.0 + 0.0j
             for a in range(M):
                 coh += w_coh[a] * rhs[a, 0]
             acc += weights[j] * coh
         out[i] = acc
-    return out
+    return out, failures
 
 
 def affine_scan_chi(base, A_coef, B_coef, scan, kv, weights, coh_idx, n_levels):
@@ -632,12 +731,14 @@ def affine_scan_chi(base, A_coef, B_coef, scan, kv, weights, coh_idx, n_levels):
     A_coef_r = np.ascontiguousarray(np.real(Uh @ A_coef @ U))
     B_coef_r = np.ascontiguousarray(np.real(Uh @ B_coef @ U))
     w_coh = np.ascontiguousarray(U[coh_idx])
-    return _affine_scan_chi_real(
+    out, failures = _affine_scan_chi_real(
         base_r, A_coef_r, B_coef_r,
         np.ascontiguousarray(scan, dtype=np.float64),
         np.ascontiguousarray(kv, dtype=np.float64),
         np.ascontiguousarray(weights, dtype=np.float64),
         w_coh, n_levels)
+    _check_lu_batch("affine_scan_chi", failures, scan=scan, kv=kv)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -645,8 +746,17 @@ def affine_scan_chi(base, A_coef, B_coef, scan, kv, weights, coh_idx, n_levels):
 # The eigenproblem stays in LAPACK via NumPy; these stages are the O(rows·n³)
 # bookkeeping around it and remain cacheable (no ctypes pointers).
 # ---------------------------------------------------------------------------
-@njit(cache=True, parallel=True)
 def pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
+                    eN, eR, WR, WN, t):
+    """Solve the stationary Schur block at each scan point."""
+    Z, g, c0, weff, failures = _pole_schur_rows(
+        NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv, eN, eR, WR, WN, t)
+    _check_lu_batch("pole_schur_rows", failures, scan=t)
+    return Z, g, c0, weff
+
+
+@njit(cache=True, parallel=True)
+def _pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
                     eN, eR, WR, WN, t):
     """Per row: Z = S_RR⁻¹(A_RR − A_RN A_NN⁻¹ A_NR), g, readout constants.
 
@@ -662,6 +772,7 @@ def pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
     g = np.empty((n_rows, nR), np.float64)
     c0 = np.empty((n_rows, n_ro), np.complex128)
     weff = np.empty((n_rows, n_ro, nR), np.complex128)
+    failures = np.zeros((n_rows, 3), np.int64)
     for i in prange(n_rows):
         ti = t[i]
         A = np.empty((nN, nN), np.float64)
@@ -679,8 +790,13 @@ def pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
         for a in range(nR):
             for b in range(nN):
                 RN[a, b] = RN0[a, b] + ti * RN1[a, b]
-        _lu_factor_real(A, piv)
-        _lu_solve_real(A, piv, B)                 # B = [A_NN⁻¹ A_NR | y]
+        status = _lu_factor_real(A, piv)
+        if status == _LU_OK:
+            status = _lu_solve_real(A, piv, B)
+        if status != _LU_OK:
+            failures[i, 0] = status
+            failures[i, 1], failures[i, 2] = 0, 0
+            continue
         for a in range(nR):
             for b in range(nR):
                 acc = RR0[a, b] + ti * RR1[a, b]
@@ -711,15 +827,23 @@ def pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
                 for k in range(nN):
                     acc_c -= WN[r, k] * B[k, b]
                 weff[i, r, b] = acc_c
-    return Z, g, c0, weff
+    return Z, g, c0, weff, failures
+
+
+def pole_residue_rows(V, g, weff):
+    """Solve for modal residues, retaining the first failed eigenbasis row."""
+    res, failures = _pole_residue_rows(V, g, weff)
+    _check_lu_batch("pole_residue_rows", failures, row=range(V.shape[0]))
+    return res
 
 
 @njit(cache=True, parallel=True)
-def pole_residue_rows(V, g, weff):
+def _pole_residue_rows(V, g, weff):
     """Residues ``res[i, r, k] = (weff V)[i, r, k] · (V⁻¹ g)[i, k]``."""
     n_rows, nR, _ = V.shape
     n_ro = weff.shape[1]
     res = np.empty((n_rows, n_ro, nR), np.complex128)
+    failures = np.zeros((n_rows, 3), np.int64)
     for i in prange(n_rows):
         A = np.empty((nR, nR), np.complex128)
         rhs = np.empty((nR, 1), np.complex128)
@@ -728,15 +852,20 @@ def pole_residue_rows(V, g, weff):
             for c in range(nR):
                 A[a, c] = V[i, a, c]
             rhs[a, 0] = g[i, a]
-        _lu_factor(A, piv)
-        _lu_solve(A, piv, rhs)
+        status = _lu_factor(A, piv)
+        if status == _LU_OK:
+            status = _lu_solve(A, piv, rhs)
+        if status != _LU_OK:
+            failures[i, 0] = status
+            failures[i, 1], failures[i, 2] = 0, 0
+            continue
         for r in range(n_ro):
             for k in range(nR):
                 acc = 0.0 + 0.0j
                 for a in range(nR):
                     acc += weff[i, r, a] * V[i, a, k]
                 res[i, r, k] = acc * rhs[k, 0]
-    return res
+    return res, failures
 
 
 @njit(cache=True, parallel=True)

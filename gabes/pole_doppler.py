@@ -38,7 +38,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from . import doppler, kernels
+from . import core, doppler, kernels
 
 _POOL = None
 _POOL_WORKERS = max(1, int(os.cpu_count() or 1))
@@ -179,7 +179,7 @@ class AffineShiftSystem:
         rhs = np.concatenate(
             [NR, np.broadcast_to(self.eN[None, :, None], (t.size, self.eN.size, 1))],
             axis=2)
-        sol = np.linalg.solve(NN, rhs)
+        sol = core._solve_checked(NN, rhs, "pole_schur_rows", scan=t)
         F, y = sol[:, :, :-1], sol[:, :, -1]
         Z = self.S_RR_inv[None] @ (RR - RN @ F)
         u = (RN @ y[:, :, None])[:, :, 0] - self.eR[None]
@@ -192,7 +192,8 @@ class AffineShiftSystem:
         """Stage 3: ``res = (weff V) * (V^-1 g)``."""
         if kernels.available():
             return kernels.pole_residue_rows(V, np.ascontiguousarray(g), weff)
-        b = np.linalg.solve(V, g[:, :, None].astype(np.complex128))[:, :, 0]
+        b = core._solve_checked(V, g[:, :, None].astype(np.complex128),
+                                "pole_residue_rows", row=range(V.shape[0]))[:, :, 0]
         return (weff @ V) * b[:, None, :]
 
     def _empty(self):

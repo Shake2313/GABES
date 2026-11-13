@@ -58,7 +58,7 @@ def test_broken_symmetry_or_complex_frequency_uses_general_solver(monkeypatch, c
         # Even a one-ULP defect must not be called mathematically zero.
         old = args[changed][0, 1]
         args[changed][0, 1] = np.nextafter(old.real, np.inf)+1j*old.imag
-    expected = kernels._floquet_chi_grid_general(*args)
+    expected = kernels._floquet_chi_grid_general(*args)[:2]
     def forbidden(*args):
         raise AssertionError('non-symmetric input reached the exact reduction')
     monkeypatch.setattr(kernels, '_floquet_chi_grid_hermitian', forbidden)
@@ -70,7 +70,7 @@ def test_broken_symmetry_or_complex_frequency_uses_general_solver(monkeypatch, c
 @pytest.mark.skipif(not kernels.available(), reason='Numba call-count instrumentation')
 def test_exact_reduction_requires_only_nf_complex_and_one_real_factorization(monkeypatch):
     args = physical_grid(n=2, n_f=4)
-    expected = kernels._floquet_chi_grid_general(*args)
+    expected = kernels._floquet_chi_grid_general(*args)[:2]
     counts = {'complex': 0, 'real': 0}
     complex_factor, real_factor = kernels._lu_factor, kernels._lu_factor_real
     def count_complex(a, p):
@@ -102,3 +102,47 @@ def test_wrapper_preserves_readonly_inputs_and_invalid_order_error():
     args[-1] = 0
     with pytest.raises(ValueError, match='n_f'):
         kernels.floquet_chi_grid(*args)
+
+
+@pytest.mark.parametrize("invalid", [0.0, np.nan, np.inf])
+def test_lu_failure_reports_floquet_point_for_compiled_and_reference(invalid):
+    # At deff[1] the zero harmonic loses its independent constraints. The
+    # nonzero harmonics are invertible when the entire input is finite.
+    matrix = -np.eye(4, dtype=complex)
+    matrix[1, 1] = matrix[2, 2] = invalid
+    shift = -np.eye(4, dtype=complex)
+    shift[1, 1] = shift[2, 2] = -1.0
+    zero = np.zeros_like(matrix)
+    deff = np.array([0.5, 0.])
+    readout = np.ones(4)
+    reason = "singular" if invalid == 0.0 else "non-finite"
+    failing_index = 1 if invalid == 0.0 else 0
+    point = rf"deff\[{failing_index}\]"
+
+    with pytest.raises(np.linalg.LinAlgError, match=rf"floquet_chi_grid.*{reason}.*delta\[0\].*{point}"):
+        kernels.floquet_chi_grid(matrix, zero, shift, zero, zero, np.array([0.]),
+                                 deff, 3., 1., readout, readout, 2)
+    with pytest.raises(np.linalg.LinAlgError, match=rf"floquet_solve.*{reason}.*{point}"):
+        core.floquet_solve_truncated(matrix, zero, zero, 3., deff, shift, 2)
+
+
+@pytest.mark.parametrize("dtype", [np.float64, np.complex128])
+@pytest.mark.parametrize("scale", [1e-20, 1., 1e20])
+@pytest.mark.parametrize("damping", [1.0, 1e-9])
+def test_checked_lu_preserves_solutions_across_scales(dtype, scale, damping):
+    # A narrow but valid response has a small pivot relative to the other
+    # scale in the matrix. It must retain its linewidth and amplitude.
+    matrix = scale * np.array([[1e-7 * damping, 1.0],
+                               [2.0 * damping, 3.0]], dtype=dtype)
+    rhs = scale * np.array([[1.0], [4.0]], dtype=dtype)
+    expected = core._solve_checked(matrix, rhs, "test")
+    factored, actual = matrix.copy(), rhs.copy()
+    pivots = np.empty(2, dtype=np.int64)
+    factor, solve = ((kernels._lu_factor_real, kernels._lu_solve_real)
+                     if dtype is np.float64 else (kernels._lu_factor, kernels._lu_solve))
+
+    assert factor(factored, pivots) == kernels._LU_OK
+    assert solve(factored, pivots, actual) == kernels._LU_OK
+    assert np.linalg.cond(matrix) < 10.0 / damping
+    assert np.linalg.norm(matrix @ actual - rhs) / np.linalg.norm(rhs) < 1e-13
+    np.testing.assert_allclose(actual, expected, rtol=1e-13, atol=0.0)

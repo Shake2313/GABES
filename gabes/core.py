@@ -199,7 +199,7 @@ def floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
         A = L_batch + 1j * harmonic * float(Omega_beat) * eye[None, :, :]
         if next_R is not None:
             A = A + Cm_batch @ next_R
-        current = -np.linalg.solve(A, Cp_batch)
+        current = -_solve_checked(A, Cp_batch, f"floquet_solve harmonic={harmonic}", deff=deff)
         R[harmonic - 1] = current
         next_R = current
 
@@ -210,12 +210,13 @@ def floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
         A = L_batch + 1j * harmonic * float(Omega_beat) * eye[None, :, :]
         if previous_Q is not None:
             A = A + Cp_batch @ previous_Q
-        current = -np.linalg.solve(A, Cm_batch)
+        current = -_solve_checked(A, Cm_batch, f"floquet_solve harmonic={harmonic}", deff=deff)
         Q[harmonic + n_f] = current
         previous_Q = current
 
     A_eff = L_batch + Cp_batch @ Q[-1] + Cm_batch @ R[0]
-    rho0 = _stationary_column(A_eff, population_trace(n_levels), 0)
+    trace_rhs = _border_trace(A_eff, population_trace(n_levels))
+    rho0 = _solve_checked(A_eff, trace_rhs, "floquet_solve harmonic=0", deff=deff)
 
     if not return_harmonics:
         rho1 = R[0] @ rho0
@@ -290,7 +291,7 @@ def floquet_solve_direct(L0_at_Deff_zero, Cp, Cm, Omega_beat,
         block[:, row, q * M + diagonal] = trace_scale[:, None]
         if harmonic == 0:
             rhs[:, row, 0] = trace_scale
-    solution = np.linalg.solve(block, rhs)[..., 0]
+    solution = _solve_checked(block, rhs, "floquet_solve_direct", deff=deff)[..., 0]
     harmonics = solution.reshape(
         deff.size, n_sector, n_levels, n_levels)
     if return_harmonics:
@@ -866,9 +867,36 @@ def _border_trace(A, trace, trace_row=0, scale=None):
     return rhs
 
 
+def _solve_checked(matrix, rhs, kernel, **axes):
+    """Use LAPACK with a deterministic failure reason and batch coordinate."""
+    def fail(reason, index):
+        points = ", ".join(f"{name}[{i}]={axis[i]}"
+                           for (name, axis), i in zip(axes.items(), index))
+        position = points or f"batch index {index}"
+        return np.linalg.LinAlgError(f"{kernel}: {reason} at {position}")
+
+    finite = np.isfinite(matrix).all(axis=(-2, -1)) & np.isfinite(rhs).all(axis=(-2, -1))
+    if not finite.all():
+        raise fail("non-finite matrix or right-hand side", tuple(np.argwhere(~finite)[0]))
+    try:
+        result = np.linalg.solve(matrix, rhs)
+    except np.linalg.LinAlgError as error:
+        # Find the responsible batch only on failure. Keep the normal batched solve.
+        for index in np.ndindex(finite.shape):
+            try:
+                np.linalg.solve(matrix[index], rhs[index])
+            except np.linalg.LinAlgError:
+                raise fail("singular (zero pivot)", index) from error
+        raise
+    finite_result = np.isfinite(result).all(axis=(-2, -1))
+    if not finite_result.all():
+        raise fail("non-finite solution", tuple(np.argwhere(~finite_result)[0]))
+    return result
+
+
 def _stationary_column(A, trace, trace_row):
     """Bordered solve on A (overwritten); the solution keeps its column axis."""
-    return np.linalg.solve(A, _border_trace(A, trace, trace_row))
+    return _solve_checked(A, _border_trace(A, trace, trace_row), "stationary_solve")
 
 
 def stationary_solve(A, trace, *, trace_row=0, overwrite_a=False):
