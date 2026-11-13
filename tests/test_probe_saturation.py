@@ -57,7 +57,7 @@ def test_autood_d2_saturation_scale_and_gaussian_waist_convention():
 
     np.testing.assert_allclose(
         saturation_intensity / 10.0,
-        1.6693356214912014,
+        1.6693356225140352,  # AutoOD scale with the exact SI Planck constant
         rtol=0.0,
         atol=1e-12,
     )
