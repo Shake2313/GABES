@@ -35,6 +35,8 @@ from typing import Tuple
 
 import math
 
+from gabes import detection as photodetection
+
 from .calibration import default_calibration
 from .layout import parts as layout_parts
 from .noise import EOMNoiseBudget, build_eom_noise_budget
@@ -137,7 +139,8 @@ class DetectionGeometry:
     @property
     def responsivity_a_per_w(self):
         """795 nm photocurrent conversion consistent with the adopted QE."""
-        return self.qe_pct * 0.01 * 795.0 / 1239.841984
+        return photodetection.photodiode_responsivity_a_per_w(
+            self.qe_pct * 0.01, 795e-9)
 
     @property
     def squeezing_floor_db(self):
@@ -273,7 +276,7 @@ def geometry(chain, settings, detection=None, calibration=None, layout=None):
 def _quantum_efficiency_pct(calibration):
     """QE implied by the photodiode responsivity: QE = R * hc / (e * lambda)."""
     responsivity = calibration.value("pd_responsivity_a_per_w")
-    return 100.0 * responsivity * 1239.841984 / 795.0
+    return 100.0 * photodetection.photodiode_quantum_efficiency(responsivity, 795e-9)
 
 
 def readout(geom, chain, gains, settings, detection=None, calibration=None):

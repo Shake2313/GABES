@@ -37,6 +37,8 @@ def run(cfg):
         coarse_points=121, fine_points=0,
         scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
         velocity_step=5.0, velocity_cutoff=3.0, branch=-1,
+        # Keep the capture on the compatibility path pinned by test_regression.
+        legacy_mean_field_fixture=True,
     )
 
 

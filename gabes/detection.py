@@ -68,6 +68,11 @@ def photodiode_responsivity_a_per_w(quantum_efficiency, wavelength_m):
         constants.PLANCK * constants.C_LIGHT)
 
 
+def photodiode_quantum_efficiency(responsivity_a_per_w, wavelength_m):
+    """Quantum efficiency implied by a responsivity [A/W] and wavelength [m]."""
+    return float(responsivity_a_per_w) / photodiode_responsivity_a_per_w(1.0, wavelength_m)
+
+
 @dataclass(frozen=True)
 class PhotodiodeChannel:
     """One photodiode arm represented by measured optical/detector quantities."""

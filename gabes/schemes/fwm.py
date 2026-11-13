@@ -19,7 +19,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .. import (adaptive_scan, atoms, beam, constants, doppler, fwm_gain_closure,
+from .. import (adaptive_scan, atoms, beam, constants, detection, doppler, fwm_gain_closure,
                fwm_stark_response,
                fwm_measured_gain,
                gain_reference,
@@ -239,15 +239,12 @@ RESPONSIVITY_AW = 0.59
 LOSS_FRAC = 0.0
 ETA_TOTAL = QE_DETECTOR * (1.0 - LOSS_FRAC)
 
-# Photon energy in eV·nm, so R[A/W] = QE · λ[nm] / 1239.84. Kept for the
-# compatibility API and archived readouts.
-_HC_EV_NM = 1239.841984
 PROBE_WAVELENGTH_NM = 795.0
 
 
 def responsivity_AW(qe=QE_DETECTOR, wavelength_nm=PROBE_WAVELENGTH_NM):
     """Photodiode responsivity [A/W] implied by a quantum efficiency."""
-    return float(qe) * float(wavelength_nm) / _HC_EV_NM
+    return detection.photodiode_responsivity_a_per_w(qe, float(wavelength_nm) * 1e-9)
 
 OMEGA_C_SEED = 0.0
 SCAN_MIN_GHZ = -8.0
@@ -4271,7 +4268,8 @@ class FWMScheme(Scheme):
             seeded_angle_deg=context["pump_probe_angle_deg"],
             tpd=float(fwm_measured_gain.internal_delta_mhz_from_eom(3034.0)),
             after_cell_eff_pct=97.09, loss_pct=2.91,
-            qe_pct=(0.58*1239.8/795)*100.0,
+            qe_pct=100.0 * detection.photodiode_quantum_efficiency(
+                0.58, PROBE_WAVELENGTH_NM * 1e-9),
             seed_input_assumption=fwm_measured_gain.SEED_INPUT_ASSUMPTION,
         )
         practical = dict(values, experimental_gain_calibration=True,

@@ -3,8 +3,8 @@ What a virtual instrument is, and what it is allowed to claim.
 
 Instruments take a `BeamState` (or, for the electrical ones, a
 `PhotocurrentSignal`) and return a `Reading`. Nothing here knows about the table
-layout or about Streamlit, so the package is reusable outside SABES: the only
-import is the beam state itself.
+layout or about Streamlit, so the package is reusable outside SABES: it uses
+GABES photodetection for the shared conversions.
 
 The load-bearing field is `Reading.provenance`.
 
@@ -25,6 +25,8 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
+from gabes import detection
+
 #: A reading whose numbers come from the model's physics.
 COMPUTED = "computed"
 #: A reading constructed from a PSD the model already knows. Not new evidence.
@@ -35,7 +37,6 @@ HEAD_OPTICAL = "optical"
 HEAD_PHOTOCURRENT = "photocurrent"
 
 ELEMENTARY_CHARGE = 1.602176634e-19
-PLANCK_EV_NM = 1239.841984
 
 
 @dataclass(frozen=True)
@@ -140,8 +141,8 @@ def shot_noise_a_per_rthz(responsivity, optical_power_w):
 
 def quantum_efficiency(responsivity_a_per_w, wavelength_nm):
     """QE = R * hc / (e * lambda). The number that sets the squeezing floor."""
-    return (float(responsivity_a_per_w) * PLANCK_EV_NM
-            / float(wavelength_nm))
+    return detection.photodiode_quantum_efficiency(
+        responsivity_a_per_w, float(wavelength_nm) * 1e-9)
 
 
 def to_dbm(power_w):

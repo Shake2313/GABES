@@ -114,7 +114,8 @@ def test_aggregate_efficiency_inputs_apply_consistently_to_both_detector_arms():
     assert all(arm.optics_transmission == pytest.approx(0.9709)
                for arm in geom.arms)
     result = readout(geom, chain, (15.0, 14.0), settings, detector)
-    expected_responsivity = 0.905 * 795.0 / 1239.841984
+    expected_responsivity = 0.905 * 1.602176634e-19 * 795e-9 / (
+        6.62607015e-34 * 299792458.0)
     assert result.shot_noise_a_per_rthz ** 2 == pytest.approx(
         2.0 * 1.602176634e-19 * expected_responsivity * result.total_power_w)
 

@@ -49,14 +49,16 @@ def test_callers_use_the_shared_detection():
     assert seed["shot_power_psd_W2_per_Hz"] == detection.optical_shot_power_psd(2e-4, omega)
 
 
-def test_planck_value_split_is_pinned():
-    # constants.PLANCK is 2*pi*HBAR from the rounded HBAR; the FWM responsivity
-    # uses hc/e = 1239.841984 eV nm. Unifying them is a value decision
-    # (checklist planck-constant-value-unification); until then both are pinned.
+def test_exact_si_planck_value_is_shared_by_fwm_and_sabes():
     from gabes.schemes import fwm
+    from sabes.instruments import base
 
-    assert constants.PLANCK == 2.0 * np.pi * constants.HBAR
-    assert constants.PLANCK / EXACT_SI_PLANCK - 1.0 == pytest.approx(-6.127e-10, abs=1e-13)
-    assert fwm.responsivity_AW(0.58, 794.979) == 0.58 * 794.979 / 1239.841984
-    ratio = fwm.responsivity_AW(0.58, 794.979) / detection.photodiode_responsivity_a_per_w(0.58, 794.979e-9)
-    assert ratio - 1.0 == pytest.approx(-3.449e-10, abs=1e-12)
+    assert constants.PLANCK == EXACT_SI_PLANCK
+    assert constants.HBAR == EXACT_SI_PLANCK / (2.0 * np.pi)
+    assert fwm.responsivity_AW(0.58, 794.979) == pytest.approx(
+        0.58 * 1.602176634e-19 * 794.979e-9 / (EXACT_SI_PLANCK * 299792458.0),
+        rel=1e-15)
+    assert base.quantum_efficiency(0.58, 795.0) == pytest.approx(
+        0.9045388061793227, rel=1e-15)
+    preset = next(p for p in fwm.FWMScheme().presets() if "2026-10-13" in p.name)
+    assert preset.values["qe_pct"] == pytest.approx(90.45388061793227, rel=1e-15)

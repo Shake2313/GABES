@@ -34,7 +34,7 @@ import numpy as np
 
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
-from gabes import constants, observables, species  # noqa: E402
+from gabes import constants, detection, observables, species  # noqa: E402
 from gabes.schemes import fwm, magneto  # noqa: E402
 from gabes.core import blas_single_thread  # noqa: E402
 
@@ -656,7 +656,8 @@ def source_readout_values(source: dict, args: argparse.Namespace) -> dict:
 def detector_responsivity_aw(args: argparse.Namespace) -> float:
     if args.responsivity_aw > 0:
         return float(args.responsivity_aw)
-    return args.detector_qe * args.probe_wavelength_nm / 1239.841984
+    return detection.photodiode_responsivity_a_per_w(
+        args.detector_qe, args.probe_wavelength_nm * 1e-9)
 
 
 def absolute_field_sensitivity(
@@ -1661,7 +1662,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--reference-path-eff", type=float, default=0.96)
     p.add_argument("--detector-qe", type=float, default=0.95)
     p.add_argument("--responsivity-aw", type=float, default=0.0,
-                   help="Photodiode responsivity. 0 computes QE*lambda/1239.84.")
+                   help="Photodiode responsivity. 0 derives responsivity from QE and wavelength.")
     p.add_argument("--probe-wavelength-nm", type=float, default=794.98)
     p.add_argument("--probe-pre-atten", type=float, default=1.0)
     p.add_argument("--reference-pre-atten", type=float, default=1.0)
