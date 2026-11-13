@@ -152,3 +152,62 @@ class AffineScan:
             rho = core.steady_state_batched(L0, np.array([s]), self.scan_shift, n)
             out[i] = rho[0, e, g] / self.probe_omega
         return out
+
+
+def joint_maxwell_mean(scan, temperature, mass, longitudinal_k, conditional_scan, *,
+                       transverse_orders=(32, 64, 128, 256), cutoff_sigma=6.0,
+                       rtol=1e-4):
+    """Integrate exact longitudinal means over an independent transverse velocity.
+
+    ``conditional_scan(vx)`` provides an AffineScan with the transverse shift
+    held fixed. Its single longitudinal coordinate carries all correlated
+    shifts. Check refinement at fixed cutoff and compare a wider cutoff at a
+    proportional order. Use both complex coherence and its scan derivative so
+    a converged envelope cannot mask an unconverged dispersion readout.
+    """
+    def transverse_mean(order, cutoff):
+        velocity, weights = doppler.maxwell_legendre_grid(
+            temperature, mass, order, cutoff)
+        mean = np.zeros_like(scan, dtype=complex)
+        for vx, weight in zip(velocity, weights):
+            mean += weight * conditional_scan(vx).maxwell_mean(
+                scan, temperature, mass, longitudinal_k)
+        return mean
+
+    def difference(a, b):
+        def normalized_error(x, y):
+            scale = max(float(np.max(np.abs(x))), np.finfo(float).tiny)
+            return float(np.max(np.abs(x - y))) / scale
+
+        return dict(
+            coherence=normalized_error(a, b),
+            derivative=normalized_error(np.gradient(a, scan), np.gradient(b, scan)),
+        )
+
+    if len(transverse_orders) < 2 or any(
+            lower >= upper for lower, upper in zip(transverse_orders, transverse_orders[1:])):
+        raise ValueError("At least two increasing transverse orders are required.")
+    history = []
+    previous = None
+    for order in transverse_orders:
+        mean = transverse_mean(order, cutoff_sigma)
+        refinement = None if previous is None else difference(mean, previous)
+        history.append(dict(order=order, cutoff_sigma=cutoff_sigma, difference=refinement))
+        if refinement is not None and max(refinement.values()) <= rtol:
+            break
+        previous = mean
+    cutoff_check = None
+    if refinement is not None and max(refinement.values()) <= rtol:
+        wider_cutoff = cutoff_sigma + 1.0
+        wider_order = math.ceil(order * wider_cutoff / cutoff_sigma)
+        wider = transverse_mean(wider_order, wider_cutoff)
+        cutoff_check = dict(order=wider_order, cutoff_sigma=wider_cutoff,
+                            difference=difference(wider, mean))
+        mean = wider
+    converged = (cutoff_check is not None
+                 and max(cutoff_check["difference"].values()) <= rtol)
+    return mean, dict(status="converged" if converged else "not_converged",
+                      relative_tolerance=rtol, transverse_refinement=history,
+                      transverse_cutoff_check=cutoff_check,
+                      longitudinal_method="conditional Maxwell pole mean with guarded direct fallback",
+                      transverse_method="Gauss-Legendre weighted by the Maxwell density")

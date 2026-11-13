@@ -53,12 +53,16 @@ def _conditions(scheme, params, key):
 def _readouts(view, readout, mode):
     metrics = {m["label"]: m for m in view["metrics"]}
     central = metrics["Transmission at center" if mode == "at" else "Transmission at resonance"]
+    joint = readout.get("joint_doppler")
+    velocity_unconverged = joint is not None and joint["status"] == "not_converged"
     rows = [dict(key="coupling_rabi", label="Effective Ωc/2π", value=readout["coupling_rabi_mhz"], unit="MHz"),
             dict(key="central_transmission", label="Resonance transmission", value=central["numeric_value"], unit="1")]
     if mode == "at":
         metric = metrics["AT splitting"]
+        status = ("velocity-not-converged" if velocity_unconverged else
+                  "resolved" if metric["numeric_value"] is not None else "unresolved")
         rows.append(dict(key="doublet_spacing", label="Absorption-peak spacing", value=metric["numeric_value"],
-                         unit="MHz", status="resolved" if metric["numeric_value"] is not None else "unresolved",
+                         unit="MHz", status=status,
                          reason="Two absorption maxima (transmission minima); central contrast must exceed 1%."))
         return rows
     width_metric = metrics["Window FWHM"]
@@ -75,12 +79,15 @@ def _readouts(view, readout, mode):
         right, _ = level_crossing(x, transmission, center, 1, half)
     bracketed = np.isfinite([left, right]).all() and contrast > 0
     intervals = width/scale/float(np.median(np.diff(x))) if width is not None else None
-    status = ("unresolved" if width is None else "scan-edge-limited" if not bracketed else
+    status = ("velocity-not-converged" if velocity_unconverged else
+              "unresolved" if width is None else "scan-edge-limited" if not bracketed else
               "resolution-limited" if intervals < 6 else "resolved")
     # Keep the original metric untouched; the comparison withholds clipped widths.
     shown_width = width if bracketed else None
-    rows += [dict(key="contrast", label="Transparency contrast ΔT", value=contrast if np.isfinite(contrast) else None,
-                  unit="1", reason="T(δ = 0) − min T of this complete native scan; absolute transmission difference."),
+    rows += [dict(key="contrast", label="Transparency contrast ΔT",
+                  value=contrast if np.isfinite(contrast) and not velocity_unconverged else None,
+                  unit="1", reason="T(δ = 0) − min T of this complete native scan; absolute transmission difference.",
+                  **({"status": status} if velocity_unconverged else {})),
              dict(key="window_width", label="Transparency-window FWHM", value=shown_width,
                   unit=width_metric["unit"], status=status,
                   reason="Both half-height crossings must lie inside the scan. Fewer than six native intervals is approximate."),
@@ -141,14 +148,17 @@ def coupling_comparison(scheme, params, *, resolve_raw, current_raw=None, curren
             markers += [dict(x=float(position), label=f"Absorption peak {j+1}")
                         for j, position in enumerate(metrics["AT splitting"].get("sample_positions", []))]
         markers.sort(key=lambda marker: marker["x"])
-        curves.append(dict(id=f"condition-{i}", label=label,
+        curve = dict(id=f"condition-{i}", label=label,
                            parameter=dict(key=key, label=spec.label, value=value, unit=spec.unit),
                            coordinates=dict(coupling_rabi=rabi), markers=markers,
                            x=sample_values(shown_x),
                            observables=dict(transmission=sample_values(readout["transmission"]),
                                             optical_depth=sample_values(np.asarray(readout["absorption_per_m"])*float(condition["cell_mm"])*1e-3),
                                             dispersion=sample_values(readout["dispersion"])),
-                           readouts=_readouts(view, readout, mode)))
+                           readouts=_readouts(view, readout, mode))
+        if "joint_doppler" in readout:
+            curve["joint_doppler"] = readout["joint_doppler"]
+        curves.append(curve)
     panels = [dict(key="transmission", title="Transmission", y_label="Transmission T", unit="1", cut_group="intensity"),
               dict(key="optical_depth", title="Optical depth", y_label="Optical depth OD", unit="1", cut_group="intensity"),
               dict(key="dispersion", title="Dispersion from the same solve", y_label="Re χ", unit="1", reference=0)]
@@ -183,6 +193,8 @@ def coupling_comparison(scheme, params, *, resolve_raw, current_raw=None, curren
                   notes=["Calculated scalar three-level Λ response; a selected regime is a preset, not an EIT/ATS classifier.",
                          "Each condition retains its own 601-point frequency grid. Zoom does not improve native resolution.",
                          "Contrast and FWHM use the minimum transmission of that condition's complete scan as background."])
+    if any("joint_doppler" in curve for curve in curves):
+        result["notes"].append("Joint Maxwell curves that reach the quadrature limit are provisional.")
     if key == "coupling_power_mw":
         # Supplied by the scheme's existing beam conversion, not a new UI physics model.
         medium_gamma = float(current_raw.get("gamma_mhz", 1.)) if current_raw is not None else 1.

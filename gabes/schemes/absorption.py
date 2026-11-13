@@ -9,9 +9,9 @@ CPT : same Λ, narrow two-photon scan → sub-natural dark resonance.
 All share one engine: build a rotating-frame H₀ with a weak probe (and optional
 strong coupling), solve the steady state per velocity class (core.steady_state_
 batched), and read the probe coherence ρ_eg/Ω_p = χ̄. Co-propagating geometry is
-the default: the optical line is Doppler-broadened while the Λ two-photon
-resonance stays Doppler-free. An optional beam-angle mismatch adds residual
-two-photon Doppler through the same atom.S_v path.
+the default: the optical line is Doppler-broadened and the Λ two-photon
+resonance retains the small longitudinal wave-vector difference. Angled beams
+can use a scalar residual shift or a joint Maxwell reference calculation.
 
 Spectroscopic knobs are in units of Γ (natural linewidth) so the physics is
 atom-agnostic and validation is direct (AT splitting reads Ω_c). Temperature sets
@@ -424,11 +424,13 @@ def _mkey(params, new_key, old_key, scale, default):
 # =========================================================
 LAMBDA_COUPLING_POWER_REF_MW = 1.0
 LAMBDA_COUPLING_DIAMETER_REF_MM = 1.0
+LAMBDA_JOINT_MAXWELL = "Joint Maxwell (reference)"
+LAMBDA_MAX_ANGLE_MRAD = 20.0
 
 
 class LambdaScheme(Scheme):
     cluster = "A — Absorption"
-    cache_version = "physical-units-v6-resolved-lambda"
+    cache_version = "physical-units-v7-joint-maxwell-reference"
     defaults_version = "physical-units-v3"
     supports_headless_observables = True
     model_comparison_parameter = "coupling_power_mw"
@@ -519,11 +521,10 @@ class LambdaScheme(Scheme):
                       help="1/e² coupling-beam diameter used for the √(P/d²) "
                            "Rabi scaling."),
             ParamSpec("beam_angle_mrad", "Beam angle mismatch", "Fields",
-                      0.0, 0.0, 20.0, 0.1, "mrad", advanced=True,
+                      0.0, 0.0, LAMBDA_MAX_ANGLE_MRAD, 0.1, "mrad", advanced=True,
                       help="Included angle between probe and coupling beams. "
-                           "0 mrad preserves the Doppler-free two-photon "
-                           "Lambda model; nonzero values add residual "
-                           "two-photon Doppler broadening."),
+                           "At 0 mrad only the optical-frequency difference "
+                           "contributes to the Raman Doppler width."),
             ParamSpec("coupling_rabi_mhz", "Coupling Rabi (anchor)", "Fields", d["oc_mhz"],
                       0.1, 120.0, 0.1, "MHz",
                       advanced=True,
@@ -542,6 +543,12 @@ class LambdaScheme(Scheme):
                       0.01, 2.0, 0.01, "", advanced=True, recompute=False),
             ParamSpec("doppler", "Doppler (vapor motion)", "Numerics", d["dopp"],
                       choices=("on", "off"), advanced=True),
+            ParamSpec("angled_doppler_model", "Angled Doppler model", "Numerics", "Scalar",
+                      choices=("Scalar", LAMBDA_JOINT_MAXWELL), advanced=True,
+                      visible_if={"doppler": "on"},
+                      help="The joint reference uses the same longitudinal velocity in both "
+                           "optical and Raman shifts, and averages transverse motion independently. "
+                           "Angled scans may take several seconds per condition."),
         ]
         return specs
 
@@ -575,11 +582,15 @@ class LambdaScheme(Scheme):
             diameter=d, ref_diameter=LAMBDA_COUPLING_DIAMETER_REF_MM)
 
     @staticmethod
-    def _two_photon_k_ratio(params, medium):
-        angle = float(params.get("beam_angle_mrad", 0.0))
+    def _wave_numbers(medium):
         # Probe addresses the lower hyperfine ground level in this Lambda model.
         k_probe = medium["k_vec"]
-        k_coupling = k_probe - 2.0 * np.pi * medium["ground_hf_hz"] / constants.C_LIGHT
+        return k_probe, k_probe - 2.0 * np.pi * medium["ground_hf_hz"] / constants.C_LIGHT
+
+    @classmethod
+    def _two_photon_k_ratio(cls, params, medium):
+        angle = float(params.get("beam_angle_mrad", 0.0))
+        k_probe, k_coupling = cls._wave_numbers(medium)
         if angle == 0.0:
             return beam.collinear_residual_k_ratio(k_probe, k_coupling)
         # Scalar angle approximation. Joint transverse averaging is a separate model.
@@ -638,6 +649,11 @@ class LambdaScheme(Scheme):
         Dc_mhz = _mkey(params, "coupling_detuning_mhz", "coupling_detuning", gamma_mhz, 0.0)
         gg_khz = _mkey(params, "buffer_ground_relax_khz", "gamma_gg", gamma_mhz * 1e3,
                        self._DEF[mode]["gg_khz"])
+        angle_mrad = float(params.get("beam_angle_mrad", 0.0))
+        joint_selected = params.get("angled_doppler_model", "Scalar") == LAMBDA_JOINT_MAXWELL
+        doppler_on = params.get("doppler", "off") == "on"
+        if joint_selected and doppler_on and not 0.0 <= angle_mrad <= LAMBDA_MAX_ANGLE_MRAD:
+            raise ValueError(f"Joint Maxwell beam angle must be in [0, {LAMBDA_MAX_ANGLE_MRAD:g}] mrad.")
         two_photon_k_ratio = self._two_photon_k_ratio(params, medium)
         atom = atoms.lambda3(
             gamma_gg=gg_khz * KHZ, gamma=gamma,
@@ -656,11 +672,12 @@ class LambdaScheme(Scheme):
         scan = self._scan(
             params, medium=medium, mode=mode, Oc_mhz=Oc_mhz,
             Dc_mhz=Dc_mhz, gg_khz=gg_khz)
+        scan_shift = core.comm_super(np.diag([0.0, 0.0, 1.0]))
         chi_bar = _solve_chi_avg(
             atom, build_H0, (2, 0), scan, params, h_dep=True,
             probe_omega=probe, k_vec=medium["k_vec"], mass=medium["mass"],
-            scan_shift=core.comm_super(np.diag([0.0, 0.0, 1.0])))
-        return dict(scan=scan, chi_bar=chi_bar, N=medium["N"], T=medium["T"], Dc=Dc,
+            scan_shift=scan_shift)
+        raw = dict(scan=scan, chi_bar=chi_bar, N=medium["N"], T=medium["T"], Dc=Dc,
                     L=params.get("cell_mm", 10.0) * 1e-3, ls=1.0,
                     gamma=gamma, gamma_mhz=gamma_mhz, k_vec=medium["k_vec"],
                     omega0=medium["omega0"], dipole=medium["dipole"],
@@ -670,8 +687,47 @@ class LambdaScheme(Scheme):
                         "coupling_power_mw", LAMBDA_COUPLING_POWER_REF_MW)),
                     coupling_diameter_mm=float(params.get(
                         "coupling_diameter_mm", LAMBDA_COUPLING_DIAMETER_REF_MM)),
-                    beam_angle_mrad=float(params.get("beam_angle_mrad", 0.0)),
-                    two_photon_k_ratio=two_photon_k_ratio)
+                    beam_angle_mrad=angle_mrad, two_photon_k_ratio=two_photon_k_ratio)
+        if joint_selected:
+            if not doppler_on:
+                raw["joint_doppler"] = dict(status="doppler_off")
+            elif angle_mrad == 0.0:
+                raw["joint_doppler"] = dict(status="collinear_limit")
+            else:
+                raw["scalar_chi_bar"] = chi_bar
+                raw["chi_bar"], raw["joint_doppler"] = self._joint_doppler(
+                    scan, medium, angle_mrad, build_H0,
+                    gg_khz * KHZ, probe, scan_shift)
+        return raw
+
+    @classmethod
+    def _joint_doppler(cls, scan, medium, angle_mrad, build_H0, ground_relaxation,
+                       probe, scan_shift):
+        k_probe, k_coupling = cls._wave_numbers(medium)
+        theta = angle_mrad * 1e-3
+        longitudinal = float(doppler.noncollinear_raman_shift_rad_s(
+            0.0, 1.0, k_probe, k_coupling, theta))
+        transverse = float(doppler.noncollinear_raman_shift_rad_s(
+            1.0, 0.0, k_probe, k_coupling, theta))
+        atom = atoms.lambda3(gamma_gg=ground_relaxation, gamma=medium["gamma"],
+                             two_photon_doppler_ratio=longitudinal / k_probe)
+
+        def conditional_scan(vx):
+            def shifted_hamiltonian(detuning):
+                hamiltonian = build_H0(detuning)
+                hamiltonian[1, 1] += transverse * vx
+                return hamiltonian
+
+            return affine_doppler.AffineScan(
+                atom, shifted_hamiltonian, (2, 0), probe, scan_shift)
+
+        mean, evidence = affine_doppler.joint_maxwell_mean(
+            scan, medium["T"], medium["mass"], k_probe, conditional_scan)
+        evidence.update(raman_rms=doppler.noncollinear_raman_rms_budget(
+            medium["T"], k_probe, k_coupling, theta, medium["mass"]),
+            probe_k_rad_m=k_probe, coupling_k_rad_m=k_coupling,
+            longitudinal_raman_k_rad_m=longitudinal, transverse_raman_k_rad_m=transverse)
+        return mean, evidence
 
     def model_comparison(self, params, *, resolve_raw, current_raw=None, current_view=None):
         from .lambda_comparison import coupling_comparison
@@ -706,18 +762,25 @@ class LambdaScheme(Scheme):
 
         ic = int(np.argmin(np.abs(x - center)))
         window = _lambda_window_readout(x, T_trans, xphys, ic, raw, L) if m != "at" else None
-        metrics = self._metrics(m, x, alpha, T_trans, ic, center, raw, params, window)
-        derived = derived_table([
+        joint = raw.get("joint_doppler")
+        joint_failed = joint is not None and joint["status"] == "not_converged"
+        if joint_failed and window is not None:
+            window.update(status="velocity_not_converged", width_mhz=None,
+                          group_index=None, group_delay_s=None)
+        metrics = self._metrics(m, x, alpha, T_trans, ic, center, raw, params, window,
+                                joint_failed=joint_failed)
+        details = [
             ("Medium", f"{raw.get('medium_label', '85Rb')} {raw.get('line', 'D1')}"),
             ("Γ / 2π", f"{raw.get('gamma_mhz', GAMMA_MHZ):.4f} MHz"),
             ("Ω_c / 2π", f"{raw['coupling_rabi_mhz']:.4f} MHz"),
             ("Coupling power", f"{raw['coupling_power_mw']:.3f} mW"),
             ("Coupling beam diameter", f"{raw['coupling_diameter_mm']:.3f} mm"),
             ("Beam angle mismatch", f"{raw.get('beam_angle_mrad', 0.0):.3f} mrad"),
-            ("Residual two-photon k / k", f"{raw.get('two_photon_k_ratio', 0.0):.3e}"),
+            ("Scalar residual k / k" if "scalar_chi_bar" in raw else "Residual two-photon k / k",
+             f"{raw.get('two_photon_k_ratio', 0.0):.3e}"),
             ("Buffer ground relax / 2π", f"{raw['buffer_ground_relax_khz']:.3f} kHz"),
             ("N", f"{raw['N']:.3e} /m³"),
-        ])
+        ]
         readout = dict(
             x_mhz=x, transmission=T_trans, absorption_per_m=alpha,
             dispersion=np.real(xphys), center_mhz=float(center),
@@ -726,9 +789,35 @@ class LambdaScheme(Scheme):
             regime=m, experimental_visibility="not assessed",
             window=window,
         )
-        return dict(metrics=metrics, figure=fig, tables=[derived], lambda_readout=readout)
+        if joint is not None:
+            status = joint["status"]
+            readout["joint_doppler"] = joint
+            details.append(("Joint Maxwell reference", status.replace("_", " ")))
+            if "scalar_chi_bar" in raw:
+                scalar_alpha, _ = observables.absorption_coefficient(
+                    raw["scalar_chi_bar"], raw["k_vec"], raw["N"], dipole=raw["dipole"],
+                    line_strength=float(params.get("line_strength", 1.0)))
+                scalar_transmission = observables.transmission(scalar_alpha, L)
+                scalar_scale = max(float(np.max(np.abs(raw["scalar_chi_bar"]))),
+                                   np.finfo(float).tiny)
+                delta = dict(
+                    complex_chi_relative_max=float(np.max(np.abs(
+                        raw["chi_bar"] - raw["scalar_chi_bar"]))) / scalar_scale,
+                    transmission_at_resonance=float(T_trans[ic] - scalar_transmission[ic]),
+                    transmission_absolute_max=float(np.max(np.abs(T_trans - scalar_transmission))),
+                )
+                readout["joint_doppler"] = dict(joint, difference_from_scalar=delta)
+                details.extend([
+                    ("Joint minus scalar, T at resonance", f"{delta['transmission_at_resonance']:+.4f}"),
+                    ("Raman Doppler RMS", f"{joint['raman_rms']['total_rms_hz'] / 1e3:.2f} kHz"),
+                ])
+        return dict(metrics=metrics, figure=fig, tables=[derived_table(details)],
+                    lambda_readout=readout)
 
-    def _metrics(self, mode, x, alpha, T_trans, ic, center, raw, params, window):
+    def _metrics(self, mode, x, alpha, T_trans, ic, center, raw, params, window,
+                 *, joint_failed=False):
+        center_transmission = None if joint_failed else float(T_trans[ic])
+        center_display = "—" if joint_failed else f"{center_transmission:.3f}"
         if mode == "at":
             # A real AT doublet needs two *resolved local maxima*. Taking the
             # largest sample on either side of centre always returns a nonzero
@@ -739,7 +828,7 @@ class LambdaScheme(Scheme):
             right = local[x[local] > center]
             resolved = False
             split = np.nan
-            if left.size and right.size:
+            if not joint_failed and left.size and right.size:
                 il = int(left[np.nanargmax(alpha[left])])
                 ir = int(right[np.nanargmax(alpha[right])])
                 valley = float(np.nanmin(alpha[il:ir + 1]))
@@ -757,9 +846,12 @@ class LambdaScheme(Scheme):
                                params.get("coupling_rabi", 0.0) * GAMMA_MHZ)
             if not resolved:
                 return [
-                    dict(label="AT status", value="doublet unresolved", kind="status",
-                         help="No pair of absorption maxima with resolvable central "
-                              "contrast exists in the displayed spectrum.", tier="hero"),
+                    dict(label="AT status", kind="status", tier="hero",
+                         value=("velocity integration not converged" if joint_failed
+                                else "doublet unresolved"),
+                         help=("Joint Maxwell refinement exceeded its bound."
+                               if joint_failed else "No pair of absorption maxima with "
+                               "resolvable central contrast exists in the displayed spectrum.")),
                     dict(label="AT splitting", value="—",
                          numeric_value=None, unit="MHz",
                          help="Withheld because the spectrum does not contain a "
@@ -767,8 +859,8 @@ class LambdaScheme(Scheme):
                     dict(label="Expected ≈ Ω_c", value=f"{expected:.1f} MHz",
                          numeric_value=float(expected), unit="MHz",
                          help="Coupling Rabi frequency Ω_c/2π."),
-                    dict(label="Transmission at center", value=f"{T_trans[ic]:.3f}",
-                         numeric_value=float(T_trans[ic]), unit="1",
+                    dict(label="Transmission at center", value=center_display,
+                         numeric_value=center_transmission, unit="1",
                          tier="hero"),
                 ]
             return [
@@ -779,8 +871,8 @@ class LambdaScheme(Scheme):
                 dict(label="Expected ≈ Ω_c", value=f"{expected:.1f} MHz",
                      numeric_value=float(expected), unit="MHz",
                      help="Coupling Rabi frequency Ω_c/2π."),
-                dict(label="Transmission at center", value=f"{T_trans[ic]:.3f}",
-                     numeric_value=float(T_trans[ic]), unit="1",
+                dict(label="Transmission at center", value=center_display,
+                     numeric_value=center_transmission, unit="1",
                      tier="hero"),
             ]
         # EIT / CPT: transparency at two-photon resonance + dark-resonance width.
@@ -791,8 +883,8 @@ class LambdaScheme(Scheme):
         scale = 1e3 if mode == "cpt" else 1.0
         width_valid = window["status"] == "resolved"
         metrics = [
-            dict(label="Transmission at resonance", value=f"{T_trans[ic]:.3f}",
-                 numeric_value=float(T_trans[ic]), unit="1",
+            dict(label="Transmission at resonance", value=center_display,
+                 numeric_value=center_transmission, unit="1",
                  help="Probe transmission at two-photon resonance (transparency).",
                  tier="hero"),
             dict(label="Window FWHM",
@@ -811,8 +903,9 @@ class LambdaScheme(Scheme):
         if not width_valid:
             metrics.append(dict(
                 label="Window status", value=window["status"].replace("_", " "), kind="status",
-                help="The current opacity/coupling settings do not produce a "
-                     "measurable transparency-window FWHM in this scan.",
+                help=("Joint Maxwell refinement exceeded its bound." if joint_failed else
+                      "The current opacity/coupling settings do not produce a "
+                      "measurable transparency-window FWHM in this scan."),
                 tier="hero"))
         return metrics
 
