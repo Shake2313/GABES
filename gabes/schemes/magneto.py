@@ -222,7 +222,7 @@ class SinglePairMagnetoReference(Scheme):
     """
     cluster = "C - Magneto-optics"
     presets_group = "Default"
-    cache_version = "polarized-two-region-v7-budker-sensitivity"
+    cache_version = "polarized-two-region-v8-light-dephasing"
     defaults_version = "polarized-two-region-v4"
     supports_headless_observables = True
 
@@ -358,12 +358,19 @@ class SinglePairMagnetoReference(Scheme):
                       help="Ground-state phase randomization without redistribution "
                            "of Zeeman populations; exposed as an override. This rate "
                            "does not describe isotropic spin destruction."),
-            ParamSpec("transit_relax_khz", "Transit relaxation", "Atomic", 80.0,
+            ParamSpec("transit_relax_khz", "Light-region exit rate", "Atomic", 80.0,
                       0.1, 1000.0, 1.0, "kHz", advanced=True,
                       visible_if={"cell_type": CELL_PARAFFIN},
                       advanced_group="Relaxation overrides",
-                      help="Atoms leaving the illuminated region; sets the broad "
-                           "pedestal. A beam-size / temperature consequence."),
+                      help="Exchange rate γ_out / 2π for atoms leaving the beam. "
+                           "The exchange already removes their light-region coherence."),
+            ParamSpec("light_dephasing_khz", "Extra light-region dephasing", "Atomic", 0.0,
+                      0.0, 1000.0, 1.0, "kHz", advanced=True,
+                      visible_if={"cell_type": CELL_PARAFFIN},
+                      advanced_group="Relaxation overrides",
+                      help="Additional in-beam ground pure dephasing / 2π, independent "
+                           "of exchange. Zero is an assumed default; enter a separate "
+                           "dephasing rate only when the conditions support one."),
             ParamSpec("dark_return_khz", "Dark-region return rate", "Atomic", 1.0,
                       0.01, 100.0, 0.01, "kHz", advanced=True,
                       visible_if={"cell_type": CELL_PARAFFIN},
@@ -540,7 +547,9 @@ class SinglePairMagnetoReference(Scheme):
             "whether the zero-field Hanle feature is EIT-like transparency, EIA/MIA-like "
             "absorption, or a crossover.  Paraffin-coated cells use a two-region "
             "light/dark OBE exchange model so wall-preserved ground coherence can "
-            "create a narrow Ramsey feature on a broad transit pedestal.\n\n"
+            "create a narrow Ramsey feature on a broad transit pedestal. The "
+            "light-region exit rate sets exchange; extra in-beam pure dephasing "
+            "is independent and defaults to zero (assumed).\n\n"
             "**References**\n"
             "- D. Budker et al., sensitive magnetometry based on nonlinear "
             "magneto-optical rotation, *Phys. Rev. A* **62**, 043403 (2000), "
@@ -592,7 +601,7 @@ class SinglePairMagnetoReference(Scheme):
             params.get("ne_pressure_torr", 0.0)) if cell_type == CELL_BUFFER else 0.0)
         gamma_homogeneous = GAMMA_D1 + buffer_gamma
         gamma_elastic = buffer_gamma / 2.0
-        gamma_transit = gamma_depol = 0.0
+        gamma_transit = gamma_depol = gamma_light_dephasing = 0.0
 
         if cell_type == CELL_BUFFER:
             gamma_transit = 2 * np.pi * params["buffer_ground_relax_khz"] * 1e3
@@ -605,12 +614,15 @@ class SinglePairMagnetoReference(Scheme):
             atom_dark = None
             gamma_out = gamma_in = gamma_wall = 0.0
         else:
-            gamma_light = 2 * np.pi * params["transit_relax_khz"] * 1e3
-            gamma_out = gamma_light
+            gamma_out = 2 * np.pi * params["transit_relax_khz"] * 1e3
+            light_dephasing_khz = float(params.get("light_dephasing_khz", 0.0))
+            if not math.isfinite(light_dephasing_khz) or light_dephasing_khz < 0:
+                raise ValueError("extra light-region dephasing must be finite and nonnegative")
+            gamma_light_dephasing = 2 * np.pi * light_dephasing_khz * 1e3
             gamma_in = 2 * np.pi * params["dark_return_khz"] * 1e3
             gamma_wall = 1.0 / max(params["wall_coherence_ms"] * 1e-3, 1e-9)
-            atom = (zeeman.zeeman_manifold(Fg, Fe, gamma=GAMMA_D1, gamma_gg=gamma_light,
-                                           transit_rate=0.0)
+            atom = (zeeman.zeeman_manifold(Fg, Fe, gamma=GAMMA_D1,
+                                           gamma_gg=gamma_light_dephasing, transit_rate=0.0)
                     if valid else None)
             atom_dark = (zeeman.zeeman_manifold(Fg, Fe, gamma=GAMMA_D1, gamma_gg=gamma_wall,
                                                 transit_rate=0.0)
@@ -717,7 +729,7 @@ class SinglePairMagnetoReference(Scheme):
                 chi_m = (cm * wt[None, :]).sum(axis=1)
                 chi_probe = (cprobe * wt[None, :]).sum(axis=1)
 
-        return dict(
+        raw = dict(
             line=LINE, isotope="87Rb", cell_type=cell_type, b_ut=b_ut,
             b_physical_ut=b_physical_ut, b_offset_ut=b_offset_ut,
             chi_probe=chi_probe, chi_p=chi_p, chi_m=chi_m, N=N, N_eff=N,
@@ -741,6 +753,9 @@ class SinglePairMagnetoReference(Scheme):
             density_convention=DENSITY_CONVENTION,
             absolute_scale_status=ABSOLUTE_SCALE_STATUS,
         )
+        if cell_type == CELL_PARAFFIN:
+            raw["gamma_light_dephasing"] = gamma_light_dephasing
+        return raw
 
     @staticmethod
     def _hamiltonian(atom, b_vec_t, gFg, gFe, Om, drive):
@@ -1314,6 +1329,14 @@ class SinglePairMagnetoReference(Scheme):
         larmor_hz_per_g = constants.MU_B * abs(raw["gFg"]) / (2 * np.pi * constants.HBAR) * 1e-4
         buffer_mhz = raw.get("buffer_gamma", 0.0) / (2 * np.pi) / 1e6
         elastic_mhz = raw.get("gamma_elastic", 0.0) / (2 * np.pi) / 1e6
+        exchange_rows = [
+            ("Two-region γ_out / 2π", f"{raw['gamma_out']/(2*np.pi)/1e3:.3f} kHz"),
+            ("Two-region γ_in / 2π", f"{raw['gamma_in']/(2*np.pi)/1e3:.3f} kHz"),
+        ]
+        if raw["cell_type"] == CELL_PARAFFIN:
+            dephasing_khz = raw.get("gamma_light_dephasing", 0.0) / (2 * np.pi) / 1e3
+            exchange_rows.append(("Extra light-region pure dephasing / 2π",
+                                  f"{dephasing_khz:.3f} kHz"))
         derived = derived_table([
             ("Isotope / line", f"{raw['isotope']} {raw['line']}"),
             ("Cell model", f"{raw['cell_type']}"),
@@ -1357,8 +1380,7 @@ class SinglePairMagnetoReference(Scheme):
              "n/a" if raw.get("doppler_guard_max_relative") is None
              else f"{raw['doppler_guard_max_relative']:.1e}"),
             ("Grid-fallback B rows", f"{raw.get('doppler_fallback_rows', 0)}"),
-            ("Two-region γ_out / 2π", f"{raw['gamma_out']/(2*np.pi)/1e3:.3f} kHz"),
-            ("Two-region γ_in / 2π", f"{raw['gamma_in']/(2*np.pi)/1e3:.3f} kHz"),
+            *exchange_rows,
             ("Wall γ / 2π", f"{raw['gamma_wall']/(2*np.pi):.3f} Hz"),
         ])
         return dict(metrics=metrics, figure=fig, magneto_readout=magneto_readout,

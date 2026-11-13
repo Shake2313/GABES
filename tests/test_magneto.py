@@ -254,6 +254,36 @@ def test_zero_light_exit_recovers_one_region_light_state():
     assert np.allclose(occupation, 1.0, rtol=1e-9, atol=0.0)
 
 
+def test_paraffin_exchange_and_extra_light_dephasing_are_independent():
+    scheme = SinglePairMagnetoReference()
+    params = dict(_fast_defaults(scheme), scan_points=5)
+    # Omitted and zero extra rates both give the exchange-only model.
+    assert params.pop("light_dephasing_khz") == 0.0
+    cases = (params, dict(params, light_dephasing_khz=0.0),
+             dict(params, light_dephasing_khz=80.0))
+    results = []
+    solve = scheme._steady_state_two_region
+    for case in cases:
+        with patch.object(scheme, "_steady_state_two_region", wraps=solve) as checked:
+            raw = scheme.compute(case)
+        rho, occupation = solve(*checked.call_args.args)
+        np.testing.assert_allclose(rho, rho.conj().swapaxes(-1, -2), atol=1e-12)
+        np.testing.assert_allclose(np.trace(rho, axis1=-2, axis2=-1), 1, atol=1e-12)
+        assert np.min(np.linalg.eigvalsh(rho)) >= -1e-12
+        np.testing.assert_allclose(occupation, 1 / 81, rtol=1e-9, atol=0)
+        assert raw["gamma_out"] == 2 * np.pi * 80e3
+        results.append(raw)
+
+    omitted, exchange_only, with_dephasing = results
+    assert omitted["gamma_light_dephasing"] == exchange_only["gamma_light_dephasing"] == 0
+    assert with_dephasing["gamma_light_dephasing"] == with_dephasing["gamma_out"]
+    np.testing.assert_array_equal(omitted["chi_probe"], exchange_only["chi_probe"])
+    assert np.max(np.abs(with_dephasing["chi_probe"] - exchange_only["chi_probe"])) > (
+        0.1 * np.max(np.abs(exchange_only["chi_probe"])))
+    table = scheme.headless_observables(exchange_only, cases[1])["tables"][1]["markdown"]
+    assert "Extra light-region pure dephasing / 2π" in table
+
+
 def test_local_density_enters_susceptibility_exactly_once():
     sc = SinglePairMagnetoReference()
     p = _fast_defaults(sc)

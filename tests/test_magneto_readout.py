@@ -151,7 +151,7 @@ def preset_schedule():
             continue
         key = "NMOR" if "NMOR" in name else "EIT"
         results[key] = {}
-        for count in (121, 201, 401, 801):
+        for count in (121, 201, 401, 801, 1601):
             params = dict(sc.defaults(), **preset)
             params["scan_points"] = count
             results[key][count] = sc.headless_observables(
@@ -162,11 +162,15 @@ def preset_schedule():
 @pytest.mark.parametrize("preset", ["EIT", "NMOR"])
 def test_deterministic_preset_schedule_preserves_sign_width_and_slope(preset_schedule, preset):
     schedule = preset_schedule[preset]
-    for count in (201, 401, 801):
+    for count in (201, 401, 801, 1601):
         current = schedule[count]
         assert current["central_width_ut"] > 0.0
         assert current["slope_rad_per_ut"] < 0.0
-    fine, finer = schedule[401], schedule[801]
+    # Removing the duplicate light-region dephasing narrows the NMOR response.
+    # Check the independent stencil gate at a finer resolution instead of relaxing it.
+    if preset == "NMOR":
+        assert schedule[401]["slope_status"] == "nonconverged on sampled grid"
+    fine, finer = schedule[801], schedule[1601]
     assert fine["feature_amplitude_per_m"] * finer["feature_amplitude_per_m"] > 0.0
     for field in ("central_width_ut", "slope_rad_per_ut"):
         assert abs(fine[field] - finer[field]) / abs(finer[field]) <= .05
