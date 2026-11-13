@@ -38,6 +38,10 @@ from ..core import (
     steady_state_batched,
     trace_zero_liouvillian_response,
 )
+from ..linear_hyperfine import (
+    analytic_hyperfine_line as _analytic_hyperfine_line,
+    hyperfine_alpha_analytic as _hyperfine_alpha_analytic,
+)
 from ..lineshape import fwhm_interp
 from ..biphoton_evidence import biphoton_output_evidence
 from ..passive_readout import passive_l1_from_spectrum
@@ -2635,42 +2639,6 @@ def _pump_scatter_noise(D_GHz, T, L, kappa):
     alpha, _, _ = absorption._hyperfine_alpha(scan, params)
     od_pump = float(np.clip(float(alpha[0]) * L, 0.0, 50.0))
     return float(kappa) * (1.0 - math.exp(-od_pump)), od_pump
-
-
-def _analytic_hyperfine_line(beam_GHz, T, Fg, Fe):
-    """Analytic Voigt absorption of one hyperfine line weighted by C_F² alone [1/m].
-
-    Same line center, self-broadened Lorentzian and Doppler width as
-    ``absorption._hyperfine_alpha`` (untruncated Maxwell, no table).
-    """
-    beam = np.atleast_1d(np.asarray(beam_GHz, dtype=float))
-    density = hyperfine.number_density(T)
-    gamma = hyperfine.self_broadened_gamma(density)
-    sigma = K_VEC * math.sqrt(constants.KB * float(T) / constants.MASS_85RB)
-    scale = (math.pi * K_VEC * hyperfine.DIPOLE_SQ * density
-             / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
-    detuning = 2 * np.pi * (beam * 1e9 + hyperfine.LINE_SHIFT_HZ[(2, 3)]
-                            - hyperfine.LINE_SHIFT_HZ[(Fg, Fe)])
-    return scale * hyperfine.CF2[(Fg, Fe)] * doppler.voigt_profile(detuning, gamma, sigma)
-
-
-def _hyperfine_alpha_analytic(beam_GHz, T, ground_F=None, population_factors=None):
-    """Closed-form counterpart of ``absorption._hyperfine_alpha`` on the FWM axis.
-
-    That path Doppler-averages a weak-probe two-level OBE (saturation ~2e-6)
-    numerically, i.e. it tabulates a Voigt profile.  The analytic twin uses the
-    same lines through the Faddeeva function.  ``population_factors`` maps each
-    ground manifold to the extra weight the reference applies (see
-    :func:`_reference_population_factors`); Ultra keeps the numerical table.
-    """
-    beam = np.atleast_1d(np.asarray(beam_GHz, dtype=float))
-    alpha = np.zeros_like(beam)
-    for (Fg, Fe) in hyperfine.TRANSITIONS:
-        if ground_F is not None and Fg != ground_F:
-            continue
-        weight = 1.0 if population_factors is None else population_factors[Fg]
-        alpha = alpha + weight * _analytic_hyperfine_line(beam, T, Fg, Fe)
-    return alpha
 
 
 @functools.lru_cache(maxsize=1)

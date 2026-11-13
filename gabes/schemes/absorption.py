@@ -22,6 +22,7 @@ import numpy as np
 from .. import atoms, beam, constants, doppler, hyperfine, observables, species
 from ..constants import GAMMA, K_VEC, OMEGA_D1
 from .. import affine_doppler, core
+from ..linear_hyperfine import hyperfine_alpha_obe
 from ..lineshape import MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM, fwhm_halfmax, level_crossing
 from ..report import derived_table
 from .base import ParamSpec, Preset, Scheme
@@ -30,10 +31,6 @@ PROBE_RABI = 1e-3              # weak probe, in units of Γ
 GAMMA_MHZ = GAMMA / (2 * np.pi) / 1e6
 MHZ = 2 * np.pi * 1e6
 KHZ = 2 * np.pi * 1e3
-
-# numpy ≥ 2.0 renamed np.trapz → np.trapezoid; support both.
-_trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
-
 
 _TABLE_STEP = GAMMA / 30.0          # Δ_eff sampling for the Doppler χ̄ table
 
@@ -95,67 +92,8 @@ def _solve_chi_avg(atom, build_H0, probe_coh, scan, params, h_dep,
 
 
 def _hyperfine_alpha(scan, params, line_strength=None):
-    """
-    Realistic 85Rb D1 absorption coefficient α(scan) [1/m]: an incoherent sum of
-    the four hyperfine transitions (Fg∈{2,3}→Fe∈{2,3}), each a Doppler-broadened
-    Voigt placed at its line-center detuning, weighted by the validated
-    Clebsch-Gordan strength C_F² and thermal sublevel population, with self-broadening.
-
-    The Voigt *shape* is produced once by the OBE Doppler kernel (a genuine OBE
-    solve — no analytic wofz) on a fine grid, normalised to unit area, then
-    shifted/scaled per line. Since C_F² sums initial magnetic sublevels,
-    the thermal population is included exactly once:
-        ∫α_F dδ = π · k · C_F² · |d|² · N / (ε₀ℏ) / (2(2I+1)).
-
-    Returns (alpha, components, info) where `components` maps (Fg,Fe)→α_F(scan)
-    and `info` carries N, Γ_eff, σ_v, Doppler FWHM for the readout.
-    """
-    T = params["temp_c"] + 273.15
-    doppler_on = params.get("doppler", "on") == "on"
-    ls = (params.get("line_strength", 1.0)
-          if line_strength is None else float(line_strength))
-
-    N = hyperfine.number_density(T)
-    buffer_gamma = _ne_buffer_gamma(params)
-    gamma_eff = hyperfine.self_broadened_gamma(N) + buffer_gamma
-    atom = atoms.two_level(gamma=gamma_eff)
-
-    def build_H0(_s):
-        H = np.zeros((2, 2), dtype=complex)
-        H[0, 1] = H[1, 0] = PROBE_RABI * GAMMA / 2
-        return H
-
-    sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
-    dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
-    width = dopp_fwhm if doppler_on else gamma_eff
-
-    shifts = {k: 2 * np.pi * v for k, v in hyperfine.LINE_SHIFT_HZ.items()}
-    smin, smax = min(shifts.values()), max(shifts.values())
-
-    # One unit-area Voigt shape on a fine grid covering (scan − shift) ± wings.
-    lo = scan.min() - smax - 12 * width
-    hi = scan.max() - smin + 12 * width
-    grid = np.linspace(lo, hi, int((hi - lo) / (width / 40.0)) + 2)
-    chi = _solve_chi_avg(atom, build_H0, (1, 0), grid, params, h_dep=False)
-    shape, _ = observables.absorption_coefficient(chi, K_VEC, 1.0, line_strength=1.0)
-    S_unit = shape / _trapz(shape, grid)          # ∫ S_unit dδ = 1
-
-    # Absolute per-line integrated absorption (AutoOD normalisation).
-    K = (np.pi * K_VEC * hyperfine.DIPOLE_SQ * N
-         / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
-
-    alpha = np.zeros_like(scan)
-    components = {}
-    for (Fg, Fe) in hyperfine.TRANSITIONS:
-        I_line = ls * K * hyperfine.CF2[(Fg, Fe)]
-        line = I_line * np.interp(scan - shifts[(Fg, Fe)], grid, S_unit,
-                                  left=0.0, right=0.0)
-        alpha += line
-        components[(Fg, Fe)] = line
-
-    info = dict(N=N, gamma_eff=gamma_eff, buffer_gamma=buffer_gamma,
-                sigma_v=sigma_v, dopp_fwhm=dopp_fwhm)
-    return alpha, components, info
+    return hyperfine_alpha_obe(scan, params, line_strength, solve_chi=_solve_chi_avg,
+                               probe_rabi=PROBE_RABI)
 
 
 # =========================================================
