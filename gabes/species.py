@@ -47,7 +47,7 @@ from . import beam, constants
 from .angular import clebsch_gordan, wigner3j, wigner6j
 
 MHZ = 2 * np.pi * 1e6          # MHz → rad/s
-_AMU = 1.660_539_066_60e-27    # kg
+_AMU = constants.ATOMIC_MASS_UNIT
 _LG, _LE, _SE = 0, 1, 0.5      # alkali D line: nS → nP orbital, electron spin ½
 
 # Self-broadening coefficient β/2π = 0.69e-7 Hz·cm³ (Rb; AutoOD).
@@ -135,7 +135,7 @@ class Isotope:
 
 
 RB85 = Isotope(
-    name="Rb85", label="⁸⁵Rb", I=2.5, mass=84.911_789_738 * _AMU, abundance=0.7217,
+    name="Rb85", label="⁸⁵Rb", I=2.5, mass=constants.MASS_85RB, abundance=0.7217,
     A_S=1011.910_813, A_P12=120.527, A_P32=25.0020, B_P32=25.790,
     nu_D1=377.107_385_690e12, nu_D2=384.230_406_373e12,
     gamma_D1_mhz=constants.GAMMA_2PI / 1e6, gamma_D2_mhz=6.0666,

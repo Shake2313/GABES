@@ -1,9 +1,9 @@
 {
   "schema_version": 4,
   "artifact": "baseline_focused.npz",
-  "sha256": "116ae9a82f03e9e17a00f33c4336434512340b2dd6ca247196d8811edcd5ea12",
+  "sha256": "a8b63ca6bcacec318524ae24e72f5e164ebf90661c8ad2a21dab949b367cb738",
   "classification": "legacy-propagation compatibility snapshot with converged-order finite-Floquet atomic response",
-  "change_reason": "The trace-normalized atomic density matrix already supplies the ground-manifold population, so the external macroscopic factor changed from p_F/12 to 1/12. The 100 kHz ground-coherence floor is now a trace-preserving thermal transit reset, while the density-dependent collision term remains pure dephasing. The atomic response changed from the fixed N_F=1 three-mode solve to N_F=3 with a full-scan N_F=2 comparison. No hidden refit of the inherited 0.74 residual was made. The exact SI Planck constant was adopted and the compatibility baseline recaptured. Adopt the Steck 85Rb D1 natural linewidth of 5.750 MHz.",
+  "change_reason": "The trace-normalized atomic density matrix already supplies the ground-manifold population, so the external macroscopic factor changed from p_F/12 to 1/12. The 100 kHz ground-coherence floor is now a trace-preserving thermal transit reset, while the density-dependent collision term remains pure dephasing. The atomic response changed from the fixed N_F=1 three-mode solve to N_F=3 with a full-scan N_F=2 comparison. No hidden refit of the inherited 0.74 residual was made. The exact SI Planck constant was adopted and the compatibility baseline recaptured. Adopt the Steck 85Rb D1 natural linewidth of 5.750 MHz. Adopt the Steck 85Rb isotope mass of 84.911789738 u.",
   "contracts_not_covered": [
     "Option-A mismatch sign",
     "canonical photon-flux Q normalization",
@@ -32,9 +32,9 @@
   "current_anchors": {
     "floquet_order": 3,
     "comparison_order": 2,
-    "sim_optimum_max_G_s": 552.6469695654318,
-    "sim_optimum_max_G_c": 556.4310325016999,
-    "detuned_max_G_s": 18.87077697198436,
-    "detuned_max_G_c": 18.281416877642204
+    "sim_optimum_max_G_s": 552.6470431852802,
+    "sim_optimum_max_G_c": 556.431107834282,
+    "detuned_max_G_s": 18.87078041350342,
+    "detuned_max_G_c": 18.28142064706167
   }
 }
