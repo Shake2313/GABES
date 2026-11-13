@@ -43,6 +43,7 @@ from .. import (atoms, constants, doppler, kernels, observables, probe_saturatio
 from ..constants import GAMMA, K_VEC
 from .. import core
 from ..lineshape import MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature
+from ..report import derived_table
 from .base import ParamSpec, Scheme
 
 PROBE_RABI = 1e-3                       # weak probe, in units of Γ
@@ -631,6 +632,18 @@ class SASScheme(Scheme):
                         if residual_scales is not None else 1.0
                     ),
                     paraffin_coated=paraffin_coated,
+                    paraffin_population_memory=(
+                        dict(status="active" if paraffin_memory else "inactive-pump-off",
+                             model="ground-hyperfine populations only",
+                             t1_reference_s=PARAFFIN_REFERENCE_T1_S,
+                             t1_reference_isotope="87Rb",
+                             t1_reference_temperature_k=300.0,
+                             t1_reference_doi="10.1063/1.4729925",
+                             assumed_cycle_rate_s_1=gt if paraffin_memory else None,
+                             cycle_rate_source="beam exchange uses the configured transit rate",
+                             calibration_status="semi-quantitative; cell specific T1 and geometry uncalibrated",
+                             optical_throughput_loss_applied=False)
+                        if paraffin_coated else None),
                     paraffin_t1_s=(PARAFFIN_REFERENCE_T1_S
                                    if paraffin_coated else None))
         if iso_ref.name == species.CS133.name:
@@ -866,6 +879,9 @@ class SASScheme(Scheme):
         buffer_mhz = raw.get("buffer_gamma", 0.0) / (2 * np.pi) / 1e6
         pump = params["pump_power_mw"]
         pump_on = pump > 0
+        coating = raw.get("paraffin_population_memory")
+        if coating is not None:
+            optical_readout["paraffin_population_memory"] = coating
 
         fig = None
         figure_views = []
@@ -873,6 +889,10 @@ class SASScheme(Scheme):
             import matplotlib.pyplot as plt
 
             title = ""
+            if coating is not None:
+                title = ("Paraffin: population memory only; reference T1 = 25.1 ms"
+                         if coating["status"] == "active"
+                         else "Paraffin: population memory inactive with pump off")
             xlabel = "Relative frequency  [GHz]  (ref: line centroid)"
             marker_x = [gx for gx, _lbl in raw["markers"]]
             fig, axT = plt.subplots(1, 1, figsize=(8.5, 4.35))
@@ -951,6 +971,20 @@ class SASScheme(Scheme):
                  "midpoint of any two sharing a ground state, enhanced/inverted by "
                  "hyperfine pumping.\n\n| Transition | Center [MHz] |\n|---|---|\n" + rows)
         tables = [{"title": "Hyperfine lines", "markdown": table}]
+        if coating is not None:
+            rate = coating["assumed_cycle_rate_s_1"]
+            tables.append(derived_table([
+                ("Paraffin model", coating["model"] + " (" + coating["status"] + ")"),
+                ("Population lifetime reference", (
+                    f"{1e3 * coating['t1_reference_s']:.1f} ms for coated 87Rb at "
+                    f"{coating['t1_reference_temperature_k']:.0f} K "
+                    f"(doi:{coating['t1_reference_doi']})")),
+                ("Beam exchange cycle rate", (
+                    f"{rate:.3g} s^-1 (configured transit rate)"
+                    if rate is not None else "inactive with pump off")),
+                ("Calibration scope", coating["calibration_status"]),
+                ("Coating throughput correction", "none"),
+            ]))
         if finite_probe:
             _, _, qualifier = _probe_scope_text(raw, params)
             tables.append({

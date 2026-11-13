@@ -19,6 +19,7 @@ Generic Γ-unit hole-burning fallback: Voigt background, Lamb dip, crossover.
 """
 from unittest.mock import patch
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
@@ -315,6 +316,31 @@ def test_paraffin_population_memory_is_opt_in_and_changes_pumped_sas():
     assert np.all(coated["alpha_unit"] >= 0.0)
     change = np.max(np.abs(coated["alpha_unit"] - explicit_off["alpha_unit"]))
     assert change > 1e-3 * explicit_off["alpha_unit"].max()
+
+
+def test_paraffin_provenance_is_visible_in_plots_and_headless_export():
+    params = _params(species=RB85_KEY, line="D1", pump_power_mw=0.5,
+                     paraffin_coated=True, temp_c=45.0, scan_points=401)
+    raw = SAS.compute(params)
+    headless = SAS.headless_observables(raw, params)
+    rendered = SAS.observables(raw, params)
+    try:
+        detail = headless["optical_readout"]["paraffin_population_memory"]
+        assert detail == rendered["optical_readout"]["paraffin_population_memory"]
+        assert detail["model"] == "ground-hyperfine populations only"
+        assert detail["t1_reference_doi"] == "10.1063/1.4729925"
+        assert detail["assumed_cycle_rate_s_1"] > 0.0
+        assert detail["optical_throughput_loss_applied"] is False
+        assert "reference T1 = 25.1 ms" in rendered["figure"].axes[0].get_title()
+        assert any("configured transit rate" in table["markdown"] for table in headless["tables"])
+    finally:
+        plt.close("all")
+    pump_off = dict(params, pump_power_mw=0.0)
+    inactive = SAS.headless_observables(SAS.compute(pump_off), pump_off)
+    assert inactive["optical_readout"]["paraffin_population_memory"]["status"] == "inactive-pump-off"
+    off = dict(params, paraffin_coated=False)
+    ordinary = SAS.headless_observables(SAS.compute(off), off)
+    assert "paraffin_population_memory" not in ordinary["optical_readout"]
 
 
 def test_paraffin_checkbox_is_inert_for_generic_toy():
