@@ -7,6 +7,11 @@ frequency. The solver uses laser detuning minus that shift. For Lambda, the
 common optical shift cancels in the Raman detuning. The reported elastic
 optical decoherence rate is half the added homogeneous FWHM. The reference
 keeps natural radiative decay and branching separate from elastic collisions.
+In uniform SAS, the pump OBE and probe use the same homogeneous width and
+the same pressure-shifted resonance. The Doppler-width temperature is the
+gas temperature for optical source comparisons. Vapor density sets
+self-broadening. The segmented SAS reference currently requires Legacy
+broadening.
 
 ## Sources and scope
 

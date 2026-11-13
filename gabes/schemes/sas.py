@@ -38,7 +38,7 @@ calculator (pump-off 85Rb D1 absolute scale).
 """
 import numpy as np
 
-from .. import (atoms, constants, doppler, kernels, observables, probe_saturation, species,
+from .. import (atoms, collisions, constants, doppler, kernels, observables, probe_saturation, species,
                vapor_cell)
 from ..constants import GAMMA, K_VEC
 from .. import core
@@ -154,6 +154,7 @@ def _probe_reference_matched(raw, params):
     return (
         raw.get("probe_validation_tier") == "reference_scope"
         and bool(raw.get("composition_reference_matched", True))
+        and not _measured_collision_mode(params)
         and float(params.get("pump_power_mw", 0.0)) == 0.0
         and float(raw.get("buffer_gamma", 0.0)) == 0.0
         and bool(raw.get("doppler_temp_tied", True))
@@ -228,7 +229,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "11"           # segmented weak-probe reference
+    cache_version = "12"           # segmented weak probe and Ne optical reference
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -328,10 +329,14 @@ class SASScheme(Scheme):
                      "beam passages using a nominal coated-cell reservoir. This changes "
                      "atomic pumping only; it does not apply a coating transmission loss.",
             ),
+            ParamSpec("optical_collision_model", "Optical collisions", "Cell & beams",
+                      collisions.LEGACY_COLLISIONS, choices=collisions.COLLISION_CHOICES,
+                      advanced=True,
+                      help="Measured Ne width and shift with source uncertainty. The reference "
+                           "uses uniform-cell propagation."),
             ParamSpec("ne_pressure_torr", "Ne buffer pressure", "Cell & beams", 0.0,
                       0.0, 200.0, 1.0, "Torr", advanced=True,
-                      help="Fixed-neon pressure broadening only; pressure shift and "
-                      "Dicke narrowing are not included."),
+                      help="Ne partial pressure at the Doppler-width temperature."),
             ParamSpec("waist_mm", "Pump beam waist (1/e²)", "Pump", 1.0, 0.1, 5.0, 0.05,
                       "mm", advanced=True, help="Sets the pump intensity I = 2P/(πw²) "
                       "for the power→Rabi conversion."),
@@ -484,6 +489,10 @@ class SASScheme(Scheme):
 
     def compute(self, params):
         segmented = params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED
+        if segmented and _measured_collision_mode(params):
+            raise sas_axial.AxialInputError(
+                "Measured Ne optical collisions require uniform-cell propagation. "
+                "Select Legacy broadening to use the segmented reference.")
         if params.get("species", "Rb (natural)") == GENERIC:
             if segmented:
                 raise sas_axial.AxialInputError("Segmented reference requires an isotope-resolved D-line species.")
@@ -559,7 +568,11 @@ class SASScheme(Scheme):
         # With no pump, coating memory cannot change a thermal OD spectrum. Keep
         # that limit on the legacy path exactly (and avoid an unnecessary solve).
         paraffin_memory = paraffin_coated and power > 0.0
-        buffer_gamma = constants.neon_buffer_broadening(params.get("ne_pressure_torr", 0.0))
+        reference = _measured_collision_mode(params)
+        pressure = params.get("ne_pressure_torr", 0.0)
+        buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
+        collision_reports = {}
+        self_reports = {}
 
         nu_ref = iso_ref.line(line)[1]
 
@@ -574,7 +587,19 @@ class SASScheme(Scheme):
             N = vapor_cell.cold_spot_limited_density(
                 species.number_density(iso, T_density), T_density, T_doppler) * weight
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
-            gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
+            pump_atom = man.atom
+            if reference:
+                effects = collisions.pressure_effects(iso.name, line, pressure, T_doppler)
+                self_fwhm, self_report = collisions.self_broadening_reference(iso.name, line, N)
+                buffer_gamma = max(buffer_gamma, effects.fwhm_rad_s)
+                offset += effects.shift_rad_s
+                gamma_eff = man.gamma + self_fwhm + effects.fwhm_rad_s
+                pump_atom = pump_atom.with_optical_dephasing(
+                    (self_fwhm + effects.fwhm_rad_s) / 2 + np.pi * extra_fwhm)
+                collision_reports[iso.name] = effects.readout()
+                self_reports[iso.name] = self_report
+            else:
+                gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
             if extra_fwhm:
                 gamma_eff += 2.0 * np.pi * extra_fwhm
             saturation_intensity = (
@@ -587,7 +612,7 @@ class SASScheme(Scheme):
             gamma_scan_max = max(
                 gamma_scan_max, gamma_eff * np.sqrt(1.0 + probe_s0))
             built.append(dict(man=man, offset=offset, N=N, Op=Op, iso=iso,
-                              gamma_eff=gamma_eff, transit_rate=gt,
+                              pump_atom=pump_atom, gamma_eff=gamma_eff, transit_rate=gt,
                               paraffin_memory=paraffin_memory,
                               probe_saturation_max=probe_s0))
             omega_all.append(man.omega + offset)
@@ -743,6 +768,9 @@ class SASScheme(Scheme):
                         if paraffin_coated else None),
                     paraffin_t1_s=(PARAFFIN_REFERENCE_T1_S
                                    if paraffin_coated else None))
+        if reference:
+            result["optical_collisions"] = collision_reports
+            result["self_broadening_reference"] = self_reports
         if iso_ref.name == species.CS133.name:
             result["self_broadening"] = {
                 "status": "unsupported",
@@ -792,12 +820,13 @@ class SASScheme(Scheme):
                     float(DS.min() + kv.min()), float(DS.max() + kv.max()))
             deff = _pump_detuning_axis(
                 om, gamma_eff, covered_detunings=covered_detunings)
+            pump_atom = b.get("pump_atom", man.atom)
             if b.get("paraffin_memory", False):
                 basis_pops = _basis_reset_pump_pops(
-                    man, Hp, deff, b["transit_rate"])
+                    man, Hp, deff, b["transit_rate"], pump_atom=pump_atom)
             else:
-                L0 = core.build_liouvillian(Hp, man.atom)
-                pops = _pump_pops(L0, deff, man.atom.S_v, man.n_levels)
+                L0 = core.build_liouvillian(Hp, pump_atom)
+                pops = _pump_pops(L0, deff, pump_atom.S_v, man.n_levels)
 
         # Homogeneous unit-area lineshape: the weak-probe 2-level absorption is a
         # Lorentzian of FWHM Γ_eff, ∫L̂ dδ = 1. Evaluated analytically at the probe
@@ -871,21 +900,28 @@ class SASScheme(Scheme):
         else:
             n_exc, offsets = 1, np.array([0.0])
 
-        buffer_gamma = constants.neon_buffer_broadening(params.get("ne_pressure_torr", 0.0))
+        T_density, T_doppler, tied = _temperatures(params)
+        mode = params.get("optical_collision_model", collisions.LEGACY_COLLISIONS)
+        effects = collisions.pressure_effects(
+            "Rb85", "D1", params.get("ne_pressure_torr", 0.0), T_doppler, mode=mode)
+        reference = _measured_collision_mode(params)
+        buffer_gamma = effects.fwhm_rad_s
         gamma_eff = GAMMA + buffer_gamma
+        radiative_gamma = GAMMA if reference else gamma_eff
+        elastic_hwhm = effects.optical_dephasing_rad_s if reference else 0.0
         Op = species.pump_rabi_from_power(params["pump_power_mw"], params["waist_mm"], GAMMA)
         pump_off = Op <= 0.0
         atom = None
         L0_pump = None
         if not pump_off:
-            atom = atoms.sas_atom(n_exc, gamma=gamma_eff)
+            atom = atoms.sas_atom(
+                n_exc, gamma=radiative_gamma).with_optical_dephasing(elastic_hwhm)
             Hp = np.zeros((atom.n_levels, atom.n_levels), dtype=complex)
             for i, e in enumerate(atom.excited):
                 Hp[e, e] = offsets[i]
                 Hp[0, e] = Hp[e, 0] = Op / 2
             L0_pump = core.build_liouvillian(Hp, atom)
 
-        T_density, T_doppler, tied = _temperatures(params)
         sigma_v = np.sqrt(constants.KB * T_doppler / constants.MASS_85RB)
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
         v, wt = doppler.velocity_grid(T_doppler, dv=3.0, cutoff_sigma=3.5)
@@ -897,7 +933,7 @@ class SASScheme(Scheme):
         half = max(3.5 * dopp_fwhm, off_span + 0.4 * dopp_fwhm, 10 * gamma_eff)
         scan = np.linspace(-half, half, int(params["scan_points"]))
 
-        two_lvl = atoms.two_level(gamma=gamma_eff)
+        two_lvl = atoms.two_level(gamma=radiative_gamma).with_optical_dephasing(elastic_hwhm)
         Hpr = np.zeros((2, 2), dtype=complex)
         Hpr[0, 1] = Hpr[1, 0] = PROBE_RABI * GAMMA / 2
         L0_probe = core.build_liouvillian(Hpr, two_lvl)
@@ -939,7 +975,7 @@ class SASScheme(Scheme):
             alpha += ((rho_gg - pe) * aL * wt[None, :]).sum(axis=1)
             chi_real += ((rho_gg - pe) * xL * wt[None, :]).sum(axis=1)
 
-        return dict(mode="generic", scan=scan, alpha_unit=alpha,
+        result = dict(mode="generic", scan=scan + effects.shift_rad_s, alpha_unit=alpha,
                     chi_real_unit=chi_real, k_vec=float(K_VEC),
                     dopp_fwhm=dopp_fwhm, buffer_gamma=buffer_gamma,
                     density_temp_c=T_density - 273.15,
@@ -947,7 +983,10 @@ class SASScheme(Scheme):
                     doppler_temp_tied=tied,
                     pump_saturation_intensity_w_m2={
                         "Rb85": species.pump_saturation_intensity(species.RB85, "D1")},
-                    gamma_eff=gamma_eff, offsets=offsets, two=(n_exc == 2))
+                    gamma_eff=gamma_eff, offsets=offsets + effects.shift_rad_s, two=(n_exc == 2))
+        if reference:
+            result["optical_collisions"] = {"Rb85": effects.readout()}
+        return result
 
     # =================================================================
     # observables  (dispatch)
@@ -967,6 +1006,9 @@ class SASScheme(Scheme):
         optical_readout = _optical_readout(
             x, "GHz", alpha, L, params, effective=finite_probe)
         T_trans = optical_readout["transmission"]
+        if "optical_collisions" in raw:
+            optical_readout["optical_collisions"] = raw["optical_collisions"]
+            optical_readout["self_broadening_reference"] = raw.get("self_broadening_reference", {})
         buffer_mhz = raw.get("buffer_gamma", 0.0) / (2 * np.pi) / 1e6
         pump = params["pump_power_mw"]
         pump_on = pump > 0
@@ -1070,6 +1112,7 @@ class SASScheme(Scheme):
                 value=f"{fraction * 100:.2f}% ⁸⁵Rb / {(1.0 - fraction) * 100:.2f}% ⁸⁷Rb",
                 help="Shares of total elemental Rb vapor density; the frequency "
                      "axis uses the ⁸⁵Rb line centroid for every mixture."))
+        metrics.extend(_collision_metrics(raw))
         if params.get("ne_pressure_torr", 0.0) != 0.0:
             metrics.append(dict(
                 label="Buffer Gas Broadening", value=f"{buffer_mhz:.1f} MHz"))
@@ -1157,6 +1200,9 @@ class SASScheme(Scheme):
         x = raw["scan"] / (2 * np.pi) / 1e6                  # MHz
         optical_readout = _optical_readout(x, "MHz", alpha, L, params)
         T_trans = optical_readout["transmission"]
+        if "optical_collisions" in raw:
+            optical_readout["optical_collisions"] = raw["optical_collisions"]
+            optical_readout["self_broadening_reference"] = raw.get("self_broadening_reference", {})
         offs_mhz = raw["offsets"] / (2 * np.pi) / 1e6
         buffer_mhz = raw.get("buffer_gamma", 0.0) / (2 * np.pi) / 1e6
 
@@ -1229,6 +1275,7 @@ class SASScheme(Scheme):
             metrics = [peak_metric, depth_metric, broad_metric]
         metrics.extend(_dispersion_metrics(chi_real, raw.get("k_vec"), L))
         metrics.extend(_temperature_metrics(raw))
+        metrics.extend(_collision_metrics(raw))
         if params.get("ne_pressure_torr", 0.0) != 0.0:
             metrics.append(dict(
                 label="Buffer Gas Broadening", value=f"{buffer_mhz:.1f} MHz"))
@@ -1255,6 +1302,21 @@ class SASScheme(Scheme):
 # =====================================================================
 # helpers
 # =====================================================================
+def _measured_collision_mode(params):
+    return params.get("optical_collision_model") == collisions.REFERENCE_COLLISIONS
+
+
+def _collision_metrics(raw):
+    metrics = []
+    for isotope, report in raw.get("optical_collisions", {}).items():
+        metrics.append(dict(
+            label=f"{isotope} Ne optical reference", kind="status", value=report["status"],
+            help=(f"Line shift {report['shift_mhz']:+.3f} MHz. "
+                  f"Added homogeneous FWHM {report['fwhm_mhz']:.3f} MHz. "
+                  + " ".join(report["warnings"]))))
+    return metrics
+
+
 def _collected_response(raw, params):
     """The same transmission input for display and export refinement."""
     L = params["cell_mm"] * 1e-3
@@ -1465,11 +1527,12 @@ def _basis_reset_atom(atom, transit_rate, source_ground):
         name=f"{atom.name}_reset_g{source_ground}")
 
 
-def _basis_reset_pump_pops(man, pump_hamiltonian, deff_axis, transit_rate):
+def _basis_reset_pump_pops(man, pump_hamiltonian, deff_axis, transit_rate, *, pump_atom=None):
     """Pump populations conditioned on each incoming ground hyperfine state."""
+    pump_atom = man.atom if pump_atom is None else pump_atom
     conditioned = []
-    for source_ground in man.atom.ground:
-        atom = _basis_reset_atom(man.atom, transit_rate, source_ground)
+    for source_ground in pump_atom.ground:
+        atom = _basis_reset_atom(pump_atom, transit_rate, source_ground)
         L0 = core.build_liouvillian(pump_hamiltonian, atom)
         conditioned.append(
             _pump_pops(L0, deff_axis, atom.S_v, atom.n_levels)
