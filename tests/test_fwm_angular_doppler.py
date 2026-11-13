@@ -170,3 +170,91 @@ def test_grid_and_cutoff_refinement_stabilize_reference_gain():
     assert rms_numeric == pytest.approx(rms_analytic, rel=0.01)
     assert fine.diagnostics["max_response_normalized_residual"] < 1e-12
     assert fine.diagnostics["max_response_trace_error"] < 1e-12
+
+
+def _finite_reference(delta_mhz, *, seed_power=8e-6, theta=THETA_RAD,
+                      probe_k_override=None, transverse_order=24):
+    _, pump_k, probe_k, _ = _geometry(delta_mhz)
+    if probe_k_override is not None:
+        probe_k = probe_k_override
+    pump = fwm.rabi_freq(.6, fwm.W_PUMP)
+    seed = fwm.rabi_freq(seed_power, fwm.W_PROBE)
+    result = fwm.finite_seed_angular_reference(
+        pump, pump, seed, seed, 2 * np.pi * np.asarray(delta_mhz) * 1e6,
+        2 * np.pi * D_GHZ * 1e9, T=T_LITERATURE, pump_k_rad_m=pump_k,
+        probe_k_axis_rad_m=probe_k, crossing_angle_rad=theta,
+        transverse_order=transverse_order)
+    return result, pump, seed
+
+
+def test_finite_seed_angular_poles_match_independent_tensor_at_heldout_point():
+    delta_mhz = -8.375
+    probe, pump_k, probe_k, conj_k = _geometry(delta_mhz)
+    reference, pump, seed = _finite_reference(delta_mhz)
+    atom = fwm.collisional_atom(T_LITERATURE)
+    vx, wx = doppler.maxwell_legendre_grid(T_LITERATURE, order=32, cutoff_sigma=5.5)
+    vz, wz = doppler.maxwell_legendre_grid(T_LITERATURE, order=96, cutoff_sigma=5.5)
+    delta = 2 * np.pi * delta_mhz * 1e6
+    deff, effective_delta = doppler.noncollinear_atomic_detunings_rad_s(
+        2 * np.pi * D_GHZ * 1e9, delta, vx[None, :], vz[:, None],
+        pump_k, probe_k[0], THETA_RAD)
+    np.testing.assert_array_equal(reference["lab_optical_beat_rad_s"],
+                                  fwm.seeded_sideband_beat(np.array([delta]), -1))
+    assert reference["analysis_frequency_rad_s"] == 0.0
+    np.testing.assert_allclose(
+        effective_delta + fwm.seeded_sideband_beat(effective_delta, -1),
+        constants.OMEGA_HF, rtol=0, atol=4e-6)
+    assert reference["total_raman_rms_hz"][0] == pytest.approx(1.38017e6, rel=2e-5)
+    for order, response in reference["responses"].items():
+        expected = np.zeros(4, complex)
+        for deff_z, delta_x, weight in zip(deff, effective_delta, wz):
+            tensor = fwm.chi_matrix_table(pump, pump, seed, seed, delta_x,
+                                         deff_z.ravel(), -1, atom=atom, n_f=order)
+            expected += weight * np.asarray([wx @ value[:, 0] for value in tensor])
+        actual = np.asarray(response).ravel()
+        np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=1e-20)
+        for values in (actual, expected):
+            ss, cs, sc, cc = values
+            gain = observables.gain_from_chi(
+                ss, sc, cs, cc, probe_k, conj_k, fwm.L_CELL,
+                fwm.hyperfine.number_density(T_LITERATURE),
+                line_strength=fwm.SEEDED_REFERENCE_RESIDUAL * fwm.physical_coupling_norm(-1),
+                delta_k_z=fwm.seeded_phase_mismatch_z(D_GHZ, probe, angle_deg=.32))[:2]
+            if values is actual:
+                actual_gain = gain
+            else:
+                np.testing.assert_allclose(actual_gain, gain, rtol=2e-5)
+
+
+def test_finite_seed_recovers_weak_tensor_and_collinear_limit():
+    reference, _, _ = _finite_reference(DELTA_MHZ, seed_power=8e-14)
+    weak = _reference(order=24)
+    np.testing.assert_allclose(np.asarray(reference["responses"][3]).ravel(),
+                               [weak.chi_ss.item(), weak.chi_cs.item(),
+                                weak.chi_sc.item(), weak.chi_cc.item()], rtol=1.5e-5)
+    probe, pump_k, probe_k, _ = _geometry()
+    collinear, pump, seed = _finite_reference(DELTA_MHZ, theta=0.0)
+    assert collinear["transverse_raman_rms_hz"][0] == 0.0
+    assert 1e3 < collinear["axial_raman_rms_hz"][0] < 3e3
+    equal_k, _, _ = _finite_reference(DELTA_MHZ, theta=0.0, probe_k_override=pump_k)
+    atom = fwm.collisional_atom(T_LITERATURE)
+    forms = fwm._seeded_pole_systems(pump, pump, seed, seed, -1, atom, (3,))
+    delta = np.array([2 * np.pi * DELTA_MHZ * 1e6])
+    one_photon = 2 * np.pi * D_GHZ * 1e9
+    sigma = pump_k * np.sqrt(constants.KB * T_LITERATURE / constants.MASS_85RB)
+    expected = []
+    for system, strength in forms.values():
+        expected.extend(system.residues(delta).gaussian_mean(one_photon, sigma)[0] / strength)
+    np.testing.assert_allclose(np.asarray(equal_k["responses"][3]).ravel(), expected, rtol=2e-11)
+    assert not np.array_equal(np.asarray(collinear["responses"][3]), equal_k["responses"][3])
+
+
+def test_finite_seed_reference_is_opt_in_and_rejects_plus_branch():
+    scheme = fwm.FWMScheme()
+    params = scheme.defaults()
+    assert any(view.key == "Finite-seed angular Doppler reference" for view in scheme.extra_views())
+    assert "finite_seed_angular_reference" not in scheme.compute(params)
+    with pytest.raises(NotImplementedError, match="minus"):
+        fwm.finite_seed_angular_reference(1.0, 1.0, 1.0, 1.0, [0.0], 0.0,
+            T=T_LITERATURE, pump_k_rad_m=1.0, probe_k_axis_rad_m=1.0,
+            crossing_angle_rad=0.0, branch=1)

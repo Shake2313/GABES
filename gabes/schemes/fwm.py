@@ -2222,7 +2222,8 @@ def chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis, bra
     return chi_ss, chi_cs, chi_sc, chi_cc
 
 
-def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders):
+def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders, *,
+                         return_real_forms=False):
     """Real pole–residue systems for both finite seed configurations and orders.
 
     Returns ``{(seed, order): (AffineShiftSystem, reference Rabi frequency)}``
@@ -2265,11 +2266,93 @@ def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders):
         L_r = np.ascontiguousarray((Uh @ L0 @ U).real)
         Cp_r = Uh @ Cp @ U
         for order in orders:
-            system = pole_doppler.AffineShiftSystem(*pole_doppler.floquet_real_form(
+            form = pole_doppler.floquet_real_form(
                 L_r, Cd_r, Cp_r, S_r, order, OMEGA_HF, float(branch), n,
-                ((0, w_probe), (1, w_conj))))
-            systems[(seed, order)] = (system, reference)
+                ((0, w_probe), (1, w_conj)))
+            systems[(seed, order)] = (form if return_real_forms else
+                                      pole_doppler.AffineShiftSystem(*form), reference)
     return systems
+
+
+def _finite_seed_angular_rows(forms, delta, one_photon, T, pump_k, probe_k, theta,
+                              transverse_order, transverse_cutoff):
+    """Conditional analytic longitudinal Maxwell mean for each transverse node."""
+    vx, weights = doppler.maxwell_legendre_grid(T, order=transverse_order,
+                                               cutoff_sigma=transverse_cutoff)
+    sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
+    rows = {key: np.empty((len(delta), 2), dtype=complex) for key in forms}
+    theta = float(theta)
+    for row, (lab_delta, k_probe) in enumerate(zip(delta, probe_k)):
+        # D = Delta - k_p v_z. The atom-frame Raman detuning is t-rD;
+        # (L0 + t A1) - D(S+rA1) includes the corresponding atom-frame beat.
+        ratio = (pump_k - k_probe * np.cos(theta)) / pump_k
+        t = lab_delta + ratio * one_photon - k_probe * np.sin(theta) * vx
+        for key, ((A0, A1, S, rhs, readout), reference) in forms.items():
+            system = pole_doppler.ShiftInvertSystem(A0, A1, S + ratio * A1, rhs, readout)
+            residues = system.residues(t, one_photon)
+            mean = residues.gaussian_mean(one_photon, pump_k * sigma_v)
+            rows[key][row] = (weights @ mean) / reference
+    return rows
+
+
+def finite_seed_angular_reference(
+        Op_A, Op_B, Os_ref, Oc_ref, lab_delta_axis_rad_s, one_photon_rad_s, *,
+        T, pump_k_rad_m, probe_k_axis_rad_m, crossing_angle_rad, atom=None,
+        floquet_order=SEEDED_FLOQUET_ORDER, transverse_order=18, cutoff_sigma=5.0,
+        branch=-1):
+    """Bounded finite-seed minus-branch mean field with transverse Raman shift.
+
+    Longitudinal averaging is analytic at each transverse quadrature node.
+    The static Raman diagonal and the internal harmonic frequency receive
+    opposite velocity shifts. Their sum keeps the pump-only gauge invariant.
+    Laboratory beat and RF analysis frequency are separate, and this steady
+    mean-field calculation evaluates the carrier (zero RF offset) only.
+    """
+    if branch != -1:
+        raise NotImplementedError("finite-seed angular Doppler supports only the minus Raman branch")
+    delta = np.atleast_1d(np.asarray(lab_delta_axis_rad_s, dtype=float))
+    probe_k = np.broadcast_to(np.asarray(probe_k_axis_rad_m, dtype=float), delta.shape)
+    if (delta.ndim != 1 or not 1 <= delta.size <= 121 or not np.isfinite(delta).all()
+            or not np.isfinite(probe_k).all() or np.any(probe_k <= 0)
+            or not np.isfinite(pump_k_rad_m) or pump_k_rad_m <= 0
+            or not np.isfinite(one_photon_rad_s)
+            or not np.isfinite(crossing_angle_rad) or abs(crossing_angle_rad) > np.deg2rad(2.0)
+            or transverse_order not in range(8, 33) or not 4.0 <= cutoff_sigma <= 6.0
+            or floquet_order not in (3, 4, 5)):
+        raise ValueError("angular reference requires 1–121 rows, angle at most 2 degrees, "
+                         "8–32 transverse nodes, a 4–6 sigma cutoff and Floquet order 3–5")
+    if not all(np.isfinite(ref) and ref > 0 for ref in (Os_ref, Oc_ref)):
+        raise ValueError("finite-seed angular reference requires positive reference Rabi frequencies")
+    if atom is None:
+        atom = collisional_atom(T)
+    orders = (floquet_order, floquet_order - 1)
+    forms = _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders,
+                                return_real_forms=True)
+    if forms is None:
+        raise ValueError("angular reference requires a Hermiticity-preserving seeded model")
+    rows = _finite_seed_angular_rows(forms, delta, one_photon_rad_s, T, pump_k_rad_m,
+                                     probe_k, crossing_angle_rad, transverse_order, cutoff_sigma)
+    responses = {}
+    for order in orders:
+        probe, conjugate = rows[(1, order)], rows[(2, order)]
+        responses[order] = (probe[:, 0], probe[:, 1], conjugate[:, 0], conjugate[:, 1])
+    if not all(np.isfinite(response).all() for parts in responses.values() for response in parts):
+        raise FloatingPointError("non-finite finite-seed angular response")
+    budgets = [doppler.noncollinear_raman_rms_budget(T, pump_k_rad_m, k, crossing_angle_rad)
+               for k in probe_k]
+    return {
+        "responses": responses,
+        "lab_two_photon_detuning_rad_s": delta,
+        "lab_optical_beat_rad_s": seeded_sideband_beat(delta, branch),
+        "analysis_frequency_rad_s": 0.0,
+        "one_photon_lab_rad_s": float(one_photon_rad_s),
+        **{f"{component}_raman_rms_hz": np.array([budget[f"{component}_rms_hz"] for budget in budgets])
+           for component in ("axial", "transverse", "total")},
+        "transverse_order": int(transverse_order),
+        "transverse_cutoff_sigma": float(cutoff_sigma),
+        "longitudinal_measure": "analytic conditional untruncated Maxwell",
+        "scope": "minus Raman branch, finite seed, carrier mean field; RMS is a velocity-distribution scale",
+    }
 
 
 def _pole_scan_response(systems, *, orders, delta_axis, probe_axis_GHz, Delta,
@@ -2858,7 +2941,8 @@ def compute_spectrum(D_GHz, *,
                      coarse_points=None, fine_points=None, window_mhz=None,
                      scan_min=None, scan_max=None, extra_probe_points_GHz=(),
                      velocity_step=None, velocity_cutoff=None,
-                     velocity_measure="truncated",
+                     velocity_measure="truncated", angular_transverse_order=0,
+                     angular_transverse_cutoff=5.0,
                      branch=DEFAULT_BRANCH, branches=None,
                      phase_detail=PHASE_LEGACY,
                      pump_probe_angle_deg=SEEDED_PHASE_ANGLE_DEG,
@@ -2906,7 +2990,9 @@ def compute_spectrum(D_GHz, *,
         gain_closure_enabled, legacy_gain_calibration_fixture)
     stark_recompute_context = copy.deepcopy({
         key: value for key, value in locals().items()
-        if key != "pump_stark_fraction" and (key != "extra_probe_points_GHz" or np.size(value))})
+        if key != "pump_stark_fraction" and (key != "extra_probe_points_GHz" or np.size(value))
+        and (key not in {"angular_transverse_order", "angular_transverse_cutoff"}
+             or angular_transverse_order)})
     branch = _single_branch(branch, branches)
     floquet_order = int(floquet_order)
     if floquet_order < 1:
@@ -3052,14 +3138,36 @@ def compute_spectrum(D_GHz, *,
     response_orders = ((floquet_order, floquet_order - 1)
                        if enforce_floquet_convergence else (floquet_order,))
     pole_systems = None
-    if response_method != RESPONSE_GRID:
+    if response_method != RESPONSE_GRID and not angular_transverse_order:
         pole_systems = _seeded_pole_systems(
             Op_A, Op_B, Os_ref, Oc_ref, branch, atom_T, response_orders)
     # Analytic absorption diagnostics only when they reproduce the reference
     # normalization; otherwise the pole tiers keep Ultra's numerical tables.
     analytic_factors = (_reference_population_factors()
                         if pole_systems is not None else None)
-    if pole_systems is None:
+    angular_reference = None
+    if angular_transverse_order:
+        if not enforce_floquet_convergence or legacy_mean_field_fixture:
+            raise ValueError("angular reference requires adjacent orders and the current carrier origin")
+        angular_reference = finite_seed_angular_reference(
+            Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta,
+            T=T, pump_k_rad_m=k_pump_vac, probe_k_axis_rad_m=k_probe_vac,
+            crossing_angle_rad=np.deg2rad(pump_probe_angle_deg), atom=atom_T,
+            floquet_order=floquet_order, transverse_order=angular_transverse_order,
+            cutoff_sigma=angular_transverse_cutoff, branch=branch)
+        chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = angular_reference["responses"].pop(floquet_order)
+        lower_order_response = angular_reference["responses"].pop(floquet_order - 1)
+        del angular_reference["responses"]
+        response_estimator = {
+            "method": "angular_conditional_pole_reference",
+            "velocity_average": "conditional longitudinal Maxwell pole mean, transverse Gauss–Legendre",
+            "solved_probe_points": int(probe_axis_GHz.size),
+            "display_probe_points": int(probe_axis_GHz.size),
+            "interpolation": "none",
+            "audit_scope": "every angular reference detuning",
+            "absorption_diagnostics": "independent one-dimensional absorption diagnostic",
+        }
+    elif pole_systems is None:
         chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = (
             averaged_response_at_order(floquet_order))
         lower_order_response = None
@@ -3192,7 +3300,7 @@ def compute_spectrum(D_GHz, *,
     response_estimator["velocity_measure"] = velocity_measure
     if exact_velocity:
         response_estimator["fallback_velocity_cutoff_sigma"] = float(fallback_cutoff)
-        if pole_systems is None:
+        if pole_systems is None and angular_reference is None:
             response_estimator["velocity_average"] = (
                 f"Maxwell grid fallback ({fallback_cutoff:g} sigma); analytic pole form unavailable")
     atomic_high_response = (chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg)
@@ -3400,7 +3508,7 @@ def compute_spectrum(D_GHz, *,
     else:
         gain_referred_noise_db = observables.gain_referred_noise_dB(G_s, G_c, eta)
 
-    if pole_systems is not None:
+    if pole_systems is not None or angular_reference is not None:
         floquet_convergence["scope"] = response_estimator["audit_scope"]
         floquet_convergence["solved_scan_points"] = (
             response_estimator["solved_probe_points"])
@@ -3606,6 +3714,8 @@ def compute_spectrum(D_GHz, *,
     # post-hoc power cap/output fit. Any susceptibility coupling closure is
     # already included in that map. The legacy gain diagnostic above is retained
     # verbatim for callers and historical numerical fixtures.
+    if angular_reference is not None:
+        spectrum["finite_seed_angular_reference"] = angular_reference
     spectrum.update(passive_l1_from_spectrum(spectrum))
     spectrum["measured_gain_reference"] = _measured_gain_reference_readout(
         spectrum, enabled=measured_gain_calibration,
@@ -4172,7 +4282,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v28-exact-readout"
+    cache_version = "fwm-experimental-jasperse-gain-v29-angular-reference"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -4699,6 +4809,14 @@ class FWMScheme(Scheme):
             params = self._biphoton_runtime_params(params)
             return _solver_from_topology_key(
                 _topology_cache_key(params)).compute_biphoton(params)
+        inputs = self._seeded_compute_inputs(params)
+        detuning = inputs.pop("D_GHz")
+        raw = compute_spectrum(detuning, **inputs)
+        if "stark_recompute_context" in raw:
+            raw["focused_readout_reference"] = inputs["velocity_measure"] == "exact"
+        return raw
+
+    def _seeded_compute_inputs(self, params):
         center = branch_center_GHz(params["opd"], -1)
         fidelity = normalize_fidelity(params["resolution"])
         res = FWM_FIDELITY[fidelity]
@@ -4709,8 +4827,8 @@ class FWMScheme(Scheme):
             raise ValueError(
                 "probe_uw and seed_wanted_sideband_uw disagree; use one "
                 "wanted-sideband power at the bridge boundary")
-        raw = compute_spectrum(
-            params["opd"],
+        return dict(
+            D_GHz=params["opd"],
             T=params["temp_c"] + 273.15,
             P_pump=params["pump_mw"] * 1e-3,
             P_probe=wanted_seed_uw * 1e-6,
@@ -4760,8 +4878,6 @@ class FWMScheme(Scheme):
                 "eom_seed_spectrum_application", "unapplied"),
             branch=DEFAULT_BRANCH,
         )
-        raw["focused_readout_reference"] = velocity_measure == "exact"
-        return raw
 
     def observables(self, raw, params, include_figures=True):
         if raw.get("kind") == "biphoton":
@@ -5809,6 +5925,60 @@ class FWMScheme(Scheme):
             + "".join(rows)
         )
 
+    def _finite_seed_angular_view(self):
+        def compute(params):
+            physical = self._seeded_compute_inputs(params)
+            physical.update(coarse_points=81, fine_points=0, response_method=RESPONSE_POLE,
+                            velocity_measure="exact")
+            center = branch_center_GHz(physical["D_GHz"], -1)
+            physical.update(scan_min=center - .05, scan_max=center + .05)
+            baseline = compute_spectrum(**physical)
+            reference = compute_spectrum(**physical, angular_transverse_order=18)
+            refined = compute_spectrum(**physical, angular_transverse_order=24)
+            tail = compute_spectrum(**physical, angular_transverse_order=24,
+                                    angular_transverse_cutoff=5.5)
+            return {
+                "delta_mhz": (reference["probe_axis_GHz"] - center) * 1e3,
+                "collinear_atomic_model": {key: baseline[key] for key in ("G_s", "G_c")},
+                "angular": {key: refined[key] for key in ("G_s", "G_c")},
+                "quadrature_delta": {
+                    "transverse_18_to_24": {key: float(np.max(np.abs(reference[key] - refined[key])
+                        / np.maximum(1.0, np.abs(refined[key])))) for key in ("G_s", "G_c")},
+                    "cutoff_5_to_5p5_sigma": {key: float(np.max(np.abs(tail[key] - refined[key])
+                        / np.maximum(1.0, np.abs(refined[key])))) for key in ("G_s", "G_c")},
+                },
+                "floquet_convergence": refined["floquet_convergence"],
+                "angular_provenance": refined["finite_seed_angular_reference"],
+            }
+
+        def render(data):
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots(figsize=(8.5, 4.5))
+            for arm, label, color in (("G_s", "Probe", "#1f77b4"),
+                                      ("G_c", "Conjugate", "#d64771")):
+                ax.plot(data["delta_mhz"], data["angular"][arm], color=color,
+                        label=f"{label}, angular reference")
+                ax.plot(data["delta_mhz"], data["collinear_atomic_model"][arm], color=color,
+                        linestyle="--", label=f"{label}, current atomic model")
+            ax.set(xlabel="Two-photon detuning [MHz]", ylabel="Atomic-medium power gain")
+            errors = data["quadrature_delta"]
+            max_order = max(errors["transverse_18_to_24"].values())
+            max_tail = max(errors["cutoff_5_to_5p5_sigma"].values())
+            status = data["floquet_convergence"]["status"]
+            label = f"Floquet {status} | transverse refinement {max_order:.2g} | cutoff {max_tail:.2g}"
+            ax.set_title(label)
+            ax.legend()
+            ax.grid(alpha=.3)
+            fig.tight_layout()
+            return fig
+
+        return ExtraView(
+            key="Finite-seed angular Doppler reference",
+            description="Minus Raman branch, ±50 MHz. Compare the finite-seed angular Maxwell "
+                        "average with the current atomic model. This calculation takes several seconds.",
+            compute=compute, render=render,
+        )
+
     def extra_views(self):
         def _compute_full(params):
             fidelity = normalize_fidelity(params.get("resolution", FIDELITY_FAST))
@@ -5945,7 +6115,7 @@ class FWMScheme(Scheme):
                         "solver detail.",
             compute=_compute_full, render=_render_full,
             render_with_params=True,
-        )]
+        ), self._finite_seed_angular_view()]
 
     def internal_measured_gain_comparison(self):
         """Historical bounded interpolation diagnostic, excluded from the UI.
