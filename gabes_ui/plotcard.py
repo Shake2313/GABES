@@ -159,7 +159,79 @@ def _forget_retained_csv(scheme_name):
     st.session_state.pop(skey(scheme_name, "_csv_fingerprint"), None)
 
 
-def _render_experimental_comparison(view, scheme_name, panel):
+def _render_physical_od_fit(panel, trace, alignment, params, fit_context):
+    from gabes.od_spectrum_fit import (
+        PARAMETERS, fit_od_spectrum, od_fit_unavailable, prepare_od_fit,
+    )
+
+    box = panel.expander("Fit physical OD parameters", expanded=False)
+    if reason := od_fit_unavailable(params):
+        box.caption(reason)
+        return None
+    if not trace.is_absolute_transmission:
+        box.caption("Absolute transmission calibration is required for a physical fit.")
+        return None
+    if not trace.branches:
+        box.caption("The trace has no usable acquisition branch.")
+        return None
+    box.caption("Uses the raw signal from one sweep and the fixed frequency scale above. "
+                "Line strength stays fixed. Fit results do not apply settings automatically.")
+    branch = box.selectbox(
+        "Acquisition branch", range(len(trace.branches)), key="sas_od_fit_branch",
+        format_func=lambda i: f"{i + 1} · {trace.branches[i].direction} · {trace.branches[i].sample_count} points",
+    )
+    free = box.multiselect("Free parameters", tuple(PARAMETERS), default=("temp_c", "offset_mhz"),
+                           key="sas_od_fit_free", format_func=lambda key: PARAMETERS[key][0])
+    calibrated_axis = box.checkbox("The frequency scale above is calibrated", key="sas_od_fit_frequency_scale")
+    use_holdout = box.checkbox("Declare separate fit and held-out ranges", key="sas_od_fit_holdout")
+    fit_range = holdout_range = None
+    if use_holdout:
+        edges = np.asarray(alignment.transform_x(trace.detuning)) * 1e3
+        start, end = float(np.min(edges)), float(np.max(edges))
+        split = start + 0.75 * (end - start)
+        left, right = box.columns(2)
+        fit_range = (
+            left.number_input("Fit start (MHz)", value=start, key="sas_od_fit_start"),
+            right.number_input("Fit end (MHz)", value=split, key="sas_od_fit_end"),
+        )
+        holdout_range = (
+            left.number_input("Held-out start (MHz)", value=split + 1e-6, key="sas_od_holdout_start"),
+            right.number_input("Held-out end (MHz)", value=end, key="sas_od_holdout_end"),
+        )
+    key = "sas_od_physical_fit"
+    identity = (fit_context, tuple(sorted(params.items())), alignment.scale, alignment.shift,
+                alignment.reverse, branch, tuple(free), calibrated_axis, fit_range, holdout_range)
+    saved = st.session_state.get(key)
+    if saved is not None and saved[0] != identity:
+        st.session_state.pop(key)
+        saved = None
+    if box.button("Run physical OD fit", key="sas_run_od_fit", disabled=not free or not calibrated_axis):
+        try:
+            data = prepare_od_fit(trace, alignment, branch=branch)
+            with box, st.spinner("Fitting the OD spectrum…"), blas_single_thread():
+                result = fit_od_spectrum(data, params, free=free, fit_range_mhz=fit_range,
+                                         heldout_range_mhz=holdout_range)
+            saved = identity, result
+            st.session_state[key] = saved
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            st.session_state.pop(key, None)
+            saved = None
+            box.error(str(exc))
+    if saved is None:
+        return None
+    result = saved[1]
+    if not result["identifiable"]:
+        box.warning("The selected parameters are poorly constrained or at a bound. "
+                    "Fix a parameter such as cell length and fit again.")
+    box.dataframe(result["parameters"], hide_index=True)
+    box.caption(f"Fit RMS {result['fit_residuals']['rms']:.4g} transmission · "
+                f"{result['status'].replace('_', ' ')} · {result['scope'].replace('_', ' ')}")
+    if result["heldout_residuals"] is not None:
+        box.caption(f"Held-out RMS {result['heldout_residuals']['rms']:.4g} transmission")
+    return result
+
+
+def _render_experimental_comparison(view, scheme_name, panel, params=None):
     """Render a scheme-declared CSV panel into `panel` and overlay its trace.
 
     Uploaded bytes and alignment controls intentionally stay outside `params`:
@@ -471,6 +543,10 @@ def _render_experimental_comparison(view, scheme_name, panel):
             else:
                 panel.warning(fit_result.message)
 
+        physical_fit = None
+        if scheme_name == "sas" and params is not None and x_unit == "GHz":
+            physical_fit = _render_physical_od_fit(panel, trace, alignment, params, fit_context)
+
         import_diag = trace.import_diagnostics
         correction_diag = trace.correction_diagnostics
         valid_rows = _diagnostic_value(
@@ -596,6 +672,7 @@ def _render_experimental_comparison(view, scheme_name, panel):
                 "signal_scale": float(signal_scale),
                 "signal_offset": float(signal_offset),
             },
+            **({"physical_od_fit": physical_fit} if physical_fit is not None else {}),
             "alignment_fit": None if fit_result is None else {
                 "success": bool(fit_result.success),
                 "rmse": float(fit_result.rmse),
@@ -778,7 +855,7 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
             label = ("Experimental CSV · upload, calibrate and fit" if view.get("experimental_workspace")
                      else "Overlay settings · upload, calibrate and fit")
             panel = st.expander(label, expanded=True)
-            comparison_payload = _render_experimental_comparison(view, scheme.name, panel)
+            comparison_payload = _render_experimental_comparison(view, scheme.name, panel, params)
         else:
             comparison_payload = None
 
