@@ -1,4 +1,5 @@
 {
+  "_physics_extension_policy_2026_11_13": {"decision": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.", "applies_to": ["od-sas-segmented-cell-propagation", "lambda-spectrum-validity", "fwm-finite-seed-angular-doppler-production", "collisional-coefficient-provenance-and-pressure-shift"], "coefficient_source_rule": "User decision 2026-11-13: take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning."},
   "_repo_restructure_2026_11_09": {
     "provenance": "Explicit user request: split heavy results and Grand Challenge records into a private archive repository, keep a light GABES main, and consolidate [tests+tools+analysis] and [gabes_ui+assets+SABES UI] with reusable blocks and a Migration Manifest. R1-R8 are user decisions 2026-11-09, each choosing the ⟦AI⟧-recommended option; boundary, step and gitignore details are ⟦AI⟧ design with direction approved by the user.",
     "status": "S2-complete-S3-prepared",
@@ -683,6 +684,7 @@
       "priority": "P1",
       "effort": "large",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: for collisional broadening and shift coefficients, take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning. Pressure shift enters as an opt-in reference mode first; switching a default is a separate decision.",
       "acceptance_criteria": [
         "Each collisional coefficient type used by the listed OD/SAS, Magneto, and Lambda paths has the physically required gas/species/line keys and validity domain, plus source, units, sign, and uncertainty.",
         "Unsupported combinations return an explicit unsupported/qualitative status instead of falling back to another species or line.",
@@ -736,6 +738,7 @@
       "priority": "P1",
       "effort": "medium",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: convert OD/SAS pump power with the line-specific Steck effective far-detuned π-polarized saturation intensity for each isotope and line (the convention of the current 4.484 mW/cm²); the probe keeps the closed two-level πhcΓ/(3λ³). Rb D1 stays nearly unchanged; D2 and Cs move. ⟦AI⟧ The code does not state the convention of 4.484 mW/cm²; confirm it against the Steck tables before landing and report back instead of choosing if it differs. Cite each value; own value commit.",
       "consolidation_2026_11_05": "⟦AI⟧ The conversion now has one implementation (beam.peak_intensity, beam.two_level_rabi; item beam-rabi-conversion-consolidation). This item's value step is the I_sat argument: species.pump_rabi_from_power still passes the Rb-85 D1 constants.I_SAT for every species and line, while the OD/SAS probe saturation already uses the line's closed two-level value probe_saturation.closed_two_level_saturation_intensity. SAS results move, so it lands after the in-flight gabes/schemes/sas.py work.",
       "acceptance_criteria": [
         "Every supported isotope/species and D1/D2 path derives or sources its saturation/Rabi scale with dipole, linewidth, polarization, intensity, and angular-versus-cyclic-frequency conventions recorded.",
@@ -1190,7 +1193,8 @@
       ],
       "priority": "P2",
       "effort": "large",
-      "status": "needs_decision",
+      "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: for the diffusion and spin-destruction coefficients, take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning. (applies to the propagated relaxation rate).",
       "user_decision": "User decision 2026-11-06: the first supported geometry is a finite cylinder with a quenching (polarization-destroying) wall; the lowest diffusion mode sets the rate, validated against the analytic cylinder limit within 5 % before it is exposed as a default. ⟦AI⟧ Still open: the diffusion and spin-destruction coefficient sources and the maximum propagated uncertainty.",
       "depends_on": [
         "magneto-dynamics-semantics"
@@ -1274,6 +1278,7 @@
       "priority": "P1",
       "effort": "medium",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision. Here: the non-parallel two-dimensional joint Maxwell average.",
       "acceptance_criteria": [
         "For a deterministic Doppler-off fixture, changing beam angle from 0 to 10 mrad leaves complex chi arrays equal under rtol=1e-12 and atol=1e-14.",
         "The optical scan-shift operator and velocity-only residual two-photon operator are distinct.",
@@ -1451,6 +1456,7 @@
       "priority": "P1",
       "effort": "medium",
       "status": "ready",
+      "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "user_decision_2026_11_06": "User decision 2026-11-06: judge the Rydberg linewidth, AT and sensitivity readouts with the SAS sub-Doppler rule: at least one feature FWHM between a half-height edge and the scan edge, at least six sample intervals per FWHM, and an optimum that moves by at most 5 % over the final two deterministic refinements. Low transmission or contrast is judged only from a calibrated detector-noise SNR; without one the status is 'not assessed'. ⟦AI⟧ Reuse lineshape.MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM and MIN_SUBDOPPLER_SAMPLES_PER_FWHM; implement after the in-flight gabes/schemes/rydberg.py work.",
       "user_decision": "User decision 2026-11-04: keep the numeric linewidth and sensitivity readouts and attach a validity status (for example unresolved, scan-edge-limited, low contrast, near-zero transmitted power), as the SAS sub-Doppler readout does; do not withhold values on an arbitrary transmission cutoff.",
       "decision_required": [
@@ -2079,6 +2085,7 @@
       "priority": "P2",
       "effort": "small",
       "status": "ready",
+      "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: move Ultra from the 4σ-truncated Maxwell measure to the exact untruncated average (PoleResidues.gaussian_mean); Fast/Balanced follow it. Recorded reports keep their historical values, and the truncated measure stays available to reproduce them. ⟦AI⟧ Starts after the in-flight gabes/schemes/fwm.py work lands. Expected change: up to 0.11 dB in the S_dB tube at 150 C, Δ = 0.9 GHz, at most 0.035 dB (p95) in the other gate cases; baseline recapture.",
       "decision_required": "Is the 4-sigma truncation of the Maxwell distribution part of the Squeezing tier model (keep), or a numerical cutoff to be widened or replaced by the exact untruncated average (change Ultra and, through the shared tier settings, Fast/Balanced)?",
       "why": "A tier definition should state whether the cutoff is physics or numerics; the pole engine already evaluates either measure (PoleResidues.discrete_mean versus gaussian_mean).",
@@ -2166,6 +2173,7 @@
       "priority": "P2",
       "effort": "small",
       "status": "ready",
+      "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: move the analysis/squeezing scanners to a converged Maxwell measure; the historical 3–5 m/s, 3σ grids stay an explicit opt-in so recorded reports reproduce. ⟦AI⟧ Starts after the in-flight scanner edits land. At the v6 centre the change is up to 0.519 dB over the ±0.7 GHz window (0.002 dB at the minimum), at 0.18 versus 0.15 s per pole solve.",
       "decision_required": "Re-run the recorded squeezing analyses (v6 tolerance, variable audit, delta-T map, theory maximum, low-pump, resonant-Hanle reference) on 1 m/s, 4 sigma and update the reported numbers, or keep the historical measures as part of those reports?",
       "acceptance_criteria": [
@@ -2203,6 +2211,7 @@
       "priority": "P2",
       "effort": "small",
       "status": "ready",
+      "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: retune the EIT-dip preset to conditions where the exact Maxwell average shows a real EIT-like dip. ⟦AI⟧ If no physical regime in the model gives one, report that to the user and rename the preset after what it shows.",
       "depends_on": [
         "magneto-dynamics-semantics"
@@ -2977,6 +2986,7 @@
       "priority": "P1",
       "effort": "medium",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: SABES follows the FWM selected noise model (default Experimental Jasperse) and its calibrated gains instead of forcing Passive L1 and raw gains, and its export records the selected model and its evidence. SABES displayed values change. ⟦AI⟧ Quantify the SABES readout shift at the defaults in the commit and here.",
       "depends_on": [
         "fwm-gain-only-trust-boundary"
       ],
@@ -3641,6 +3651,7 @@
       "priority": "P2",
       "effort": "large",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.",
       "consolidation_2026_11_05": "⟦AI⟧ The shared layer for this item is vapor_cell (item vapor-cell-consolidation): axial_cell_profile gives T(z) and the cold-spot-limited n(z) and integrate_beer_lambert the per-segment and total optical depth for any trailing scan axes; reuse them rather than adding a SAS-local slicer.",
       "acceptance_criteria": [
         "Segment count is an explicit convergence parameter with a documented convergence test showing the reported observables are stable to a stated tolerance.",
@@ -3810,6 +3821,7 @@
       "priority": "P1",
       "effort": "large",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.",
       "depends_on": [
         "fwm-angular-doppler-reference",
         "fwm-pump-state-linear-response-reference",
@@ -4838,6 +4850,7 @@
       "priority": "P1",
       "effort": "medium",
       "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: split the two-region exchange rate (γ_out) from an extra light-region dephasing knob whose default is 0, so relaxation is not counted twice. Paraffin preset values change (max χ_probe about 35 % in the review diagnostic). ⟦AI⟧ Own value commit with the affected magneto pins recaptured; magneto-eit-dip-preset-exact-doppler retunes on top of it.",
       "source_reports": [
         "docs/daily_report/2026-08-08_scheme-4_hanle-eia-nmor.md",
         "docs/daily_report/2026-08-13_scheme-4_hanle-eia-nmor.md",
@@ -5471,6 +5484,7 @@
       "priority": "P2",
       "effort": "medium",
       "status": "ready",
+      "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: adopt the Steck species record everywhere (Γ/2π 5.750 MHz, isotope mass 84.911789738 u, excited splitting 3·A(5P1/2) = 361.581 MHz, ground g_J 2.00233113); give the Generic and single-line paths the CRC vapor pressure with an explicit isotope composition (natural abundance or pure) in place of the Steck liquid fit × abundance; source a Cs self-broadening coefficient instead of reusing the Rb β. ⟦AI⟧ One commit per value, each with tests/baseline_focused.npz recaptured and the FWM/Λ/OD/SAS shifts quantified. Γ and mass move FWM, so they start after the in-flight gabes/schemes/fwm.py work lands. Expected sizes: Γ +0.07 %, mass +4.7e-6, Generic and single-line density ×1.22–1.45 for a natural cell over 313–393 K.",
       "problem": "⟦AI⟧ The 2026-10-30 atomic-data single-source refactor (angular.py leaf; hyperfine as the 85Rb D1 view of species) kept every value bit-identical, so these value splits remain: constants.GAMMA_2PI 5.746 MHz (FWM/Λ/OD and the hyperfine view) vs species RB85/RB87 gamma_D1 5.750 MHz (SAS/magneto); MASS_85RB 1.4100e-25 kg vs 84.911789738 u (+4.7e-6); NU_EXCITED_HF_D1 361.58 MHz vs 3·A(5P1/2) = 361.581 MHz; species.rb85_steck_density (Steck liquid fit × natural abundance; Λ/Rydberg Generic medium, OD single-line, SAS Generic) is 0.50–0.59 × number_density(RB85) (CRC, every other path) over 313–393 K; species.self_broadening applies the Rb β to Cs; species.GJ_S12_LEGACY 2.002331070 (magneto ground g_J) vs the Steck gJ_S 2.00233113 (−3.0e-8).",
       "decision_required": [
@@ -5631,6 +5645,7 @@
       "priority": "P3",
       "effort": "small",
       "status": "ready",
+      "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-05: adopt the exact SI h = 6.62607015e-34 with HBAR = h/(2 pi) everywhere (option a). ⟦AI⟧ constants defines PLANCK as the exact value and HBAR from it; fwm.responsivity_AW and SABES then call gabes.detection (hc/e = PLANCK*C_LIGHT/e) instead of 1239.841984. Every hbar-dependent result moves by about +6.1e-10 relative, FWM/SABES responsivities by +2.7e-10; tests/baseline_focused.npz is recaptured and the pins in tests/test_detection.py and tests/test_atomic_data.py follow. It lands as its own commit after the in-flight gabes/schemes/fwm.py and sabes/ work, alongside the Steck atomic-constant commit of atomic-data-legacy-value-unification. User decision 2026-11-06: the FWM '2026-10-13 experiment' qe_pct preset uses the exact hc/e (0.58 A/W at 795 nm: 90.4508 % -> 90.4539 %) in the same commit.",
       "problem": "⟦AI⟧ Consolidation item 7 found three Planck values. (1) constants.PLANCK = 2*pi*HBAR with HBAR = 1.054571817e-34 (rounded): 6.6260701459e-34, 6.13e-10 below the exact SI h = 6.62607015e-34; used by the Rydberg responsivity, magneto photon flux, the closed two-level I_sat and, through HBAR, every hbar omega. (2) hc/e = 1239.841984 eV nm in fwm.responsivity_AW and SABES (detection.py, instruments/base.py): 3.45e-10 above 2*pi*HBAR*c/e and 2.7e-10 below the exact hc/e = 1239.84198433 eV nm. (3) The FWM default qe_pct = 0.58*1239.8/795 rounds hc/e to 1239.8 (-3.4e-5); it converts a 0.58 A/W responsivity into a QE preset.",
       "decision_required": [
@@ -5707,7 +5722,7 @@
       "priority": "P2",
       "effort": "medium",
       "status": "ready",
-      "adoption_status": "user_approved_registration_only",
+      "adoption_status": "user_approved_implementation_2026_11_13",
       "problem": "⟦AI⟧ 실수·복소 LU의 피벗 역수 계산에 특이/비유한 실패 상태와 해당 kernel·배치 계산점 정보를 전달하는 명시적 계약이 부족하다. 상위 FWM 비유한값·수렴 검증은 이미 존재하므로, 모든 스킴이 잘못된 값을 조용히 게시한다는 주장과 구분한다. 이번 검수는 정적 대조이며 실패 재현은 미실행이다.",
       "acceptance_criteria": [
         "⟦AI⟧ 실수·복소 컴파일/참조 경로의 특이·비유한 입력 실패 처리를 일관되게 정의하고 kernel·해당 계산점·원인을 호출부에 전달한다. 기존 상위 유효성 검사와 참조 fallback을 보존한다.",
@@ -5738,7 +5753,7 @@
       "priority": "P2",
       "effort": "medium",
       "status": "ready",
-      "adoption_status": "user_approved_registration_only",
+      "adoption_status": "user_approved_implementation_2026_11_13",
       "problem": "⟦AI⟧ GABES는 plotcard.PLOT_LOCK을 사용하고 SABES는 별도 _PLOT_LOCK을 사용한다. SABES _cached_observables와 Spectrum 그림 표시 경로에는 동일한 보호 범위가 명시되어 있지 않다. 공유 Matplotlib 상태에 대한 정적 보호 범위 점검 과제이며, 실제 race/crash나 락 경합 병목을 재현했다는 뜻은 아니다.",
       "acceptance_criteria": [
         "⟦AI⟧ 두 화면의 figure 생성·mathtext/layout·artist 변경·복사·draw/export·표시·정리 경로와 lock 소유권을 목록화하고, 같은 프로세스의 공유 Matplotlib 상태가 일관된 동기화 범위에 있는지 확인한다.",
@@ -5802,8 +5817,9 @@
       "origin": "ai_found_during_s5_step3",
       "priority": "P3",
       "effort": "small",
-      "status": "open",
-      "adoption_status": "pending_user_decision",
+      "status": "ready",
+      "user_decision_2026_11_13": "User decision 2026-11-13: copy the literature table into main at references/fwm_experiments/ and point the scanner there (option 1). ⟦AI⟧ Byte copy of GABES-archive archive/fwm_squeezing_paper_parameters.csv with its source commit and SHA-256 recorded; content corrections belong to fwm-reference-parameter-provenance.",
+      "adoption_status": "user_decided_2026_11_13",
       "problem": "⟦AI⟧ sec_paper_db가 REPO_ROOT/archive/fwm_squeezing_paper_parameters.csv를 읽는데, 분리 뒤 이 파일은 GABES-archive의 archive/에만 있다. main에서 스캐너를 실행하면 첫 절 paper_db에서 FileNotFoundError로 멈춘다. S5 3단계 검증은 아카이브 사본을 임시 트리에 넣고 실행했다. 실행 경로 문제이며 계산 값과는 무관하다.",
       "options": [
         "⟦AI⟧ 추천: 문헌 표이므로 main references/fwm_experiments/로 복사하고 경로를 고친다 (main은 references/*_experiments 문헌 DB를 유지).",
