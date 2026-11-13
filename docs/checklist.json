@@ -2088,7 +2088,7 @@
       ],
       "priority": "P2",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: move Ultra from the 4σ-truncated Maxwell measure to the exact untruncated average (PoleResidues.gaussian_mean); Fast/Balanced follow it. Recorded reports keep their historical values, and the truncated measure stays available to reproduce them. ⟦AI⟧ Starts after the in-flight gabes/schemes/fwm.py work lands. Expected change: up to 0.11 dB in the S_dB tube at 150 C, Δ = 0.9 GHz, at most 0.035 dB (p95) in the other gate cases; baseline recapture.",
       "decision_required": "Is the 4-sigma truncation of the Maxwell distribution part of the Squeezing tier model (keep), or a numerical cutoff to be widened or replaced by the exact untruncated average (change Ultra and, through the shared tier settings, Fast/Balanced)?",
@@ -2114,7 +2114,8 @@
         "docs/daily_report/2026-10-04_scheme-5_fwm.md",
         "docs/daily_report/2026-10-09_scheme-5_fwm.md",
         "docs/daily_report/2026-10-14_scheme-5_fwm.md"
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ ead9cb5 sets all seeded FWM tiers to the exact Maxwell pole mean and retains a Historical 4-sigma control, including the old Ultra grid. Both 12-case historical tier gates passed twice. Fast max tube 0.017135 dB; Balanced bit-identical to exact Ultra. Exact versus historical max tube 0.212583 dB at 150 C / 0.9 GHz, max p95 0.093053 dB at frontier, max selected-point dB 0.004058. Default Fast raw max gain shifts 2.289/1.963 and NF 0.05648 dB, selected NF +0.000624 dB. FWM legacy baseline recapture byte-identical. 134 focused passed."
     },
     {
       "id": "pole-residue-doppler-reuse",
@@ -2176,7 +2177,7 @@
       ],
       "priority": "P2",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "unblocked_2026_11_13": "⟦AI⟧ The in-flight gabes/schemes/fwm.py, sabes and scanner work this waited on has landed (main clean at 627aff0, no other session editing); ready to start.",
       "value_decision": "User decision 2026-11-04: move the analysis/squeezing scanners to a converged Maxwell measure; the historical 3–5 m/s, 3σ grids stay an explicit opt-in so recorded reports reproduce. ⟦AI⟧ Starts after the in-flight scanner edits land. At the v6 centre the change is up to 0.519 dB over the ±0.7 GHz window (0.002 dB at the minimum), at 0.18 versus 0.15 s per pole solve.",
       "decision_required": "Re-run the recorded squeezing analyses (v6 tolerance, variable audit, delta-T map, theory maximum, low-pump, resonant-Hanle reference) on 1 m/s, 4 sigma and update the reported numbers, or keep the historical measures as part of those reports?",
@@ -2201,7 +2202,8 @@
         "docs/daily_report/2026-10-04_scheme-5_fwm.md",
         "docs/daily_report/2026-10-09_scheme-5_fwm.md",
         "docs/daily_report/2026-10-14_scheme-5_fwm.md"
-      ]
+      ],
+      "implementation_2026_11_13": "⟦AI⟧ caf9fbb uses analytic Maxwell means for pole scans and 1 m/s 4 sigma for sampled scans. Historical option preserved all sampled paths and both quick reports bit-for-bit (1196 variable, 511 low-pump entries, ignoring runtime/provenance). Against A5 parent max changes were 0.428452 dB variable, 0.046828 low-pump, 0.001406 delta-T map, 0.072896 theory, 0.535555 v6 center, 0.084941 angle, 0.012640 Hanle. V6 best shifted +0.244368 dB and -370 to -375 MHz. 32 focused passed."
     },
     {
       "id": "magneto-eit-dip-preset-exact-doppler",
@@ -4298,7 +4300,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-08-10_scheme-1_od-sas.md",
         "docs/daily_report/2026-08-25_scheme-1_od-sas.md",
@@ -4342,7 +4344,8 @@
         "⟦AI⟧ tests/test_sas.py:260-271 still asserts area and peak <0.01, while sas.info states <0.1%. Tighten only internal numerical closure, not claim external experimental validation."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ Current species.line_integrated_alpha uses CF2/[2(2I+1)] without second pF. tests/test_sas.py:91..109 checks lifetime oscillator sums and degeneracy ratios for all 6 isotope/line combinations, ratio7/5 retained. External AutoOD-Rb source/baseline lies under ignored references/*. sas.py:358-359 still says lab AutoOD calculator <0.1%; guide lines409,563,922 repeat it. Internal ODScheme closure is not independent experimental validation.; tests/test_sas.py:260-271 still asserts area and peak <0.01, while sas.info states <0.1%. Tighten only internal numerical closure, not claim external experimental validation."
+      "problem": "⟦AI⟧ Current species.line_integrated_alpha uses CF2/[2(2I+1)] without second pF. tests/test_sas.py:91..109 checks lifetime oscillator sums and degeneracy ratios for all 6 isotope/line combinations, ratio7/5 retained. External AutoOD-Rb source/baseline lies under ignored references/*. sas.py:358-359 still says lab AutoOD calculator <0.1%; guide lines409,563,922 repeat it. Internal ODScheme closure is not independent experimental validation.; tests/test_sas.py:260-271 still asserts area and peak <0.01, while sas.info states <0.1%. Tighten only internal numerical closure, not claim external experimental validation.",
+      "implementation_2026_11_13": "⟦AI⟧ 45492e6 distinguishes Rb D1 internal OD/SAS pump-off closure (relative area 3.938e-4, peak 1.186e-4 in the named test) from Rb D2 AutoOD software-reference matching. Guide regenerated with 11 embedded images. 110 focused tests passed."
     },
     {
       "id": "scheme-current-documentation-and-examples",
@@ -4488,7 +4491,7 @@
       "origin": "ai_review_of_automated_feedback",
       "priority": "P2",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "source_reports": [
         "docs/daily_report/2026-08-30_scheme-1_od-sas.md",
         "docs/daily_report/2026-09-05_scheme-1_od-sas.md",
@@ -4524,7 +4527,8 @@
       "depends_on": [
         "od-sas-paraffin-population-memory"
       ],
-      "problem": "⟦AI⟧ sas.py raw has paraffin_coated/paraffin_t1_s and info explains T1 reference, but _obs_species figure title and derived readout do not consume either field. Saved figure can lose coated model provenance."
+      "problem": "⟦AI⟧ sas.py raw has paraffin_coated/paraffin_t1_s and info explains T1 reference, but _obs_species figure title and derived readout do not consume either field. Saved figure can lose coated model provenance.",
+      "implementation_2026_11_13": "⟦AI⟧ 0c179b8 exports population-only paraffin memory, the 25.1 ms Rb87/300 K reference and assumed transit/cycle rate. Pump-off reports inactive, and the model excludes throughput loss. Five scoped tests passed."
     },
     {
       "id": "sas-local-readout-convergence-export",
