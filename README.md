@@ -84,7 +84,7 @@ These practical approximations are separate from Grand Challenge acceptance.
 
 | Cluster | Scheme | Output |
 |---|---|---|
-| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to `references/AutoOD-Rb` at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. Imports oscilloscope A/B CSV data for robust correction and manual transmission-overlay alignment. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
+| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to frozen outputs from the retired AutoOD-Rb calculator at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. Imports oscilloscope A/B CSV data for robust correction and manual transmission-overlay alignment. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
 | A | **Lambda coherence (EIT / AT / CPT)** | one 3-level Lambda engine with regime-driven defaults, physical MHz/kHz controls, Rb/Cs D-line media, EIT transparency, AT splitting, and CPT dark resonance |
 | A | **Rydberg-EIT electrometry** | 85Rb cascade EIT / microwave AT spectrum for the 5S-5P-40D ladder and 37 GHz 40D-39F RF leg; first-order finite-IF weak-SIG response, AT→field calibration, balanced-detector PSN/RIN/electronics budget, temperature/cold-spot sweep, and conditional absolute sensitivity |
 | C — Magneto-optics | **Hanle / EIA / NMOR** | two distinct effects vs B: the **Hanle** effect (zero-field transmission dip/peak, EIA variant) from ground-state coherence, and **magneto-optical rotation** (MOR/NMOR, polarization-plane rotation) — both over the Zeeman manifold |
@@ -190,9 +190,10 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
 - `archive/` — retired legacy entry points and artifacts, kept in GABES-archive
   since the split (not in main): the early `AutoOD/` calculator, the
   `fwm_obe.py` compatibility shim and its generated
-  `fwm_double_lambda_gain_squeezing.png`. The current Rb D1/D2 calculator with
-  selectable isotope composition lives in `references/AutoOD-Rb/`; the active
-  physics lives in `gabes/`.
+  `fwm_double_lambda_gain_squeezing.png`.
+  The standalone AutoOD desktop app lives in a sibling `AutoOD/` project and
+  runs the OD path from a pinned GABES engine revision. The historical
+  `references/AutoOD-Rb/` calculator was moved to `AutoOD/legacy/AutoOD-Rb/`.
 - `tests/` — regression + physics validation; `baseline_focused.npz` is an
   intentional compatibility snapshot documented by `baseline_focused_manifest.json`.
 - `gabes_lab/` — development package. `blocks/` holds helpers without physics:
