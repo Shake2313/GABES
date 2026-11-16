@@ -11,6 +11,7 @@ from . import observables, species
 from .experimental_alignment import AxisAlignment
 from .experimental_csv import ExperimentalCSV, transform_x
 from .schemes.sas import SASScheme, _probe_power_mw
+from .vapor_cell import CellTemperatureState
 
 
 MAX_FIT_POINTS = 1200
@@ -25,6 +26,165 @@ PARAMETERS = {
 }
 
 
+def _calibration_vector(values, name, *, minimum_size=1):
+    result = np.asarray(values, dtype=float)
+    if result.ndim != 1 or result.size < minimum_size or not np.isfinite(result).all():
+        raise ValueError(f"{name} must be a finite 1-D array with at least {minimum_size} values.")
+    return result
+
+
+def _interpolate_calibration(x, nodes, values, name):
+    if not np.isfinite(x).all():
+        raise ValueError(f"{name} requires finite evaluation coordinates.")
+    if np.any(x < nodes[0]) or np.any(x > nodes[-1]):
+        raise ValueError(f"{name} must bracket all evaluated samples.")
+    return np.interp(x, nodes, values)
+
+
+@dataclass(frozen=True)
+class ODFrequencyCalibration:
+    """Fixed piecewise-linear marker map from the raw CSV x coordinate to MHz.
+
+    Supply markers in increasing raw-axis order. Detuning can increase or
+    decrease, and is relative to the selected isotope or mixture's line origin.
+    The same map must cover the full selected acquisition branch.
+    """
+
+    raw_axis: tuple[float, ...]
+    frequency_mhz: tuple[float, ...]
+    source: str = "supplied frequency markers"
+
+    def __post_init__(self):
+        raw_axis = _calibration_vector(self.raw_axis, "Raw marker coordinates", minimum_size=2)
+        frequency = _calibration_vector(self.frequency_mhz, "Marker detunings", minimum_size=2)
+        if (raw_axis.shape != frequency.shape or np.any(np.diff(raw_axis) <= 0)
+                or not (np.all(np.diff(frequency) > 0) or np.all(np.diff(frequency) < 0))):
+            raise ValueError("Frequency markers need increasing raw coordinates and strictly monotonic detunings.")
+        object.__setattr__(self, "raw_axis", tuple(raw_axis.tolist()))
+        object.__setattr__(self, "frequency_mhz", tuple(frequency.tolist()))
+
+    def detuning_mhz(self, raw_axis):
+        return _interpolate_calibration(
+            np.asarray(raw_axis, dtype=float), self.raw_axis, self.frequency_mhz, "Frequency markers"
+        )
+
+    def readout(self):
+        return dict(source=self.source, raw_axis=list(self.raw_axis),
+                    frequency_mhz=list(self.frequency_mhz))
+
+
+@dataclass(frozen=True)
+class ODOpticalCalibration:
+    """Fixed optical response on the absolute detector-transmission scale.
+
+    Laser offsets are added to nominal detuning, with weights proportional to
+    incident power. Bypass is the optical power fraction unaffected by atoms.
+    The optional baseline is the no-atom throughput left after dark/reference
+    calibration, tabulated versus nominal detuning. It applies to both terms.
+    """
+
+    laser_offsets_mhz: tuple[float, ...] = (0.0,)
+    laser_weights: tuple[float, ...] = (1.0,)
+    bypass_fraction: float = 0.0
+    baseline_frequency_mhz: tuple[float, ...] = ()
+    baseline_transmission: tuple[float, ...] = ()
+    source: str = "supplied optical calibration"
+
+    def __post_init__(self):
+        offsets = _calibration_vector(self.laser_offsets_mhz, "Laser offsets")
+        weights = _calibration_vector(self.laser_weights, "Laser weights")
+        total = float(weights.sum())
+        if offsets.shape != weights.shape or np.any(weights < 0) or not 0 < total < np.inf:
+            raise ValueError("Laser offsets and nonnegative weights must match and have finite positive total weight.")
+        bypass = float(self.bypass_fraction)
+        if not 0.0 <= bypass <= 1.0:
+            raise ValueError("Optical bypass fraction must be between zero and one.")
+        axis = _calibration_vector(self.baseline_frequency_mhz, "Baseline frequencies", minimum_size=0)
+        baseline = _calibration_vector(self.baseline_transmission, "Baseline transmission", minimum_size=0)
+        if (axis.shape != baseline.shape or axis.size == 1 or np.any(np.diff(axis) <= 0)
+                or np.any(baseline <= 0)):
+            raise ValueError("Supply at least two matching baseline samples with increasing frequencies and positive transmission.")
+        object.__setattr__(self, "laser_offsets_mhz", tuple(offsets.tolist()))
+        object.__setattr__(self, "laser_weights", tuple((weights / total).tolist()))
+        object.__setattr__(self, "bypass_fraction", bypass)
+        object.__setattr__(self, "baseline_frequency_mhz", tuple(axis.tolist()))
+        object.__setattr__(self, "baseline_transmission", tuple(baseline.tolist()))
+
+    @property
+    def is_identity(self):
+        return (self.laser_offsets_mhz == (0.0,) and self.bypass_fraction == 0.0
+                and not self.baseline_frequency_mhz)
+
+    def transmission(self, frequency_mhz, atomic_transmission):
+        """Evaluate the detected power average on the supplied frequency samples."""
+        frequency_mhz = _calibration_vector(frequency_mhz, "Evaluation frequencies")
+        if self.is_identity:
+            return atomic_transmission(frequency_mhz)
+        if self.baseline_frequency_mhz:
+            baseline = _interpolate_calibration(
+                frequency_mhz, self.baseline_frequency_mhz, self.baseline_transmission, "Optical baseline"
+            )
+        else:
+            baseline = 1.0
+        average = np.zeros_like(frequency_mhz)
+        for offset, weight in zip(self.laser_offsets_mhz, self.laser_weights):
+            if weight > 0.0:
+                average += weight * atomic_transmission(frequency_mhz + offset)
+        return baseline * (self.bypass_fraction + (1.0 - self.bypass_fraction) * average)
+
+    def readout(self):
+        return dict(source=self.source, laser_offsets_mhz=list(self.laser_offsets_mhz),
+                    laser_weights=list(self.laser_weights), bypass_fraction=self.bypass_fraction,
+                    baseline_frequency_mhz=list(self.baseline_frequency_mhz),
+                    baseline_transmission=list(self.baseline_transmission))
+
+
+@dataclass(frozen=True)
+class ODCellCalibration:
+    """Fixed temperature inputs from the shared cell model and/or a known length.
+
+    Fits using these conditions report uncertainty conditional on their values.
+    """
+
+    temperature: CellTemperatureState | None = None
+    cell_length_mm: float | None = None
+    source: str = "supplied cell constraints"
+
+    def __post_init__(self):
+        if self.temperature is None and self.cell_length_mm is None:
+            raise ValueError("Supply a fixed cell temperature state, a cell length, or both.")
+        if self.temperature is not None:
+            cold = self.temperature.cold_spot_temp_c
+            path = self.temperature.effective_vapor_temp_c
+            if not 20.0 <= cold <= 200.0 or not cold <= path <= 300.0:
+                raise ValueError("Fixed cell temperatures must be in the supported ranges and the path must be at least as warm as the cold spot.")
+        if self.cell_length_mm is not None:
+            length = float(self.cell_length_mm)
+            if not 0.5 <= length <= 200.0:
+                raise ValueError("Fixed cell length must be between 0.5 and 200 mm.")
+            object.__setattr__(self, "cell_length_mm", length)
+
+    def apply(self, params):
+        result = dict(params)
+        if self.temperature is not None:
+            cold = self.temperature.cold_spot_temp_c
+            path = self.temperature.effective_vapor_temp_c
+            result.update(temp_c=cold, doppler_temp_c=path, constrain_doppler_temp=False)
+        if self.cell_length_mm is not None:
+            result["cell_mm"] = self.cell_length_mm
+        return result
+
+    def readout(self):
+        result = dict(source=self.source, cell_length_mm=self.cell_length_mm)
+        if self.temperature is not None:
+            state = self.temperature
+            result["temperature"] = dict(
+                cold_spot_temp_c=state.cold_spot_temp_c, cold_spot_source=state.cold_spot_source,
+                doppler_temp_c=state.effective_vapor_temp_c, doppler_temp_source=state.effective_source,
+            )
+        return result
+
+
 @dataclass(frozen=True)
 class ODFitInput:
     frequency_mhz: np.ndarray
@@ -33,6 +193,7 @@ class ODFitInput:
     branch: int
     source_points: int
     uncertainty_source: str
+    frequency_calibration: ODFrequencyCalibration | None = None
 
 
 def od_fit_unavailable(params):
@@ -45,16 +206,26 @@ def od_fit_unavailable(params):
     return None
 
 
-def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment, *, branch=0):
-    """Use one raw sweep and the measured detector law. Alignment fixes the frequency scale."""
+def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = None, *,
+                   branch=0, frequency_calibration: ODFrequencyCalibration | None = None):
+    """Use one raw sweep and the declared detector law.
+
+    A supplied marker map fixes the detuning directly from raw x coordinates.
+    Otherwise the legacy display alignment determines the fit axis.
+    """
     if not trace.is_absolute_transmission:
         raise ValueError("OD fitting requires an absolute transmission calibration.")
     if not 0 <= branch < len(trace.branches):
         raise ValueError("Select an acquisition branch for OD fitting.")
     sweep = trace.branches[branch]
-    pivot = 0.5 * float(trace.detuning.min()) + 0.5 * float(trace.detuning.max())
-    x = transform_x(sweep.detuning, scale=alignment.scale, shift=alignment.shift,
-                    reverse=alignment.reverse, pivot=pivot) * 1e3  # SAS plot axis is GHz.
+    if frequency_calibration is not None:
+        x = frequency_calibration.detuning_mhz(sweep.detuning)
+    else:
+        if alignment is None:
+            raise ValueError("Supply a frequency calibration or the display alignment.")
+        pivot = 0.5 * float(trace.detuning.min()) + 0.5 * float(trace.detuning.max())
+        x = transform_x(sweep.detuning, scale=alignment.scale, shift=alignment.shift,
+                        reverse=alignment.reverse, pivot=pivot) * 1e3  # SAS axis is GHz.
     y = trace.calibrate_signal(sweep.raw_signal)
     order = np.argsort(x, kind="stable")
     x, y = x[order], y[order]
@@ -90,32 +261,77 @@ def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment, *, branch=0
     else:
         raise ValueError("Noise could not be estimated from this trace. Supply raw measurements with noise.")
     keep = np.linspace(0, x.size - 1, min(x.size, MAX_FIT_POINTS), dtype=int)
-    return ODFitInput(x[keep], y[keep], sigma[keep], branch, int(x.size), source)
+    return ODFitInput(x[keep], y[keep], sigma[keep], branch, int(x.size), source,
+                      frequency_calibration=frequency_calibration)
 
 
-def od_transmission(frequency_mhz, params, *, extra_width_mhz=0.0, offset_mhz=0.0):
-    """Evaluate the resolved SAS pump-off model directly at each input frequency."""
+def _require_calibrated_od_scope(params):
+    components = species.SPECIES[params["species"]]
+    if (any(iso not in (species.RB85, species.RB87) for iso, _ in components)
+            or params.get("line") not in ("D1", "D2")
+            or params.get("paraffin_coated", False)
+            or float(params.get("ne_pressure_torr", 0.0)) != 0.0):
+        raise ValueError("The new calibration inputs cover uncoated, buffer-free Rb D1 and D2 cells.")
+
+
+def od_transmission(frequency_mhz, params, *, extra_width_mhz=0.0, offset_mhz=0.0,
+                    optics: ODOpticalCalibration | None = None,
+                    cell: ODCellCalibration | None = None):
+    """Evaluate the resolved SAS pump-off model at the supplied detunings in MHz."""
     reason = od_fit_unavailable(params)
     if reason:
         raise ValueError(reason)
-    scan = (np.asarray(frequency_mhz, dtype=float) - offset_mhz) * (2 * np.pi * 1e6)
-    raw = SASScheme()._compute_species(
-        params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=extra_width_mhz * 1e6)
-    alpha = raw["alpha_unit"] * float(params.get("line_strength", 1.0))
-    return observables.transmission(alpha, float(params["cell_mm"]) * 1e-3)
+    if optics is not None or cell is not None:
+        _require_calibrated_od_scope(params)
+    if cell is not None:
+        params = cell.apply(params)
+
+    def atomic_transmission(frequency):
+        scan = (frequency - offset_mhz) * (2 * np.pi * 1e6)
+        raw = SASScheme()._compute_species(
+            params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=extra_width_mhz * 1e6)
+        alpha = raw["alpha_unit"] * float(params.get("line_strength", 1.0))
+        return observables.transmission(alpha, float(params["cell_mm"]) * 1e-3)
+
+    frequency = np.asarray(frequency_mhz, dtype=float)
+    if optics is None:
+        return atomic_transmission(frequency)
+    return optics.transmission(frequency, atomic_transmission)
 
 
-def fit_od_spectrum(data: ODFitInput, params, *, free=("temp_c", "offset_mhz"),
-                    fit_range_mhz=None, heldout_range_mhz=None, bounds=None):
+def fit_od_spectrum(data: ODFitInput, params, *, free=None,
+                    fit_range_mhz=None, heldout_range_mhz=None, bounds=None,
+                    optics: ODOpticalCalibration | None = None,
+                    cell: ODCellCalibration | None = None):
     """Search bounded parameter space and refine weighted residuals on fit points.
 
     Ranges apply to the calibrated input axis before fitting the offset. The
     covariance is local, conditional on fixed model and calibration inputs.
+    By default the fit estimates cold-spot temperature and frequency offset,
+    omitting either when fixed by the corresponding calibration. An explicit
+    offset on a marker-anchored axis is interpreted as a residual offset.
     """
     reason = od_fit_unavailable(params)
     if reason:
         raise ValueError(reason)
+    markers = data.frequency_calibration
+    if optics is not None or cell is not None or markers is not None:
+        _require_calibrated_od_scope(params)
+    fixed = set()
+    if cell is not None:
+        params = cell.apply(params)
+        if cell.temperature is not None:
+            fixed.add("temp_c")
+        if cell.cell_length_mm is not None:
+            fixed.add("cell_mm")
+    if free is None:
+        free = tuple(key for key in ("temp_c", "offset_mhz")
+                     if key not in fixed and (key != "offset_mhz" or markers is None))
+        if not free:
+            raise ValueError("The default fit parameters are fixed. Choose an explicitly free parameter.")
     free = tuple(free)
+    if fixed.intersection(free):
+        raise ValueError("A fixed cell constraint cannot also be a free fit parameter.")
     if not free or len(free) != len(set(free)) or any(key not in PARAMETERS for key in free):
         raise ValueError("Choose distinct physical fit parameters from the supported list.")
     x, y, sigma = (np.asarray(values, dtype=float) for values in
@@ -156,7 +372,8 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=("temp_c", "offset_mhz"),
     def model(frequency, normalized):
         values = dict(base, **dict(zip(free, lower + normalized * width)))
         return od_transmission(frequency, dict(params, temp_c=values["temp_c"], cell_mm=values["cell_mm"]),
-                        extra_width_mhz=values["extra_width_mhz"], offset_mhz=values["offset_mhz"])
+                               extra_width_mhz=values["extra_width_mhz"],
+                               offset_mhz=values["offset_mhz"], optics=optics)
 
     x_train, y_train, sigma_train = x[train], y[train], sigma[train]
     calls = 0
@@ -202,7 +419,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=("temp_c", "offset_mhz"),
         return dict(points=int(r.size), rms=float(np.sqrt(np.mean(r**2))),
                     mean=float(np.mean(r)), quantiles=np.quantile(r, [0.05, 0.5, 0.95]).tolist())
 
-    return dict(
+    result = dict(
         status="converged" if best.success else "optimizer_limit",
         uncertainty_scope="Conditional on the detector calibration and fixed model inputs",
         scope="fit_with_disjoint_holdout" if np.any(heldout) else "calibration_only",
@@ -230,3 +447,11 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=("temp_c", "offset_mhz"),
         global_evaluations=global_calls, local_evaluations=calls - global_calls,
         local_max_evaluations_per_start=LOCAL_MAX_NFEV, local_starts=LOCAL_STARTS,
     )
+
+    if markers is not None:
+        result["frequency_calibration"] = dict(markers.readout(), residual_offset_fitted="offset_mhz" in free)
+    if optics is not None:
+        result["optical_calibration"] = optics.readout()
+    if cell is not None:
+        result["cell_calibration"] = cell.readout()
+    return result
