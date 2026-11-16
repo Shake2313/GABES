@@ -44,6 +44,7 @@ from ..constants import GAMMA, K_VEC
 from .. import core
 from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
                          subdoppler_refinement)
+from ..optical_pumping import steady_populations as _pump_pops
 from ..report import derived_table
 from .base import ParamSpec, Scheme
 from . import sas_axial
@@ -1695,16 +1696,6 @@ def _coated_ground_populations(
         man, basis_pops, deff_axis, detuning, kv, weights)
     return _stationary_ground_populations(
         transfer, man.p_ground, cycle_rate=cycle_rate)
-
-
-def _pump_pops(L0, deff_axis, S_v, n, chunk=1500):
-    """Diagonal populations ρ_ii(Δ_eff) on a fine axis, in memory-safe chunks."""
-    pops = np.empty((deff_axis.size, n))
-    for s in range(0, deff_axis.size, chunk):
-        sl = slice(s, s + chunk)
-        rho = core.steady_state_batched(L0, deff_axis[sl], S_v, n)
-        pops[sl] = np.einsum("vii->vi", rho).real
-    return pops
 
 
 def _dispersion_figure(x, chi_real, xlabel, title, markers=()):
