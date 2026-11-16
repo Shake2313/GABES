@@ -142,6 +142,13 @@ def _weak_probe_profile(params):
               "pressure at zero and Legacy broadening to use Exact Maxwell Voigt.")
 
 
+def _weak_probe_model_id(profile):
+    """Model ID for a weak readout, including an inactive Exact Voigt request."""
+    if profile is not None and profile["applied"] == EXACT_WEAK_PROBE:
+        return "weak_probe_exact_maxwell_voigt"
+    return "weak_probe_legacy"
+
+
 def _isotope_composition(params):
     """Resolve elemental-density shares without moving the Rb frequency origin.
 
@@ -266,7 +273,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "13"           # opt-in exact weak-probe Maxwell mean
+    cache_version = "14"           # consistent pump comparison and reference provenance
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -392,8 +399,9 @@ class SASScheme(Scheme):
                       "stronger inverted crossovers."),
             ParamSpec("line_strength", "Line-strength factor", "Detection & scaling", 1.0,
                       0.01, 2.0, 0.01, "", advanced=True, recompute=False,
-                      help="Effective |d|² calibration knob. =1.0 reproduces the "
-                      "Thermal 85Rb D1 sublevel normalization at pump = 0."),
+                      help="Scale the optical readout, including absorption used in propagation. "
+                      "The optical drive and level populations keep their calculated values. "
+                      "1.0 uses the thermal 85Rb D1 sublevel normalization at pump = 0."),
             ParamSpec("transitions", "Generic: transitions", "Atomic", "single line",
                       choices=("single line", "two lines (crossover)"), advanced=True,
                       hidden=True, help="Internal legacy Generic mode only."),
@@ -550,6 +558,11 @@ class SASScheme(Scheme):
                     "with zero buffer pressure and Legacy broadening.")
         if not 0.0 <= _probe_power_mw(params) <= 0.1:
             return "Set the probe power between 0 and 100 µW."
+        cold_k, path_k, _ = _temperatures(params)
+        if not 293.15 <= cold_k <= 473.15 or not 293.15 <= path_k <= 573.15:
+            return "Set the temperatures within the OD/SAS controls."
+        if path_k < cold_k:
+            return "Set the beam-path temperature at or above the cold-spot temperature."
         return None
 
     def projected_probe_reference(self, params):
@@ -562,8 +575,6 @@ class SASScheme(Scheme):
             raise ValueError(unavailable)
         components, reference, *_ = _isotope_composition(params)
         cold_k, path_k, _ = _temperatures(params)
-        if not 293.15 <= cold_k <= 473.15 or not 293.15 <= path_k <= 573.15:
-            raise ValueError("The probe reference requires temperatures within the OD/SAS controls.")
         densities = [(isotope, fraction, _species_path_density(isotope, cold_k, path_k, fraction))
                      for isotope, fraction in components]
         return compute(params, densities, reference, path_k, _probe_power_mw(params))
@@ -841,7 +852,7 @@ class SASScheme(Scheme):
                     doppler_temp_tied=tied,
                     probe_model=("finite_power_2level_gaussian_propagation"
                                  if probe_peak_intensity > 0.0
-                                 else "weak_probe_legacy"),
+                                 else _weak_probe_model_id(weak_profile)),
                     probe_saturation_supported=probe_supported,
                     probe_validation_tier=probe_validation_tier,
                     probe_power_mw=probe_power,

@@ -8,7 +8,7 @@ from gabes import species
 from gabes.experimental_alignment import AxisAlignment
 from gabes.experimental_csv import CALIBRATION_ABSOLUTE_GAIN_OFFSET, load_experimental_csv
 from gabes.od_spectrum_fit import ODFitInput, fit_od_spectrum, od_transmission, prepare_od_fit
-from gabes.schemes.sas import SASScheme
+from gabes.schemes.sas import EXACT_WEAK_PROBE, SASScheme
 
 
 @pytest.fixture
@@ -25,6 +25,8 @@ def test_exact_spectrum_recovers_temperature_and_offset(conditions):
     fit = fit_od_spectrum(data, conditions)
     assert fit["identifiable"]
     assert fit["scope"] == "calibration_only"
+    assert fit["probe_model"] == "weak_probe_legacy"
+    assert "weak_probe_profile" not in fit
     assert [item["value"] for item in fit["parameters"]] == pytest.approx([67.2, 21.7], abs=1e-7)
     assert fit["fit_residuals"]["rms"] < 1e-10
     assert fit["global_evaluations"] == 65
@@ -62,3 +64,20 @@ def test_noisy_absolute_trace_keeps_holdout_separate_and_flags_density_length(co
         fit_od_spectrum(prepared, dict(conditions, pump_power_mw=1.0))
     with pytest.raises(ValueError, match="supported list"):
         fit_od_spectrum(prepared, conditions, free=("line_strength",))
+
+
+@pytest.mark.parametrize(("coated", "status", "model"), [
+    (False, "active", "weak_probe_exact_maxwell_voigt"),
+    (True, "inactive", "weak_probe_legacy"),
+])
+def test_standalone_fit_reports_actual_weak_probe_backend(conditions, coated, status, model):
+    conditions = dict(conditions, weak_probe_profile=EXACT_WEAK_PROBE, paraffin_coated=coated)
+    x = np.linspace(-3100.0, 3100.0, 77)
+    y = od_transmission(x, conditions)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    fit = fit_od_spectrum(data, conditions, free=("temp_c",))
+    raw = SASScheme()._compute_species(conditions, scan_rad_s=x * (2.0 * np.pi * 1e6))
+    assert fit["probe_model"] == raw["probe_model"] == model
+    assert fit["weak_probe_profile"] == raw["weak_probe_profile"]
+    assert fit["weak_probe_profile"]["status"] == status
+    assert fit["fit_residuals"]["rms"] < 1e-10

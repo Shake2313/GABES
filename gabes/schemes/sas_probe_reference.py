@@ -123,6 +123,9 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
         length_m, probe_waist, 2 * np.pi * nu_ref / constants.C_LIGHT)
     notes = ["Numerical reference for linearly polarized Rb D1/D2. Magnetic sublevels "
              "within each hyperfine level share equal populations."]
+    if strength != 1.0:
+        notes.append(f"Absorption is scaled by {strength:g}. Optical drive and level "
+                     "populations keep their calculated values.")
     if length_ratio >= 0.5:
         notes.append(f"Cell length is {length_ratio:.2g} Rayleigh ranges. "
                      "The calculation assumes a constant beam waist and full collection.")
@@ -132,6 +135,7 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
                         polarization="linear", frequency_reference=reference.name,
                         isotope_fractions=fractions, homogeneous_fwhm_mhz=widths,
                         transit_khz=transit_khz, peak_probe_intensity_w_m2=float(intensity),
+                        line_strength=dict(factor=strength, applies_to="propagated absorption coefficient"),
                         linear_limit="complex Voigt with natural, self and transit broadening",
                         beam="constant Gaussian waist, full collection"),
         notes=notes,

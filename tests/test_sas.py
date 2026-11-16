@@ -698,6 +698,7 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
         np.testing.assert_allclose(raw["alpha_unit"], expected_alpha, rtol=4e-10)
         np.testing.assert_allclose(raw["chi_real_unit"], expected_chi, rtol=4e-10)
         assert raw["chi_real_unit"][0] < 0 < raw["chi_real_unit"][-1]
+        assert raw["probe_model"] == "weak_probe_exact_maxwell_voigt"
         view = SAS.headless_observables(raw, p)["optical_readout"]
         assert view["weak_probe_profile"]["applied"] == EXACT_WEAK_PROBE
         assert view["weak_probe_profile"]["status"] == "active"
@@ -718,6 +719,7 @@ def test_exact_voigt_selection_falls_back_with_visible_reason_when_ineligible():
         assert "weak_probe_profile" not in legacy
         assert raw["weak_probe_profile"]["applied"] == LEGACY_WEAK_PROBE
         assert raw["weak_probe_profile"]["status"] == "inactive"
+        assert raw["probe_model"] == legacy["probe_model"]
         assert SAS.headless_observables(raw, p)["optical_readout"]["weak_probe_profile"]["scope"]
         np.testing.assert_array_equal(raw["alpha_unit"], legacy["alpha_unit"])
         np.testing.assert_array_equal(raw["chi_real_unit"], legacy["chi_real_unit"])

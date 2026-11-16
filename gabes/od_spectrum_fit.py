@@ -1,16 +1,17 @@
 """Bounded calibration of absolutely calibrated weak-probe OD spectra."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.stats import qmc
 
 from . import observables, species
+from ._arrays import readonly_float_array
 from .experimental_alignment import AxisAlignment
 from .experimental_csv import ExperimentalCSV, transform_x
-from .schemes.sas import SASScheme, _probe_power_mw
+from .schemes.sas import SASScheme, _probe_power_mw, _weak_probe_model_id, _weak_probe_profile
 from .vapor_cell import CellTemperatureState
 
 
@@ -194,6 +195,8 @@ class ODFitInput:
     source_points: int
     uncertainty_source: str
     frequency_calibration: ODFrequencyCalibration | None = None
+    _trace_estimated_sigma: tuple[np.ndarray, np.ndarray] | None = field(
+        default=None, repr=False, compare=False)
 
 
 def od_fit_unavailable(params):
@@ -232,6 +235,25 @@ def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = Non
     if x.size < 16 or np.unique(x).size < 16:
         raise ValueError("OD fitting requires at least 16 distinct frequency samples.")
 
+    diagnostic = trace.correction_diagnostics
+    detector_sigma = float(diagnostic.noise_sigma / abs(diagnostic.calibration_gain))
+    sigma = _branch_noise_weights(x, y, x, detector_sigma=detector_sigma)
+    if sigma is not None:
+        source = "Interpolated robust noise estimates from raw branch frequency bins"
+    elif detector_sigma > 0 and np.isfinite(detector_sigma):
+        sigma = np.full_like(x, detector_sigma)
+        source = "Raw detector noise estimate converted to transmission"
+    else:
+        raise ValueError("Noise could not be estimated from this trace. Supply raw measurements with noise.")
+    keep = np.linspace(0, x.size - 1, min(x.size, MAX_FIT_POINTS), dtype=int)
+    retained_sigma = sigma[keep]
+    return ODFitInput(x[keep], y[keep], retained_sigma, branch, int(x.size), source,
+                      frequency_calibration=frequency_calibration,
+                      _trace_estimated_sigma=(retained_sigma, readonly_float_array(retained_sigma)))
+
+
+def _branch_noise_weights(x, y, evaluation_x, *, detector_sigma=0.0):
+    """Interpolate robust noise levels estimated from the supplied samples."""
     # For an irregular frequency grid, subtract linear interpolation of each
     # point's two neighbors. Scale the resulting high-pass residual back to
     # the noise of one raw sample. Robust bin estimates limit line-edge bias.
@@ -249,20 +271,10 @@ def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = Non
         if spread > 0 and np.isfinite(spread):
             centers.append(float(np.mean(x[1:-1][valid][group])))
             spreads.append(float(spread))
-    diagnostic = trace.correction_diagnostics
-    detector_sigma = float(diagnostic.noise_sigma / abs(diagnostic.calibration_gain))
     if spreads:
         floor = max(0.2 * detector_sigma, 0.2 * float(np.median(spreads)), np.finfo(float).eps)
-        sigma = np.maximum(np.interp(x, centers, spreads), floor)
-        source = "Interpolated robust noise estimates from raw branch frequency bins"
-    elif detector_sigma > 0 and np.isfinite(detector_sigma):
-        sigma = np.full_like(x, detector_sigma)
-        source = "Raw detector noise estimate converted to transmission"
-    else:
-        raise ValueError("Noise could not be estimated from this trace. Supply raw measurements with noise.")
-    keep = np.linspace(0, x.size - 1, min(x.size, MAX_FIT_POINTS), dtype=int)
-    return ODFitInput(x[keep], y[keep], sigma[keep], branch, int(x.size), source,
-                      frequency_calibration=frequency_calibration)
+        return np.maximum(np.interp(evaluation_x, centers, spreads), floor)
+    return None
 
 
 def _require_calibrated_od_scope(params):
@@ -356,6 +368,18 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         raise ValueError("Fit and held-out points must be disjoint. The fit needs at least 16 distinct points.")
     if heldout_range_mhz is not None and np.unique(x[heldout]).size < 4:
         raise ValueError("The held-out interval must contain at least four distinct samples.")
+    uncertainty_source = data.uncertainty_source
+    # CSV-prepared uncertainties may use neighbors in the holdout and the
+    # merged detector noise. Re-estimate from training samples alone. A caller
+    # supplying or modifying sigma keeps their fixed weights. Check identity
+    # as well as contents to recognize even a replacement with equal values.
+    estimated = data._trace_estimated_sigma
+    if (np.any(heldout) and estimated is not None and data.sigma is estimated[0]
+            and np.array_equal(sigma, estimated[1])):
+        sigma = _branch_noise_weights(x[train], y[train], x)
+        if sigma is None:
+            raise ValueError("Noise could not be estimated from the training range. Supply fixed uncertainties.")
+        uncertainty_source = "Robust noise estimated from retained training samples only"
     domains = dict(bounds or {})
     if domains.keys() - set(free):
         raise ValueError("Fit bounds apply only to selected physical parameters.")
@@ -419,16 +443,18 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         return dict(points=int(r.size), rms=float(np.sqrt(np.mean(r**2))),
                     mean=float(np.mean(r)), quantiles=np.quantile(r, [0.05, 0.5, 0.95]).tolist())
 
+    profile = _weak_probe_profile(params)
     result = dict(
         status="converged" if best.success else "optimizer_limit",
         uncertainty_scope="Conditional on the detector calibration and fixed model inputs",
         scope="fit_with_disjoint_holdout" if np.any(heldout) else "calibration_only",
-        model="resolved uniform weak-probe pump-off OD", source_points=data.source_points,
+        model="resolved uniform weak-probe pump-off OD", probe_model=_weak_probe_model_id(profile),
+        source_points=data.source_points,
         medium=params["species"], line=params["line"],
         acquisition_sampling="evenly spaced record indices, no averaging" if data.source_points > x.size else "all branch points",
         points_used=int(x.size), acquisition_branch=data.branch + 1,
         axis_method="direct evaluation on retained experimental points, no residual interpolation",
-        uncertainty_source=data.uncertainty_source, frequency_mhz=x.tolist(),
+        uncertainty_source=uncertainty_source, frequency_mhz=x.tolist(),
         measured_transmission=y.tolist(), model_transmission=predicted.tolist(),
         residual=residuals.tolist(), sigma=sigma.tolist(), train_mask=train.tolist(), heldout_mask=heldout.tolist(),
         fit_range_mhz=fit_range_mhz, heldout_range_mhz=heldout_range_mhz,
@@ -448,6 +474,8 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         local_max_evaluations_per_start=LOCAL_MAX_NFEV, local_starts=LOCAL_STARTS,
     )
 
+    if profile is not None:
+        result["weak_probe_profile"] = profile
     if markers is not None:
         result["frequency_calibration"] = dict(markers.readout(), residual_offset_fitted="offset_mhz" in free)
     if optics is not None:

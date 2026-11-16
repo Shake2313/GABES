@@ -24,6 +24,12 @@ def comparison_values(key, values):
         _condition_values.reset(token)
 
 
+def condition_samples(key, default):
+    """Return explicit samples for this axis when the caller supplies them."""
+    requested = _condition_values.get()
+    return requested[1] if requested is not None and requested[0] == key else default
+
+
 def condition_views(scheme, params, key, values, *, resolve_raw,
                     current_raw=None, current_view=None):
     """Yield each distinct condition in order, reusing the committed solution.
@@ -32,10 +38,7 @@ def condition_views(scheme, params, key, values, *, resolve_raw,
     selects recompute keys. A view is only reused at the exact current value.
     No Matplotlib figures are constructed for the other conditions.
     """
-    requested = _condition_values.get()
-    if requested is not None and requested[0] == key:
-        values = requested[1]
-    for value in dict.fromkeys(values):
+    for value in dict.fromkeys(condition_samples(key, values)):
         condition = {**params, key: value}
         if value == params[key] and current_raw is not None:
             raw, view = current_raw, current_view

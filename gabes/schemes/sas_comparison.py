@@ -6,7 +6,8 @@ import re
 import numpy as np
 
 from .. import __version__
-from ..model_comparison import SCHEMA, condition_views, same_grid, sample_values
+from ..model_comparison import SCHEMA, condition_samples, condition_views, same_grid, sample_values
+from .sas import LEGACY_WEAK_PROBE, _weak_probe_profile
 
 
 # The solver emits one marker per allowed transition as "<isotope> <Fg>→<Fe>′".
@@ -62,6 +63,17 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
     if not np.isfinite(current) or current < 0:
         raise ValueError("Pump power must be finite and non-negative.")
     powers = [0., current] if current else [0.]
+    profile = _weak_probe_profile({**params, key: 0.})
+    if profile is not None and profile["status"] == "active" and any(
+            power > 0. for power in condition_samples(key, powers)):
+        profile = dict(requested=profile["requested"], applied=LEGACY_WEAK_PROBE,
+                       status="inactive", scope="The pump comparison uses the legacy velocity "
+                       "grid for every curve so the pump is the only setting that varies.")
+    if profile is not None and profile["status"] == "inactive":
+        # Exact Voigt covers the pump-off limit. Use the same legacy backend
+        # for all rows when the selected conditions include a pumped curve.
+        params = {**params, "weak_probe_profile": LEGACY_WEAK_PROBE}
+        current_raw = current_view = None
     conditions = condition_views(scheme, params, key, powers, resolve_raw=resolve_raw,
                                  current_raw=current_raw, current_view=current_view)
     series = []
@@ -105,6 +117,11 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "probe_model_scope": probe_scope.get("value"),
             "probe_model_note": probe_scope.get("help"),
         })
+        if profile is not None:
+            series[-1]["weak_probe_profile"] = profile
+            series[-1]["probe_model"] = raw.get("probe_model")
+            if not probe_scope:
+                series[-1].update(probe_model_scope=profile["applied"], probe_model_note=profile["scope"])
         if "axial_cell" in readout:
             axial = readout["axial_cell"]
             series[-1]["axial_cell"] = {key: axial[key] for key in (
@@ -138,5 +155,6 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "baseline_power_mw": 0.0, "missing_value": "null",
             "crossover_basis": "Midpoint of allowed lines from the same ground F; not a detected peak.",
             "group_scope": "Group windows show total transmission, including other transitions in overlapping windows.",
+            **({"weak_probe_profile": profile} if profile is not None else {}),
         },
     }

@@ -16,7 +16,7 @@ from gabes.od_spectrum_fit import (
     od_transmission,
     prepare_od_fit,
 )
-from gabes.schemes.sas import SASScheme
+from gabes.schemes.sas import EXACT_WEAK_PROBE, SASScheme
 
 
 @pytest.fixture
@@ -153,6 +153,8 @@ def test_calibrated_synthetic_fit_recovers_width_and_predicts_disjoint_holdout(c
     assert fit["identifiable"]
     assert fit["parameters"][0]["value"] == pytest.approx(width, abs=0.1)
     assert fit["heldout_residuals"]["rms"] < 1.5 * sigma
+    np.testing.assert_array_equal(fit["sigma"], data.sigma)
+    assert fit["uncertainty_source"] == data.uncertainty_source
     assert uncorrected["heldout_residuals"]["rms"] > 10 * sigma
     assert fit["frequency_calibration"]["residual_offset_fitted"] is False
     assert fit["cell_calibration"]["temperature"]["doppler_temp_c"] == 86.0
@@ -165,3 +167,47 @@ def test_calibrated_synthetic_fit_recovers_width_and_predicts_disjoint_holdout(c
     with pytest.raises(ValueError, match="uncoated, buffer-free Rb"):
         od_transmission(x, dict(conditions, ne_pressure_torr=1), optics=optics)
     json.dumps(fit, allow_nan=False)
+
+
+def test_heldout_csv_noise_cannot_change_any_training_result(conditions):
+    conditions = dict(conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    x = np.linspace(-3900.0, 4000.0, 501)
+    markers = ODFrequencyCalibration((x[0], x[-1]), (x[0], x[-1]))
+    train = x <= -600.0
+    noise = np.random.default_rng(13).normal(size=x.size)
+    clean = od_transmission(x, conditions)
+    training_y = clean + np.where(x > -1000.0, 0.06, 0.0) + 0.0002 * noise
+
+    prepared = []
+    fits = []
+    for heldout_noise in (0.0002, 0.01):
+        signal = np.where(train, training_y, clean + heldout_noise * noise)
+        csv = "\n".join(f"{a:.17g},{b:.17g}" for a, b in zip(x, signal)).encode()
+        trace = load_experimental_csv(
+            csv, calibration_mode=CALIBRATION_ABSOLUTE_GAIN_OFFSET,
+            gain=1.0, offset=0.0, denoise=False,
+        )
+        data = prepare_od_fit(trace, frequency_calibration=markers)
+        prepared.append(data)
+        fits.append(fit_od_spectrum(
+            data, conditions, fit_range_mhz=(-3900.0, -600.0),
+            heldout_range_mhz=(-590.0, 4000.0),
+        ))
+
+    # Reproduces the source of leakage: the legacy whole-trace noise estimate
+    # changes inside the train window even though all its signal stays fixed.
+    assert np.max(np.abs(prepared[0].sigma[train] - prepared[1].sigma[train])) > 1e-4
+    low_noise, high_noise = fits
+    for result in fits:
+        assert result["uncertainty_source"] == "Robust noise estimated from retained training samples only"
+        np.testing.assert_array_equal(result["train_mask"], train)
+    for key in ("sigma", "parameters", "covariance", "reduced_chi_squared",
+                "fit_residuals", "model_transmission"):
+        assert low_noise[key] == high_noise[key]
+    assert low_noise["heldout_residuals"] != high_noise["heldout_residuals"]
+
+    fixed = replace(prepared[0], sigma=prepared[0].sigma.copy(), uncertainty_source="independent weights")
+    fit = fit_od_spectrum(fixed, conditions, fit_range_mhz=(-3900., -600.),
+                          heldout_range_mhz=(-590., 4000.))
+    assert fit["uncertainty_source"] == "independent weights"
+    np.testing.assert_array_equal(fit["sigma"], fixed.sigma)

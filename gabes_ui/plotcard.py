@@ -65,12 +65,24 @@ with _EXPERIMENTAL_CSV_IMPORT_LOCK:
     load_experimental_csv = _experimental_csv.load_experimental_csv
 
 
+class _UnresolvedExtraView(Exception):
+    """Carry an unresolved result through the cache to the current view."""
+
+    def __init__(self, data):
+        super().__init__("Extra view did not resolve.")
+        self.data = data
+
+
 @st.cache_data(show_spinner=False, max_entries=16)
-def _cached_extra(scheme_name, view_key, param_items, cache_version):
+def _cached_extra(scheme_name, view_key, param_items, cache_version, *, retry_unresolved=False):
     scheme = schemes.get(scheme_name)
     view = next(v for v in scheme.extra_views() if v.key == view_key)
     with blas_single_thread():
-        return view.compute(dict(param_items))
+        data = view.compute(dict(param_items))
+    if retry_unresolved and data.get("status") == "unresolved":
+        # Streamlit only caches returns, so another Run can retry this calculation.
+        raise _UnresolvedExtraView(data)
+    return data
 
 
 @st.cache_data(show_spinner=False, max_entries=16)
@@ -987,7 +999,11 @@ def _render_extra_view(obj, scheme, params, cache_version, readout_cache_version
         saved = None
     if st.button("Run", key=button_key, icon=":material/play_arrow:", disabled=bool(reason)):
         with st.spinner("Running…"):
-            data = _cached_extra(scheme.name, obj.key, extra_items, cache_version)
+            try:
+                data = _cached_extra(scheme.name, obj.key, extra_items, cache_version,
+                                     retry_unresolved=remember)
+            except _UnresolvedExtraView as exc:
+                data = exc.data
         saved = (identity, data)
         if remember:
             st.session_state[result_key] = saved

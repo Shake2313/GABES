@@ -268,6 +268,30 @@ def test_advanced_reference_rejects_out_of_scope_conditions(unsupported):
         scheme.projected_probe_reference(params)
 
 
+def test_advanced_reference_rejects_beam_path_colder_than_cold_spot():
+    scheme = SASScheme()
+    params = _od_conditions(scheme, temp_c=150., doppler_temp_c=20., constrain_doppler_temp=False)
+    assert "beam-path temperature" in scheme.extra_view_unavailable(
+        "Finite-probe pumping reference", params)
+    with pytest.raises(ValueError, match="at or above the cold-spot temperature"):
+        scheme.projected_probe_reference(params)
+    assert scheme.compute(params)["probe_model"] == "weak_probe_legacy"
+
+
+def test_advanced_line_strength_is_reported_as_opacity_calibration():
+    scheme = SASScheme()
+    params = _od_conditions(scheme, species="Rb (natural)", temp_c=40.,
+                            probe_power_uw=10., transit_khz=20., scan_points=401)
+    scaled = scheme.projected_probe_reference(dict(params, line_strength=.5, cell_mm=10.))
+    short = scheme.projected_probe_reference(dict(params, line_strength=1., cell_mm=5.))
+    assert scaled["status"] == short["status"] == "converged"
+    assert scaled["provenance"]["line_strength"] == {
+        "factor": .5, "applies_to": "propagated absorption coefficient"}
+    assert any("Optical drive and level populations keep their calculated values" in note
+               for note in scaled["notes"])
+    np.testing.assert_allclose(scaled["transmission"], short["transmission"], rtol=0., atol=2e-15)
+
+
 def test_advanced_reference_withholds_finite_curve_on_deadline(monkeypatch):
     from gabes.schemes import sas_probe_reference
 

@@ -8,8 +8,8 @@ import pytest
 
 from gabes import schemes
 from gabes.core import blas_single_thread
-from gabes.model_comparison import sample_values, same_grid
-from gabes.schemes.sas import GENERIC, RB_COMPOSITION_CUSTOM
+from gabes.model_comparison import comparison_values, sample_values, same_grid
+from gabes.schemes.sas import EXACT_WEAK_PROBE, GENERIC, LEGACY_WEAK_PROBE, RB_COMPOSITION_CUSTOM
 
 
 def _compare(**changes):
@@ -75,6 +75,30 @@ def test_mixed_rb_composition_isotope_absence_and_native_reference_do_not_confla
         mids = [m["x_mhz"] for m in group["markers"] if m["kind"] == "crossover_candidate"]
         assert len(lines) == 3
         assert mids == sorted((a+b)/2 for a,b in combinations(lines, 2))
+
+
+def test_pump_comparison_matches_legacy_for_both_curves_when_exact_was_selected():
+    conditions = dict(line="D2", temp_c=90., cell_mm=12.5, probe_power_uw=0.,
+                      scan_points=401, pump_power_mw=.01)
+    expected, _, _ = _compare(**conditions)
+    actual, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    assert actual["axis"] == expected["axis"] and actual["x"] == expected["x"]
+    assert actual["fixed"]["weak_probe_profile"] == LEGACY_WEAK_PROBE
+    for actual_curve, expected_curve in zip(actual["series"], expected["series"], strict=True):
+        np.testing.assert_array_equal(actual_curve["transmission"], expected_curve["transmission"])
+        np.testing.assert_array_equal(actual_curve["delta"], expected_curve["delta"])
+        assert actual_curve["probe_model"] == "weak_probe_legacy"
+        assert actual_curve["weak_probe_profile"]["requested"] == EXACT_WEAK_PROBE
+        assert actual_curve["weak_probe_profile"]["applied"] == LEGACY_WEAK_PROBE
+
+    # An explicit comparison can request both powers while the active curve is the exact pump-off one.
+    conditions["pump_power_mw"] = 0.
+    off_only, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    assert off_only["series"][0]["probe_model"] == "weak_probe_exact_maxwell_voigt"
+    with comparison_values("pump_power_mw", [0., .01]):
+        sweep, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    for series, expected_curve in zip(sweep["series"], expected["series"], strict=True):
+        np.testing.assert_array_equal(series["delta"], expected_curve["delta"])
 
 
 @pytest.mark.parametrize("atom,reference,count,unit", [

@@ -75,7 +75,7 @@ def test_lazy_extra_view_export_runs_only_when_requested(monkeypatch):
     extra = SimpleNamespace(key="Test scan", description="Test scan", param_keys=(),
                             render=render, render_with_params=True)
     monkeypatch.setattr(type(scheme), "extra_views", lambda _self: [extra])
-    def compute(*_args):
+    def compute(*_args, **_kwargs):
         calls.append("run")
         return {"signal": [3., 4.], "minus": {"branch": -1, "validation_level": "PREDICTED"}}
     def download(*_args, **kwargs):
@@ -100,6 +100,58 @@ def test_lazy_extra_view_export_runs_only_when_requested(monkeypatch):
     assert result["extra_view"]["branches"]["minus"]["validation_level"] == "PREDICTED"
     assert result["extra_view"]["status"] == "complete"
     assert result["extra_view"]["compute_params"]
+
+
+def test_retained_extra_view_retries_unresolved_and_caches_success(monkeypatch):
+    from streamlit.testing.v1 import AppTest
+
+    calls, downloads = [], []
+    scheme = get("sas")
+    view_key = "Finite-probe pumping reference"
+    timeout_reason = "The 30 s reference calculation limit was reached."
+
+    def compute(_self, params):
+        calls.append(params)
+        provenance = {"validation": "numerical readiness", "peak_probe_intensity_w_m2": 0.0}
+        if len(calls) == 1:
+            return {"status": "unresolved", "reason": timeout_reason,
+                    "provenance": provenance, "refinement": {"levels": 1}}
+        return {"status": "converged", "x_ghz": [1., 2.], "transmission": [0.8, 0.9],
+                "provenance": provenance, "refinement": {"levels": 2}}
+
+    monkeypatch.setattr(type(scheme), "projected_probe_reference", compute)
+    monkeypatch.setattr(export, "render_export", lambda *_args, **kwargs: downloads.append(kwargs))
+    monkeypatch.setattr(plotcard.st, "pills", lambda *_args, **_kwargs: view_key)
+    app = AppTest.from_string("""
+        from gabes.schemes import get
+        from gabes_ui.plotcard import render_on_demand
+        scheme = get("sas")
+        params = dict(scheme.defaults(), pump_power_mw=0.0)
+        render_on_demand(scheme, params, "retained-retry-test", "roundtrip-test")
+    """).run()
+    run_key = f"run__sas__{view_key}"
+    assert not app.exception and not calls and not downloads
+
+    app.button(key=run_key).click().run()
+    assert not app.exception and len(calls) == 1
+    assert app.warning[0].value == timeout_reason
+    assert downloads[-1]["extra_view"]["status"] == "unresolved"
+    assert downloads[-1]["extra_view"]["refinement"] == {"levels": 1}
+    assert not downloads[-1]["plot_payloads"]
+
+    app.run()
+    assert not app.exception and len(calls) == 1
+    assert app.warning[0].value == timeout_reason
+
+    app.button(key=run_key).click().run()
+    assert not app.exception and len(calls) == 2 and calls[0] == calls[1]
+    assert not app.warning
+    assert downloads[-1]["extra_view"]["status"] == "converged"
+    assert downloads[-1]["plot_payloads"][0]["traces"][0]["y_data"] == [0.8, 0.9]
+
+    app.button(key=run_key).click().run()
+    assert not app.exception and len(calls) == 2
+    assert downloads[-1]["extra_view"]["refinement"] == {"levels": 2}
 
 
 def test_sweep_exports_status_before_first_row_and_keeps_curve_provenance():
