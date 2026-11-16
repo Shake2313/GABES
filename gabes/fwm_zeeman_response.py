@@ -13,9 +13,8 @@ from functools import lru_cache
 
 import numpy as np
 
-from . import constants, core, doppler, hyperfine, observables
+from . import constants, core, doppler, hyperfine, observables, species
 from .atoms import AtomModel
-from .magneto_multilevel import build_multilevel_atom
 
 N_LEVELS = 24
 N_GROUND = 12
@@ -124,7 +123,7 @@ def build_model(T=394.15, *, transit_rate=constants.GAMMA_GG,
                     if optical_dephasing_rate is None else float(optical_dephasing_rate))
     if not np.isfinite([ground_rate, optical_rate]).all() or min(ground_rate, optical_rate) < 0:
         raise ValueError("dephasing rates must be finite and nonnegative")
-    angular = build_multilevel_atom("Rb85", "D1")
+    angular = species.level_structure("Rb85", "D1")
     levels = angular.ground+angular.excited
     fs = np.array([level[0] for level in levels])
     ms = np.array([level[1] for level in levels])
@@ -158,9 +157,9 @@ def build_model(T=394.15, *, transit_rate=constants.GAMMA_GG,
         ground=tuple(range(N_GROUND)), excited=tuple(range(N_GROUND, N_LEVELS)),
         decay=(), dephasing=(), doppler_levels=tuple(range(N_GROUND, N_LEVELS)),
         emission_ops=tuple(emission), collapse_ops=tuple(collapse))
-    thermal = np.diag(np.r_[np.full(N_GROUND, 1./N_GROUND), np.zeros(N_LEVELS-N_GROUND)])
-    trace = np.eye(N_LEVELS).reshape(-1)
-    atom.lindblad += reset*(np.outer(thermal.reshape(-1), trace)-np.eye(N_LEVELS**2))
+    populations = np.full(N_GROUND, 1./N_GROUND)
+    thermal = np.diag(np.r_[populations, np.zeros(N_LEVELS-N_GROUND)])
+    atom = atom.with_reset(reset, populations, direct=True)
     delta_m = (ms[:, None]-ms[None, :]).ravel()
     sectors = {q: np.flatnonzero(delta_m == q) for q in range(-6, 7)}
     pump_coupling = np.sqrt(3.)*dipoles[0]

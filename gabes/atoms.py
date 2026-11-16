@@ -11,12 +11,13 @@ The registry contains the default 85Rb D1 double-Λ model. Factory functions als
 construct two-level, three-level Λ, and saturated-absorption models; the SAS
 species builder supplies isotope-specific hyperfine manifolds.
 """
+from copy import copy
 from dataclasses import dataclass, field, fields, replace
 
 import numpy as np
 
 from . import constants, hyperfine, species
-from .core import comm_super, dissipator
+from .core import comm_super, dissipator, thermal_reset_superoperator
 
 
 @dataclass
@@ -58,16 +59,31 @@ class AtomModel:
     def rho_index(self, row, col):
         return row * self.n_levels + col
 
-    def with_reset(self, rate, populations, name=None):
+    def with_reset(self, rate, populations, name=None, *, direct=False):
         """Copy with a transit/thermal reset ρ̇ += rate·(ρ_th·Trρ − ρ).
 
         ρ_th = Σ_g p_g|g⟩⟨g| with `populations` aligned to `self.ground`. Every
         state s gets a rate channel s → g at rate·p_g (zero weights skipped),
         appended after the existing `decay`. Attributes a builder attached after
         construction (`couplings`, `m_ground`, …) are carried over.
+
+        `direct=True` applies the closed-form sum for normalized populations
+        without enumerating the jumps. Use it when the caller consumes only
+        the superoperator and needs to preserve its replacement arithmetic.
         """
         if len(populations) != len(self.ground):
             raise ValueError("reset populations must align with `ground`")
+        if direct:
+            full = np.zeros(self.n_levels)
+            full[list(self.ground)] = populations
+            if not np.isclose(full.sum(), 1.0, atol=1e-12, rtol=0.0):
+                raise ValueError("direct reset populations must sum to one")
+            clone = copy(self)
+            if name is not None:
+                clone.name = name
+            clone.lindblad = self.lindblad + thermal_reset_superoperator(rate, full)
+            clone.S_v = self.S_v.copy()
+            return clone
         reset = tuple((s, g, rate * p) for s in range(self.n_levels)
                       for g, p in zip(self.ground, populations) if p)
         kwargs = {f.name: getattr(self, f.name) for f in fields(self) if f.init}
