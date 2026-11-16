@@ -660,6 +660,69 @@ def test_dispersion_matches_independent_voigt_reference():
                 / np.abs(chi_ref).max()) < 1e-3
 
 
+def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatch):
+    from scipy.special import wofz
+    from gabes import doppler
+    from gabes.schemes.sas import EXACT_WEAK_PROBE
+
+    def unexpected_grid(*args, **kwargs):
+        raise AssertionError("Exact weak-probe OD should not allocate a velocity grid")
+
+    monkeypatch.setattr(doppler, "velocity_grid", unexpected_grid)
+    scan = 2 * np.pi * np.array([1.1e10, -3.0e9, 0.0, 0.0, 5.1e9, -1.1e10])
+    for line in ("D1", "D2"):
+        p = _params(species="Rb (natural)", line=line, pump_power_mw=0.0,
+                    temp_c=90.0, constrain_doppler_temp=False, doppler_temp_c=125.0,
+                    rb_composition="Custom", rb85_fraction=0.36,
+                    weak_probe_profile=EXACT_WEAK_PROBE)
+        raw = SAS._compute_species(p, scan_rad_s=scan, extra_homogeneous_fwhm_hz=2.0e6)
+        expected_alpha = np.zeros_like(scan)
+        expected_chi = np.zeros_like(scan)
+        reference = species.RB85.line(line)[1]
+        for isotope, fraction in ((species.RB85, 0.36), (species.RB87, 1.0 - 0.36)):
+            m = species.build_manifold(isotope, line)
+            density = (fraction * species.number_density(isotope, 363.15)
+                       * (363.15 / 398.15))
+            gamma = m.gamma + species.self_broadening(isotope, density) + 2 * np.pi * 2.0e6
+            sigma = m.k_vec * np.sqrt(constants.KB * 398.15 / isotope.mass)
+            shift = 2 * np.pi * (m.nu0 - reference)
+            areas = species.line_integrated_alpha(isotope, line, density)
+            for center, g, e in zip(m.omega, m.g_idx, m.e_idx, strict=True):
+                area = areas[m.Fg[g], m.Fe[e - len(m.Fg)]]
+                normal = sigma * np.sqrt(2 * np.pi)
+                profile = wofz((scan - shift - center + 0.5j * gamma)
+                               / (sigma * np.sqrt(2))) / normal
+                expected_alpha += area * profile.real
+                expected_chi -= area * profile.imag / m.k_vec
+        np.testing.assert_array_equal(raw["scan"], scan)
+        np.testing.assert_allclose(raw["alpha_unit"], expected_alpha, rtol=4e-10)
+        np.testing.assert_allclose(raw["chi_real_unit"], expected_chi, rtol=4e-10)
+        assert raw["chi_real_unit"][0] < 0 < raw["chi_real_unit"][-1]
+        view = SAS.headless_observables(raw, p)["optical_readout"]
+        assert view["weak_probe_profile"]["applied"] == EXACT_WEAK_PROBE
+        assert view["weak_probe_profile"]["status"] == "active"
+        np.testing.assert_allclose(view["transmission"],
+                                   np.exp(-expected_alpha * p["cell_mm"] * 1e-3),
+                                   rtol=1e-10, atol=1e-12)
+
+
+def test_exact_voigt_selection_falls_back_with_visible_reason_when_ineligible():
+    from gabes.schemes.sas import EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE
+
+    for changes in (dict(pump_power_mw=0.5), dict(probe_power_mw=0.002),
+                    dict(paraffin_coated=True), dict(ne_pressure_torr=2.0),
+                    dict(cell_propagation="Segmented reference")):
+        p = _params(**{"pump_power_mw": 0.0, "scan_points": 401, **changes})
+        legacy = SAS.compute(p)
+        raw = SAS.compute(dict(p, weak_probe_profile=EXACT_WEAK_PROBE))
+        assert "weak_probe_profile" not in legacy
+        assert raw["weak_probe_profile"]["applied"] == LEGACY_WEAK_PROBE
+        assert raw["weak_probe_profile"]["status"] == "inactive"
+        assert SAS.headless_observables(raw, p)["optical_readout"]["weak_probe_profile"]["scope"]
+        np.testing.assert_array_equal(raw["alpha_unit"], legacy["alpha_unit"])
+        np.testing.assert_array_equal(raw["chi_real_unit"], legacy["chi_real_unit"])
+
+
 def test_weak_probe_quadrature_ratio_fixes_the_dispersion_sign():
     """Homogeneous limit: Re χ / Im χ = −δ/hwhm in the GABES χ convention.
 

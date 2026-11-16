@@ -38,8 +38,8 @@ calculator (pump-off 85Rb D1 absolute scale).
 """
 import numpy as np
 
-from .. import (atoms, collisions, constants, doppler, kernels, observables, probe_saturation, species,
-               vapor_cell)
+from .. import (atoms, collisions, constants, doppler, kernels, linear_hyperfine, observables,
+               probe_saturation, species, vapor_cell)
 from ..constants import GAMMA, K_VEC
 from .. import core
 from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
@@ -53,6 +53,9 @@ PROBE_PASSIVITY_INTERIOR = 1e-8         # avoid an artificial exact-zero fixed p
 PROBE_REFERENCE_RB_D2_ISOTOPES = frozenset(("Rb85", "Rb87"))
 RB_COMPOSITION_NATURAL = "Natural"
 RB_COMPOSITION_CUSTOM = "Custom"
+LEGACY_WEAK_PROBE = "Legacy velocity grid"
+EXACT_WEAK_PROBE = "Exact Maxwell Voigt"
+_RB_MEDIA = ("Rb (natural)", species.RB85.label, species.RB87.label)
 # Atom / Isotope rows of the species knob (rendered as two selectors).
 ATOM_MENU = (
     ("Rb", "Natural", "Rb (natural)", {"rb_composition": RB_COMPOSITION_NATURAL}),
@@ -103,6 +106,33 @@ def _probe_power_mw(params):
     if "probe_power_mw" in params:
         return float(params["probe_power_mw"])
     return float(params.get("probe_power_uw", 0.0)) * 1e-3
+
+
+def _weak_probe_profile(params):
+    """Describe an explicit Voigt request, including when app inputs make it inactive."""
+    requested = params.get("weak_probe_profile", LEGACY_WEAK_PROBE)
+    if requested == LEGACY_WEAK_PROBE:
+        return None
+    if requested != EXACT_WEAK_PROBE:
+        raise ValueError("Choose Legacy velocity grid or Exact Maxwell Voigt.")
+    eligible = (
+        params.get("species", "Rb (natural)") in _RB_MEDIA
+        and params["line"] in ("D1", "D2")
+        and float(params["pump_power_mw"]) == 0.0
+        and _probe_power_mw(params) == 0.0
+        and params.get("cell_propagation", "Uniform") == "Uniform"
+        and not params.get("paraffin_coated", False)
+        and float(params.get("ne_pressure_torr", 0.0)) == 0.0
+        and not _measured_collision_mode(params)
+    )
+    if eligible:
+        return dict(requested=requested, applied=requested, status="active",
+                    scope="Numerical reference for uniform weak-probe Rb D1/D2.",
+                    velocity_measure="Untruncated 1D Maxwell distribution")
+    return dict(
+        requested=requested, applied=LEGACY_WEAK_PROBE, status="inactive",
+        scope="Select uniform uncoated Rb D1/D2 with pump, probe and buffer "
+              "pressure at zero and Legacy broadening to use Exact Maxwell Voigt.")
 
 
 def _isotope_composition(params):
@@ -229,7 +259,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "12"           # segmented weak probe and Ne optical reference
+    cache_version = "13"           # opt-in exact weak-probe Maxwell mean
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -391,6 +421,15 @@ class SASScheme(Scheme):
                       control="checkbox", advanced=True, advanced_group="Axial reference",
                       visible_if={"cell_propagation": sas_axial.SEGMENTED},
                       help="Propagate the pump from the probe exit toward the probe entrance."),
+            ParamSpec("weak_probe_profile", "Weak-probe line profile", "Numerics",
+                      LEGACY_WEAK_PROBE, choices=(LEGACY_WEAK_PROBE, EXACT_WEAK_PROBE),
+                      advanced=True, advanced_group="Doppler average",
+                      visible_if={"species": _RB_MEDIA, "pump_power_mw": 0.0,
+                                  "probe_power_uw": 0.0, "cell_propagation": "Uniform",
+                                  "optical_collision_model": collisions.LEGACY_COLLISIONS,
+                                  "paraffin_coated": False, "ne_pressure_torr": 0.0},
+                      help="Exact Maxwell Voigt uses the full thermal velocity distribution "
+                           "for absorption and dispersion in a uniform, unbuffered Rb cell."),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
         ]
@@ -483,6 +522,8 @@ class SASScheme(Scheme):
 
     def solve_param_keys(self, params):
         keys = super().solve_param_keys(params)
+        if "weak_probe_profile" not in params:
+            keys = tuple(key for key in keys if key != "weak_probe_profile")
         if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
             return keys + ("cell_mm", "line_strength")
         return tuple(key for key in keys if not key.startswith("axial_"))
@@ -496,7 +537,11 @@ class SASScheme(Scheme):
         if params.get("species", "Rb (natural)") == GENERIC:
             if segmented:
                 raise sas_axial.AxialInputError("Segmented reference requires an isotope-resolved D-line species.")
-            return self._compute_generic(params)
+            raw = self._compute_generic(params)
+            profile = _weak_probe_profile(params)
+            if profile is not None:
+                raw["weak_probe_profile"] = profile
+            return raw
         if segmented:
             components, reference, *_ = _isotope_composition(params)
             return sas_axial.compute(params, uniform=self._compute_species,
@@ -569,6 +614,8 @@ class SASScheme(Scheme):
         # that limit on the legacy path exactly (and avoid an unnecessary solve).
         paraffin_memory = paraffin_coated and power > 0.0
         reference = _measured_collision_mode(params)
+        weak_profile = _weak_probe_profile(params)
+        exact_weak_probe = weak_profile is not None and weak_profile["status"] == "active"
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
         collision_reports = {}
@@ -637,12 +684,16 @@ class SASScheme(Scheme):
         probe_profiles = []
         ng_of = {id(b["man"]): len(b["man"].Fg) for b in built}
         for b in built:
-            component_alpha, component_chi_real, component_probe_profiles = (
-                self._component_response(b, scan, T_doppler))
+            man, off = b["man"], b["offset"]
+            if exact_weak_probe:
+                component_alpha, component_chi_real = linear_hyperfine.species_complex_voigt(
+                    scan, man, b["N"], T_doppler, b["gamma_eff"], offset=off)
+            else:
+                component_alpha, component_chi_real, component_probe_profiles = (
+                    self._component_response(b, scan, T_doppler))
+                probe_profiles.extend(component_probe_profiles)
             alpha += component_alpha
             chi_real += component_chi_real
-            probe_profiles.extend(component_probe_profiles)
-            man, off = b["man"], b["offset"]
             ng = ng_of[id(man)]
             for t in range(man.omega.size):
                 fg = man.Fg[man.g_idx[t]]
@@ -768,6 +819,8 @@ class SASScheme(Scheme):
                         if paraffin_coated else None),
                     paraffin_t1_s=(PARAFFIN_REFERENCE_T1_S
                                    if paraffin_coated else None))
+        if weak_profile is not None:
+            result["weak_probe_profile"] = weak_profile
         if reference:
             result["optical_collisions"] = collision_reports
             result["self_broadening_reference"] = self_reports
@@ -1164,6 +1217,10 @@ class SASScheme(Scheme):
                         else:
                             details.append(("Lamb-dip depth change", "No matched resolved line-centered dip"))
             tables.append(derived_table(details, title="Segmented cell reference"))
+        profile = raw.get("weak_probe_profile")
+        if profile is not None:
+            optical_readout["weak_probe_profile"] = profile
+            metrics.append(_weak_probe_profile_metric(profile))
         if finite_probe:
             _, _, qualifier = _probe_scope_text(raw, params)
             tables.append({
@@ -1282,6 +1339,10 @@ class SASScheme(Scheme):
         note = ("Two transitions: Lamb dips at ±splitting/2 and a **crossover** dip "
                 "at the midpoint (green)." if raw["two"]
                 else "Single transition: one Lamb dip at line centre.")
+        profile = raw.get("weak_probe_profile")
+        if profile is not None:
+            optical_readout["weak_probe_profile"] = profile
+            metrics.append(_weak_probe_profile_metric(profile))
         return dict(
             metrics=metrics,
             hero_count=1,
@@ -1304,6 +1365,11 @@ class SASScheme(Scheme):
 # =====================================================================
 def _measured_collision_mode(params):
     return params.get("optical_collision_model") == collisions.REFERENCE_COLLISIONS
+
+
+def _weak_probe_profile_metric(profile):
+    return dict(label="Weak-probe line profile", value=profile["applied"], kind="status",
+                help=profile["scope"])
 
 
 def _collision_metrics(raw):

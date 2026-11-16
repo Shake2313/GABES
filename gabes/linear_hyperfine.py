@@ -1,13 +1,14 @@
 """85Rb D1 linear hyperfine absorption on the historical OD and FWM axes.
 
 The OBE and analytic profiles preserve their established normalization and
-velocity measures. The resolved OD/SAS manifold uses its own species model.
+velocity measures. The species-resolved Voigt reference uses the OD/SAS
+manifold, line strengths, and homogeneous widths.
 """
 import math
 
 import numpy as np
 
-from . import constants, doppler, hyperfine, observables
+from . import constants, doppler, hyperfine, observables, species
 from .constants import GAMMA, K_VEC
 
 _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
@@ -110,3 +111,28 @@ def hyperfine_alpha_analytic(beam_GHz, T, ground_F=None, population_factors=None
         weight = 1.0 if population_factors is None else population_factors[Fg]
         alpha = alpha + weight * analytic_hyperfine_line(beam, T, Fg, Fe)
     return alpha
+
+
+def species_complex_voigt(scan, manifold, density_m3, temperature_k,
+                          homogeneous_fwhm, *, offset=0.0):
+    """Absorption and dispersion with an untruncated Maxwell velocity distribution.
+
+    The scan, isotope centroid offset, and homogeneous FWHM are in rad/s.
+    Thermal populations are already included in the integrated line strengths.
+    The returned absorption is per metre and the real susceptibility is dimensionless.
+    """
+    scan = np.asarray(scan, dtype=float)
+    sigma = manifold.k_vec * math.sqrt(constants.KB * temperature_k / manifold.iso.mass)
+    scale = sigma * math.sqrt(2.0)
+    normalization = sigma * math.sqrt(2.0 * math.pi)
+    strengths = species.line_integrated_alpha(manifold.iso, manifold.line, density_m3)
+    ground_count = len(manifold.Fg)
+    alpha = np.zeros_like(scan)
+    chi_real = np.zeros_like(scan)
+    for center, g, e in zip(manifold.omega, manifold.g_idx, manifold.e_idx, strict=True):
+        area = strengths[manifold.Fg[g], manifold.Fe[e - ground_count]]
+        z = (scan - offset - center + 0.5j * homogeneous_fwhm) / scale
+        profile = doppler.faddeeva_upper(z) / normalization
+        alpha += area * profile.real
+        chi_real -= (area / manifold.k_vec) * profile.imag
+    return alpha, chi_real
