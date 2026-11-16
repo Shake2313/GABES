@@ -97,6 +97,37 @@ def test_hyperfine_group_strength_ratio():
     assert abs((g3 / g2) / (7.0 / 5.0) - 1.0) < 0.03
 
 
+@pytest.mark.parametrize("doppler_on, pressure", [(True, 0.0), (True, 25.0), (False, 25.0)])
+def test_hyperfine_profiles_preserve_line_centers_and_strength(doppler_on, pressure):
+    from scipy.special import voigt_profile
+
+    from gabes import collisions, hyperfine
+    from gabes.schemes.absorption import _hyperfine_alpha
+
+    T = 373.15
+    density = hyperfine.number_density(T)
+    effects = collisions.pressure_effects(
+        "Rb85", "D1", pressure, T, mode=collisions.REFERENCE_COLLISIONS)
+    gamma = hyperfine.self_broadened_gamma(density) + effects.fwhm_rad_s
+    sigma = K * np.sqrt(constants.KB * T / constants.MASS_85RB) if doppler_on else 0.0
+    scan = np.linspace(2.0 * np.pi * 0.5e9, 2.0 * np.pi * 5.0e9, 1001)
+    alpha, lines, info = _hyperfine_alpha(scan, {
+        "temp_c": T - 273.15, "doppler": "on" if doppler_on else "off",
+        "ne_pressure_torr": pressure, "optical_collision_model": collisions.REFERENCE_COLLISIONS,
+    }, line_strength=0.75)
+
+    areas = (0.75 * np.pi * K * hyperfine.DIPOLE_SQ * density
+             / (constants.HBAR * constants.EPS_0 * hyperfine.N_GROUND_SUBLEVELS))
+    for line, center_hz in hyperfine.LINE_SHIFT_HZ.items():
+        expected = (areas * hyperfine.CF2[line]
+                    * voigt_profile(scan - (2 * np.pi * center_hz + effects.shift_rad_s),
+                                    sigma, 0.5 * gamma))
+        np.testing.assert_allclose(lines[line], expected, rtol=7e-10)
+    np.testing.assert_array_equal(alpha, sum(lines.values()))
+    assert info["gamma_eff"] == gamma
+    assert info["optical_collisions"] == effects.readout()
+
+
 def test_hyperfine_self_broadening_monotone():
     from gabes import hyperfine
     g_cold = hyperfine.self_broadened_gamma(hyperfine.number_density(323.15))

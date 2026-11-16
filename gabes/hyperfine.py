@@ -18,10 +18,9 @@ This module is *data only* and is the ⁸⁵Rb D1 view of `species`, which is
 the single source of the vapor pressure, density and β. Kept here: the exact
 rational C_F² table and the AutoOD-origin line shifts. The linewidth uses
 the shared Steck Rb-85 D1 value (5.750 MHz).
-The Voigt lineshape itself is still produced by the OBE Doppler kernel in
-`schemes/absorption.py` (a genuine OBE solve, no analytic wofz / scipy);
-hyperfine.py supplies the validated line table, the relative/absolute
-strengths, the self-broadened width, and the density.
+The Voigt lineshape uses the shared Faddeeva profile in
+`linear_hyperfine`. This module supplies the legacy axis and line strengths,
+self-broadened width, and vapor density for the realistic OD path.
 
 Reference
   [1] AutoOD lab calculator (rb_od_calculator_optimized_final.py).

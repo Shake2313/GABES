@@ -6,9 +6,9 @@ EIT : Λ system, weak probe + strong coupling → transparency window + dispersi
 AT  : same Λ in the strong-coupling regime → Autler-Townes doublet (split ≈ Ω_c).
 CPT : same Λ, narrow two-photon scan → sub-natural dark resonance.
 
-All share one engine: build a rotating-frame H₀ with a weak probe (and optional
-strong coupling), solve the steady state per velocity class (core.steady_state_
-batched), and read the probe coherence ρ_eg/Ω_p = χ̄. Co-propagating geometry is
+The four-line OD model evaluates normalized weak-probe profiles through
+Faddeeva. Single-line OD and the Λ schemes solve the rotating-frame steady
+state and read the probe coherence ρ_eg/Ω_p = χ̄. Co-propagating geometry is
 the default: the optical line is Doppler-broadened and the Λ two-photon
 resonance retains the small longitudinal wave-vector difference. Angled beams
 can use a scalar residual shift or a joint Maxwell reference calculation.
@@ -22,7 +22,7 @@ import numpy as np
 from .. import atoms, beam, collisions, constants, doppler, hyperfine, observables, species
 from ..constants import GAMMA, K_VEC, OMEGA_D1
 from .. import affine_doppler, core
-from ..linear_hyperfine import hyperfine_alpha_obe
+from ..linear_hyperfine import rb85_d1_alpha_faddeeva
 from ..lineshape import MIN_SUBDOPPLER_EDGE_CLEARANCE_FWHM, fwhm_halfmax, level_crossing
 from ..report import derived_table
 from .base import ParamSpec, Preset, Scheme
@@ -127,11 +127,10 @@ def _hyperfine_alpha(scan, params, line_strength=None):
     T = params["temp_c"] + 273.15
     effects = _ne_optics(params, T)
     reference = _ne_reference_selected(params)
-    gamma_self = hyperfine.self_broadened_gamma(hyperfine.number_density(T))
-    atom = _od_atom(gamma_self, effects, reference)
-    alpha, components, info = hyperfine_alpha_obe(
-        scan, params, line_strength, solve_chi=_solve_chi_avg, probe_rabi=PROBE_RABI,
-        atom=atom, buffer_gamma=effects.fwhm_rad_s, shift_rad_s=effects.shift_rad_s)
+    strength = params.get("line_strength", 1.0) if line_strength is None else float(line_strength)
+    alpha, components, info = rb85_d1_alpha_faddeeva(
+        scan, T, line_strength=strength, doppler_on=params.get("doppler", "on") == "on",
+        buffer_gamma=effects.fwhm_rad_s, shift_rad_s=effects.shift_rad_s)
     if reference:
         info["optical_collisions"] = effects.readout()
     return alpha, components, info
@@ -142,7 +141,7 @@ def _hyperfine_alpha(scan, params, line_strength=None):
 # =========================================================
 class ODScheme(Scheme):
     name = "od"
-    cache_version = "ne-optical-reference-v1"
+    cache_version = "ne-optical-reference-v2-faddeeva"
     cluster = "A — Absorption"
     title = "Optical absorption (OD)"
     supports_headless_observables = True

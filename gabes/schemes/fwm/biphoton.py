@@ -10,6 +10,7 @@ from .phase_matching import (
     transverse_matched_angle_deg,
 )
 from ... import beam, constants, doppler, species
+from ...linear_hyperfine import line_absorption
 import functools
 import math
 import numpy as np
@@ -276,15 +277,17 @@ class GenericFWMSolver:
         return tuple(out)
 
     def _leg_optical_depth(self, density, L, gamma_mhz, wavelength_nm):
-        """Physical on-resonance optical depth of one cascade leg from its natural
-        linewidth, via the AutoOD-validated Γ→|d|² route (`species.reduced_dipole_sq`):
-        α₀ = 2 N k |d|² /(ε₀ ℏ Γ), OD = α₀ L."""
+        """Homogeneous on-resonance OD scale for the subsequent velocity average.
+
+        The longitudinal response integrates velocities separately, so this
+        input uses the zero-Doppler limit with the natural linewidth.
+        """
         gamma_nat = max(float(gamma_mhz), 1e-3) * MHZ_ANG
         lam = float(wavelength_nm) * NM
         k = 2.0 * np.pi / lam
         d2 = species.reduced_dipole_sq(gamma_nat, lam, 0.5, 0.5)
-        alpha0 = 2.0 * density * k * d2 / (constants.EPS_0 * constants.HBAR * gamma_nat)
-        return float(alpha0 * L)
+        area = np.pi * density * k * d2 / (constants.EPS_0 * constants.HBAR)
+        return float(line_absorption(0.0, area, gamma_nat) * L)
 
     def _apply_longitudinal_response(self, kappa_tau, tau_s, v_grid, weights,
                                      residual_k, two_det, Oc, Gamma_e, gamma_g,

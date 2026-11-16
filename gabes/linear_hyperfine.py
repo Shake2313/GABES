@@ -1,115 +1,81 @@
-"""85Rb D1 linear hyperfine absorption on the historical OD and FWM axes.
+"""Weak-probe line profiles with explicit line areas and frequency axes."""
 
-The OBE and analytic profiles preserve their established normalization and
-velocity measures. The species-resolved Voigt reference uses the OD/SAS
-manifold, line strengths, and homogeneous widths.
-"""
 import math
 
 import numpy as np
 
-from . import constants, doppler, hyperfine, observables, species
-from .constants import GAMMA, K_VEC
-
-_trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
+from . import constants, doppler, hyperfine, species
+from .constants import K_VEC
 
 
-def hyperfine_alpha_obe(scan, params, line_strength, *, solve_chi, probe_rabi,
-                        atom, buffer_gamma, shift_rad_s):
+def line_absorption(detuning, integrated_alpha, homogeneous_fwhm, sigma=0.0):
+    """Absorption [1/m] for a line of known area [rad/s/m].
+
+    Detuning, homogeneous FWHM and Gaussian sigma use angular frequency.
+    Zero sigma gives the homogeneous Lorentzian limit.
     """
-    Realistic 85Rb D1 absorption coefficient α(scan) [1/m]: an incoherent sum of
-    the four hyperfine transitions (Fg∈{2,3}→Fe∈{2,3}), each a Doppler-broadened
-    Voigt placed at its line-center detuning, weighted by the validated
-    Clebsch-Gordan strength C_F² and thermal sublevel population, with self-broadening.
+    if sigma == 0.0:
+        hwhm = 0.5 * homogeneous_fwhm
+        detuning = np.asarray(detuning, dtype=float)
+        profile = hwhm / (math.pi * (detuning**2 + hwhm**2))
+    else:
+        profile = doppler.voigt_profile(detuning, homogeneous_fwhm, sigma)
+    return integrated_alpha * profile
 
-    The Voigt *shape* is produced once by the OBE Doppler kernel (a genuine OBE
-    solve — no analytic wofz) on a fine grid, normalised to unit area, then
-    shifted/scaled per line. Since C_F² sums initial magnetic sublevels,
-    the thermal population is included exactly once:
-        ∫α_F dδ = π · k · C_F² · |d|² · N / (ε₀ℏ) / (2(2I+1)).
 
-    Returns (alpha, components, info) where `components` maps (Fg,Fe)→α_F(scan)
-    and `info` carries N, Γ_eff, σ_v, Doppler FWHM for the readout.
+def rb85_d1_alpha_faddeeva(scan, T, *, line_strength=1.0, doppler_on=True,
+                           buffer_gamma=0.0, shift_rad_s=0.0):
+    """Four Rb-85 D1 lines referenced to the Rb-87 F=2 to F'=2 marker.
+
+    The historical OD/FWM line areas already include thermal population
+    through the population per magnetic sublevel. Keep that absolute scale
+    while evaluating the profile with the exact Maxwell average.
     """
-    T = params["temp_c"] + 273.15
-    doppler_on = params.get("doppler", "on") == "on"
-    ls = (params.get("line_strength", 1.0)
-          if line_strength is None else float(line_strength))
-
-    N = hyperfine.number_density(T)
-    gamma_eff = hyperfine.self_broadened_gamma(N) + buffer_gamma
-
-    def build_H0(_s):
-        H = np.zeros((2, 2), dtype=complex)
-        H[0, 1] = H[1, 0] = probe_rabi * GAMMA / 2
-        return H
-
+    scan = np.asarray(scan, dtype=float)
+    density = hyperfine.number_density(T)
+    gamma = hyperfine.self_broadened_gamma(density) + buffer_gamma
     sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
-    dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
-    width = dopp_fwhm if doppler_on else gamma_eff
-
-    shifts = {k: 2 * np.pi * v + shift_rad_s for k, v in hyperfine.LINE_SHIFT_HZ.items()}
-    smin, smax = min(shifts.values()), max(shifts.values())
-
-    # One unit-area Voigt shape on a fine grid covering (scan − shift) ± wings.
-    lo = scan.min() - smax - 12 * width
-    hi = scan.max() - smin + 12 * width
-    grid = np.linspace(lo, hi, int((hi - lo) / (width / 40.0)) + 2)
-    chi = solve_chi(atom, build_H0, (1, 0), grid, params, h_dep=False)
-    shape, _ = observables.absorption_coefficient(chi, K_VEC, 1.0, line_strength=1.0)
-    S_unit = shape / _trapz(shape, grid)          # ∫ S_unit dδ = 1
-
-    # Absolute per-line integrated absorption (AutoOD normalisation).
-    K = (np.pi * K_VEC * hyperfine.DIPOLE_SQ * N
-         / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
-
+    sigma = K_VEC * sigma_v if doppler_on else 0.0
+    area_scale = (math.pi * K_VEC * hyperfine.DIPOLE_SQ * density
+                  / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
     alpha = np.zeros_like(scan)
     components = {}
-    for (Fg, Fe) in hyperfine.TRANSITIONS:
-        I_line = ls * K * hyperfine.CF2[(Fg, Fe)]
-        line = I_line * np.interp(scan - shifts[(Fg, Fe)], grid, S_unit,
-                                  left=0.0, right=0.0)
-        alpha += line
-        components[(Fg, Fe)] = line
-
-    info = dict(N=N, gamma_eff=gamma_eff, buffer_gamma=buffer_gamma,
-                sigma_v=sigma_v, dopp_fwhm=dopp_fwhm)
+    for line in hyperfine.TRANSITIONS:
+        center = 2.0 * np.pi * hyperfine.LINE_SHIFT_HZ[line] + shift_rad_s
+        area = line_strength * area_scale * hyperfine.CF2[line]
+        component = line_absorption(scan - center, area, gamma, sigma)
+        alpha += component
+        components[line] = component
+    info = dict(N=density, gamma_eff=gamma, buffer_gamma=buffer_gamma,
+                sigma_v=sigma_v, dopp_fwhm=np.sqrt(8 * np.log(2)) * K_VEC * sigma_v)
     return alpha, components, info
 
 
-def analytic_hyperfine_line(beam_GHz, T, Fg, Fe):
-    """Analytic Voigt absorption of one hyperfine line weighted by C_F² alone [1/m].
-
-    Same line center, self-broadened Lorentzian and Doppler width as
-    ``absorption._hyperfine_alpha`` (untruncated Maxwell, no table).
-    """
+def _fwm_absorption_axis(beam_GHz):
     beam = np.atleast_1d(np.asarray(beam_GHz, dtype=float))
-    density = hyperfine.number_density(T)
-    gamma = hyperfine.self_broadened_gamma(density)
-    sigma = K_VEC * math.sqrt(constants.KB * float(T) / constants.MASS_85RB)
-    scale = (math.pi * K_VEC * hyperfine.DIPOLE_SQ * density
-             / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
-    detuning = 2 * np.pi * (beam * 1e9 + hyperfine.LINE_SHIFT_HZ[(2, 3)]
-                            - hyperfine.LINE_SHIFT_HZ[(Fg, Fe)])
-    return scale * hyperfine.CF2[(Fg, Fe)] * doppler.voigt_profile(detuning, gamma, sigma)
+    return 2.0 * np.pi * (beam * 1e9 + hyperfine.LINE_SHIFT_HZ[(2, 3)])
+
+
+def analytic_hyperfine_line(beam_GHz, T, Fg, Fe):
+    """Rb-85 D1 component on the FWM frequency axis, in inverse metres."""
+    _, lines, _ = rb85_d1_alpha_faddeeva(_fwm_absorption_axis(beam_GHz), T)
+    return lines[Fg, Fe]
 
 
 def hyperfine_alpha_analytic(beam_GHz, T, ground_F=None, population_factors=None):
-    """Closed-form counterpart of ``absorption._hyperfine_alpha`` on the FWM axis.
+    """Rb-85 D1 absorption on the FWM axis (zero at F=2 to F'=3).
 
-    That path Doppler-averages a weak-probe two-level OBE (saturation ~2e-6)
-    numerically, i.e. it tabulates a Voigt profile.  The analytic twin uses the
-    same lines through the Faddeeva function.  ``population_factors`` maps each
-    ground manifold to the extra weight the reference applies (see
-    :func:`_reference_population_factors`); Ultra keeps the numerical table.
+    An optional ground-manifold filter gives one arm's lines. The historical
+    `population_factors` argument is retained for explicit external callers.
     """
-    beam = np.atleast_1d(np.asarray(beam_GHz, dtype=float))
-    alpha = np.zeros_like(beam)
-    for (Fg, Fe) in hyperfine.TRANSITIONS:
-        if ground_F is not None and Fg != ground_F:
-            continue
-        weight = 1.0 if population_factors is None else population_factors[Fg]
-        alpha = alpha + weight * analytic_hyperfine_line(beam, T, Fg, Fe)
+    total, lines, _ = rb85_d1_alpha_faddeeva(_fwm_absorption_axis(beam_GHz), T)
+    if ground_F is None and population_factors is None:
+        return total
+    alpha = np.zeros_like(total)
+    for (Fg, _), component in lines.items():
+        if ground_F is None or Fg == ground_F:
+            weight = 1.0 if population_factors is None else population_factors[Fg]
+            alpha = alpha + weight * component
     return alpha
 
 

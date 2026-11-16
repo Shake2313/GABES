@@ -23,7 +23,11 @@ def test_pole_response_reproduces_the_grid_response(phase):
     pole = _small(fwm.RESPONSE_POLE, phase)
     for key in ("G_s", "G_c", "G_s_smallsignal", "G_c_smallsignal"):
         np.testing.assert_allclose(pole[key], grid[key], rtol=1e-7)
-    # Ultra's pump-scatter term uses the analytic Voigt in the pole tiers.
+    if phase == fwm.PHASE_ULTRA:
+        for raw in (grid, pole):
+            assert raw["hardened_noise"]["absorption_model"].startswith("analytic Voigt")
+        for key in ("od_pump", "od_conj_arr", "od_probe_lin_arr", "pump_scatter_noise"):
+            np.testing.assert_array_equal(pole["hardened_noise"][key], grid["hardened_noise"][key])
     atol = 5e-3 if phase == fwm.PHASE_ULTRA else 1e-9
     np.testing.assert_allclose(pole["S_dB"], grid["S_dB"], rtol=0, atol=atol)
     assert pole["floquet_convergence"]["status"] == grid["floquet_convergence"]["status"]
@@ -289,41 +293,3 @@ def test_compiled_scorer_matches_bounded_canonical_pair_drift(P_pump, P_seed):
     used_fraction = ((np.maximum(expected_s - 1.0, 0.0)
                       + area_ratio * expected_c) * P_seed / P_pump)
     assert 0.5 < np.max(used_fraction) <= 1.0
-
-
-@pytest.mark.parametrize("T, D", ((394.15, 0.9), (408.15, -2.2), (423.15, 2.5), (333.15, 0.3)))
-def test_analytic_absorption_diagnostics_track_the_numerical_tables(T, D):
-    factors = fwm._reference_population_factors()
-    assert factors is not None and set(factors) == {2, 3}
-    scatter, od = fwm._pump_scatter_noise(D, T, fwm.L_CELL, 0.1)
-    scatter_a, od_a = fwm._pump_scatter_noise_analytic(
-        D, T, fwm.L_CELL, 0.1, population_factors=factors)
-    assert abs(scatter_a - scatter) < 1e-4
-    assert abs(od_a - od) <= 3e-3 * max(od, 1e-3)
-
-
-def test_reference_population_convention_is_classified_exactly():
-    from gabes import hyperfine
-    factors = fwm._reference_population_factors()
-    for Fg, factor in factors.items():
-        assert factor in (1.0, hyperfine.GROUND_POP[Fg])
-
-
-def test_unrecognized_reference_normalization_keeps_numerical_diagnostics(monkeypatch):
-    from gabes.schemes import absorption
-    original = absorption._hyperfine_alpha
-
-    def rescaled(scan, params, line_strength=None):
-        alpha, components, info = original(scan, params, line_strength)
-        return 0.8 * alpha, {key: 0.8 * value for key, value in components.items()}, info
-
-    fwm._reference_population_factors.cache_clear()
-    monkeypatch.setattr(absorption, "_hyperfine_alpha", rescaled)
-    try:
-        assert fwm._reference_population_factors() is None
-        spec = _small(fwm.RESPONSE_POLE, fwm.PHASE_ULTRA)
-        assert spec["hardened_noise"]["absorption_model"].startswith("numerical")
-        assert spec["response_estimator"]["absorption_diagnostics"].startswith("numerical")
-    finally:
-        monkeypatch.undo()
-        fwm._reference_population_factors.cache_clear()

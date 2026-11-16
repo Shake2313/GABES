@@ -17,7 +17,7 @@ from ...core import _EXP_ARG_CLAMP, blas_single_thread
 from .phase_matching import (
     _gaussian_overlap_profile, seeded_option_a_wavenumbers, seeded_phase_mismatch_z,
 )
-from .references import _zeeman_consistency_cached
+from .references import LINEAR_ABSORPTION_MODEL, _zeeman_consistency_cached
 from ... import (
     constants, doppler, fwm_gain_closure, fwm_stark_response, gain_reference, hyperfine, kernels,
     observables,
@@ -400,10 +400,6 @@ def compute_spectrum(D_GHz, *,
     if response_method != RESPONSE_GRID and not angular_transverse_order:
         pole_systems = fwm._seeded_pole_systems(
             Op_A, Op_B, Os_ref, Oc_ref, branch, atom_T, response_orders)
-    # Analytic absorption diagnostics only when they reproduce the reference
-    # normalization; otherwise the pole tiers keep Ultra's numerical tables.
-    analytic_factors = (fwm._reference_population_factors()
-                        if pole_systems is not None else None)
     angular_reference = None
     if angular_transverse_order:
         if not enforce_floquet_convergence or legacy_mean_field_fixture:
@@ -424,7 +420,6 @@ def compute_spectrum(D_GHz, *,
             "display_probe_points": int(probe_axis_GHz.size),
             "interpolation": "none",
             "audit_scope": "every angular reference detuning",
-            "absorption_diagnostics": "independent one-dimensional absorption diagnostic",
         }
     elif pole_systems is None:
         chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = (
@@ -441,7 +436,6 @@ def compute_spectrum(D_GHz, *,
             "display_probe_points": int(probe_axis_GHz.size),
             "interpolation": "none",
             "audit_scope": "every displayed probe detuning",
-            "absorption_diagnostics": "numerical OBE Voigt tables",
         }
         if response_method != RESPONSE_GRID:
             response_estimator["fallback_reason"] = (
@@ -456,11 +450,7 @@ def compute_spectrum(D_GHz, *,
                          else dict(excess_noise_model))
             score_kappa = score_cfg.get(
                 "pump_scatter_kappa", HARDENED_PUMP_SCATTER_KAPPA)
-            if analytic_factors is None:
-                score_scatter, _ = fwm._pump_scatter_noise(D_GHz, T, L, score_kappa)
-            else:
-                score_scatter, _ = fwm._pump_scatter_noise_analytic(
-                    D_GHz, T, L, score_kappa, population_factors=analytic_factors)
+            score_scatter, _ = fwm._pump_scatter_noise(D_GHz, T, L, score_kappa)
 
         def score_readout(chi4, rows):
             """Pointwise copy of the readout below, used only to steer refinement."""
@@ -545,16 +535,7 @@ def compute_spectrum(D_GHz, *,
             tolerance_log10_gain=scan_tolerance_log10_gain,
             start_stride=scan_start_stride, guard=guard_rows, grid_rows=grid_rows)
         chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = high_response
-        if analytic_factors is None:
-            response_estimator["absorption_diagnostics"] = (
-                "numerical OBE Voigt tables (reference normalization not recognized "
-                "by the analytic twin)")
-        else:
-            convention = ("C_F² only" if all(f == 1.0 for f in analytic_factors.values())
-                          else "p_F·C_F²")
-            response_estimator["absorption_diagnostics"] = (
-                "analytic Voigt (Faddeeva), untruncated Maxwell; reference line "
-                f"weights {convention}")
+    response_estimator["absorption_diagnostics"] = LINEAR_ABSORPTION_MODEL
     response_estimator["velocity_classes"] = int(v_grid.size)
     response_estimator["velocity_measure"] = velocity_measure
     if exact_velocity:
@@ -712,19 +693,9 @@ def compute_spectrum(D_GHz, *,
             conj_ground = G1 if branch == -1 else G2
             manifold_F = GROUND_F[conj_ground]
             conj_GHz = 2.0 * float(D_GHz) - probe_axis_GHz
-            if analytic_factors is None:
-                od_conj_arr = fwm._arm_linear_od(conj_GHz, T, L, ground_F=manifold_F)
-                od_probe_lin = fwm._arm_linear_od(probe_axis_GHz, T, L, ground_F=manifold_F)
-                pump_scatter, od_pump = fwm._pump_scatter_noise(D_GHz, T, L, kappa)
-            else:
-                od_conj_arr = fwm._arm_linear_od_analytic(
-                    conj_GHz, T, L, ground_F=manifold_F,
-                    population_factors=analytic_factors)
-                od_probe_lin = fwm._arm_linear_od_analytic(
-                    probe_axis_GHz, T, L, ground_F=manifold_F,
-                    population_factors=analytic_factors)
-                pump_scatter, od_pump = fwm._pump_scatter_noise_analytic(
-                    D_GHz, T, L, kappa, population_factors=analytic_factors)
+            od_conj_arr = fwm._arm_linear_od(conj_GHz, T, L, ground_F=manifold_F)
+            od_probe_lin = fwm._arm_linear_od(probe_axis_GHz, T, L, ground_F=manifold_F)
+            pump_scatter, od_pump = fwm._pump_scatter_noise(D_GHz, T, L, kappa)
             # These OD curves remain useful diagnostics, but applying them as
             # post-source efficiencies would count absorption already present in
             # the diagonal Maxwell drift a second time.  Atomic vacuum/excess
