@@ -46,7 +46,7 @@ from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
                          subdoppler_refinement)
 from ..optical_pumping import steady_populations as _pump_pops
 from ..report import derived_table
-from .base import ParamSpec, Scheme
+from .base import ExtraView, ParamSpec, Scheme
 from . import sas_axial
 
 PROBE_RABI = 1e-3                       # weak probe, in units of Γ
@@ -57,6 +57,7 @@ RB_COMPOSITION_CUSTOM = "Custom"
 LEGACY_WEAK_PROBE = "Legacy velocity grid"
 EXACT_WEAK_PROBE = "Exact Maxwell Voigt"
 _RB_MEDIA = ("Rb (natural)", species.RB85.label, species.RB87.label)
+PROJECTED_PROBE_VIEW = "Finite-probe pumping reference"
 # Atom / Isotope rows of the species knob (rendered as two selectors).
 ATOM_MENU = (
     ("Rb", "Natural", "Rb (natural)", {"rb_composition": RB_COMPOSITION_NATURAL}),
@@ -107,6 +108,11 @@ def _probe_power_mw(params):
     if "probe_power_mw" in params:
         return float(params["probe_power_mw"])
     return float(params.get("probe_power_uw", 0.0)) * 1e-3
+
+
+def _species_path_density(isotope, cold_k, path_k, fraction):
+    return vapor_cell.cold_spot_limited_density(
+        species.number_density(isotope, cold_k), cold_k, path_k) * fraction
 
 
 def _weak_probe_profile(params):
@@ -521,6 +527,53 @@ class SASScheme(Scheme):
         return pump_power_comparison(self, params, resolve_raw=resolve_raw,
                                      current_raw=current_raw, current_view=current_view)
 
+    def extra_views(self):
+        return [ExtraView(
+            key=PROJECTED_PROBE_VIEW,
+            description="Calculate transmission with optical pumping driven by the probe. "
+                        "Use a uniform, uncoated Rb cell with the pump off and no buffer gas.",
+            compute=self.projected_probe_reference,
+            render=self._render_projected_probe,
+            param_keys=("cell_mm", "line_strength"),
+        )]
+
+    def extra_view_unavailable(self, key, params):
+        if key != PROJECTED_PROBE_VIEW:
+            return None
+        if (params.get("species") not in _RB_MEDIA or params.get("line") not in ("D1", "D2")
+                or float(params.get("pump_power_mw", 0.0)) != 0.0
+                or params.get("cell_propagation", "Uniform") != "Uniform"
+                or params.get("paraffin_coated", False)
+                or float(params.get("ne_pressure_torr", 0.0)) != 0.0
+                or _measured_collision_mode(params)):
+            return ("Select Rb D1 or D2, turn off the pump, and use a uniform, uncoated cell "
+                    "with zero buffer pressure and Legacy broadening.")
+        if not 0.0 <= _probe_power_mw(params) <= 0.1:
+            return "Set the probe power between 0 and 100 µW."
+        return None
+
+    def projected_probe_reference(self, params):
+        """Run the on-demand reference independently of the cached SAS solve."""
+        from .sas_probe_reference import compute
+
+        params = {**self.defaults(), **params}
+        unavailable = self.extra_view_unavailable(PROJECTED_PROBE_VIEW, params)
+        if unavailable is not None:
+            raise ValueError(unavailable)
+        components, reference, *_ = _isotope_composition(params)
+        cold_k, path_k, _ = _temperatures(params)
+        if not 293.15 <= cold_k <= 473.15 or not 293.15 <= path_k <= 573.15:
+            raise ValueError("The probe reference requires temperatures within the OD/SAS controls.")
+        densities = [(isotope, fraction, _species_path_density(isotope, cold_k, path_k, fraction))
+                     for isotope, fraction in components]
+        return compute(params, densities, reference, path_k, _probe_power_mw(params))
+
+    @staticmethod
+    def _render_projected_probe(data):
+        from .sas_probe_reference import render
+
+        return render(data)
+
     def solve_param_keys(self, params):
         keys = super().solve_param_keys(params)
         if "weak_probe_profile" not in params:
@@ -632,8 +685,7 @@ class SASScheme(Scheme):
             offset = 2 * np.pi * (man.nu0 - nu_ref)
             sigma_v = np.sqrt(constants.KB * T_doppler / iso.mass)
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
-            N = vapor_cell.cold_spot_limited_density(
-                species.number_density(iso, T_density), T_density, T_doppler) * weight
+            N = _species_path_density(iso, T_density, T_doppler, weight)
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
             pump_atom = man.atom
             if reference:
@@ -1766,10 +1818,8 @@ def _probe_saturation_metrics(raw, params, length_m):
                   "pump + finite probe quantitatively only with a joint model."),
         ))
 
-    wavelength = 2.0 * np.pi / float(raw["k_vec"])
-    waist_m = float(params.get("probe_waist_mm", 1.0)) * 1e-3
-    rayleigh_range = np.pi * waist_m**2 / wavelength
-    length_ratio = float(length_m) / rayleigh_range
+    length_ratio = probe_saturation.cell_to_rayleigh_ratio(
+        length_m, params.get("probe_waist_mm", 1.0), raw["k_vec"])
     if length_ratio >= 0.5:
         metrics.append(dict(
             label="Probe beam geometry",

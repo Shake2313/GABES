@@ -964,7 +964,69 @@ def _extra_export_metadata(key, data, compute_params, figure):
     return metadata
 
 
-def render_more(view, scheme, params, cache_version, readout_cache_version=None):
+@st.fragment
+def render_on_demand(scheme, params, cache_version, readout_cache_version):
+    """Render retained manual runs without rerunning the spectrum workspace."""
+    render_more({}, scheme, params, cache_version, readout_cache_version, remember_extra=True)
+
+
+def _render_extra_view(obj, scheme, params, cache_version, readout_cache_version, *, remember):
+    st.caption(obj.description)
+    extra_keys = set(scheme.recompute_keys()) | set(obj.param_keys)
+    extra_items = tuple(sorted((key, params[key]) for key in extra_keys if key in params))
+    identity = (cache_version, extra_items)
+    button_key = f"run__{scheme.name}__{obj.key}"
+    result_key = f"{button_key}__result"
+    saved = st.session_state.get(result_key) if remember else None
+    unavailable = getattr(scheme, "extra_view_unavailable", None)
+    reason = unavailable(obj.key, params) if unavailable is not None else None
+    if reason:
+        st.caption(reason)
+    if saved is not None and (saved[0] != identity or reason):
+        st.caption("Conditions changed. Run again to see the reference for the current settings.")
+        saved = None
+    if st.button("Run", key=button_key, icon=":material/play_arrow:", disabled=bool(reason)):
+        with st.spinner("Running…"):
+            data = _cached_extra(scheme.name, obj.key, extra_items, cache_version)
+        saved = (identity, data)
+        if remember:
+            st.session_state[result_key] = saved
+    if saved is None:
+        return
+
+    data = saved[1]
+    unresolved = remember and data.get("status") == "unresolved"
+    if remember:
+        if unresolved:
+            st.warning(data.get("reason") or "Numerical refinement did not converge.")
+        elif data.get("status") == "converged":
+            validation = data.get("provenance", {}).get("validation")
+            st.caption(f"Converged · {validation}" if validation else "Converged")
+        for note in data.get("notes", ()):
+            st.caption(note)
+
+    figure = None
+    plots = []
+    with PLOT_LOCK:
+        if not unresolved:
+            figure = obj.render(data, params) if obj.render_with_params else obj.render(data)
+            plots = ui_export.collect_view_plot_payloads({}, figure)
+            for plot in plots:
+                plot.update(label=obj.key, source="extra_view")
+            render_fig(figure)
+        metadata = _extra_export_metadata(obj.key, data, dict(extra_items), figure)
+    if remember:
+        metadata.update({key: data[key] for key in ("status", "provenance", "refinement")
+                         if key in data})
+    ui_export.render_export(
+        st.popover("Export extra view", icon=":material/download:", type="tertiary"),
+        scheme=scheme, raw=data, params=params, view={}, plot_payloads=plots,
+        comparison_payload=None, cache_version=cache_version,
+        readout_cache_version=readout_cache_version, extra_view=metadata,
+        key_suffix="extra-view")
+
+
+def render_more(view, scheme, params, cache_version, readout_cache_version=None, *, remember_extra=False):
     """Tables, diagnostic figures and heavy on-demand views behind pills."""
     items = [(table["title"], "table", table) for table in view.get("tables", [])]
     items += [(f"Diagnostic · {title}", "figure", extra_fig)
@@ -997,24 +1059,5 @@ def render_more(view, scheme, params, cache_version, readout_cache_version=None)
         elif kind == "figure":
             render_fig(obj)
         else:
-            st.caption(obj.description)
-            if st.button("Run", key=f"run__{scheme.name}__{obj.key}",
-                         icon=":material/play_arrow:"):
-                extra_keys = set(scheme.recompute_keys()) | set(obj.param_keys)
-                extra_items = tuple(sorted(
-                    (key, params[key]) for key in extra_keys if key in params))
-                with st.spinner("Running…"):
-                    data = _cached_extra(scheme.name, obj.key, extra_items, cache_version)
-                with PLOT_LOCK:
-                    figure = obj.render(data, params) if obj.render_with_params else obj.render(data)
-                    plots = ui_export.collect_view_plot_payloads({}, figure)
-                    for plot in plots:
-                        plot.update(label=obj.key, source="extra_view")
-                    metadata = _extra_export_metadata(obj.key, data, dict(extra_items), figure)
-                    render_fig(figure)
-                ui_export.render_export(
-                    st.popover("Export extra view", icon=":material/download:", type="tertiary"),
-                    scheme=scheme, raw=data, params=params, view={}, plot_payloads=plots,
-                    comparison_payload=None, cache_version=cache_version,
-                    readout_cache_version=readout_cache_version, extra_view=metadata,
-                    key_suffix="extra-view")
+            _render_extra_view(obj, scheme, params, cache_version, readout_cache_version,
+                               remember=remember_extra)

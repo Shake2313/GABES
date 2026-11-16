@@ -32,7 +32,8 @@ from gabes_ui.defaults import render_defaults
 from gabes_ui.dropdowns import render_dropdown_policy
 from gabes_ui.guide import guide_button
 from gabes_ui.paths import asset_text
-from gabes_ui.plotcard import PLOT_LOCK, render_more, render_plot_section
+from gabes_ui.plotcard import (PLOT_LOCK, render_more, render_on_demand,
+                               render_plot_section)
 from gabes_ui.readout import (
     metrics_table_markdown,
     partition_readout,
@@ -344,12 +345,15 @@ def render_spectra():
             render_comparison(comparison, comparison_context(scheme, params, comparison["schema"]),
                               scheme=scheme, raw=raw, params=params, view=view,
                               readout_version=READOUT_CACHE_VERSION)
+        if is_sas:
+            render_on_demand(scheme, params, cache_version, READOUT_CACHE_VERSION)
         return
 
     spec_by_name = {sp.name: sp for sp in specs}
     if is_sas:
         render_plot_section(dict(view, experimental_workspace=True), scheme, spec_by_name, raw, params,
                             cache_version, READOUT_CACHE_VERSION)
+        render_on_demand(scheme, params, cache_version, READOUT_CACHE_VERSION)
         return
 
     metrics = present_metrics(view.get("metrics", []), scheme_name=scheme.name, raw=raw)

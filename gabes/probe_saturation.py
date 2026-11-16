@@ -42,6 +42,14 @@ def gaussian_peak_intensity(power_mw, waist_mm):
     return beam.peak_intensity(power_mw * 1e-3, waist_mm * 1e-3)
 
 
+def cell_to_rayleigh_ratio(length_m, waist_mm, k_rad_m):
+    """Cell length divided by the Gaussian probe's Rayleigh range."""
+    wavelength = 2.0 * np.pi / float(k_rad_m)
+    waist_m = float(waist_mm) * 1e-3
+    rayleigh_range = np.pi * waist_m**2 / wavelength
+    return float(length_m) / rayleigh_range
+
+
 def closed_two_level_saturation_intensity(nu_hz, gamma_rad_s):
     """Return ``pi*h*c*Gamma/(3*lambda^3)`` in W/m^2.
 
