@@ -81,7 +81,8 @@ def test_pump_comparison_matches_legacy_for_both_curves_when_exact_was_selected(
     conditions = dict(line="D2", temp_c=90., cell_mm=12.5, probe_power_uw=0.,
                       scan_points=401, pump_power_mw=.01)
     expected, _, _ = _compare(**conditions)
-    actual, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    actual, solves, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    assert solves == [0.]
     assert actual["axis"] == expected["axis"] and actual["x"] == expected["x"]
     assert actual["fixed"]["weak_probe_profile"] == LEGACY_WEAK_PROBE
     for actual_curve, expected_curve in zip(actual["series"], expected["series"], strict=True):
@@ -95,10 +96,15 @@ def test_pump_comparison_matches_legacy_for_both_curves_when_exact_was_selected(
     conditions["pump_power_mw"] = 0.
     off_only, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
     assert off_only["series"][0]["probe_model"] == "weak_probe_exact_maxwell_voigt"
-    with comparison_values("pump_power_mw", [0., .01]):
-        sweep, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
-    for series, expected_curve in zip(sweep["series"], expected["series"], strict=True):
-        np.testing.assert_array_equal(series["delta"], expected_curve["delta"])
+    expected_delta = {row["power_mw"]: row["delta"] for row in expected["series"]}
+    for powers in ([0., .01], [.01, 0.], [.01]):
+        with comparison_values("pump_power_mw", powers):
+            sweep, solves, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+        assert solves == [0., .01]
+        assert sweep["varied"]["values"] == powers
+        assert [row["power_mw"] for row in sweep["series"]] == powers
+        for row in sweep["series"]:
+            np.testing.assert_array_equal(row["delta"], expected_delta[row["power_mw"]])
 
 
 @pytest.mark.parametrize("atom,reference,count,unit", [

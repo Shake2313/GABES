@@ -180,6 +180,7 @@ def test_heldout_csv_noise_cannot_change_any_training_result(conditions):
 
     prepared = []
     fits = []
+    restricted_fits = []
     for heldout_noise in (0.0002, 0.01):
         signal = np.where(train, training_y, clean + heldout_noise * noise)
         csv = "\n".join(f"{a:.17g},{b:.17g}" for a, b in zip(x, signal)).encode()
@@ -193,6 +194,7 @@ def test_heldout_csv_noise_cannot_change_any_training_result(conditions):
             data, conditions, fit_range_mhz=(-3900.0, -600.0),
             heldout_range_mhz=(-590.0, 4000.0),
         ))
+        restricted_fits.append(fit_od_spectrum(data, conditions, fit_range_mhz=(-3900., -600.)))
 
     # Reproduces the source of leakage: the legacy whole-trace noise estimate
     # changes inside the train window even though all its signal stays fixed.
@@ -204,6 +206,7 @@ def test_heldout_csv_noise_cannot_change_any_training_result(conditions):
     for key in ("sigma", "parameters", "covariance", "reduced_chi_squared",
                 "fit_residuals", "model_transmission"):
         assert low_noise[key] == high_noise[key]
+        assert restricted_fits[0][key] == restricted_fits[1][key] == low_noise[key]
     assert low_noise["heldout_residuals"] != high_noise["heldout_residuals"]
 
     fixed = replace(prepared[0], sigma=prepared[0].sigma.copy(), uncertainty_source="independent weights")
@@ -211,3 +214,30 @@ def test_heldout_csv_noise_cannot_change_any_training_result(conditions):
                           heldout_range_mhz=(-590., 4000.))
     assert fit["uncertainty_source"] == "independent weights"
     np.testing.assert_array_equal(fit["sigma"], fixed.sigma)
+
+
+def test_holdout_with_no_full_trace_noise_estimate_can_still_fit(conditions):
+    conditions = dict(conditions, line="D1", temp_c=40., weak_probe_profile=EXACT_WEAK_PROBE)
+    x = np.linspace(-3500., 4500., 801)
+    markers = ODFrequencyCalibration((x[0], x[-1]), (x[0], x[-1]))
+    train = x <= -3300.
+    noise = np.random.default_rng(7).normal(scale=0.001, size=x.shape)
+    training_signal = od_transmission(x, conditions) + noise
+    results = []
+    for heldout_signal in (np.full(x.shape, 0.5), 0.5 + noise):
+        signal = np.where(train, training_signal, heldout_signal)
+        csv = "\n".join(f"{a:.17g},{b:.17g}" for a, b in zip(x, signal)).encode()
+        trace = load_experimental_csv(csv, calibration_mode=CALIBRATION_ABSOLUTE_GAIN_OFFSET,
+                                      gain=1.0, offset=0.0, denoise=False)
+        data = prepare_od_fit(trace, frequency_calibration=markers)
+        if not results:
+            assert data.sigma is None
+            with pytest.raises(ValueError, match="Noise could not be estimated from this trace"):
+                fit_od_spectrum(data, conditions)
+        else:
+            assert data.sigma is not None
+        results.append(fit_od_spectrum(data, conditions, fit_range_mhz=(-3500., -3300.),
+                                       heldout_range_mhz=(-3290., 4500.)))
+    for key in ("parameters", "sigma", "covariance", "reduced_chi_squared", "fit_residuals"):
+        assert results[0][key] == results[1][key]
+    assert all(result["status"] == "converged" for result in results)

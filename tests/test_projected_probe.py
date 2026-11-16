@@ -287,7 +287,7 @@ def test_advanced_line_strength_is_reported_as_opacity_calibration():
     assert scaled["status"] == short["status"] == "converged"
     assert scaled["provenance"]["line_strength"] == {
         "factor": .5, "applies_to": "propagated absorption coefficient"}
-    assert any("Optical drive and level populations keep their calculated values" in note
+    assert any("At a given local intensity, the atomic drive and populations are unchanged" in note
                for note in scaled["notes"])
     np.testing.assert_allclose(scaled["transmission"], short["transmission"], rtol=0., atol=2e-15)
 

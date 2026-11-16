@@ -400,7 +400,7 @@ class SASScheme(Scheme):
             ParamSpec("line_strength", "Line-strength factor", "Detection & scaling", 1.0,
                       0.01, 2.0, 0.01, "", advanced=True, recompute=False,
                       help="Scale the optical readout, including absorption used in propagation. "
-                      "The optical drive and level populations keep their calculated values. "
+                      "At a given local intensity, the atomic drive and populations are unchanged. "
                       "1.0 uses the thermal 85Rb D1 sublevel normalization at pump = 0."),
             ParamSpec("transitions", "Generic: transitions", "Atomic", "single line",
                       choices=("single line", "two lines (crossover)"), advanced=True,

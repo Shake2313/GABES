@@ -31,14 +31,15 @@ def condition_samples(key, default):
 
 
 def condition_views(scheme, params, key, values, *, resolve_raw,
-                    current_raw=None, current_view=None):
+                    current_raw=None, current_view=None, required_values=()):
     """Yield each distinct condition in order, reusing the committed solution.
 
     resolve_raw accepts full parameters; the caller's existing compute cache
     selects recompute keys. A view is only reused at the exact current value.
-    No Matplotlib figures are constructed for the other conditions.
+    Required values such as a difference baseline precede the requested
+    samples. No Matplotlib figures are constructed for the other conditions.
     """
-    for value in dict.fromkeys(condition_samples(key, values)):
+    for value in dict.fromkeys((*required_values, *condition_samples(key, values))):
         condition = {**params, key: value}
         if value == params[key] and current_raw is not None:
             raw, view = current_raw, current_view

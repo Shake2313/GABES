@@ -190,7 +190,7 @@ class ODCellCalibration:
 class ODFitInput:
     frequency_mhz: np.ndarray
     transmission: np.ndarray
-    sigma: np.ndarray
+    sigma: np.ndarray | None
     branch: int
     source_points: int
     uncertainty_source: str
@@ -214,7 +214,9 @@ def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = Non
     """Use one raw sweep and the declared detector law.
 
     A supplied marker map fixes the detuning directly from raw x coordinates.
-    Otherwise the legacy display alignment determines the fit axis.
+    Otherwise the legacy display alignment determines the fit axis. If the
+    whole branch gives no noise estimate, the fit can still estimate noise on
+    a restricted fit range.
     """
     if not trace.is_absolute_transmission:
         raise ValueError("OD fitting requires an absolute transmission calibration.")
@@ -244,12 +246,13 @@ def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = Non
         sigma = np.full_like(x, detector_sigma)
         source = "Raw detector noise estimate converted to transmission"
     else:
-        raise ValueError("Noise could not be estimated from this trace. Supply raw measurements with noise.")
+        source = "No positive noise estimate from the full raw branch"
     keep = np.linspace(0, x.size - 1, min(x.size, MAX_FIT_POINTS), dtype=int)
-    retained_sigma = sigma[keep]
+    retained_sigma = sigma[keep] if sigma is not None else None
+    estimated = None if retained_sigma is None else (retained_sigma, readonly_float_array(retained_sigma))
     return ODFitInput(x[keep], y[keep], retained_sigma, branch, int(x.size), source,
                       frequency_calibration=frequency_calibration,
-                      _trace_estimated_sigma=(retained_sigma, readonly_float_array(retained_sigma)))
+                      _trace_estimated_sigma=estimated)
 
 
 def _branch_noise_weights(x, y, evaluation_x, *, detector_sigma=0.0):
@@ -346,10 +349,12 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         raise ValueError("A fixed cell constraint cannot also be a free fit parameter.")
     if not free or len(free) != len(set(free)) or any(key not in PARAMETERS for key in free):
         raise ValueError("Choose distinct physical fit parameters from the supported list.")
-    x, y, sigma = (np.asarray(values, dtype=float) for values in
-                   (data.frequency_mhz, data.transmission, data.sigma))
-    if (x.ndim != 1 or x.size > MAX_FIT_POINTS or y.shape != x.shape or sigma.shape != x.shape or
-            not all(np.isfinite(v).all() for v in (x, y, sigma)) or np.any(sigma <= 0)):
+    x, y = (np.asarray(values, dtype=float) for values in (data.frequency_mhz, data.transmission))
+    sigma = None if data.sigma is None else np.asarray(data.sigma, dtype=float)
+    invalid_sigma = sigma is not None and (sigma.shape != x.shape or not np.isfinite(sigma).all()
+                                           or np.any(sigma <= 0))
+    if (x.ndim != 1 or x.size > MAX_FIT_POINTS or y.shape != x.shape
+            or not np.isfinite(x).all() or not np.isfinite(y).all() or invalid_sigma):
         raise ValueError(f"Fit at most {MAX_FIT_POINTS} finite samples with positive uncertainty.")
 
     def points(interval, *, default):
@@ -369,17 +374,18 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     if heldout_range_mhz is not None and np.unique(x[heldout]).size < 4:
         raise ValueError("The held-out interval must contain at least four distinct samples.")
     uncertainty_source = data.uncertainty_source
-    # CSV-prepared uncertainties may use neighbors in the holdout and the
-    # merged detector noise. Re-estimate from training samples alone. A caller
-    # supplying or modifying sigma keeps their fixed weights. Check identity
-    # as well as contents to recognize even a replacement with equal values.
+    # CSV-prepared uncertainties can depend on excluded samples. Re-estimate
+    # from training samples alone. Check both identity and contents so even
+    # a replacement with equal values counts as explicitly fixed weights.
     estimated = data._trace_estimated_sigma
-    if (np.any(heldout) and estimated is not None and data.sigma is estimated[0]
-            and np.array_equal(sigma, estimated[1])):
+    automatic = estimated is not None and data.sigma is estimated[0] and np.array_equal(sigma, estimated[1])
+    if not np.all(train) and (sigma is None or automatic):
         sigma = _branch_noise_weights(x[train], y[train], x)
         if sigma is None:
             raise ValueError("Noise could not be estimated from the training range. Supply fixed uncertainties.")
         uncertainty_source = "Robust noise estimated from retained training samples only"
+    if sigma is None:
+        raise ValueError("Noise could not be estimated from this trace. Supply raw measurements with noise.")
     domains = dict(bounds or {})
     if domains.keys() - set(free):
         raise ValueError("Fit bounds apply only to selected physical parameters.")

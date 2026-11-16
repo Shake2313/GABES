@@ -124,8 +124,8 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
     notes = ["Numerical reference for linearly polarized Rb D1/D2. Magnetic sublevels "
              "within each hyperfine level share equal populations."]
     if strength != 1.0:
-        notes.append(f"Absorption is scaled by {strength:g}. Optical drive and level "
-                     "populations keep their calculated values.")
+        notes.append(f"Absorption is scaled by {strength:g}. At a given local intensity, "
+                     "the atomic drive and populations are unchanged.")
     if length_ratio >= 0.5:
         notes.append(f"Cell length is {length_ratio:.2g} Rayleigh ranges. "
                      "The calculation assumes a constant beam waist and full collection.")

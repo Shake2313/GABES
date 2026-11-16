@@ -62,21 +62,22 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
     current = float(params[key])
     if not np.isfinite(current) or current < 0:
         raise ValueError("Pump power must be finite and non-negative.")
-    powers = [0., current] if current else [0.]
+    powers = list(dict.fromkeys(condition_samples(key, [0., current] if current else [0.])))
+    if not powers or not all(np.isfinite(power) and power >= 0. for power in powers):
+        raise ValueError("Choose finite, non-negative pump powers for the comparison.")
     profile = _weak_probe_profile({**params, key: 0.})
-    if profile is not None and profile["status"] == "active" and any(
-            power > 0. for power in condition_samples(key, powers)):
+    if profile is not None and profile["status"] == "active" and any(power > 0. for power in powers):
         profile = dict(requested=profile["requested"], applied=LEGACY_WEAK_PROBE,
                        status="inactive", scope="The pump comparison uses the legacy velocity "
                        "grid for every curve so the pump is the only setting that varies.")
-    if profile is not None and profile["status"] == "inactive":
-        # Exact Voigt covers the pump-off limit. Use the same legacy backend
-        # for all rows when the selected conditions include a pumped curve.
         params = {**params, "weak_probe_profile": LEGACY_WEAK_PROBE}
-        current_raw = current_view = None
+        if current == 0.:
+            # Only the committed pump-off solution could have used Exact Voigt.
+            current_raw = current_view = None
     conditions = condition_views(scheme, params, key, powers, resolve_raw=resolve_raw,
-                                 current_raw=current_raw, current_view=current_view)
-    series = []
+                                 current_raw=current_raw, current_view=current_view,
+                                 required_values=(0.,))
+    series = {}
     for condition, raw, view in conditions:
         readout = view["optical_readout"]
         if "resolution" not in readout:
@@ -106,8 +107,9 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             same_grid(native_axis, x)
         probe_scope = next((m for m in view["metrics"]
                             if m.get("label") == "Probe model scope"), {})
-        series.append({
-            "power_mw": condition[key],
+        power = condition[key]
+        row = {
+            "power_mw": power,
             "transmission": sample_values(transmission),
             "optical_depth": sample_values(optical_depth),
             "effective": bool(readout["effective"]),
@@ -116,24 +118,25 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "attenuation_scope": readout["attenuation_scope"],
             "probe_model_scope": probe_scope.get("value"),
             "probe_model_note": probe_scope.get("help"),
-        })
+        }
         if profile is not None:
-            series[-1]["weak_probe_profile"] = profile
-            series[-1]["probe_model"] = raw.get("probe_model")
+            row["weak_probe_profile"] = profile
+            row["probe_model"] = raw.get("probe_model")
             if not probe_scope:
-                series[-1].update(probe_model_scope=profile["applied"], probe_model_note=profile["scope"])
+                row.update(probe_model_scope=profile["applied"], probe_model_note=profile["scope"])
         if "axial_cell" in readout:
             axial = readout["axial_cell"]
-            series[-1]["axial_cell"] = {key: axial[key] for key in (
+            row["axial_cell"] = {key: axial[key] for key in (
                 "status", "segment_count", "pump_depletion", "field_source", "temperature_source")}
             if "difference_from_undepleted" in axial:
-                series[-1]["axial_cell"]["difference_from_undepleted"] = axial["difference_from_undepleted"]
+                row["axial_cell"]["difference_from_undepleted"] = axial["difference_from_undepleted"]
+        series[power] = row
     return {
         "schema": SCHEMA, "scheme": scheme.name,
         "x": frequency_mhz.tolist(),
         "axis": {"label": "Relative frequency", "unit": "MHz",
                  "reference": reference, "overview_unit": native_unit},
-        "series": series, "groups": groups,
+        "series": [series[power] for power in powers], "groups": groups,
         "default_power_mw": current,
         "fixed": {k: v for k, v in params.items() if k != key},
         "varied": {"key": key, "unit": "mW", "values": powers},
