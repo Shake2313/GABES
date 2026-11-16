@@ -10,6 +10,7 @@ Usage
     python -m gabes_lab.tools.ui_audit --tag baseline            # spawns Streamlit on a free port
     python -m gabes_lab.tools.ui_audit --tag p1 --url http://localhost:8501
     python -m gabes_lab.tools.ui_audit --compare baseline p1     # markdown diff table
+    python -m gabes_lab.tools.ui_audit --sabes --tag sabes --output-dir runs/ui_audit
 
 DOM contract the redesign must keep (or update here in the same commit):
   * stApp carries Streamlit's data-test-script-state attribute;
@@ -39,6 +40,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from gabes_lab.blocks.io import write_json
 from gabes_lab.blocks.paths import REPO_ROOT
@@ -463,8 +465,51 @@ async def screenshot(cdp, path):
     path.write_bytes(base64.b64decode(res["data"]))
 
 
-async def run_audit(url, out_dir, browser):
-    inventory = scheme_inventory()
+async def _audit_sabes_tabs(cdp, url, out_dir):
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True), app="sabes")
+    url = urlunsplit(parts._replace(query=urlencode(query)))
+    results = {}
+    meta = {}
+    for label, viewport in (("desktop", DESKTOP), ("mobile", MOBILE)):
+        await cdp.send("Emulation.setDeviceMetricsOverride", **viewport)
+        await cdp.send("Page.navigate", url=url)
+        ready = await wait_ready(cdp, timeout=120, min_wait=1.0)
+        sidebar = await sidebar_roundtrip(cdp, end_open=(label == "desktop"))
+        tab_query = '[data-testid="stMain"] [role="tab"]'
+        tabs = await cdp.js(f"[...document.querySelectorAll({json.dumps(tab_query)})]"
+                            ".map(tab => tab.textContent.trim())")
+        if not tabs:
+            raise RuntimeError("SABES tabs not found")
+        meta[label] = dict(ready_ms=ready, sidebar_roundtrip=sidebar, **await cdp.js(JS_TRANSFER))
+        for index, title in enumerate(tabs):
+            tab = f"document.querySelectorAll({json.dumps(tab_query)})[{index}]"
+            await cdp.click(*await cdp.js(_center_js(tab)))
+            selected = await cdp.js(
+                f"new Promise(resolve => {{ const tab = {tab};"
+                " const deadline = performance.now() + 2000;"
+                " const check = () => {"
+                "   if (tab.getAttribute('aria-selected') === 'true') return resolve(true);"
+                "   if (performance.now() >= deadline) return resolve(false);"
+                "   requestAnimationFrame(check); }; requestAnimationFrame(check); })")
+            if not selected:
+                raise RuntimeError(f"SABES tab did not become selected: {title}")
+            slug = "".join(char.lower() if char.isalnum() else "_" for char in title)
+            log(f"{label}: SABES / {title}")
+            tab_result = results.setdefault(title, dict(title=title))
+            tab_result[f"sidebar_roundtrip_{label}"] = sidebar
+            tab_result[label] = await cdp.js(JS_MEASURE)
+            await screenshot(cdp, out_dir / f"sabes_{slug}_{label}.png")
+            if label == "mobile":
+                await cdp.js(f"document.getElementById({tab}.getAttribute('aria-controls'))"
+                             "?.scrollIntoView({block: 'start', inline: 'nearest'});")
+                await screenshot(cdp, out_dir / f"sabes_{slug}_{label}_panel.png")
+    meta.update(meta["desktop"])
+    return meta, results
+
+
+async def run_audit(url, out_dir, browser, *, sabes=False):
+    inventory = [] if sabes else scheme_inventory()
     proc, profile, port = launch_browser(browser)
     cdp = await CDP.connect(page_ws_url(port))
     results = {row["name"]: dict(row) for row in inventory}
@@ -472,6 +517,8 @@ async def run_audit(url, out_dir, browser):
     try:
         await cdp.send("Page.enable")
         await cdp.send("Runtime.enable")
+        if sabes:
+            return await _audit_sabes_tabs(cdp, url, out_dir)
 
         # Desktop pass: one session, schemes in registry order.
         await cdp.send("Emulation.setDeviceMetricsOverride", **DESKTOP)
@@ -582,9 +629,9 @@ def summary_markdown(doc):
     return "\n".join(lines) + "\n"
 
 
-def compare(tag_a, tag_b):
-    a = json.loads((AUDIT_ROOT / tag_a / "metrics.json").read_text(encoding="utf-8"))
-    b = json.loads((AUDIT_ROOT / tag_b / "metrics.json").read_text(encoding="utf-8"))
+def compare(tag_a, tag_b, output_dir=AUDIT_ROOT):
+    a = json.loads((output_dir / tag_a / "metrics.json").read_text(encoding="utf-8"))
+    b = json.loads((output_dir / tag_b / "metrics.json").read_text(encoding="utf-8"))
     names = [n for n in a["schemes"] if n in b["schemes"]]
     print(f"| metric | " + " | ".join(names) + " |")
     print("|---|" + "---|" * len(names))
@@ -605,21 +652,24 @@ def main():
     ap.add_argument("--url", help="audit an already running app instead of spawning one")
     ap.add_argument("--browser", help="Edge/Chrome executable")
     ap.add_argument("--compare", nargs=2, metavar=("TAG_A", "TAG_B"))
+    ap.add_argument("--sabes", action="store_true", help="audit the seven SABES tabs")
+    ap.add_argument("--output-dir", type=Path, default=AUDIT_ROOT, help="parent directory for audit tags")
     args = ap.parse_args()
     if args.compare:
-        compare(*args.compare)
+        compare(*args.compare, output_dir=args.output_dir)
         return
     if not args.tag:
         ap.error("--tag is required unless --compare is used")
 
-    out_dir = AUDIT_ROOT / args.tag
+    out_dir = args.output_dir / args.tag
     out_dir.mkdir(parents=True, exist_ok=True)
     server = None
     url = args.url
     if url is None:
         server, url = spawn_streamlit()
     try:
-        meta, results = asyncio.run(run_audit(url, out_dir, find_browser(args.browser)))
+        meta, results = asyncio.run(
+            run_audit(url, out_dir, find_browser(args.browser), sabes=args.sabes))
     finally:
         if server is not None:
             server.terminate()

@@ -33,7 +33,9 @@ from gabes.schemes import fwm
 
 from sabes import bridge, detection as detection_model, instruments, layout
 from gabes_ui.controls import skey
+from gabes_ui.paths import asset_text
 from gabes_ui.plotcard import PLOT_LOCK, render_fig
+from gabes_ui.readout import strip_html
 from gabes_ui.sabes.components import canvas as canvas_module
 from gabes_ui.sabes.render import build_spec, legend_rows
 from sabes.beamline import (SetupSettings, solve_seed_polarizer_deg,
@@ -429,7 +431,7 @@ def _owned_parameters():
 
 
 def _render_control(container, name):
-    """One numeric input, from the single shared definition."""
+    """Keep typed, conditionally disabled inputs under persistent optic state."""
     label, unit, low, high, step, help_text = CONTROLS[name]
     widget_key = _widget_key(name)
     flag = ("use_recorded_waists" if name.endswith("waist_override_um") else
@@ -726,8 +728,6 @@ def _render_reading(reading):
 def _render_trace(trace):
     import matplotlib.pyplot as plt
 
-    from gabes.plot_style import apply_gabes_plot_style
-
     with PLOT_LOCK:
         figure, axis = plt.subplots(figsize=(7.2, 3.0))
         try:
@@ -743,10 +743,10 @@ def _render_trace(trace):
             if len(trace.series) > 1:
                 axis.legend(fontsize=8, loc="best")
             axis.grid(alpha=0.3)
-            apply_gabes_plot_style(figure)
-            st.pyplot(figure)
-        finally:
+        except BaseException:
             plt.close(figure)
+            raise
+        render_fig(figure)
 
 
 
@@ -1261,56 +1261,8 @@ def render(host=None):
 
 
 def _render_metrics(metrics):
-    cards = "".join(
-        "<div class='sabes-metric' title='{help}'>"
-        "<div class='sabes-metric-label'>{label}</div>"
-        "<div class='sabes-metric-value'>{value}</div></div>".format(
-            help=escape(str(m.get("help", ""))),
-            label=escape(str(m["label"])),
-            value=escape(str(m["value"])))
-        for m in metrics)
-    st.markdown(f"<section class='sabes-metrics'>{cards}</section>",
-                unsafe_allow_html=True)
+    st.markdown(strip_html(metrics, (), (), preserve_text=True), unsafe_allow_html=True)
 
 
 def _inject_css():
-    st.markdown(
-        """
-        <style>
-        .sabes-brand { padding: 0.35rem 0 0.6rem 0; }
-        .sabes-brand-name { font-size: 2rem; font-weight: 800; letter-spacing: .06em;
-            line-height: 1; color: #0F766E; }
-        .sabes-brand-sub { font-size: .78rem; font-weight: 600; color: #475569;
-            margin-top: .2rem; }
-        .sabes-brand-note { font-size: .7rem; color: #64748B; margin-top: .25rem; }
-        .sabes-title { display: flex; align-items: center; flex-wrap: wrap;
-            gap: .5rem 1rem; margin-bottom: .35rem; }
-        .sabes-header h1 { margin: 0; color: #0F766E; letter-spacing: .04em; }
-        .sabes-status { white-space: normal; }
-        [data-testid="stAppViewContainer"]:has([data-testid="stSidebar"][aria-expanded="false"])
-            .sabes-header { padding-top: 1.5rem; }
-        .sabes-header p { color: #475569; margin-top: 0; font-size: .92rem; }
-        .sabes-metrics { display: grid; gap: .6rem; margin: .8rem 0 1.1rem 0;
-            grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .sabes-metric { border: 1px solid rgba(15,118,110,.22); border-radius: 12px;
-            padding: .6rem .75rem; background: rgba(15,118,110,.05); }
-        .sabes-metric-label { font-size: .72rem; text-transform: uppercase;
-            letter-spacing: .06em; color: #0F766E; font-weight: 700; }
-        .sabes-metric-value { font-size: 1.35rem; font-weight: 700; color: #0F172A;
-            margin-top: .15rem; font-variant-numeric: tabular-nums; }
-        @media (max-width: 700px) {
-            .sabes-metrics { grid-template-columns: 1fr; }
-        }
-        .sabes-legend { display: flex; flex-wrap: wrap; gap: .1rem 1.1rem;
-            margin: .35rem 0 .9rem 0; font-size: .78rem; color: #475569; }
-        .sabes-key { display: inline-flex; align-items: center; gap: .35rem; }
-        .sabes-key i { width: 18px; height: 4px; border-radius: 2px;
-            display: inline-block; }
-        .sabes-key--note { color: #5B6B80; }
-        .sabes-synth { border-left: 3px solid #B45309;
-            background: #FEF3C7; color: #78350F; padding: .45rem .7rem;
-            border-radius: 4px; font-size: .78rem; margin-bottom: .6rem; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<style>{asset_text('ui/sabes.css')}</style>", unsafe_allow_html=True)

@@ -1,0 +1,44 @@
+/* SABES route, apparatus legend and synthetic trace notice. The shared
+   stylesheet supplies the readout strip and status chip. */
+.sabes-brand { padding: .35rem 0 .6rem; }
+.sabes-brand-name {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: .06em;
+    line-height: 1;
+    color: var(--g-ok-ink);
+}
+.sabes-brand-sub { font-size: .78rem; font-weight: 600; color: var(--g-ink-3); margin-top: .2rem; }
+.sabes-brand-note { font-size: .7rem; color: var(--g-muted); margin-top: .25rem; }
+.sabes-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem 1rem;
+    margin-bottom: .35rem;
+}
+.sabes-header h1 { margin: 0; color: var(--g-ok-ink); letter-spacing: .04em; }
+.sabes-header p { color: var(--g-ink-3); margin-top: 0; font-size: .92rem; }
+.sabes-status { white-space: normal; }
+[data-testid="stAppViewContainer"]:has([data-testid="stSidebar"][aria-expanded="false"])
+    .sabes-header { padding-top: 1.5rem; }
+.sabes-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .1rem 1.1rem;
+    margin: .35rem 0 .9rem;
+    font-size: .78rem;
+    color: var(--g-ink-3);
+}
+.sabes-key { display: inline-flex; align-items: center; gap: .35rem; }
+.sabes-key i { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
+.sabes-key--note { color: var(--g-muted); }
+.sabes-synth {
+    border-left: 3px solid var(--g-warn-line);
+    background: var(--g-warn-bg);
+    color: var(--g-warn-ink);
+    padding: .45rem .7rem;
+    border-radius: 4px;
+    font-size: .78rem;
+    margin-bottom: .6rem;
+}

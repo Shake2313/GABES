@@ -111,19 +111,26 @@ def _value_html(metric):
     return f"<div class='g-cell-value{num_class}'>{approx}{escape(number)}{unit_html}</div>"
 
 
-def _cell_html(metric, role):
+def _cell_html(metric, role, *, preserve_text=False):
     label = str(metric.get("label", ""))
-    _, unit = split_metric_value(metric.get("value", ""), kind=metric.get("kind"))
-    if unit:
-        label = re.sub(r"\s*\[" + re.escape(unit) + r"\]$", "", label)
-    label = caption_html(label)
+    if preserve_text:
+        label = escape(label)
+        value = str(metric.get("value", ""))
+        number_class = " g-num" if looks_numeric(value) else ""
+        value_html = f"<div class='g-cell-value{number_class}'>{escape(value)}</div>"
+    else:
+        _, unit = split_metric_value(metric.get("value", ""), kind=metric.get("kind"))
+        if unit:
+            label = re.sub(r"\s*\[" + re.escape(unit) + r"\]$", "", label)
+        label = caption_html(label)
+        value_html = _value_html(metric)
     title = escape(str(metric.get("help") or ""), quote=True)
     delta = metric.get("delta")
     sub = f"<div class='g-cell-sub'>{escape(str(delta))}</div>" if delta is not None else ""
     if metric.get("status"):
         sub += f"<div class='g-cell-status'>{_chip_html(metric['status'])}</div>"
     return (f"<div class='g-cell g-cell--{role}' title='{title}'>"
-            f"<div class='g-cell-label'>{label}</div>{_value_html(metric)}{sub}</div>")
+            f"<div class='g-cell-label'>{label}</div>{value_html}{sub}</div>")
 
 
 def status_tone(value):
@@ -190,10 +197,11 @@ def _compact_magneto_status_html(statuses):
     )
 
 
-def strip_html(heroes, secondary, statuses, *, compact_statuses=False):
-    """Readout cells with status chips or an opt-in compact model disclosure."""
-    cells = [_cell_html(m, "hero") for m in heroes]
-    cells += [_cell_html(m, "secondary") for m in secondary]
+def strip_html(heroes, secondary, statuses, *, compact_statuses=False,
+               preserve_text=False):
+    """Readout cells with optional verbatim labels and preformatted values."""
+    cells = [_cell_html(m, "hero", preserve_text=preserve_text) for m in heroes]
+    cells += [_cell_html(m, "secondary", preserve_text=preserve_text) for m in secondary]
     if statuses:
         if compact_statuses:
             cells.append(_compact_magneto_status_html(statuses))
