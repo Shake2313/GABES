@@ -1,6 +1,6 @@
 """FWM model constants, settings, atomic definitions and claim metadata."""
 from ...constants import OMEGA_HF
-from ... import atoms, constants, detection, hyperfine, species
+from ... import atoms, constants, core, detection, hyperfine, species
 from dataclasses import dataclass
 import numpy as np
 
@@ -795,11 +795,7 @@ def thermal_transit_reset_superoperator(rate, populations=None):
     total = float(np.sum(populations))
     if total <= 0.0:
         raise ValueError("transit target populations must have positive trace")
-    rho_target = np.diag(populations / total).reshape(-1)
-    trace_row = np.zeros(N_LEVELS * N_LEVELS, dtype=float)
-    trace_row[np.arange(N_LEVELS) * (N_LEVELS + 1)] = 1.0
-    return rate * (np.outer(rho_target, trace_row)
-                   - np.eye(N_LEVELS * N_LEVELS, dtype=float))
+    return core.thermal_reset_superoperator(rate, populations / total)
 
 
 def collisional_atom(T, density=None, *, transit_rate=None):

@@ -123,6 +123,19 @@ def dissipator(L):
             - 0.5 * np.kron(eye, LdL.T))
 
 
+def thermal_reset_superoperator(rate, populations):
+    """Closed-form sum of the reset jumps sqrt(rate*p_i) |i><j|.
+
+    The normalized replacement populations are ordered over the full Hilbert
+    space. In row-major vectorization the result maps rho to
+    rate * (diag(populations) * Tr(rho) - rho).
+    """
+    n = len(populations)
+    target = np.diag(populations).reshape(-1)
+    trace = np.eye(n).reshape(-1)
+    return rate * (np.outer(target, trace) - np.eye(n*n))
+
+
 def build_liouvillian(H, atom):
     """L₀ = −i[H,·] + (Lindblad dissipator + dephasing) for the given AtomModel.
 
