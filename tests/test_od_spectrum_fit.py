@@ -8,7 +8,7 @@ from gabes import species
 from gabes.experimental_alignment import AxisAlignment
 from gabes.experimental_csv import CALIBRATION_ABSOLUTE_GAIN_OFFSET, load_experimental_csv
 from gabes.od_spectrum_fit import ODFitInput, fit_od_spectrum, od_transmission, prepare_od_fit
-from gabes.schemes.sas import EXACT_WEAK_PROBE, SASScheme
+from gabes.schemes.sas import AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, SASScheme
 
 
 @pytest.fixture
@@ -18,6 +18,7 @@ def conditions():
 
 
 def test_exact_spectrum_recovers_temperature_and_offset(conditions):
+    conditions = dict(conditions, weak_probe_profile=LEGACY_WEAK_PROBE)
     x = np.linspace(-3100.0, 3100.0, 501)
     truth = dict(conditions, temp_c=67.2)
     y = od_transmission(x, truth, offset_mhz=21.7)
@@ -66,12 +67,17 @@ def test_noisy_absolute_trace_keeps_holdout_separate_and_flags_density_length(co
         fit_od_spectrum(prepared, conditions, free=("line_strength",))
 
 
-@pytest.mark.parametrize(("coated", "status", "model"), [
-    (False, "active", "weak_probe_exact_maxwell_voigt"),
-    (True, "inactive", "weak_probe_legacy"),
+@pytest.mark.parametrize(("profile", "coated", "status", "model"), [
+    (AUTO_WEAK_PROBE, False, "active", "weak_probe_exact_maxwell_voigt"),
+    (EXACT_WEAK_PROBE, False, "active", "weak_probe_exact_maxwell_voigt"),
+    (EXACT_WEAK_PROBE, True, "inactive", "weak_probe_legacy"),
 ])
-def test_standalone_fit_reports_actual_weak_probe_backend(conditions, coated, status, model):
-    conditions = dict(conditions, weak_probe_profile=EXACT_WEAK_PROBE, paraffin_coated=coated)
+def test_standalone_fit_reports_actual_weak_probe_backend(
+        conditions, profile, coated, status, model):
+    conditions = dict(conditions, paraffin_coated=coated)
+    if profile != AUTO_WEAK_PROBE:
+        conditions["weak_probe_profile"] = profile
+    assert conditions["weak_probe_profile"] == profile
     x = np.linspace(-3100.0, 3100.0, 77)
     y = od_transmission(x, conditions)
     data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
@@ -80,4 +86,5 @@ def test_standalone_fit_reports_actual_weak_probe_backend(conditions, coated, st
     assert fit["probe_model"] == raw["probe_model"] == model
     assert fit["weak_probe_profile"] == raw["weak_probe_profile"]
     assert fit["weak_probe_profile"]["status"] == status
+    assert fit["weak_probe_profile"]["requested"] == profile
     assert fit["fit_residuals"]["rms"] < 1e-10

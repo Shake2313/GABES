@@ -9,7 +9,9 @@ import pytest
 from gabes import schemes
 from gabes.core import blas_single_thread
 from gabes.model_comparison import comparison_values, sample_values, same_grid
-from gabes.schemes.sas import EXACT_WEAK_PROBE, GENERIC, LEGACY_WEAK_PROBE, RB_COMPOSITION_CUSTOM
+from gabes.schemes.sas import (
+    AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, GENERIC, LEGACY_WEAK_PROBE, RB_COMPOSITION_CUSTOM,
+)
 
 
 def _compare(**changes):
@@ -77,11 +79,12 @@ def test_mixed_rb_composition_isotope_absence_and_native_reference_do_not_confla
         assert mids == sorted((a+b)/2 for a,b in combinations(lines, 2))
 
 
-def test_pump_comparison_matches_legacy_for_both_curves_when_exact_was_selected():
+@pytest.mark.parametrize("profile", [AUTO_WEAK_PROBE, EXACT_WEAK_PROBE])
+def test_pump_comparison_uses_same_legacy_grid_for_both_curves(profile):
     conditions = dict(line="D2", temp_c=90., cell_mm=12.5, probe_power_uw=0.,
                       scan_points=401, pump_power_mw=.01)
-    expected, _, _ = _compare(**conditions)
-    actual, solves, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    expected, _, _ = _compare(**conditions, weak_probe_profile=LEGACY_WEAK_PROBE)
+    actual, solves, _ = _compare(**conditions, weak_probe_profile=profile)
     assert solves == [0.]
     assert actual["axis"] == expected["axis"] and actual["x"] == expected["x"]
     assert actual["fixed"]["weak_probe_profile"] == LEGACY_WEAK_PROBE
@@ -89,17 +92,21 @@ def test_pump_comparison_matches_legacy_for_both_curves_when_exact_was_selected(
         np.testing.assert_array_equal(actual_curve["transmission"], expected_curve["transmission"])
         np.testing.assert_array_equal(actual_curve["delta"], expected_curve["delta"])
         assert actual_curve["probe_model"] == "weak_probe_legacy"
-        assert actual_curve["weak_probe_profile"]["requested"] == EXACT_WEAK_PROBE
+        assert actual_curve["weak_probe_profile"]["requested"] == profile
         assert actual_curve["weak_probe_profile"]["applied"] == LEGACY_WEAK_PROBE
 
     # An explicit comparison can request both powers while the active curve is the exact pump-off one.
     conditions["pump_power_mw"] = 0.
-    off_only, _, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+    off_only, solves, current = _compare(**conditions, weak_probe_profile=profile)
+    assert solves == []
     assert off_only["series"][0]["probe_model"] == "weak_probe_exact_maxwell_voigt"
+    assert off_only["series"][0]["weak_probe_profile"]["requested"] == profile
+    np.testing.assert_array_equal(off_only["series"][0]["transmission"],
+                                  current["optical_readout"]["transmission"])
     expected_delta = {row["power_mw"]: row["delta"] for row in expected["series"]}
     for powers in ([0., .01], [.01, 0.], [.01]):
         with comparison_values("pump_power_mw", powers):
-            sweep, solves, _ = _compare(**conditions, weak_probe_profile=EXACT_WEAK_PROBE)
+            sweep, solves, _ = _compare(**conditions, weak_probe_profile=profile)
         assert solves == [0., .01]
         assert sweep["varied"]["values"] == powers
         assert [row["power_mw"] for row in sweep["series"]] == powers

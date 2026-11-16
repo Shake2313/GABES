@@ -6,7 +6,7 @@ import pytest
 from gabes import atoms, collisions, species
 from gabes.schemes.absorption import LambdaScheme, ODScheme
 from gabes.schemes.magneto_unified import BUFFER, UnifiedMagnetoScheme
-from gabes.schemes.sas import SASScheme
+from gabes.schemes.sas import LEGACY_WEAK_PROBE, SASScheme
 from gabes.schemes.sas_axial import AxialInputError, SEGMENTED
 
 
@@ -96,7 +96,7 @@ def test_magneto_reference_reaches_both_public_axes():
 def test_sas_pressure_applies_same_width_and_shift_to_pump_and_probe(monkeypatch):
     scheme = SASScheme()
     p = dict(scheme.defaults(), species=species.RB87.label, line="D1", scan_points=161)
-    legacy = scheme.compute(dict(p, pump_power_mw=0.0))
+    legacy = scheme.compute(dict(p, pump_power_mw=0.0, weak_probe_profile=LEGACY_WEAK_PROBE))
     zero = scheme.compute(dict(p, pump_power_mw=0.0,
                                optical_collision_model=collisions.REFERENCE_COLLISIONS))
     np.testing.assert_array_equal(zero["alpha_unit"], legacy["alpha_unit"])

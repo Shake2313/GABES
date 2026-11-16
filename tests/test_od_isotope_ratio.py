@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from gabes import constants, schemes, species
-from gabes.schemes.sas import _probe_reference_matched
+from gabes.schemes.sas import AUTO_WEAK_PROBE, LEGACY_WEAK_PROBE, _probe_reference_matched
 
 
 SAS = schemes.get("sas")
@@ -19,11 +19,11 @@ def _params(**overrides):
 
 
 def test_natural_composition_preserves_legacy_spectrum_exactly():
-    legacy = _params()
+    legacy = _params(weak_probe_profile=LEGACY_WEAK_PROBE)
     del legacy["rb_composition"]
     del legacy["rb85_fraction"]
     original = SAS.compute(legacy)
-    natural = SAS.compute(_params(rb85_fraction=0.2))
+    natural = SAS.compute(_params(rb85_fraction=0.2, weak_probe_profile=LEGACY_WEAK_PROBE))
     for key in ("scan", "alpha_unit", "chi_real_unit"):
         np.testing.assert_array_equal(natural[key], original[key])
     assert natural["rb85_fraction"] == species.RB85.abundance
@@ -74,16 +74,17 @@ def test_mixture_endpoints_match_pure_isotopes_with_declared_centroid(line, frac
     assert mixture["k_vec"] == 2 * np.pi * species.RB85.line(line)[1] / constants.C_LIGHT
 
 
-def test_custom_fraction_assigns_complementary_elemental_density_shares():
-    params = _params(rb_composition="Custom", rb85_fraction=0.35)
+@pytest.mark.parametrize("profile", [AUTO_WEAK_PROBE, LEGACY_WEAK_PROBE])
+def test_custom_fraction_assigns_complementary_elemental_density_shares(profile):
+    params = _params(rb_composition="Custom", rb85_fraction=0.35, weak_probe_profile=profile)
     densities = {}
-    component_response = SAS._component_response
+    line_integrated_alpha = species.line_integrated_alpha
 
-    def capture(component, scan, temperature):
-        densities[component["iso"].name] = component["N"]
-        return component_response(component, scan, temperature)
+    def capture(iso, line, N):
+        densities[iso.name] = N
+        return line_integrated_alpha(iso, line, N)
 
-    with patch.object(SAS, "_component_response", side_effect=capture):
+    with patch.object(species, "line_integrated_alpha", side_effect=capture):
         raw = SAS.compute(params)
     total = species.number_density(species.RB85, params["temp_c"] + 273.15)
     assert densities == pytest.approx({"Rb85": 0.35 * total, "Rb87": 0.65 * total})

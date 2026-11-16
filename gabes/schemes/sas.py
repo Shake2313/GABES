@@ -54,6 +54,7 @@ PROBE_PASSIVITY_INTERIOR = 1e-8         # avoid an artificial exact-zero fixed p
 PROBE_REFERENCE_RB_D2_ISOTOPES = frozenset(("Rb85", "Rb87"))
 RB_COMPOSITION_NATURAL = "Natural"
 RB_COMPOSITION_CUSTOM = "Custom"
+AUTO_WEAK_PROBE = "Automatic"
 LEGACY_WEAK_PROBE = "Legacy velocity grid"
 EXACT_WEAK_PROBE = "Exact Maxwell Voigt"
 _RB_MEDIA = ("Rb (natural)", species.RB85.label, species.RB87.label)
@@ -116,12 +117,12 @@ def _species_path_density(isotope, cold_k, path_k, fraction):
 
 
 def _weak_probe_profile(params):
-    """Describe an explicit Voigt request, including when app inputs make it inactive."""
-    requested = params.get("weak_probe_profile", LEGACY_WEAK_PROBE)
+    """Resolve the default weak-probe backend and report explicit Voigt fallbacks."""
+    requested = params.get("weak_probe_profile", AUTO_WEAK_PROBE)
     if requested == LEGACY_WEAK_PROBE:
         return None
-    if requested != EXACT_WEAK_PROBE:
-        raise ValueError("Choose Legacy velocity grid or Exact Maxwell Voigt.")
+    if requested not in (AUTO_WEAK_PROBE, EXACT_WEAK_PROBE):
+        raise ValueError("Choose Automatic, Legacy velocity grid or Exact Maxwell Voigt.")
     eligible = (
         params.get("species", "Rb (natural)") in _RB_MEDIA
         and params["line"] in ("D1", "D2")
@@ -133,9 +134,11 @@ def _weak_probe_profile(params):
         and not _measured_collision_mode(params)
     )
     if eligible:
-        return dict(requested=requested, applied=requested, status="active",
+        return dict(requested=requested, applied=EXACT_WEAK_PROBE, status="active",
                     scope="Numerical reference for uniform weak-probe Rb D1/D2.",
                     velocity_measure="Untruncated 1D Maxwell distribution")
+    if requested == AUTO_WEAK_PROBE:
+        return None
     return dict(
         requested=requested, applied=LEGACY_WEAK_PROBE, status="inactive",
         scope="Select uniform uncoated Rb D1/D2 with pump, probe and buffer "
@@ -273,7 +276,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "14"           # consistent pump comparison and reference provenance
+    cache_version = "15"           # Exact Maxwell Voigt by default for eligible weak-probe OD
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -437,14 +440,16 @@ class SASScheme(Scheme):
                       visible_if={"cell_propagation": sas_axial.SEGMENTED},
                       help="Propagate the pump from the probe exit toward the probe entrance."),
             ParamSpec("weak_probe_profile", "Weak-probe line profile", "Numerics",
-                      LEGACY_WEAK_PROBE, choices=(LEGACY_WEAK_PROBE, EXACT_WEAK_PROBE),
+                      AUTO_WEAK_PROBE, choices=(AUTO_WEAK_PROBE, LEGACY_WEAK_PROBE, EXACT_WEAK_PROBE),
                       advanced=True, advanced_group="Doppler average",
                       visible_if={"species": _RB_MEDIA, "pump_power_mw": 0.0,
                                   "probe_power_uw": 0.0, "cell_propagation": "Uniform",
                                   "optical_collision_model": collisions.LEGACY_COLLISIONS,
                                   "paraffin_coated": False, "ne_pressure_torr": 0.0},
-                      help="Exact Maxwell Voigt uses the full thermal velocity distribution "
-                           "for absorption and dispersion in a uniform, unbuffered Rb cell."),
+                      help="Automatic uses Exact Maxwell Voigt for absorption and dispersion "
+                           "in uniform, uncoated, buffer-free Rb D1/D2 with pump and probe off "
+                           "and Legacy broadening. Select Legacy velocity grid to reproduce "
+                           "the historical weak-probe spectrum."),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
         ]
@@ -584,6 +589,10 @@ class SASScheme(Scheme):
         from .sas_probe_reference import render
 
         return render(data)
+
+    def migrate_default_params(self, params):
+        # Saved snapshots without a profile predate the Exact Voigt default.
+        return {"weak_probe_profile": LEGACY_WEAK_PROBE, **params}
 
     def solve_param_keys(self, params):
         keys = super().solve_param_keys(params)

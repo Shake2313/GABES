@@ -6,6 +6,7 @@ import pytest
 from gabes import schemes
 from gabes.schemes.base import ParamSpec
 from gabes.schemes.fwm import FWMScheme
+from gabes.schemes.sas import AUTO_WEAK_PROBE, LEGACY_WEAK_PROBE
 from gabes_ui.defaults_store import (
     MAX_PAYLOAD_BYTES,
     DefaultValidationError,
@@ -70,6 +71,19 @@ def test_fwm_legacy_migration_does_not_accept_unknown_or_invalid_inputs():
         }))
     with pytest.raises(DefaultValidationError):
         parse_default(scheme, dict(record, params={"gain_closure_enabled": "false"}))
+
+
+def test_old_sas_snapshot_without_profile_replays_on_the_legacy_grid():
+    scheme = schemes.get("sas")
+    record = create_default(scheme, "OD settings", {"pump_power_mw": 0.0, "scan_points": 401})
+    assert record["params"]["weak_probe_profile"] == AUTO_WEAK_PROBE
+    old = copy.deepcopy(record)
+    del old["params"]["weak_probe_profile"]
+
+    restored = parse_default(scheme, old)["params"]
+    assert restored == {**record["params"], "weak_probe_profile": LEGACY_WEAK_PROBE}
+    assert "weak_probe_profile" not in old["params"]
+    assert scheme.compute(restored)["probe_model"] == "weak_probe_legacy"
 
 
 def test_snapshot_preserves_hidden_metadata_and_fills_new_parameters(example):

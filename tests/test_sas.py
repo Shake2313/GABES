@@ -25,9 +25,12 @@ import pytest
 
 
 from gabes import (  # noqa: E402
-    atoms, core, schemes, constants, observables, species, hyperfine)
+    atoms, collisions, core, doppler, schemes, constants, observables, species, hyperfine)
 from gabes.schemes.sas import (  # noqa: E402
+    AUTO_WEAK_PROBE,
+    EXACT_WEAK_PROBE,
     GENERIC,
+    LEGACY_WEAK_PROBE,
     _basis_reset_pump_pops,
     _coated_ground_transfer,
     _lock_readout_metrics,
@@ -293,6 +296,7 @@ def test_pump_off_closes_against_internal_od_85rb_d1():
 
 def test_paraffin_coating_has_no_direct_pump_off_optical_loss():
     common = dict(species=RB85_KEY, line="D1", pump_power_mw=0.0,
+                  weak_probe_profile=LEGACY_WEAK_PROBE,
                   temp_c=45.0, scan_points=401)
     plain = SAS.compute(_params(**common, paraffin_coated=False))
     coated = SAS.compute(_params(**common, paraffin_coated=True))
@@ -364,7 +368,7 @@ def test_pump_off_is_smooth_and_7_5():
     assert view["hero_count"] == 1
     assert [metric["label"] for metric in view["metrics"]] == [
         "Peak absorbance A10", "Peak optical depth tau",
-        "Gaussian Doppler FWHM", "Peak phase shift"
+        "Gaussian Doppler FWHM", "Peak phase shift", "Weak-probe line profile",
     ]
     assert view["metrics"][0]["tier"] == "hero"
     broad = next(m for m in view["metrics"] if m["label"] == "Gaussian Doppler FWHM")
@@ -647,11 +651,11 @@ def _voigt_reference(scan, iso, line, T_density, T_doppler):
     return alpha, chi_real
 
 
-def test_dispersion_matches_independent_voigt_reference():
-    """Both quadratures, against scipy's Faddeeva instead of our velocity sum."""
+def test_legacy_velocity_sum_matches_independent_voigt_reference_at_zero_pump():
+    """Check both quadratures of the discrete pump-solver limit."""
     for temp_c in (25.0, 90.0):
         p = _params(species=RB85_KEY, line="D1", pump_power_mw=0.0,
-                    temp_c=temp_c, scan_points=1201)
+                    temp_c=temp_c, scan_points=1201, weak_probe_profile=LEGACY_WEAK_PROBE)
         raw = SAS.compute(p)
         a_ref, chi_ref = _voigt_reference(
             raw["scan"], species.RB85, "D1", temp_c + 273.15, temp_c + 273.15)
@@ -660,10 +664,37 @@ def test_dispersion_matches_independent_voigt_reference():
                 / np.abs(chi_ref).max()) < 1e-3
 
 
+@pytest.mark.parametrize("line", ["D1", "D2"])
+@pytest.mark.parametrize("medium", [
+    {"species": "Rb (natural)"},
+    {"species": RB85_KEY},
+    {"species": RB87_KEY},
+    {"species": "Rb (natural)", "rb_composition": "Custom", "rb85_fraction": 0.36},
+], ids=["natural", "rb85", "rb87", "custom"])
+def test_default_weak_probe_uses_exact_maxwell_voigt(line, medium, monkeypatch):
+    def unexpected_grid(*args, **kwargs):
+        raise AssertionError("Automatic weak-probe OD should not allocate a velocity grid")
+
+    monkeypatch.setattr(doppler, "velocity_grid", unexpected_grid)
+    params = _params(**medium, line=line, pump_power_mw=0.0, scan_points=401)
+    assert params["weak_probe_profile"] == AUTO_WEAK_PROBE
+    exact = SAS.compute(dict(params, weak_probe_profile=EXACT_WEAK_PROBE))
+    missing = {key: value for key, value in params.items() if key != "weak_probe_profile"}
+    for settings in (params, missing):
+        raw = SAS.compute(settings)
+        for key in ("scan", "alpha_unit", "chi_real_unit"):
+            np.testing.assert_array_equal(raw[key], exact[key])
+        assert raw["probe_model"] == "weak_probe_exact_maxwell_voigt"
+        profile = raw["weak_probe_profile"]
+        assert profile["requested"] == AUTO_WEAK_PROBE
+        assert profile["applied"] == EXACT_WEAK_PROBE
+        assert profile["status"] == "active"
+        readout = SAS.headless_observables(raw, settings)["optical_readout"]
+        assert readout["weak_probe_profile"] == profile
+
+
 def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatch):
     from scipy.special import wofz
-    from gabes import doppler
-    from gabes.schemes.sas import EXACT_WEAK_PROBE
 
     def unexpected_grid(*args, **kwargs):
         raise AssertionError("Exact weak-probe OD should not allocate a velocity grid")
@@ -707,22 +738,49 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
                                    rtol=1e-10, atol=1e-12)
 
 
-def test_exact_voigt_selection_falls_back_with_visible_reason_when_ineligible():
-    from gabes.schemes.sas import EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE
+@pytest.mark.parametrize("changes", [
+    {"pump_power_mw": 0.5},
+    {"probe_power_mw": 0.002},
+    {"paraffin_coated": True},
+    {"ne_pressure_torr": 2.0},
+    {"cell_propagation": "Segmented reference"},
+    {"optical_collision_model": collisions.REFERENCE_COLLISIONS},
+    {"species": CS_KEY},
+    {"species": GENERIC},
+], ids=["pumped", "finite-probe", "coated", "neon", "axial", "measured-ne", "cs", "generic"])
+def test_ineligible_exact_voigt_is_reported_but_automatic_falls_back_quietly(changes):
+    params = _params(**{"pump_power_mw": 0.0, "scan_points": 401, **changes})
+    legacy = SAS.compute(dict(params, weak_probe_profile=LEGACY_WEAK_PROBE))
+    automatic = SAS.compute(params)
+    exact = SAS.compute(dict(params, weak_probe_profile=EXACT_WEAK_PROBE))
+    assert "weak_probe_profile" not in legacy
+    assert "weak_probe_profile" not in automatic
+    assert "weak_probe_profile" not in SAS.headless_observables(
+        automatic, params)["optical_readout"]
+    profile = exact["weak_probe_profile"]
+    assert profile["applied"] == LEGACY_WEAK_PROBE
+    assert profile["status"] == "inactive"
+    assert profile["scope"]
+    assert SAS.headless_observables(exact, params)["optical_readout"]["weak_probe_profile"] == profile
+    for raw in (automatic, exact):
+        assert raw.get("probe_model") == legacy.get("probe_model")
+        for key in ("scan", "alpha_unit", "chi_real_unit"):
+            np.testing.assert_array_equal(raw[key], legacy[key])
 
-    for changes in (dict(pump_power_mw=0.5), dict(probe_power_mw=0.002),
-                    dict(paraffin_coated=True), dict(ne_pressure_torr=2.0),
-                    dict(cell_propagation="Segmented reference")):
-        p = _params(**{"pump_power_mw": 0.0, "scan_points": 401, **changes})
-        legacy = SAS.compute(p)
-        raw = SAS.compute(dict(p, weak_probe_profile=EXACT_WEAK_PROBE))
-        assert "weak_probe_profile" not in legacy
-        assert raw["weak_probe_profile"]["applied"] == LEGACY_WEAK_PROBE
-        assert raw["weak_probe_profile"]["status"] == "inactive"
-        assert raw["probe_model"] == legacy["probe_model"]
-        assert SAS.headless_observables(raw, p)["optical_readout"]["weak_probe_profile"]["scope"]
-        np.testing.assert_array_equal(raw["alpha_unit"], legacy["alpha_unit"])
-        np.testing.assert_array_equal(raw["chi_real_unit"], legacy["chi_real_unit"])
+
+def test_pumped_velocity_sum_tends_to_explicit_legacy_at_zero_pump():
+    params = _params(line="D1", pump_power_mw=0.0, scan_points=401)
+    legacy = SAS.compute(dict(params, weak_probe_profile=LEGACY_WEAK_PROBE))
+    exact = SAS.compute(params)
+    with core.blas_single_thread():
+        pumped = SAS.compute(dict(params, pump_power_mw=1e-8))
+    assert legacy["probe_model"] == pumped["probe_model"] == "weak_probe_legacy"
+    np.testing.assert_array_equal(pumped["scan"], legacy["scan"])
+    np.testing.assert_array_equal(exact["scan"], legacy["scan"])
+    for key in ("alpha_unit", "chi_real_unit"):
+        scale = np.max(np.abs(legacy[key]))
+        assert np.max(np.abs(pumped[key] - legacy[key])) < 1e-6 * scale
+        assert np.max(np.abs(pumped[key] - exact[key])) > 1e-5 * scale
 
 
 def test_weak_probe_quadrature_ratio_fixes_the_dispersion_sign():

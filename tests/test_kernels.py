@@ -218,7 +218,7 @@ def test_velocity_interp_mean_takes_np_interp_values():
 
 
 @pytest.mark.parametrize("over", [
-    {}, {"pump_power_mw": 0.0}, {"paraffin_coated": True},
+    {}, {"pump_power_mw": 0.0, "weak_probe_profile": sas.LEGACY_WEAK_PROBE}, {"paraffin_coated": True},
     {"species": "¹³³Cs", "line": "D2", "probe_power_uw": 20.0},
 ], ids=["sas", "od", "coated", "cs-d2-finite-probe"])
 def test_sas_kernel_matches_reference(over):

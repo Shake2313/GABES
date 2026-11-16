@@ -9,7 +9,7 @@ import pytest
 
 
 from gabes import probe_saturation, schemes, species  # noqa: E402
-from gabes.schemes.sas import GENERIC  # noqa: E402
+from gabes.schemes.sas import GENERIC, LEGACY_WEAK_PROBE  # noqa: E402
 
 
 SAS = schemes.get("sas")
@@ -155,7 +155,7 @@ def test_gaussian_propagator_is_continuous_at_zero_cell_length():
 def test_zero_probe_power_is_exact_legacy_limit_even_when_new_keys_are_missing(
         ensemble, line):
     explicit = _params(
-        species=ensemble, line=line,
+        species=ensemble, line=line, weak_probe_profile=LEGACY_WEAK_PROBE,
         probe_power_uw=0.0, probe_waist_mm=4.5)
     legacy = dict(explicit)
     legacy.pop("probe_power_uw")

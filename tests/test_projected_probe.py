@@ -9,7 +9,7 @@ from scipy.special import wofz
 from gabes import constants, species
 from gabes.atoms import AtomModel
 from gabes.optical_pumping import ProjectedProbe
-from gabes.schemes.sas import SASScheme
+from gabes.schemes.sas import LEGACY_WEAK_PROBE, SASScheme
 
 
 def _line_areas(manifold):
@@ -270,7 +270,8 @@ def test_advanced_reference_rejects_out_of_scope_conditions(unsupported):
 
 def test_advanced_reference_rejects_beam_path_colder_than_cold_spot():
     scheme = SASScheme()
-    params = _od_conditions(scheme, temp_c=150., doppler_temp_c=20., constrain_doppler_temp=False)
+    params = _od_conditions(scheme, temp_c=150., doppler_temp_c=20.,
+                            constrain_doppler_temp=False, weak_probe_profile=LEGACY_WEAK_PROBE)
     assert "beam-path temperature" in scheme.extra_view_unavailable(
         "Finite-probe pumping reference", params)
     with pytest.raises(ValueError, match="at or above the cold-spot temperature"):

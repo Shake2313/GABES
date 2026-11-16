@@ -4,7 +4,7 @@ import pytest
 
 from gabes import constants, species, vapor_cell
 from gabes.schemes.absorption import ODScheme
-from gabes.schemes.sas import SASScheme
+from gabes.schemes.sas import LEGACY_WEAK_PROBE, SASScheme
 from gabes.schemes.sas_axial import AxialInputError, SEGMENTED
 
 
@@ -18,7 +18,8 @@ def test_flat_profile_recovers_uniform_raw_and_absorption_anchor(count, power):
     scheme = SASScheme()
     uniform = _params(scheme, pump_power_mw=power, temp_c=90., scan_points=1401)
     segmented = dict(uniform, cell_propagation=SEGMENTED, axial_segments=count)
-    reference = scheme.compute(uniform)
+    # The segmented reference retains the historical velocity grid at every pump power.
+    reference = scheme.compute(dict(uniform, weak_probe_profile=LEGACY_WEAK_PROBE))
     raw = scheme.compute(segmented)
     axial = raw.pop("axial_cell")
     assert axial["status"] == "exact_uniform_limit"
