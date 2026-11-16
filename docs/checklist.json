@@ -5242,6 +5242,7 @@
       "priority": "P1",
       "effort": "medium",
       "status": "in_progress",
+      "evidence_archive_2026_11_16": "⟦AI⟧ Draft certification inputs and outputs from the November 13 fast-dense (a29b7dc), fast-fix and fast-probe worktrees are preserved in GABES-archive at 2dc884f under analysis/wave_2026_11_13/. worktree-recovery.json records source paths, HEADs and SHA-256 hashes. The follow-up Fast package remains scheduled after consolidation.",
       "sequencing_2026_11_16": "User request 2026-11-16: finish the remaining consolidation work first; the Fast work is the next package after it.",
       "user_decision_2026_11_16": "User decision 2026-11-16: do not choose between the cached Fast path and the exact-source opt-in by hand. Build a reusable skill (.claude/skills/gabes-fast-tier/SKILL.md) that creates a Fast tier for any scheme from the existing FWM Fast techniques and iterates until it reproduces the non-Fast computation closely enough to be useful; the same skill repairs a Fast tier when an error like the current one is found. FWM Fast is its first case. The skill gives the procedure only; the agent sets the acceptance criteria itself before starting and freezes them before collecting evidence. ⟦AI⟧ The existing validation_contract thresholds remain available as a starting point, not a mandate. Run after fwm-lab-gain-calibration-refit so the calibrated readouts are checked with the refitted coefficients.",
       "source_reports": [
