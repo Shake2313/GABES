@@ -164,16 +164,15 @@ def _averaged_chi(tables, master_delta_eff, v_grid, weights, D_GHz, *, gaussian_
 
 def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
                       D_GHz, T_K, *, gaussian_sigma=None):
-    chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = _averaged_chi(
+    chi = _averaged_chi(
         tables, master_delta_eff, v_grid, weights, D_GHz, gaussian_sigma=gaussian_sigma)
 
-    # Mirror compute_spectrum: pure-85Rb CRC density + first-principles coupling
-    # normalization p_F/[2(2I+1)] on top of the residual LINE_STRENGTH.
+    # The temperature table keeps the scanner's relative detuning grid and its
+    # field-power coefficients at matched reference wavevectors.
     N_atoms = hyperfine.number_density(T_K)
-    G_s, G_c, _ = observables.gain_from_chi(
-        chi_ss_avg, chi_sc_avg, chi_cs_avg, chi_cc_avg,
-        fwm.K_VEC, fwm.K_VEC, fwm.L_CELL, N_atoms,
-        line_strength=LINE_STRENGTH * fwm.physical_coupling_norm(BRANCH))
+    G_s, G_c, _, _ = fwm.seeded_linear_gain(
+        chi, fwm.K_VEC, fwm.K_VEC, fwm.L_CELL, N_atoms,
+        LINE_STRENGTH * fwm.physical_coupling_norm(BRANCH))
     G_s_smallsignal = G_s
     G_s, G_c = observables.pump_depletion_saturation(
         G_s, G_c, P_PUMP, P_SEED)

@@ -58,7 +58,6 @@ for _stream in (sys.stdout, sys.stderr):
 
 from gabes.core import blas_single_thread  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402
-from gabes import observables  # noqa: E402
 
 # Probe responses as exact pole–residue Maxwell sums on the same velocity nodes
 # (analysis/pole_reuse); GABES_FWM_RESPONSE=maxwell_grid reruns the Floquet grid.
@@ -150,11 +149,11 @@ def _readouts(sol):
 
 
 def _xi_of_loss(sol, idx, loss_axis):
-    """Analytic eta remap at one delta index (hardened balanced formula).
+    """Historical loss remap at one delta index.
 
-    Reproduces compute_spectrum's hardened S_dB: probe arm eta_s =
-    eta*exp(-(seg_od+od_probe)), conjugate arm eta_c = eta*exp(-od_conj),
-    pump-scatter excess added to the normalized noise ratio.
+    Attenuate each effective detection efficiency by its OD and add scatter as
+    detected excess. The current spectrum readout uses source-referred scatter
+    and reports the arm ODs separately.
     """
     Gs, Gc = sol["Gs"][idx], sol["Gc"][idx]
     out = np.empty(loss_axis.size)
@@ -163,10 +162,8 @@ def _xi_of_loss(sol, idx, loss_axis):
         eta_s = eta * np.exp(-(max(sol["seg_od"], 0.0)
                                + max(sol["od_probe"][idx], 0.0)))
         eta_c = eta * np.exp(-max(sol["od_conj"][idx], 0.0))
-        S = observables.balanced_twin_beam_noise(
-            Gs, Gc, eta_s, eta_c, reference_weight="dc")
-        S = S + max(sol["pump_scatter"], 0.0)
-        out[k] = 10.0 * np.log10(max(S, 1e-30))
+        out[k] = fwm.seeded_balanced_gain_noise_dB(
+            Gs, Gc, eta_s, eta_c, detected_excess_noise=max(sol["pump_scatter"], 0.0))
     return out
 
 

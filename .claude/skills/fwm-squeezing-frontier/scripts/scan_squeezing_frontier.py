@@ -210,8 +210,9 @@ def squeezing_map(Gs, Gc, OD, eta, od_conj=None, pump_scatter=None, od_probe=Non
     When `od_conj` is supplied (hardened model) the probe/conjugate arms carry
     unequal in-cell transmission (probe e^(−OD), conjugate e^(−od_conj)) and are
     routed through the validated `balanced_twin_beam_noise`; `pump_scatter` is an
-    η-independent additive excess added to the normalized noise. This reproduces
-    `compute_spectrum`'s hardened S_dB at the same η, so ξ(η) stays remappable.
+    η-independent detected excess added to the normalized noise. This is the
+    historical loss remap. The current spectrum readout uses source-referred
+    scatter and reports the arm ODs separately.
     """
     Gs = np.asarray(Gs, float); Gc = np.asarray(Gc, float); OD = np.asarray(OD, float)
     if od_conj is not None:
@@ -220,13 +221,10 @@ def squeezing_map(Gs, Gc, OD, eta, od_conj=None, pump_scatter=None, od_probe=Non
                        else np.maximum(np.asarray(od_probe, float), 0.0))
         eta_s = eta * np.exp(-(np.maximum(OD, 0.0) + probe_extra))
         eta_c = eta * np.exp(-np.maximum(od_conj, 0.0))
-        # balanced_twin_beam_noise's scalar `tech` can't take a grid array, so add
-        # the (per-point) pump-scatter excess to the returned noise ratio instead.
-        S = observables.balanced_twin_beam_noise(
-            Gs, Gc, eta_s, eta_c, reference_weight="dc")
-        if pump_scatter is not None:
-            S = S + np.maximum(np.asarray(pump_scatter, float), 0.0)
-        return 10.0 * np.log10(np.maximum(S, 1e-30))
+        detected_excess = (None if pump_scatter is None
+                           else np.maximum(np.asarray(pump_scatter, float), 0.0))
+        return fwm.seeded_balanced_gain_noise_dB(
+            Gs, Gc, eta_s, eta_c, detected_excess_noise=detected_excess)
     S_ideal = observables.ideal_twin_beam_noise(Gs, Gc)
     tau = np.exp(-np.maximum(OD, 0.0))
     S_cell = tau * S_ideal + (1.0 - tau)

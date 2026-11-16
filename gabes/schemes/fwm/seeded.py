@@ -68,6 +68,45 @@ def two_photon_detuning_from_probe_scan(probe_GHz, Delta_GHz, branch):
     return 2 * np.pi * delta_Hz
 
 
+def seeded_linear_gain(
+        response, k_probe, k_conj, length, density, line_strength, *,
+        collected_modes=None, delta_k_z=None, propagation_segments=1,
+        segment_profile=None):
+    """Propagate averaged (ss, cs, sc, cc) susceptibility and return arm gains.
+
+    With `collected_modes=(omega_probe, omega_conj, area_probe, area_conj)`,
+    gains use the collected power convention and include canonical diagnostics.
+    Omit it to obtain the field-power coefficients used by the historical
+    delta-T scanner. The transfer always maps electric-field amplitudes.
+    """
+    ss, cs, sc, cc = response
+    probe, conjugate, transfer = observables.gain_from_chi(
+        ss, sc, cs, cc, k_probe, k_conj, length, density,
+        line_strength=line_strength, delta_k_z=delta_k_z,
+        propagation_segments=propagation_segments, segment_profile=segment_profile)
+    canonical = None
+    if collected_modes is not None:
+        canonical = observables.canonical_transfer_diagnostics(transfer, *collected_modes)
+        probe = canonical["probe_power_gain"]
+        conjugate = canonical["conjugate_power_gain"]
+    return probe, conjugate, transfer, canonical
+
+
+def seeded_balanced_gain_noise_dB(
+        G_s, G_c, eta_s, eta_c, *, seed_excess_noise=0.0, detected_excess_noise=None):
+    """Gain diagnostic with explicit arm efficiencies and noise reference plane.
+
+    The engine passes source-referred scatter; historical scanner remaps pass a
+    detected additive term and their own effective arm efficiencies.
+    """
+    noise = observables.balanced_twin_beam_noise(
+        G_s, G_c, eta_s, eta_c, reference_weight="dc",
+        seed_excess_noise=seed_excess_noise)
+    if detected_excess_noise is not None:
+        noise = noise + detected_excess_noise
+    return 10.0 * np.log10(np.maximum(noise, 1e-30))
+
+
 def _uniform_segment_profile_and_probe_od(
         chi_bar, N_atoms, line_strength, nseg, L=L_CELL):
     """Return a neutral coupling profile plus a probe-OD diagnostic.
@@ -588,32 +627,18 @@ def compute_spectrum(D_GHz, *,
         ultra_pump_remaining_min = float(np.nanmin(pump_remaining))
         # Canonical diagnostics require a linear map. Remove the seed-dependent
         # dynamic-depletion scale while retaining the fixed spatial/pump profile.
-        _, _, T_small_signal = observables.gain_from_chi(
-            chi_ss_avg, chi_sc_avg, chi_cs_avg, chi_cc_avg,
-            k_probe_prop, k_conj_prop, L, N_atoms, line_strength=coupling_ls,
-            delta_k_z=delta_k_z, propagation_segments=propagation_segments,
-            segment_profile=segment_profile * spatial_profile)
-    else:
-        G_s_effective, G_c_effective, T_small_signal = observables.gain_from_chi(
-            chi_ss_avg, chi_sc_avg, chi_cs_avg, chi_cc_avg,
-            k_probe_prop, k_conj_prop, L, N_atoms, line_strength=coupling_ls,
-            delta_k_z=delta_k_z, propagation_segments=propagation_segments,
-            segment_profile=segment_profile)
-
-    canonical = observables.canonical_transfer_diagnostics(
-        T_small_signal, omega_probe, omega_conj, area_probe, area_conj)
+    undepleted_profile = (
+        segment_profile * spatial_profile if phase_detail == PHASE_ULTRA else segment_profile)
+    collected_modes = (omega_probe, omega_conj, area_probe, area_conj)
+    G_s_smallsignal, G_c_smallsignal, T_small_signal, canonical = seeded_linear_gain(
+        atomic_high_response, k_probe_prop, k_conj_prop, L, N_atoms, coupling_ls,
+        collected_modes=collected_modes, delta_k_z=delta_k_z,
+        propagation_segments=propagation_segments, segment_profile=undepleted_profile)
     if lower_order_response is not None:
-        low_ss, low_cs, low_sc, low_cc = lower_order_response
-        _, _, T_lower_order = observables.gain_from_chi(
-            low_ss, low_sc, low_cs, low_cc,
-            k_probe_prop, k_conj_prop, L, N_atoms, line_strength=coupling_ls,
-            delta_k_z=delta_k_z, propagation_segments=propagation_segments,
-            segment_profile=(
-                segment_profile * spatial_profile
-                if phase_detail == PHASE_ULTRA else segment_profile),
-        )
-        canonical_lower = observables.canonical_transfer_diagnostics(
-            T_lower_order, omega_probe, omega_conj, area_probe, area_conj)
+        _, _, _, canonical_lower = seeded_linear_gain(
+            lower_order_response, k_probe_prop, k_conj_prop, L, N_atoms, coupling_ls,
+            collected_modes=collected_modes, delta_k_z=delta_k_z,
+            propagation_segments=propagation_segments, segment_profile=undepleted_profile)
         floquet_convergence = fwm.assess_floquet_scan_convergence(
             high_order=floquet_order,
             low_order=floquet_order - 1,
@@ -640,8 +665,6 @@ def compute_spectrum(D_GHz, *,
                 "adjacent-order full-scan comparison explicitly disabled; "
                 "result is a historical/numerical fixture only"),
         }
-    G_s_smallsignal = canonical["probe_power_gain"]
-    G_c_smallsignal = canonical["conjugate_power_gain"]
     if phase_detail == PHASE_ULTRA:
         # The dynamic-depletion path propagates sqrt(power) amplitudes. Convert
         # its conjugate coefficient for an explicitly unequal collected area.
@@ -708,10 +731,8 @@ def compute_spectrum(D_GHz, *,
             # noise needs the future distributed covariance solve instead.
             eta_s_arm = eta
             eta_c_arm = eta
-            S_lin = observables.balanced_twin_beam_noise(
-                G_s, G_c, eta_s_arm, eta_c_arm, reference_weight="dc",
-                seed_excess_noise=pump_scatter)
-            gain_referred_noise_db = 10.0 * np.log10(np.maximum(S_lin, 1e-30))
+            gain_referred_noise_db = seeded_balanced_gain_noise_dB(
+                G_s, G_c, eta_s_arm, eta_c_arm, seed_excess_noise=pump_scatter)
             hardened_noise = {
                 "kappa": float(kappa),
                 "pump_scatter_noise": float(pump_scatter),

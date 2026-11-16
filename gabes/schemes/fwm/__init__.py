@@ -107,7 +107,7 @@ from .seeded_response import (
 from .seeded import (
     branch_center_GHz, probe_scan_axis_GHz, two_photon_detuning_from_probe_scan,
     _uniform_segment_profile_and_probe_od, _ultra_segmented_gain, _single_branch, compute_spectrum,
-    operating_point, full_spectrum,
+    operating_point, full_spectrum, seeded_linear_gain, seeded_balanced_gain_noise_dB,
 )
 from .readout import (
     _measured_gain_context, _measured_gain_rf_roundoff, _measured_gain_reference_readout,

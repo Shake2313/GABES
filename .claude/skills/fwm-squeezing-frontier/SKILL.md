@@ -94,6 +94,11 @@ block to the user, and surface the saved `squeezing_frontier.png` (heatmap +
 frontier overlay + optimum, the cost-vs-Δ curve, and the ξ-vs-T slice showing the
 true minimum vs the detection floor).
 
+The frontier retains the scanner's historical loss remap. In the Ultra remap,
+the arm optical depths also scale the effective detection efficiencies and pump
+scatter is added in detected noise units. Current FWM spectrum readouts report
+the arm optical depths separately and apply source-referred scatter.
+
 ## Fidelity — defaults to Ultra (the full model)
 `--fidelity` maps onto `compute_spectrum`'s `phase_detail` / `model_fidelity`. The
 default is **ultra** — the complete propagation physics this engine can model:
