@@ -95,13 +95,14 @@ def zeeman_manifold(Fg, Fe, gamma=None, gamma_gg=None, g_ratio=1.0,
     sqrt_gamma = math.sqrt(gamma)
     emission = {q: np.zeros((n, n), dtype=complex) for q in (-1, 0, 1)}
     couplings = {-1: [], 0: [], +1: []}
+    dipoles = species.signed_dipole_block(Fg, Fe)
     for ie, m_e in enumerate(me):
         eidx = ng + ie
         for ig, m_g in enumerate(mg):
             q = m_e - m_g
             if q not in (-1, 0, 1):
                 continue
-            cg = clebsch_gordan(Fg, m_g, 1, q, Fe, m_e)
+            cg = float(dipoles[q][ig, ie])
             if abs(cg) < 1e-14:
                 continue
             emission[q][ig, eidx] = sqrt_gamma * cg      # |Fg m_g⟩⟨Fe m_e|

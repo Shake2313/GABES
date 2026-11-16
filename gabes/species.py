@@ -395,6 +395,22 @@ def sublevels(fs):
     return tuple((f, m) for f in fs for m in range(-f, f + 1))
 
 
+def signed_dipole_block(fg, fe, reduced=1.0):
+    """Polarization-resolved signed dipoles for one integer Fg-to-Fe block.
+
+    The default reduced amplitude leaves the closed-pair Clebsch-Gordan
+    coefficients normalized over decay from each excited sublevel.
+    """
+    mg, me = range(-fg, fg + 1), range(-fe, fe + 1)
+    block = {q: np.zeros((len(mg), len(me))) for q in (-1, 0, 1)}
+    for g, m in enumerate(mg):
+        for e, m_e in enumerate(me):
+            q = m_e - m
+            if q in block:
+                block[q][g, e] = reduced * clebsch_gordan(fg, m, 1, q, fe, m_e)
+    return block
+
+
 def _read_only(array):
     array.flags.writeable = False
     return array
@@ -431,15 +447,19 @@ def level_structure(isotope, line):
     fes = tuple(int(f) for f in f_values(iso.I, Je))
     ground, excited = sublevels(fs), sublevels(fes)
     dipoles = {q: np.zeros((len(ground), len(excited))) for q in (-1, 0, 1)}
-    for g, (f, m) in enumerate(ground):
-        for e, (fe, me) in enumerate(excited):
-            q = me-m
-            if q not in dipoles:
-                continue
+    g0 = 0
+    for f in fs:
+        g1 = g0 + int(2*f+1)
+        e0 = 0
+        for fe in fes:
+            e1 = e0 + int(2*fe+1)
             reduced = ((-1)**int(round(Je+iso.I+f+1))
                        * math.sqrt((2*Je+1)*(2*f+1))
                        * wigner6j(Je, fe, iso.I, f, iso.Jg, 1))
-            dipoles[q][g, e] = reduced * clebsch_gordan(f, m, 1, q, fe, me)
+            for q, block in signed_dipole_block(f, fe, reduced).items():
+                dipoles[q][g0:g1, e0:e1] = block
+            e0 = e1
+        g0 = g1
     gamma = width * MHZ
     omega = 2*np.pi*nu
     d2 = 3*np.pi*constants.EPS_0*constants.HBAR*constants.C_LIGHT**3*gamma/omega**3
