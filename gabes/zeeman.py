@@ -149,85 +149,59 @@ def rb85_d1_double_lambda_zeeman(gamma=None, gamma_gg=None):
     """Full 85Rb D1 double-lambda Zeeman manifold used by FWM Ultra diagnostics.
 
     Levels are ordered as all ground states F=2,3 followed by all excited states
-    F'=2,3. Coupling amplitudes are normalized so the unpolarized CG sum for each
-    Fg->Fe block reproduces the lumped FWM scale 3*C_F^2.
+    F'=2,3. Drive and spontaneous emission use the same signed C_q values.
+    The separate Ultra diagnostic projects their strengths onto the reduced
+    FWM normalization.
     """
     gamma = constants.GAMMA if gamma is None else gamma
     gamma_gg = constants.GAMMA_GG if gamma_gg is None else gamma_gg
 
-    ground_F = excited_F = (2, 3)
-    sub_g, sub_e = species.sublevels(ground_F), species.sublevels(excited_F)
-    labels = ([f"gF{F}m{m:+d}" for F, m in sub_g]
-              + [f"eF{F}m{m:+d}" for F, m in sub_e])
-    level_F = [F for F, _ in sub_g + sub_e]
-    level_m = [m for _, m in sub_g + sub_e]
-    ground = list(range(len(sub_g)))
-    excited = list(range(len(sub_g), len(labels)))
-
+    structure = species.level_structure("Rb85", "D1")
+    sub_g, sub_e = structure.ground, structure.excited
+    labels = tuple(f"gF{F}m{m:+d}" for F, m in sub_g) + tuple(f"eF{F}m{m:+d}" for F, m in sub_e)
+    ng = len(sub_g)
     n = len(labels)
-    couplings = {-1: [], 0: [], +1: []}
-    block_sum = {}
-    for Fg in ground_F:
-        for Fe in excited_F:
-            raw = []
-            for gi in ground:
-                if level_F[gi] != Fg:
-                    continue
-                for ei in excited:
-                    if level_F[ei] != Fe:
-                        continue
-                    q = level_m[ei] - level_m[gi]
-                    if q not in (-1, 0, 1):
-                        continue
-                    cg = clebsch_gordan(Fg, level_m[gi], 1, q, Fe, level_m[ei])
-                    if abs(cg) > 1e-14:
-                        raw.append((q, gi, ei, cg))
-            sum_cg2 = sum(abs(cg) ** 2 for _, _, _, cg in raw)
-            target = 3.0 * hyperfine.CF2[(Fg, Fe)]
-            scale = math.sqrt(target * (2 * Fg + 1) / max(sum_cg2, 1e-30))
-            for q, gi, ei, cg in raw:
-                couplings[q].append((gi, ei, scale * cg))
-            avg = sum(abs(scale * cg) ** 2 for _, _, _, cg in raw) / (2 * Fg + 1)
-            block_sum[(Fg, Fe)] = avg
+    ground = tuple(range(ng))
+    excited = tuple(range(ng, n))
 
-    emission = {q: np.zeros((n, n), dtype=complex) for q in (-1, 0, 1)}
-    for Fe in excited_F:
-        weights = {Fg: hyperfine.CF2[(Fg, Fe)] for Fg in ground_F}
-        total_w = sum(weights.values())
-        for ei in excited:
-            if level_F[ei] != Fe:
+    couplings = {q: [] for q in structure.dipoles}
+    strengths = {pair: [] for pair in hyperfine.CF2}
+    for Fg, Fe in strengths:
+        for gi, (fg, mg) in enumerate(sub_g):
+            if fg != Fg:
                 continue
-            for Fg in ground_F:
-                branch = weights[Fg] / total_w
-                raw = []
-                for gi in ground:
-                    if level_F[gi] != Fg:
-                        continue
-                    q = level_m[ei] - level_m[gi]
-                    if q not in (-1, 0, 1):
-                        continue
-                    cg = clebsch_gordan(Fg, level_m[gi], 1, q, Fe, level_m[ei])
-                    if abs(cg) > 1e-14:
-                        raw.append((q, gi, cg))
-                norm = sum(abs(cg) ** 2 for _, _, cg in raw)
-                amp_scale = math.sqrt(gamma * branch / max(norm, 1e-30))
-                for q, gi, cg in raw:
-                    emission[q][gi, ei] = amp_scale * cg
+            for ei, (fe, me) in enumerate(sub_e):
+                q = me - mg
+                if fe == Fe and q in structure.dipoles:
+                    c = float(structure.dipoles[q][gi, ei])
+                    if c:
+                        couplings[q].append((gi, ng + ei, c))
+                        strengths[(Fg, Fe)].append(c**2)
+    # Comparing the sum over sublevels and polarizations divided by three
+    # against 3*C_F^2 checks the reduced convention without rescaling a drive.
+    block_sum = {pair: math.fsum(values)/3.0 for pair, values in strengths.items()}
+
+    emission = []
+    sqrt_gamma = math.sqrt(gamma)
+    for dipole in structure.dipoles.values():
+        jump = np.zeros((n, n), dtype=complex)
+        jump[:ng, ng:] = sqrt_gamma * dipole
+        emission.append(jump)
 
     dephasing = tuple((i, j, gamma_gg) for i in ground for j in ground if i != j)
     atom = AtomModel(
         name="rb85_d1_double_lambda_zeeman",
         n_levels=n,
-        labels=tuple(labels),
-        ground=tuple(ground),
-        excited=tuple(excited),
+        labels=labels,
+        ground=ground,
+        excited=excited,
         decay=(),
         dephasing=dephasing,
-        doppler_levels=tuple(excited),
-        emission_ops=tuple(emission[q] for q in (-1, 0, 1)),
+        doppler_levels=excited,
+        emission_ops=tuple(emission),
     )
-    atom.level_F = np.array(level_F, dtype=int)
-    atom.level_m = np.array(level_m, dtype=float)
+    atom.level_F = np.array([F for F, _ in sub_g + sub_e], dtype=int)
+    atom.level_m = np.array([m for _, m in sub_g + sub_e], dtype=float)
     atom.couplings = couplings
     atom.lumped_strengths = block_sum
     ratios = [

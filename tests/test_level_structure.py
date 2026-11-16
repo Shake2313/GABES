@@ -122,24 +122,18 @@ def test_double_lambda_is_the_rb85_d1_manifold_with_the_legacy_gamma():
         assert math.isclose(a / b, legacy, rel_tol=1e-14)
 
 
-def test_rb85_zeeman_manifold_is_the_dipoles_in_an_excited_f2_gauge():
-    # Emission is √Γ·C_q; the drive is block-fitted to 3·C_F² per ground
-    # sublevel, |c/C_q|² = (2Fg+1)/3, not the Wigner-Eckart amplitude. The
-    # F'=2 states carry the opposite phase, which changes no observable.
+def test_rb85_zeeman_manifold_drives_and_emits_with_shared_signed_dipoles():
     z = zeeman.rb85_d1_double_lambda_zeeman()
     s = species.level_structure("Rb85", "D1")
     ng = len(s.ground)
     assert [(int(f), int(m)) for f, m in zip(z.level_F, z.level_m)] == list(s.ground + s.excited)
-    gauge = np.array([-1.0 if f == 2 else 1.0 for f, _ in s.excited])
     for qi, q in enumerate((-1, 0, 1)):
-        expected = math.sqrt(constants.GAMMA) * s.dipoles[q] * gauge
-        np.testing.assert_allclose(z.emission_ops[qi][:ng, ng:], expected,
-                                   rtol=1e-14, atol=1e-15)
-        assert len(z.couplings[q]) == np.count_nonzero(s.dipoles[q])
+        expected = math.sqrt(constants.GAMMA) * s.dipoles[q]
+        np.testing.assert_array_equal(z.emission_ops[qi][:ng, ng:], expected)
+        drive = np.zeros_like(s.dipoles[q])
         for g, e, c in z.couplings[q]:
-            fg = s.ground[g][0]
-            d = s.dipoles[q][g, e - ng] * gauge[e - ng]
-            assert math.isclose(c, math.sqrt((2 * fg + 1) / 3) * d, rel_tol=1e-14)
+            drive[g, e-ng] = c
+        np.testing.assert_array_equal(drive, s.dipoles[q])
 
 
 @pytest.mark.parametrize("fg, fe", [(1, 1), (1, 2), (2, 1), (2, 2)])
