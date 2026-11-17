@@ -65,13 +65,13 @@ HISTORICAL_VELOCITY_GRID = (3.0, 3.0)
 
 def deepest_point(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP,
                   P_pump=P_PUMP, P_seed=P_SEED, ls=LINE_STRENGTH,
-                  vcut=VELOCITY_CUTOFF):
+                  vcut=VELOCITY_CUTOFF, *, historical_replay=False):
     """Return gains at the minimum η=1 mean-field diagnostic on the (-) branch."""
     center = fwm.branch_center_GHz(D_GHz, BRANCH)
     with blas_single_thread():
         spec = fwm.compute_spectrum(
             D_GHz, T=T_K, P_pump=P_pump, P_probe=P_seed,
-            line_strength=ls, loss_frac=0.0, qe=QE,
+            line_strength=ls, loss_frac=0.0, qe=QE if historical_replay else 1.0,
             coarse_points=coarse, fine_points=0,
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
             velocity_step=vstep, velocity_cutoff=vcut,
@@ -79,7 +79,8 @@ def deepest_point(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP,
             response_method=RESPONSE_METHOD)
     Gs, Gc = spec["G_s"], spec["G_c"]
     # The η=1 diagnostic selects one operating point on the δ axis.
-    s_ideal_dB = ob.intensity_difference_squeezing_dB(Gs, Gc, 1.0)
+    s_ideal_dB = (ob.intensity_difference_squeezing_dB(Gs, Gc, 1.0)
+                  if historical_replay else spec["gain_referred_noise_dB"])
     i = int(np.nanargmin(s_ideal_dB))
     n = Gs.size
     return dict(
@@ -92,7 +93,7 @@ def deepest_point(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP,
     )
 
 
-def run_grid(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
+def run_grid(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF, *, historical_replay=False):
     jobs = [(iD, iT, float(D), float(T) + 273.15)
             for iD, D in enumerate(DELTA_GHZ)
             for iT, T in enumerate(TEMP_C)]
@@ -107,7 +108,8 @@ def run_grid(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     workers = min(os.cpu_count() or 1, 8)
     print(f"  {len(jobs)} points on {workers} workers ...", flush=True)
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(deepest_point, D, T, vstep=vstep, vcut=vcut): (iD, iT)
+        futs = {ex.submit(deepest_point, D, T, vstep=vstep, vcut=vcut,
+                          historical_replay=historical_replay): (iD, iT)
                 for (iD, iT, D, T) in jobs}
         done = 0
         for fut in as_completed(futs):
@@ -158,7 +160,7 @@ def report_eta(name, eta, Gs, Gc, Dlt):
     return S
 
 
-def cap_sweep(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
+def cap_sweep(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF, *, historical_replay=False):
     """Minimum η=1 gain diagnostic versus the pump-depletion ceiling.
 
     cap = 1 + P_pump/(2 P_seed). Pushed to a high T so the small-signal gain
@@ -186,7 +188,8 @@ def cap_sweep(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     rows = []
     for P_pump, P_seed in combos:
         r = deepest_point(2.0, 180.0 + 273.15, coarse=161, vstep=vstep, vcut=vcut,
-                          P_pump=P_pump, P_seed=P_seed)
+                          P_pump=P_pump, P_seed=P_seed,
+                          historical_replay=historical_replay)
         cap = 1.0 + P_pump / (2.0 * P_seed)
         gap = r["G_s"] - r["G_c"]
         pred = 10.0 * np.log10(1.0 / (2.0 * r["G_s"] - 1.0))
@@ -201,16 +204,16 @@ def cap_sweep(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--historical-velocity-grid", action="store_true",
-                    help="use the velocity grid from the historical report")
+    ap.add_argument("--historical-replay", "--historical-velocity-grid", action="store_true",
+                    help="use the sampled velocity grid from the historical report")
     args = ap.parse_args()
-    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_replay
                    else (VELOCITY_STEP, VELOCITY_CUTOFF))
     run = start_run("squeezing/theory_max", config=dict(
         delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta_qe=ETA_QE, eta_ref=ETA_REF,
         coarse_points=COARSE_POINTS, velocity_step=vstep, velocity_cutoff=vcut,
         velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
-        historical_velocity_grid=args.historical_velocity_grid))
+        historical_replay=args.historical_replay))
     print("Gain-derived mean-field diagnostic search (loss = 0)")
     print(f"  QE = {QE}, asymptote(η=QE) = {floor_dB(ETA_QE):.3f} dB")
     print(f"  grid: {DELTA_GHZ.size} one-photon detunings Δ "
@@ -221,7 +224,7 @@ def main():
     print(f"  δ window ±{WINDOW_GHZ} GHz, coarse={COARSE_POINTS}, "
           f"Maxwell measure={measure}, velocity_step={vstep} m/s, cutoff={vcut} sigma\n")
 
-    Sid, Gs, Gc, Dlt, Edge = run_grid(vstep, vcut)
+    Sid, Gs, Gc, Dlt, Edge = run_grid(vstep, vcut, historical_replay=args.historical_replay)
 
     print(f"\n[edge check] deepest-δ hit scan-window edge at "
           f"{int(Edge.sum())}/{Edge.size} points "
@@ -238,7 +241,7 @@ def main():
     print(f"    G_s = {Gs[iD,iT]:.3e} (cap-limited); "
           "the η=1 diagnostic follows 1/(2G-1) and is bounded by the gain ceiling.")
 
-    rows = cap_sweep(vstep, vcut)
+    rows = cap_sweep(vstep, vcut, historical_replay=args.historical_replay)
 
     out = run.dir
     np.savez(out / "squeezing_theory_max.npz",

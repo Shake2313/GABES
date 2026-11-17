@@ -65,11 +65,10 @@ The work is done by the bundled script. From the repo root:
 python .claude/skills/fwm-squeezing-frontier/scripts/scan_squeezing_frontier.py
 ```
 
-Default grid (Δ −3.5…3.0 GHz, T 60…150 °C, coarse=81, vstep=5, window ±0.7 GHz)
-at **Ultra** fidelity finishes in a few minutes on 8 cores (numba-accelerated; the
-per-point 64-segment / 3-iteration cost is modest). The wide OPD range is
-**required** — the frontier minimum sits at negative Δ, outside the old [−0.5, 3.0]
-window. Useful flags:
+The default grid covers OPD -3.5 to +3.0 GHz and 60 to 150 °C, with 81
+two-photon detuning points in a window of ±0.7 GHz. It uses Floquet order
+N_F=3, the exact Maxwell pole average, and the engine's gain-referred noise
+readout. Keep the negative OPD region when searching for the minimum.
 
 - `--fidelity legacy|balanced|fine|ultra` — engine fidelity (default **ultra** =
   full propagation model). `legacy` is the fast ideal model for a quick map.
@@ -77,11 +76,15 @@ window. Useful flags:
   the script also reports a 0.05/0.1/0.2 sensitivity sweep.
 - `--metric temp|gain` — cost minimised on the frontier (default `temp`).
 - `--loss 0` — lossless detection (η = QE); moves the detection floor to −10.2 dB
-  (in-cell loss still applies under Ultra).
+  (propagation loss still affects the Ultra gains).
 - `--opd-min/--opd-max/--opd-step`, `--t-min/--t-max/--t-step` — widen/refine
   (e.g. `--t-step 2.5` to pin the min-T more finely). Widen if the VERDICT is
   `CHECK` (grid optimum on a boundary).
-- `--coarse N --vstep V --vcut S` — higher δ / velocity-class precision.
+- `--historical-replay` restores the sampled 5 m/s, ±3σ grid and
+  historical loss remap. Use the archived engine revision for a dated result.
+- `--coarse N` controls the two-photon detuning resolution.
+  `--vstep V --vcut S` override the velocity grid. Nondefault grid settings
+  select a sampled Maxwell average.
 - `--window G` — half-width of the δ scan window in GHz (default 0.7; raise it if
   the verdict says the optimum was reached only at δ-edge-limited points).
 - `--out DIR` sets the output folder. The default is a new folder at
@@ -94,10 +97,9 @@ block to the user, and surface the saved `squeezing_frontier.png` (heatmap +
 frontier overlay + optimum, the cost-vs-Δ curve, and the ξ-vs-T slice showing the
 true minimum vs the detection floor).
 
-The frontier retains the scanner's historical loss remap. In the Ultra remap,
-the arm optical depths also scale the effective detection efficiencies and pump
-scatter is added in detected noise units. Current FWM spectrum readouts report
-the arm optical depths separately and apply source-referred scatter.
+At the default, the engine applies source-referred scatter and reports arm
+optical depths as diagnostics. Historical replay attenuates the effective
+arm efficiencies using those ODs and adds scatter in detected noise units.
 
 ## Fidelity — defaults to Ultra (the full model)
 `--fidelity` maps onto `compute_spectrum`'s `phase_detail` / `model_fidelity`. The
@@ -105,24 +107,19 @@ default is **ultra** — the complete propagation physics this engine can model:
 
 | Ultra element | Effect on the frontier |
 |---|---|
-| **In-cell propagation loss** `1−e^(−OD)` (segmented absorption) | **Dominant.** Raises the achievable floor from `1−η` to `~1−η·e^(−OD)` (T/Δ-dependent) → the detection floor is no longer reachable and ξ(T) gains a true minimum. |
+| In-cell propagation loss | Changes the gains through the diagonal Maxwell response. |
 | Self-consistent Δk_z phase mismatch (3 iters) | Reshapes gain vs Δ → shifts Δ*. |
 | 64-segment propagation + dynamic per-segment pump depletion | More physical gain than the bulk Manley-Rowe cap. |
 | Gaussian beam-overlap profile | Reduces effective gain (≈1.0 at the reference geometry). |
 | Zeeman `lumped_strength_correction` (24-level CG diagnostic) | Rescales coupling (≈1.0 at the reference point). |
-| Technical-noise channels (seed-excess / pump-scatter / EOM) | Plumbed but `0.0` in the current Ultra call. |
+| Pump scatter | Adds source-referred noise in the default Ultra readout. |
 | **Density/T-dependent collisional decoherence** (`fwm.collisional_atom`, applied inside `compute_spectrum`'s χ̄ solve at **every** fidelity, not just Ultra) | Rb self-broadening of the optical coherence + ground-Raman collisions grow with T; best achievable squeezing now peaks near 121-131 °C and **worsens** at higher T instead of improving monotonically with density — an additional, physical high-T penalty on top of the in-cell-loss one. |
 
-**Why it changes the answer** (legacy vs ultra at one point, Δ −1.1 GHz, T 95 °C):
-legacy ξ = **−7.16 dB** but ultra ξ = **−4.28 dB** — a ≈2.9 dB gap, dominated by
-in-cell loss (OD ≈ 0.30 → ≈26 % loss). So the ultra frontier is the *real*
-operating point, while a legacy scan understates the loss penalty. The
-detection-floor guardrail still holds (ultra `S` only ever sits **above** `1−η`).
-
-**Solve-once is preserved.** The deepest-δ argmin is η-independent (in-cell loss
-`tau = e^(−OD)` is one scalar per (Δ, T) spectrum, so `S` is monotone in `S_ideal`
-along δ). The script captures `(G_s, G_c, OD)` at that δ and reconstructs ξ for any
-η from the segmented-loss formula — so `--loss`/`--eps` variations need no re-solve.
+The scan solves each (OPD, T) point once and uses the engine noise to select
+the best trusted two-photon detuning at the requested efficiency. The
+QE-only comparison uses the same selected coordinate. Changing `--loss`
+or `--qe` can change the selected coordinate, so rerun the scan for a new
+efficiency. An eps sweep reuses the same noise map.
 
 Use `--fidelity legacy` for a fast ideal map (e.g. to locate the gain knee or sanity
 -check the guardrail); the deepest-fidelity research answer is the default ultra run.
@@ -137,15 +134,9 @@ reference law), so the legacy gain knee is
 `G_knee = (1/S_ideal_thr + 1)/2`, `S_ideal_thr = (1−η)/η·(10^(eps/10)−1)`
 (printed as a reference).
 
-Under **Ultra**, in-cell transmission `tau = e^(−OD)` degrades the twin beams
-*inside* the cell before detection: `S = η·[tau·S_ideal + (1−tau)] + (1−η)`. The
-achievable floor rises to `~1−η·e^(−OD)`; OD grows with T, so high-T points become
-loss-limited while low-T points stay gain-limited. The engine's escape is
-**detuning**: at large |Δ| the seed sits far off-resonance, OD→0, and the full
-detection floor is recovered — so the Ultra optimum migrates to larger |Δ| (modest
-T) rather than the legacy small-|Δ| knee. The deepest-δ argmin is η-independent (one
-`tau` per spectrum), so the grid is solved **once** and any η/eps follows from the
-captured `(G_s, G_c, OD)`.
+In historical replay the Ultra remap also reduces the effective detection
+efficiencies using the segment and arm ODs. This differs from the default
+engine readout, which already incorporates propagation loss in the gains.
 
 Read the verdict this way:
 - **EFFICIENT**: a trustworthy interior point reaches within `eps` of `ξ_opt` at
@@ -174,10 +165,6 @@ Read the verdict this way:
   calibration.
 - **One Raman branch only.** Do not sum susceptibilities across branches — the
   engine rejects it. The δ scan on the `−1` branch already gives the unique dip.
-- **η is a post-process**, not a re-solve. The grid is solved once; ξ for any
-  η/loss/eps follows from the captured `(G_s, G_c, in-cell OD)` via the
-  segmented-loss formula — even under Ultra, because the deepest-δ argmin is
-  η-independent (one `tau = e^(−OD)` per spectrum).
 - **δ-window edge points are excluded from the frontier.** At low T / low gain
   (exactly where the frontier lives) the deepest-δ can fall outside the window;
   such points have untrustworthy gains and are dropped from candidacy (and
@@ -205,32 +192,34 @@ Read the verdict this way:
   near `G_s≈G_c`, so it happened not to produce this artifact; the corrected
   formula does, so don't remove the gate when re-deriving the physics again.
 
-## Sanity expectations (current code, default = Ultra)
+## Historical headline results
+These values come from the sampled velocity grid and historical loss remap.
+
 > Full-fidelity numbers (`fwm.physical_coupling_norm` = p_F/[2(2I+1)] + pure-85Rb
 > CRC density; density/T-dependent collisional decoherence via
 > `fwm.collisional_atom`; corrected ideal noise `S_ideal=(G_s−G_c)²/(G_s+G_c)`;
-> Ultra propagation incl. in-cell loss; twin-beam gap gate applied). Headline:
-> in-cell loss pushes the optimum to LARGER |Δ| (where OD→0), not a small-|Δ| knee.
-- **Default Ultra run** (η = QE·(1−loss) = 0.92·0.945 = **0.8694**, `eps=0.1`, full
+> Ultra propagation incl. in-cell loss; twin-beam gap gate applied).
+> The historical optimum lies farther from resonance, where the OD is lower.
+- **Historical Ultra run** (η = QE·(1−loss) = 0.92·0.945 = **0.8694**, `eps=0.1`, full
   grid ~110 s on 16 cores): best achievable ξ_opt ≈ **−8.834 dB** (0.006 dB above
   the detection floor, at Δ ≈ **−2.2 GHz**, T ≈ **135 °C**, `G_s ≈ 636`, in-cell
   OD ≈ 0). Efficient frontier ≈ **Δ −2.1 GHz, T 125 °C, G_s ≈ 54**, in-cell OD ≈ 0,
   ξ ≈ **−8.77 dB** (gap +0.07), VERDICT `EFFICIENT`, 0 below floor, 0 δ-edge/gap
   exclusions. eps sweep: (Δ −2.1 GHz, T 135 °C, `G_s≈159`) at `eps=0.05`;
   (Δ −2.0 GHz, T 120 °C, `G_s≈27`) at `eps=0.2`.
-- **Why Ultra ≠ legacy** (illustrative point Δ −1.1 GHz, T 95 °C): legacy
+- **Historical Ultra and legacy comparison** (illustrative point Δ −1.1 GHz, T 95 °C): legacy
   ξ ≈ **−7.16 dB**, `G_s≈11.2`, but ultra ξ ≈ **−4.28 dB**, `G_s≈7.9` — in-cell
   OD ≈ 0.30 (≈26 % loss) degrades the twin beams inside the cell. Detuning to
   ≈ −2.1 GHz trades a little T/gain to drop OD toward 0 and recover near the
   floor. Surfacing that trade-off is the whole point of scanning at full fidelity.
 - Detection floor `10·log10(1−η)` ≈ **−8.841 dB**; lossless detection (`--loss 0`,
   η=QE=0.92) ≈ **−10.97 dB** (in-cell loss still applies under Ultra).
-- A `--fidelity legacy` run on the default grid finds `ξ_opt` on a **grid boundary**
+- A `--historical-replay --fidelity legacy` run on the same grid finds `ξ_opt` on a **grid boundary**
   (VERDICT `CHECK` — 43/1254 points sit within 0.01 dB of it, a broad plateau at
   the floor as expected for the lossless model); its `eps=0.1` frontier lands near
   Δ −2.1 GHz, T 120 °C, `G_s≈64` — widen `--t-max` to pin the true interior optimum
   if you need one.
-If the numbers are wildly off (VERDICT `FAIL`, or `CHECK` with the optimum pinned at
+In historical replay, if the numbers are wildly off (VERDICT `FAIL`, or `CHECK` with the optimum pinned at
 a grid edge, or a nonzero twin-beam-gap-gate exclusion count that swallows most of
 the grid), suspect code drift / too-narrow a grid / a broken ideal-noise formula
 and re-check `load_reference`, the `--t-*`/`--opd-*` ranges, and `GAP_MIN`/`GAP_MAX`

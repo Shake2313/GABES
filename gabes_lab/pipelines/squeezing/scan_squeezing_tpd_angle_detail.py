@@ -11,7 +11,7 @@ import threading
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -22,6 +22,9 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 import numpy as np
 
 from gabes_lab.blocks.runner import start_run  # noqa: E402
+from gabes_lab.pipelines.squeezing._velocity_measure import (
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 
 from gabes.core import blas_single_thread  # noqa: E402
 from gabes.schemes import fwm  # noqa: E402
@@ -33,8 +36,7 @@ LINE_STRENGTH = 0.74
 BRANCH = -1
 QE = 1.0
 LOSS = 0.0
-VELOCITY_STEP = 1.0          # converged truncated Maxwell grid (m/s, 4 sigma)
-VELOCITY_CUTOFF = 4.0
+VELOCITY_STEP, VELOCITY_CUTOFF = CONVERGED_VELOCITY_GRID
 HISTORICAL_VELOCITY_GRID = (4.0, 3.0)
 GAP_MIN = 0.5
 GAP_MAX = 1.5
@@ -51,6 +53,7 @@ class ScanConfig:
     reference_temperature_c: float
     velocity_step: float = VELOCITY_STEP
     velocity_cutoff: float = VELOCITY_CUTOFF
+    historical_replay: bool = False
 
 
 _TABLE_STATE = threading.local()
@@ -85,6 +88,7 @@ def _compute_one(config: ScanConfig, i_delta: int, i_temp: int, i_angle: int) ->
     scan_min = center + float(config.two_photon_axis_mhz[0]) * 1e-3
     scan_max = center + float(config.two_photon_axis_mhz[-1]) * 1e-3
 
+    method = fwm.RESPONSE_GRID if config.historical_replay else fwm.RESPONSE_POLE
     spec = fwm.compute_spectrum(
         delta_ghz,
         T=temperature_c + 273.15,
@@ -99,6 +103,8 @@ def _compute_one(config: ScanConfig, i_delta: int, i_temp: int, i_angle: int) ->
         scan_max=scan_max,
         velocity_step=config.velocity_step,
         velocity_cutoff=config.velocity_cutoff,
+        velocity_measure=velocity_measure(method, config.velocity_step, config.velocity_cutoff),
+        response_method=method,
         branch=BRANCH,
         phase_detail=fwm.PHASE_ULTRA,
         pump_probe_angle_deg=angle,
@@ -115,7 +121,7 @@ def _compute_one(config: ScanConfig, i_delta: int, i_temp: int, i_angle: int) ->
         "i_delta": i_delta,
         "i_temp": i_temp,
         "i_angle": i_angle,
-        "xi": np.asarray(spec["S_dB"], dtype=float),
+        "xi": np.asarray(spec["gain_referred_noise_dB"], dtype=float),
         "Gs": np.asarray(spec["G_s"], dtype=float),
         "Gc": np.asarray(spec["G_c"], dtype=float),
         "delta_k_z": np.asarray(spec["delta_k_z"], dtype=float),
@@ -261,7 +267,8 @@ def _plot(config: ScanConfig, xi, trusted, summary_rows, path: Path) -> None:
 def run(config: ScanConfig, out: str | Path | None = None) -> Path:
     record = start_run(f"squeezing/tpd_angle_detail/{config.version}", out=out,
                        config=dict(velocity_step=config.velocity_step,
-                                   velocity_cutoff=config.velocity_cutoff))
+                                   velocity_cutoff=config.velocity_cutoff,
+                                   historical_replay=config.historical_replay))
     shape4 = (config.delta_axis_ghz.size, config.temperature_axis_c.size,
               config.angle_axis_deg.size, config.two_photon_axis_mhz.size)
     shape3 = shape4[:3]
@@ -288,7 +295,8 @@ def run(config: ScanConfig, out: str | Path | None = None) -> Path:
           f"{shape4[2]} angle propagations per group")
 
     started = time.time()
-    with (_reuse_atomic_tables(), blas_single_thread(),
+    table_cache = _reuse_atomic_tables() if config.historical_replay else nullcontext()
+    with (table_cache, blas_single_thread(),
           ThreadPoolExecutor(max_workers=workers) as executor):
         futures = {executor.submit(_compute_delta_temperature, config, *job): job
                    for job in jobs}
@@ -389,10 +397,10 @@ def run(config: ScanConfig, out: str | Path | None = None) -> Path:
 
 def main(config: ScanConfig) -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--historical-velocity-grid", action="store_true",
-                    help="use the velocity grid from the historical report")
+    ap.add_argument("--historical-replay", "--historical-velocity-grid", action="store_true",
+                    help="replay the historical grid solver and sampled velocity grid")
     args = ap.parse_args()
-    if args.historical_velocity_grid:
+    if args.historical_replay:
         vstep, vcut = HISTORICAL_VELOCITY_GRID
-        config = replace(config, velocity_step=vstep, velocity_cutoff=vcut)
+        config = replace(config, velocity_step=vstep, velocity_cutoff=vcut, historical_replay=True)
     run(config)

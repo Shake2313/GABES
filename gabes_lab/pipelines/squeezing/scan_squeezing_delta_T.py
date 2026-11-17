@@ -21,11 +21,13 @@ efficiency η = QE·(1-loss) does, because it sets the detection-loss asymptote
     S_floor(dB) = 10·log10(1 - η).
 
 Density-dependent collisional decoherence (optical Rb self-broadening + ground
-Raman collisions) makes χ̄ temperature-dependent, so the scan rebuilds the χ̄
-table per temperature (`fwm.collisional_atom`); squeezing now peaks near
-121-131 °C and worsens at higher T rather than tracking the density monotonically.
+Raman collisions) makes the susceptibility temperature-dependent. The
+historical replay rebuilds its susceptibility table once per temperature.
 
     python -m gabes_lab.pipelines.squeezing.scan_squeezing_delta_T
+
+Use --historical-replay to reuse the recorded order-one temperature tables
+and sampled velocity grids. New maps use the engine spectrum at every point.
 
 Outputs (squeezing_map.npz, .png) go to a new run folder under
 runs/squeezing/delta_T/ with its run.json record.
@@ -33,6 +35,7 @@ runs/squeezing/delta_T/ with its run.json record.
 import argparse
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 os.environ.setdefault("OMP_NUM_THREADS", str(os.cpu_count() or 1))
 
@@ -98,7 +101,7 @@ def best_squeezing(D_GHz, T_K, coarse=COARSE_POINTS, vstep=VELOCITY_STEP,
             velocity_step=vstep, velocity_cutoff=vcut,
             velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut), branch=BRANCH,
             response_method=RESPONSE_METHOD)
-    S = spec["S_dB"]
+    S = spec["gain_referred_noise_dB"]
     i = int(np.nanargmin(S))
     delta_mhz = (spec["probe_axis_GHz"][i] - center) * 1e3
     return dict(
@@ -191,7 +194,7 @@ def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
     )
 
 
-def run_grid(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
+def _historical_grid(vstep, vcut):
     nD, nT = DELTA_GHZ.size, TEMP_C.size
     Xi = np.full((nD, nT), np.nan)
     Gs = np.full((nD, nT), np.nan)
@@ -224,27 +227,56 @@ def run_grid(vstep=VELOCITY_STEP, vcut=VELOCITY_CUTOFF):
     return Xi, Gs, Gc, Dlt
 
 
+def run_grid(vstep=None, vcut=None, *, historical_replay=False):
+    """Return noise, gains, and best detuning on the scanner grid."""
+    grid = HISTORICAL_VELOCITY_GRID if historical_replay else CONVERGED_VELOCITY_GRID
+    vstep = grid[0] if vstep is None else vstep
+    vcut = grid[1] if vcut is None else vcut
+    if historical_replay:
+        return _historical_grid(vstep, vcut)
+
+    shape = DELTA_GHZ.size, TEMP_C.size
+    xi, gs, gc, delta_mhz = (np.empty(shape) for _ in range(4))
+    workers = min(os.cpu_count() or 1, 8)
+    print(f"engine spectra: {delta_mhz.size} points on {workers} workers", flush=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(best_squeezing, float(d), float(t) + 273.15,
+                        coarse=COARSE_POINTS, vstep=vstep, vcut=vcut): (i, j)
+            for i, d in enumerate(DELTA_GHZ) for j, t in enumerate(TEMP_C)
+        }
+        for future in as_completed(futures):
+            i, j = futures[future]
+            result = future.result()
+            xi[i, j] = result["S_dB"]
+            gs[i, j] = result["G_s"]
+            gc[i, j] = result["G_c"]
+            delta_mhz[i, j] = result["delta_mhz"]
+    return xi, gs, gc, delta_mhz
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--historical-velocity-grid", action="store_true",
-                    help="use the velocity grid from the historical report")
+    ap.add_argument("--historical-replay", "--historical-velocity-grid", action="store_true",
+                    help="replay the order-one map and sampled velocity grids")
     args = ap.parse_args()
-    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
-                   else (VELOCITY_STEP, VELOCITY_CUTOFF))
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_replay
+                   else CONVERGED_VELOCITY_GRID)
     sim_vstep, sim_vcut = (HISTORICAL_SIM_VELOCITY_GRID
-                           if args.historical_velocity_grid else (vstep, vcut))
+                         if args.historical_replay else (vstep, vcut))
     run = start_run("squeezing/delta_T", config=dict(
         delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta=ETA,
         coarse_points=COARSE_POINTS, velocity_step=vstep, velocity_cutoff=vcut,
         velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         sim_velocity_step=sim_vstep, sim_velocity_cutoff=sim_vcut,
-        historical_velocity_grid=args.historical_velocity_grid))
+        historical_replay=args.historical_replay,
+        map_floquet_order=1 if args.historical_replay else fwm.SEEDED_FLOQUET_ORDER))
     print(f"eta = QE*(1-loss) = {QE:.4f}*(1-{LOSS_FRAC}) = {ETA:.5f}")
     print(f"detection-loss asymptote 10log10(1-eta) = {S_FLOOR_DB:.4f} dB")
     print(f"grid: {DELTA_GHZ.size} one-photon detunings Δ x {TEMP_C.size} T = "
           f"{DELTA_GHZ.size*TEMP_C.size} points\n")
 
-    Xi, Gs, Gc, Dlt = run_grid(vstep, vcut)
+    Xi, Gs, Gc, Dlt = run_grid(vstep, vcut, historical_replay=args.historical_replay)
 
     # Global maximum squeezing (most negative S_dB).
     flat = int(np.nanargmin(Xi))

@@ -100,6 +100,9 @@ from gabes.core import blas_single_thread             # noqa: E402
 from gabes import observables                         # noqa: E402
 from gabes_lab.blocks.figures import save_figure      # noqa: E402
 from gabes_lab.blocks.runner import start_run         # noqa: E402
+from gabes_lab.pipelines.squeezing._velocity_measure import (  # noqa: E402
+    CONVERGED_VELOCITY_GRID, velocity_measure,
+)
 
 # Fidelity label -> compute_spectrum kwargs. `legacy` passes nothing (defaults to
 # phase_detail=legacy). The others switch on the matching propagation refinements;
@@ -110,6 +113,9 @@ FIDELITY_KW = {
     "fine":     dict(phase_detail=fwm.PHASE_FINE,     model_fidelity=fwm.FIDELITY_BALANCED),
     "ultra":    dict(phase_detail=fwm.PHASE_ULTRA,    model_fidelity=fwm.FIDELITY_ULTRA),
 }
+
+
+HISTORICAL_VELOCITY_GRID = (5.0, 3.0)
 
 
 def load_reference():
@@ -151,32 +157,30 @@ GAP_MAX = 1.5
 
 
 def best_squeezing(D_GHz, T_K, ref, window, coarse, vstep, vcut, branch, fid_kw,
-                   excess_noise=None):
-    """Deepest squeezing over the δ scan on one branch, at the chosen fidelity.
+                   excess_noise=None, *, qe=None, historical_replay=False):
+    """Deepest gain-derived noise over the δ scan on one branch, at the chosen fidelity.
 
     Returns the gains, the in-cell propagation OD and the δ at the deepest point.
     The argmin is restricted to δ points passing the [GAP_MIN, GAP_MAX] twin-beam
-    validity gate (`gap_bad=True` if none in the window do, in which case the
-    unrestricted argmin is reported anyway for diagnostics but the point should
-    be excluded from frontier/optimum candidacy by the caller). The argmin is
-    otherwise η-independent (one tau_cell per spectrum), so the captured
-    (G_s, G_c, seg_od) reconstruct ξ for any η downstream.
-
-    `excess_noise` (None → legacy gap-only S_dB; else the hardened model, Ultra
-    only) makes `spec["S_dB"]` the hardened metric, so the argmin already lands on
-    the hardened-deepest δ; the conjugate arm OD at that δ and the (scalar) pump
-    scatter are captured so `squeezing_map` can reconstruct ξ(η) downstream.
+    validity gate (`gap_bad=True` if none in the window pass). The engine's
+    gain-referred noise is evaluated at the configured detection efficiency.
+    Historical replay captures the selected point for the original loss remap.
     """
     center = fwm.branch_center_GHz(D_GHz, branch)
+    solver = {}
+    if not historical_replay:
+        solver = dict(response_method=fwm.RESPONSE_POLE,
+                      velocity_measure=velocity_measure(fwm.RESPONSE_POLE, vstep, vcut))
+    qe = fwm.QE_DETECTOR if qe is None or historical_replay else qe
     with blas_single_thread():
         spec = fwm.compute_spectrum(
             D_GHz, T=T_K, P_pump=ref["P_pump"], P_probe=ref["P_probe"],
             line_strength=ref["line_strength"], loss_frac=ref["loss_frac"],
-            qe=fwm.QE_DETECTOR, coarse_points=coarse, fine_points=0,
+            qe=qe, coarse_points=coarse, fine_points=0,
             scan_min=center - window, scan_max=center + window,
             velocity_step=vstep, velocity_cutoff=vcut, branch=branch,
-            excess_noise_model=excess_noise, **fid_kw)
-    Gs, Gc, S = spec["G_s"], spec["G_c"], spec["S_dB"]
+            excess_noise_model=excess_noise, **fid_kw, **solver)
+    Gs, Gc, S = spec["G_s"], spec["G_c"], spec["gain_referred_noise_dB"]
     gap = Gs - Gc
     valid = np.isfinite(S) & (gap >= GAP_MIN) & (gap <= GAP_MAX)
     gap_bad = not bool(valid.any())
@@ -188,12 +192,21 @@ def best_squeezing(D_GHz, T_K, ref, window, coarse, vstep, vcut, branch, fid_kw,
     od_conj_i = float(od_conj_arr[i]) if od_conj_arr is not None else 0.0
     od_probe_arr = hn.get("od_probe_lin_arr")
     od_probe_i = float(od_probe_arr[i]) if od_probe_arr is not None else 0.0
-    return dict(G_s=float(Gs[i]), G_c=float(Gc[i]), gap=float(gap[i]),
-                seg_od=float(spec.get("segment_absorption_od", 0.0) or 0.0),
-                od_conj=od_conj_i, od_probe=od_probe_i,
-                pump_scatter=float(hn.get("pump_scatter_noise", 0.0)),
-                delta_mhz=float((spec["probe_axis_GHz"][i] - center) * 1e3),
-                at_edge=bool(i <= 1 or i >= n - 2), gap_bad=gap_bad)
+    result = dict(G_s=float(Gs[i]), G_c=float(Gc[i]), gap=float(gap[i]),
+                  seg_od=float(spec.get("segment_absorption_od", 0.0) or 0.0),
+                  od_conj=od_conj_i, od_probe=od_probe_i,
+                  pump_scatter=float(hn.get("pump_scatter_noise", 0.0)),
+                  delta_mhz=float((spec["probe_axis_GHz"][i] - center) * 1e3),
+                  at_edge=bool(i <= 1 or i >= n - 2), gap_bad=gap_bad)
+    if not historical_replay:
+        result["gain_noise_db"] = float(S[i])
+        if hn:
+            qe_noise = fwm.seeded_balanced_gain_noise_dB(
+                Gs[i], Gc[i], qe, qe, seed_excess_noise=result["pump_scatter"])
+        else:
+            qe_noise = observables.gain_referred_noise_dB(Gs[i], Gc[i], qe)
+        result["gain_noise_qe_db"] = float(qe_noise)
+    return result
 
 
 def squeezing_map(Gs, Gc, OD, eta, od_conj=None, pump_scatter=None, od_probe=None):
@@ -310,8 +323,10 @@ def main():
     ap.add_argument("--line-strength", type=float, default=None,
                     help="override residual line_strength (drift recovery)")
     ap.add_argument("--coarse", type=int, default=81, help="δ scan points")
-    ap.add_argument("--vstep", type=float, default=5.0, help="velocity step m/s")
-    ap.add_argument("--vcut", type=float, default=3.0, help="velocity cutoff sigma")
+    ap.add_argument("--historical-replay", action="store_true",
+                    help="replay the sampled velocity grid and loss remap")
+    ap.add_argument("--vstep", type=float, help="override the velocity step in m/s")
+    ap.add_argument("--vcut", type=float, help="override the velocity cutoff in sigma")
     ap.add_argument("--window", type=float, default=0.7,
                     help="half-width of the δ scan window [GHz] (wide enough to "
                          "capture the low-gain dip on the frontier)")
@@ -324,7 +339,13 @@ def main():
                          "and re-plotted after merging with other chunks.")
     args = ap.parse_args()
 
-    with start_run("squeezing/frontier", out=args.out, config=vars(args)) as run:
+    grid = HISTORICAL_VELOCITY_GRID if args.historical_replay else CONVERGED_VELOCITY_GRID
+    args.vstep = grid[0] if args.vstep is None else args.vstep
+    args.vcut = grid[1] if args.vcut is None else args.vcut
+    method = fwm.RESPONSE_GRID if args.historical_replay else fwm.RESPONSE_POLE
+    config = dict(vars(args), response_method=method,
+                  velocity_measure=velocity_measure(method, args.vstep, args.vcut))
+    with start_run("squeezing/frontier", out=args.out, config=config) as run:
         _run_scan(args, run)
 
 
@@ -357,7 +378,7 @@ def _run_scan(args, run):
     if hardened:
         kap = (args.pump_scatter_kappa if args.pump_scatter_kappa is not None
                else fwm.HARDENED_PUMP_SCATTER_KAPPA)
-        print(f"  Ultra hardened noise ACTIVE (conjugate-arm linear OD + pump "
+        print(f"  Ultra hardened noise ACTIVE (linear OD diagnostics and pump "
               f"scatter, kappa={kap})")
     print(f"eta = QE*(1-loss) = {qe_val}*(1-{ref['loss_frac']}) = {eta:.5f}")
     print(f"detection floor 10log10(1-eta) = {det_floor:.4f} dB  (hard guardrail)")
@@ -372,6 +393,8 @@ def _run_scan(args, run):
           f"vcut={args.vcut}, window=+-{args.window} GHz\n")
 
     nD, nT = D.size, T.size
+    Xi = np.full((nD, nT), np.nan)
+    Xi_qe = np.full((nD, nT), np.nan)
     Gs = np.full((nD, nT), np.nan)
     Gc = np.full((nD, nT), np.nan)
     Gap = np.full((nD, nT), np.nan)
@@ -385,11 +408,13 @@ def _run_scan(args, run):
     jobs = [(iD, iT, float(d), float(t) + 273.15)
             for iD, d in enumerate(D) for iT, t in enumerate(T)]
 
+    print(f"scan convention: {'historical replay' if args.historical_replay else 'engine'}")
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=args.jobs) as ex:
         futs = {ex.submit(best_squeezing, d, t, ref, args.window, args.coarse,
                           args.vstep, args.vcut, args.branch, fid_kw,
-                          excess_noise): (iD, iT)
+                          excess_noise, qe=qe_val,
+                          historical_replay=args.historical_replay): (iD, iT)
                 for (iD, iT, d, t) in jobs}
         done = 0
         for fut in as_completed(futs):
@@ -397,6 +422,9 @@ def _run_scan(args, run):
             r = fut.result()
             Gs[iD, iT], Gc[iD, iT] = r["G_s"], r["G_c"]
             Gap[iD, iT] = r["gap"]
+            if not args.historical_replay:
+                Xi[iD, iT] = r["gain_noise_db"]
+                Xi_qe[iD, iT] = r["gain_noise_qe_db"]
             OD[iD, iT] = r["seg_od"]
             OdConj[iD, iT] = r.get("od_conj", 0.0)
             OdProbe[iD, iT] = r.get("od_probe", 0.0)
@@ -410,13 +438,10 @@ def _run_scan(args, run):
                 print(f"  {done}/{len(jobs)}  ({el:.0f}s, ~{eta_s:.0f}s left)",
                       flush=True)
 
-    od_conj_arg = OdConj if hardened else None
-    od_probe_arg = OdProbe if hardened else None
-    pscat_arg = PumpScatter if hardened else None
-    Xi = squeezing_map(Gs, Gc, OD, eta, od_conj=od_conj_arg,
-                       pump_scatter=pscat_arg, od_probe=od_probe_arg)
-    Xi_qe = squeezing_map(Gs, Gc, OD, eta_qe, od_conj=od_conj_arg,
-                          pump_scatter=pscat_arg, od_probe=od_probe_arg)
+    if args.historical_replay:
+        remap = dict(od_conj=OdConj, od_probe=OdProbe, pump_scatter=PumpScatter) if hardened else {}
+        Xi = squeezing_map(Gs, Gc, OD, eta, **remap)
+        Xi_qe = squeezing_map(Gs, Gc, OD, eta_qe, **remap)
     n_below = int(np.sum(Xi[np.isfinite(Xi)] < det_floor - 1e-6))
     Untrusted = Edge | GapBad
 

@@ -116,7 +116,7 @@ def _solve(D_GHz, T_C, P_probe, coarse=COARSE, *,
     n = tpd_mhz.size
     return dict(
         tpd_mhz=np.asarray(tpd_mhz, float),
-        xi=np.asarray(spec["S_dB"], float),
+        xi=np.asarray(spec["gain_referred_noise_dB"], float),
         Gs=np.asarray(spec["G_s"], float),
         Gc=np.asarray(spec["G_c"], float),
         seg_od=float(spec.get("segment_absorption_od", 0.0) or 0.0),
@@ -148,7 +148,7 @@ def _readouts(sol):
     return fixed, best
 
 
-def _xi_of_loss(sol, idx, loss_axis):
+def _historical_loss_remap(sol, idx, loss_axis):
     """Historical loss remap at one delta index.
 
     Attenuate each effective detection efficiency by its OD and add scatter as
@@ -165,6 +165,16 @@ def _xi_of_loss(sol, idx, loss_axis):
         out[k] = fwm.seeded_balanced_gain_noise_dB(
             Gs, Gc, eta_s, eta_c, detected_excess_noise=max(sol["pump_scatter"], 0.0))
     return out
+
+
+def _xi_of_loss(sol, idx, loss_axis, *, historical_replay=False):
+    """Sweep detection loss on the already solved, fixed-detuning spectrum."""
+    if historical_replay:
+        return _historical_loss_remap(sol, idx, loss_axis)
+    eta = QE * (1.0 - loss_axis)
+    return fwm.seeded_balanced_gain_noise_dB(
+        sol["Gs"][idx], sol["Gc"][idx], eta, eta,
+        seed_excess_noise=sol["pump_scatter"])
 
 
 def _crossings(x, xi, x_center, xi_center, thr_db):
@@ -192,15 +202,15 @@ def _fmt(v, unit=""):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--historical-velocity-grid", action="store_true",
-                    help="use the velocity grid from the historical report")
+    ap.add_argument("--historical-replay", "--historical-velocity-grid", action="store_true",
+                    help="replay the historical sampled grid and loss remap")
     args = ap.parse_args()
-    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_velocity_grid
+    vstep, vcut = (HISTORICAL_VELOCITY_GRID if args.historical_replay
                    else (VELOCITY_STEP, VELOCITY_CUTOFF))
     run = start_run("squeezing/v6_tolerance", config=dict(
         velocity_step=vstep, velocity_cutoff=vcut,
         velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
-        historical_velocity_grid=args.historical_velocity_grid))
+        historical_replay=args.historical_replay))
     t0 = time.time()
 
     # ---- center point (fine δ axis, loss remap, and validation) ------------
@@ -213,8 +223,9 @@ def main():
     print(f"  re-tuned-δ readout: xi = {best_c['xi']:.4f} dB @ "
           f"δ = {best_c['tpd']:.1f} MHz, gap = {best_c['gap']:.3f} "
           f"(v6 report: -8.102 dB @ -280.0 MHz, gap 0.623)")
-    # loss remap must reproduce the solved S_dB at the reference loss
-    xi_remap_ref = _xi_of_loss(sol_c, fixed_c["idx"], np.array([LOSS0]))[0]
+    # The engine remap reproduces the solved readout at the reference loss.
+    xi_remap_ref = _xi_of_loss(sol_c, fixed_c["idx"], np.array([LOSS0]),
+                               historical_replay=args.historical_replay)[0]
     print(f"  eta-remap check @ loss={LOSS0}: remap {xi_remap_ref:.4f} dB "
           f"vs solve {xi_c:.4f} dB (diff {abs(xi_remap_ref - xi_c):.2e})")
 
@@ -257,7 +268,8 @@ def main():
     tpd_axis = sol_c["tpd_mhz"]
     xi_tpd = sol_c["xi"]
     gap_tpd = sol_c["Gs"] - sol_c["Gc"]
-    xi_loss = _xi_of_loss(sol_c, fixed_c["idx"], LOSS_AXIS)
+    xi_loss = _xi_of_loss(sol_c, fixed_c["idx"], LOSS_AXIS,
+                          historical_replay=args.historical_replay)
 
     # ---- tolerance table ----------------------------------------------------
     scans = [
