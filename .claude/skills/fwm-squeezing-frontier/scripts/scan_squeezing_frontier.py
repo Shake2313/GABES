@@ -303,19 +303,16 @@ def main():
                          "(default) or lowest gain")
     ap.add_argument("--pump-scatter-kappa", type=float, default=None,
                     help="override the Ultra hardened-noise pump-scatter coefficient "
-                         f"kappa (default {fwm.HARDENED_PUMP_SCATTER_KAPPA}). The "
-                         "hardened model (conjugate-arm linear OD + pump scatter) is "
-                         "intrinsic to Ultra; this only tunes the pump-scatter term "
-                         "and is ignored at other fidelities.")
+                         f"kappa (default {fwm.HARDENED_PUMP_SCATTER_KAPPA}). "
+                         "Ignored at other fidelities. Engine mode uses source-referred scatter "
+                         "and reports arm optical depths as diagnostics.")
     ap.add_argument("--loss", type=float, default=None,
                     help="override loss fraction (e.g. 0 for lossless/QE "
                          "detection); default = the Sim reference loss")
     ap.add_argument("--qe", type=float, default=None,
-                    help="override detector quantum efficiency (e.g. 1.0 for an "
-                         "ideal/source-limit scan with --loss 0); default = "
-                         "fwm.QE_DETECTOR. G_s/G_c/OD never depend on qe/loss "
-                         "(only the final eta-readout does), so this never "
-                         "requires a re-solve of the physics.")
+                    help="override detector quantum efficiency (default: fwm.QE_DETECTOR). "
+                         "Changing QE can move the selected detuning in engine mode. "
+                         "Use 1.0 with --loss 0 for unit detection efficiency.")
     ap.add_argument("--p-pump", type=float, default=None,
                     help="override pump power [W] (drift recovery)")
     ap.add_argument("--p-probe", type=float, default=None,

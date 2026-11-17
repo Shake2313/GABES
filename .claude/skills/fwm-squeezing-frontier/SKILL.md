@@ -75,8 +75,8 @@ readout. Keep the negative OPD region when searching for the minimum.
 - `--eps E` — gap [dB] to `ξ_opt` that counts as "on the frontier". Headline `0.1`;
   the script also reports a 0.05/0.1/0.2 sensitivity sweep.
 - `--metric temp|gain` — cost minimised on the frontier (default `temp`).
-- `--loss 0` — lossless detection (η = QE); moves the detection floor to −10.2 dB
-  (propagation loss still affects the Ultra gains).
+- `--loss 0` sets the detection efficiency to QE. At the default QE of 0.92,
+  the detection floor is −10.97 dB. Propagation loss still affects the Ultra gains.
 - `--opd-min/--opd-max/--opd-step`, `--t-min/--t-max/--t-step` — widen/refine
   (e.g. `--t-step 2.5` to pin the min-T more finely). Widen if the VERDICT is
   `CHECK` (grid optimum on a boundary).

@@ -55,6 +55,10 @@ class ScanConfig:
     velocity_cutoff: float = VELOCITY_CUTOFF
     historical_replay: bool = False
 
+    @property
+    def response_method(self):
+        return fwm.RESPONSE_GRID if self.historical_replay else fwm.RESPONSE_POLE
+
 
 _TABLE_STATE = threading.local()
 
@@ -88,7 +92,7 @@ def _compute_one(config: ScanConfig, i_delta: int, i_temp: int, i_angle: int) ->
     scan_min = center + float(config.two_photon_axis_mhz[0]) * 1e-3
     scan_max = center + float(config.two_photon_axis_mhz[-1]) * 1e-3
 
-    method = fwm.RESPONSE_GRID if config.historical_replay else fwm.RESPONSE_POLE
+    method = config.response_method
     spec = fwm.compute_spectrum(
         delta_ghz,
         T=temperature_c + 273.15,
@@ -265,9 +269,13 @@ def _plot(config: ScanConfig, xi, trusted, summary_rows, path: Path) -> None:
 
 
 def run(config: ScanConfig, out: str | Path | None = None) -> Path:
+    method = config.response_method
     record = start_run(f"squeezing/tpd_angle_detail/{config.version}", out=out,
                        config=dict(velocity_step=config.velocity_step,
                                    velocity_cutoff=config.velocity_cutoff,
+                                   response_method=method,
+                                   velocity_measure=velocity_measure(
+                                       method, config.velocity_step, config.velocity_cutoff),
                                    historical_replay=config.historical_replay))
     shape4 = (config.delta_axis_ghz.size, config.temperature_axis_c.size,
               config.angle_axis_deg.size, config.two_photon_axis_mhz.size)

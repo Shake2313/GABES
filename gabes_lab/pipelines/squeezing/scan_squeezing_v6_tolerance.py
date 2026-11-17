@@ -209,6 +209,7 @@ def main():
                    else (VELOCITY_STEP, VELOCITY_CUTOFF))
     run = start_run("squeezing/v6_tolerance", config=dict(
         velocity_step=vstep, velocity_cutoff=vcut,
+        response_method=RESPONSE_METHOD,
         velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         historical_replay=args.historical_replay))
     t0 = time.time()

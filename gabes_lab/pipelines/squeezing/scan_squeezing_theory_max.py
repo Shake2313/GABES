@@ -212,6 +212,7 @@ def main():
     run = start_run("squeezing/theory_max", config=dict(
         delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta_qe=ETA_QE, eta_ref=ETA_REF,
         coarse_points=COARSE_POINTS, velocity_step=vstep, velocity_cutoff=vcut,
+        response_method=RESPONSE_METHOD,
         velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         historical_replay=args.historical_replay))
     print("Gain-derived mean-field diagnostic search (loss = 0)")

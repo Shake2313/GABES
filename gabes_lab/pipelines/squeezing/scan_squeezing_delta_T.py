@@ -267,6 +267,7 @@ def main():
     run = start_run("squeezing/delta_T", config=dict(
         delta_ghz=DELTA_GHZ, temp_c=TEMP_C, eta=ETA,
         coarse_points=COARSE_POINTS, velocity_step=vstep, velocity_cutoff=vcut,
+        response_method=RESPONSE_METHOD,
         velocity_measure=velocity_measure(RESPONSE_METHOD, vstep, vcut),
         sim_velocity_step=sim_vstep, sim_velocity_cutoff=sim_vcut,
         historical_replay=args.historical_replay,
