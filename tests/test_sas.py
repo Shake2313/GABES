@@ -29,6 +29,7 @@ from gabes import (  # noqa: E402
 from gabes.schemes.sas import (  # noqa: E402
     AUTO_WEAK_PROBE,
     EXACT_WEAK_PROBE,
+    PUMPED_MAXWELL,
     GENERIC,
     LEGACY_WEAK_PROBE,
     _basis_reset_pump_pops,
@@ -739,7 +740,6 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
 
 
 @pytest.mark.parametrize("changes", [
-    {"pump_power_mw": 0.5},
     {"probe_power_mw": 0.002},
     {"paraffin_coated": True},
     {"ne_pressure_torr": 2.0},
@@ -747,7 +747,7 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
     {"optical_collision_model": collisions.REFERENCE_COLLISIONS},
     {"species": CS_KEY},
     {"species": GENERIC},
-], ids=["pumped", "finite-probe", "coated", "neon", "axial", "measured-ne", "cs", "generic"])
+], ids=["finite-probe", "coated", "neon", "axial", "measured-ne", "cs", "generic"])
 def test_ineligible_exact_voigt_is_reported_but_automatic_falls_back_quietly(changes):
     params = _params(**{"pump_power_mw": 0.0, "scan_points": 401, **changes})
     legacy = SAS.compute(dict(params, weak_probe_profile=LEGACY_WEAK_PROBE))
@@ -773,7 +773,8 @@ def test_pumped_velocity_sum_tends_to_explicit_legacy_at_zero_pump():
     legacy = SAS.compute(dict(params, weak_probe_profile=LEGACY_WEAK_PROBE))
     exact = SAS.compute(params)
     with core.blas_single_thread():
-        pumped = SAS.compute(dict(params, pump_power_mw=1e-8))
+        pumped = SAS.compute(dict(params, pump_power_mw=1e-8,
+                                  weak_probe_profile=LEGACY_WEAK_PROBE))
     assert legacy["probe_model"] == pumped["probe_model"] == "weak_probe_legacy"
     np.testing.assert_array_equal(pumped["scan"], legacy["scan"])
     np.testing.assert_array_equal(exact["scan"], legacy["scan"])
@@ -781,6 +782,32 @@ def test_pumped_velocity_sum_tends_to_explicit_legacy_at_zero_pump():
         scale = np.max(np.abs(legacy[key]))
         assert np.max(np.abs(pumped[key] - legacy[key])) < 1e-6 * scale
         assert np.max(np.abs(pumped[key] - exact[key])) > 1e-5 * scale
+
+
+def test_automatic_pumped_sas_is_continuous_at_hot_rb87_window_boundary():
+    params = dict(SAS.defaults(), species=species.RB87.label, line="D2",
+                  temp_c=90.0, cell_mm=75.0, scan_points=1201, pump_power_mw=0.0)
+    off = SAS.compute(params)
+    pumped_params = dict(params, pump_power_mw=1e-10)
+    with core.blas_single_thread():
+        on = SAS.compute(pumped_params)
+        legacy = SAS.compute(dict(pumped_params, weak_probe_profile=LEGACY_WEAK_PROBE))
+        explicit_exact = SAS.compute(dict(pumped_params, weak_probe_profile=EXACT_WEAK_PROBE))
+        bare = SAS.compute({k: v for k, v in pumped_params.items() if k != "weak_probe_profile"})
+
+    def transmission(raw, conditions):
+        return SAS.headless_observables(raw, conditions)["optical_readout"]["transmission"]
+
+    np.testing.assert_array_equal(on["scan"], off["scan"])
+    before = transmission(off, params)
+    after = transmission(on, pumped_params)
+    np.testing.assert_allclose(after, before, rtol=0.0, atol=1e-6)
+    assert np.max(np.abs(transmission(legacy, pumped_params) - before)) > 0.05
+    assert on["weak_probe_profile"]["applied"] == PUMPED_MAXWELL
+    assert explicit_exact["weak_probe_profile"]["status"] == "inactive"
+    for key in ("alpha_unit", "chi_real_unit"):
+        np.testing.assert_array_equal(explicit_exact[key], legacy[key])
+        np.testing.assert_array_equal(bare[key], legacy[key])
 
 
 def test_weak_probe_quadrature_ratio_fixes_the_dispersion_sign():

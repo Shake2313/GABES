@@ -7,7 +7,7 @@ import numpy as np
 
 from .. import __version__
 from ..model_comparison import SCHEMA, condition_samples, condition_views, same_grid, sample_values
-from .sas import LEGACY_WEAK_PROBE, _weak_probe_profile
+from .sas import EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, _pump_is_driven, _weak_probe_profile
 
 
 # The solver emits one marker per allowed transition as "<isotope> <Fg>→<Fe>′".
@@ -65,15 +65,21 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
     powers = list(dict.fromkeys(condition_samples(key, [0., current] if current else [0.])))
     if not powers or not all(np.isfinite(power) and power >= 0. for power in powers):
         raise ValueError("Choose finite, non-negative pump powers for the comparison.")
-    profile = _weak_probe_profile({**params, key: 0.})
-    if profile is not None and profile["status"] == "active" and any(power > 0. for power in powers):
-        profile = dict(requested=profile["requested"], applied=LEGACY_WEAK_PROBE,
-                       status="inactive", scope="The pump comparison uses the legacy velocity "
-                       "grid for every curve so the pump is the only setting that varies.")
+    off_profile = _weak_probe_profile({**params, key: 0.})
+    positive_power = next((power for power in powers if _pump_is_driven(power)), None)
+    fallback = None
+    if (off_profile is not None and off_profile["status"] == "active"
+            and positive_power is not None
+            and (off_profile["requested"] == EXACT_WEAK_PROBE or "weak_probe_profile" not in params)):
+        fallback = dict(requested=off_profile["requested"], applied=LEGACY_WEAK_PROBE,
+                        status="inactive", scope="The pump comparison uses the legacy velocity "
+                        "grid for every curve so the pump is the only setting that varies.")
         params = {**params, "weak_probe_profile": LEGACY_WEAK_PROBE}
-        if current == 0.:
-            # Only the committed pump-off solution could have used Exact Voigt.
+        if not _pump_is_driven(current):
             current_raw = current_view = None
+    # Automatic uses the same exact background at every pump power.
+    profile = (fallback or _weak_probe_profile({**params, key: positive_power})
+               if positive_power is not None else off_profile)
     conditions = condition_views(scheme, params, key, powers, resolve_raw=resolve_raw,
                                  current_raw=current_raw, current_view=current_view,
                                  required_values=(0.,))
@@ -119,11 +125,13 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "probe_model_scope": probe_scope.get("value"),
             "probe_model_note": probe_scope.get("help"),
         }
-        if profile is not None:
-            row["weak_probe_profile"] = profile
+        row_profile = fallback or raw.get("weak_probe_profile")
+        if row_profile is not None:
+            row["weak_probe_profile"] = row_profile
             row["probe_model"] = raw.get("probe_model")
             if not probe_scope:
-                row.update(probe_model_scope=profile["applied"], probe_model_note=profile["scope"])
+                row.update(probe_model_scope=row_profile["applied"],
+                           probe_model_note=row_profile["scope"])
         if "axial_cell" in readout:
             axial = readout["axial_cell"]
             row["axial_cell"] = {key: axial[key] for key in (

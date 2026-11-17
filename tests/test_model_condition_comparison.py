@@ -10,7 +10,8 @@ from gabes import schemes
 from gabes.core import blas_single_thread
 from gabes.model_comparison import comparison_values, sample_values, same_grid
 from gabes.schemes.sas import (
-    AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, GENERIC, LEGACY_WEAK_PROBE, RB_COMPOSITION_CUSTOM,
+    AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, GENERIC, LEGACY_WEAK_PROBE,
+    PUMPED_MAXWELL, RB_COMPOSITION_CUSTOM,
 )
 
 
@@ -79,8 +80,8 @@ def test_mixed_rb_composition_isotope_absence_and_native_reference_do_not_confla
         assert mids == sorted((a+b)/2 for a,b in combinations(lines, 2))
 
 
-@pytest.mark.parametrize("profile", [AUTO_WEAK_PROBE, EXACT_WEAK_PROBE])
-def test_pump_comparison_uses_same_legacy_grid_for_both_curves(profile):
+def test_explicit_exact_mixed_comparison_uses_same_legacy_grid_for_both_curves():
+    profile = EXACT_WEAK_PROBE
     conditions = dict(line="D2", temp_c=90., cell_mm=12.5, probe_power_uw=0.,
                       scan_points=401, pump_power_mw=.01)
     expected, _, _ = _compare(**conditions, weak_probe_profile=LEGACY_WEAK_PROBE)
@@ -112,6 +113,30 @@ def test_pump_comparison_uses_same_legacy_grid_for_both_curves(profile):
         assert [row["power_mw"] for row in sweep["series"]] == powers
         for row in sweep["series"]:
             np.testing.assert_array_equal(row["delta"], expected_delta[row["power_mw"]])
+
+
+def test_automatic_pump_comparison_shares_exact_background_and_reuses_zero():
+    base = dict(line="D2", temp_c=90., cell_mm=75., probe_power_uw=0.,
+                scan_points=1201, pump_power_mw=0.)
+    tiny = float(np.nextafter(0., 1.))
+    powers = [tiny, 0.01, 0., 1e-10, .5]
+    with comparison_values("pump_power_mw", powers):
+        sweep, solves, view = _compare(**base)
+    assert solves == [tiny, 0.01, 1e-10, .5]
+    assert sweep["fixed"]["weak_probe_profile"] == AUTO_WEAK_PROBE
+    assert sweep["source"]["weak_probe_profile"]["applied"] == PUMPED_MAXWELL
+    rows = {row["power_mw"]: row for row in sweep["series"]}
+    assert list(rows) == powers
+    off = rows[0.]
+    assert off["weak_probe_profile"]["applied"] == EXACT_WEAK_PROBE
+    np.testing.assert_array_equal(off["transmission"], view["optical_readout"]["transmission"])
+    assert rows[tiny]["weak_probe_profile"]["applied"] == EXACT_WEAK_PROBE
+    np.testing.assert_array_equal(rows[tiny]["transmission"], off["transmission"])
+    for pump in (0.01, 1e-10, .5):
+        assert rows[pump]["weak_probe_profile"]["applied"] == PUMPED_MAXWELL
+        np.testing.assert_array_equal(
+            rows[pump]["delta"], np.asarray(rows[pump]["transmission"]) - off["transmission"])
+    assert np.max(np.abs(rows[1e-10]["delta"])) < 1e-6
 
 
 @pytest.mark.parametrize("atom,reference,count,unit", [

@@ -1027,7 +1027,7 @@ def velocity_interp_mean(detuning, kv, weights, axis, tables):
 @njit(cache=True, parallel=True)
 def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
                        lorentz_scale, hwhm_sq, axis, tables, slopes, reservoir,
-                       pumped, thermal_needed, same_direction):
+                       pumped, thermal_needed, same_direction, higher, population_delta):
     ns = detuning.size
     nv = kv.size
     nt = omega.size
@@ -1053,7 +1053,10 @@ def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
                         if node:
                             value = tables[s, lv, k]
                         else:
-                            value = slopes[s, lv, k] * (x - axis[k]) + tables[s, lv, k]
+                            dx = x - axis[k]
+                            value = slopes[s, lv, k] * dx + tables[s, lv, k]
+                            if higher.size:
+                                value += (higher[1, s, lv, k] + higher[0, s, lv, k] * dx) * dx * dx
                         total += reservoir[i, s] * value
                     pop[lv] = total
             base = d_i + kv[j] if same_direction else d_i - kv[j]
@@ -1064,6 +1067,8 @@ def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
                 dp = (arg / np.pi) / denom
                 if pumped:
                     w = (pop[g_pos[t]] - pop[e_pos[t]]) / p_ground[t]
+                    if population_delta:
+                        w -= 1.0
                     acc_a[t] += (w * lp) * wj
                     acc_d[t] += (w * dp) * wj
                     if thermal_needed:
@@ -1080,7 +1085,8 @@ def _sas_velocity_sums(detuning, kv, weights, omega, g_pos, e_pos, p_ground,
 
 def sas_velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
                       axis=None, tables=None, reservoir=None, thermal_needed=False,
-                      *, same_direction=False):
+                      *, same_direction=False, population_spline=None,
+                      population_delta=False):
     """
     Per-transition Doppler sums of the OD/SAS probe response, without the
     (scan, velocity) temporaries:
@@ -1093,18 +1099,25 @@ def sas_velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground
     partner D̂ = (x/π)/(x² + hwhm²) and the pump-prepared weight
     W_t = (ρ_g − ρ_e)/p_g at the pump detuning Δ_s + kv. ρ_l is
     Σ_source reservoir[s, source] · interp(axis, tables[source, l]) with
-    np.interp's bracket and edge values, so every factor is the elementwise
-    value of the NumPy path; only the order of the velocity sum differs.
+    np.interp's bracket and edge values by default. A full-domain
+    population_spline may supply cubic coefficients instead.
+    population_delta subtracts the thermal weight 1 before integration.
     `tables=None` is the pump-off case W = 1 (thermal is then `absorptive`).
     `reservoir=None` is one unconditioned source. `same_direction=True` uses
     the pump's velocity sign for the optical readout of pump attenuation.
     """
     detuning = np.ascontiguousarray(detuning, dtype=np.float64)
     pumped = tables is not None
+    higher = np.empty((0, 0, 0, 0))
     if pumped:
         tables = np.ascontiguousarray(tables, dtype=np.float64)
         axis = np.ascontiguousarray(axis, dtype=np.float64)
-        slopes = _interp_slopes(axis, tables)
+        if population_spline is None:
+            slopes = _interp_slopes(axis, tables)
+        else:
+            coefficients = np.moveaxis(population_spline.c, 1, -1)
+            higher = np.ascontiguousarray(coefficients[:2])
+            slopes = np.ascontiguousarray(coefficients[2])
         if reservoir is None:
             reservoir = np.ones((detuning.size, 1))
         reservoir = np.ascontiguousarray(reservoir, dtype=np.float64)
@@ -1122,5 +1135,6 @@ def sas_velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground
         np.ascontiguousarray(e_pos, dtype=np.int64),
         np.ascontiguousarray(p_ground, dtype=np.float64),
         hwhm / np.pi, hwhm ** 2, axis, tables, slopes, reservoir,
-        pumped, bool(thermal_needed and pumped), bool(same_direction))
+        pumped, bool(thermal_needed and pumped), bool(same_direction),
+        higher, bool(population_delta))
     return absorptive, dispersive, (thermal if pumped else absorptive)

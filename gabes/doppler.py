@@ -172,14 +172,15 @@ def noncollinear_raman_rms_budget(
     }
 
 
-def velocity_grid(T, mass=constants.MASS_85RB, dv=1.0, cutoff_sigma=3.0):
-    """1-D Maxwell velocity classes and normalised weights at temperature T."""
+def velocity_grid(T, mass=constants.MASS_85RB, dv=1.0, cutoff_sigma=3.0,
+                  *, normalize=True):
+    """1-D Maxwell grid; normalize=False leaves the omitted tail mass out."""
     sigma = np.sqrt(constants.KB * T / mass)
     v_limit = np.ceil(cutoff_sigma * sigma / dv) * dv
     v = np.arange(-v_limit, v_limit + 0.5 * dv, dv)
     pdf = np.exp(-v**2 / (2 * sigma**2)) / (np.sqrt(2 * np.pi) * sigma)
     w = pdf * dv
-    return v, w / w.sum()
+    return v, w / w.sum() if normalize else w
 
 
 def maxwell_strip_grid(T, mass, k_vec, strip, error=1e-6, cutoff_sigma=6.0):

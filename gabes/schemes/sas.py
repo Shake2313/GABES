@@ -57,6 +57,7 @@ RB_COMPOSITION_CUSTOM = "Custom"
 AUTO_WEAK_PROBE = "Automatic"
 LEGACY_WEAK_PROBE = "Legacy velocity grid"
 EXACT_WEAK_PROBE = "Exact Maxwell Voigt"
+PUMPED_MAXWELL = "Exact Voigt + SAS correction"
 _RB_MEDIA = ("Rb (natural)", species.RB85.label, species.RB87.label)
 PROJECTED_PROBE_VIEW = "Finite-probe pumping reference"
 # Atom / Isotope rows of the species knob (rendered as two selectors).
@@ -116,8 +117,13 @@ def _species_path_density(isotope, cold_k, path_k, fraction):
         species.number_density(isotope, cold_k), cold_k, path_k) * fraction
 
 
+def _pump_is_driven(power_mw):
+    # Match the mW-to-watts conversion before the Rabi calculation.
+    return float(power_mw) * 1e-3 > 0.0
+
+
 def _weak_probe_profile(params):
-    """Resolve the default weak-probe backend and report explicit Voigt fallbacks."""
+    """Resolve the weak-probe backend and report explicit Voigt fallbacks."""
     requested = params.get("weak_probe_profile", AUTO_WEAK_PROBE)
     if requested == LEGACY_WEAK_PROBE:
         return None
@@ -126,17 +132,25 @@ def _weak_probe_profile(params):
     eligible = (
         params.get("species", "Rb (natural)") in _RB_MEDIA
         and params["line"] in ("D1", "D2")
-        and float(params["pump_power_mw"]) == 0.0
         and _probe_power_mw(params) == 0.0
         and params.get("cell_propagation", "Uniform") == "Uniform"
         and not params.get("paraffin_coated", False)
         and float(params.get("ne_pressure_torr", 0.0)) == 0.0
         and not _measured_collision_mode(params)
     )
-    if eligible:
+    power = float(params["pump_power_mw"])
+    driven = _pump_is_driven(power)
+    if eligible and power >= 0.0 and not driven:
         return dict(requested=requested, applied=EXACT_WEAK_PROBE, status="active",
                     scope="Numerical reference for uniform weak-probe Rb D1/D2.",
                     velocity_measure="Untruncated 1D Maxwell distribution")
+    # A bare old parameter dictionary has no explicit profile choice. Its
+    # zero-pump default was Exact; its pumped solver stayed on the legacy grid.
+    if eligible and driven and params.get("weak_probe_profile") == AUTO_WEAK_PROBE:
+        return dict(requested=requested, applied=PUMPED_MAXWELL, status="active",
+                    scope="Exact Maxwell Voigt background with a population correction "
+                          "integrated on a 1 m/s grid out to 5 thermal velocity standard deviations.",
+                    velocity_measure="Untruncated 1D Maxwell background; pumped correction to 5σ")
     if requested == AUTO_WEAK_PROBE:
         return None
     return dict(
@@ -147,8 +161,11 @@ def _weak_probe_profile(params):
 
 def _weak_probe_model_id(profile):
     """Model ID for a weak readout, including an inactive Exact Voigt request."""
-    if profile is not None and profile["applied"] == EXACT_WEAK_PROBE:
-        return "weak_probe_exact_maxwell_voigt"
+    if profile is not None:
+        if profile["applied"] == EXACT_WEAK_PROBE:
+            return "weak_probe_exact_maxwell_voigt"
+        if profile["applied"] == PUMPED_MAXWELL:
+            return "weak_probe_maxwell_pumped_correction"
     return "weak_probe_legacy"
 
 
@@ -276,7 +293,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "15"           # Exact Maxwell Voigt by default for eligible weak-probe OD
+    cache_version = "16"           # Continuous Maxwell background through pump-off and pumped SAS
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -442,14 +459,14 @@ class SASScheme(Scheme):
             ParamSpec("weak_probe_profile", "Weak-probe line profile", "Numerics",
                       AUTO_WEAK_PROBE, choices=(AUTO_WEAK_PROBE, LEGACY_WEAK_PROBE, EXACT_WEAK_PROBE),
                       advanced=True, advanced_group="Doppler average",
-                      visible_if={"species": _RB_MEDIA, "pump_power_mw": 0.0,
-                                  "probe_power_uw": 0.0, "cell_propagation": "Uniform",
+                      visible_if={"species": _RB_MEDIA, "probe_power_uw": 0.0,
+                                  "cell_propagation": "Uniform",
                                   "optical_collision_model": collisions.LEGACY_COLLISIONS,
                                   "paraffin_coated": False, "ne_pressure_torr": 0.0},
-                      help="Automatic uses Exact Maxwell Voigt for absorption and dispersion "
-                           "in uniform, uncoated, buffer-free Rb D1/D2 with pump and probe off "
-                           "and Legacy broadening. Select Legacy velocity grid to reproduce "
-                           "the historical weak-probe spectrum."),
+                      help="Automatic uses Exact Maxwell Voigt as the absorption and dispersion "
+                           "background and adds the SAS correction when the pump is on. "
+                           "Exact Maxwell Voigt alone applies at 0 mW pump. "
+                           "Legacy velocity grid reproduces the historical spectrum."),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
         ]
@@ -689,7 +706,9 @@ class SASScheme(Scheme):
         paraffin_memory = paraffin_coated and power > 0.0
         reference = _measured_collision_mode(params)
         weak_profile = _weak_probe_profile(params)
-        exact_weak_probe = weak_profile is not None and weak_profile["status"] == "active"
+        applied_profile = weak_profile["applied"] if weak_profile is not None else None
+        exact_weak_probe = applied_profile == EXACT_WEAK_PROBE
+        pumped_maxwell = applied_profile == PUMPED_MAXWELL
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
         collision_reports = {}
@@ -734,6 +753,7 @@ class SASScheme(Scheme):
             built.append(dict(man=man, offset=offset, N=N, Op=Op, iso=iso,
                               pump_atom=pump_atom, gamma_eff=gamma_eff, transit_rate=gt,
                               paraffin_memory=paraffin_memory,
+                              pumped_maxwell=pumped_maxwell,
                               probe_saturation_max=probe_s0))
             omega_all.append(man.omega + offset)
         omega_all = np.concatenate(omega_all)
@@ -931,7 +951,12 @@ class SASScheme(Scheme):
         ng = len(man.Fg)
         gamma_eff = b["gamma_eff"]
 
-        v, wt = doppler.velocity_grid(T, mass=iso.mass, dv=1.0, cutoff_sigma=4.0)
+        pumped_maxwell = b.get("pumped_maxwell", False)
+        if pumped_maxwell:
+            v, wt = doppler.velocity_grid(T, mass=iso.mass, dv=1.0, cutoff_sigma=5.0,
+                                          normalize=False)
+        else:
+            v, wt = doppler.velocity_grid(T, mass=iso.mass, dv=1.0, cutoff_sigma=4.0)
         kv = k * v
 
         # Pump steady state ρ(Δ_eff): scan-independent H, one fine table.
@@ -941,7 +966,7 @@ class SASScheme(Scheme):
         if not pump_off:
             Hp = species.pump_hamiltonian(man, Op)
             covered_detunings = None
-            if b.get("paraffin_memory", False):
+            if pumped_maxwell or b.get("paraffin_memory", False):
                 covered_detunings = (
                     float(DS.min() + kv.min()), float(DS.max() + kv.max()))
             deff = _pump_detuning_axis(
@@ -986,6 +1011,15 @@ class SASScheme(Scheme):
                       np.asarray(man.p_ground)[ground])
         sum_options = dict(axis=None if pump_off else deff, tables=tables,
                            reservoir=reservoir, thermal_needed=finite_probe)
+        if pumped_maxwell:
+            from scipy.interpolate import CubicSpline
+            # A cutoff on the pump-state table would reuse nonthermal endpoint
+            # populations at far-detuned velocities. Interpolate over the full
+            # detuning domain of the correction at the inherited table spacing.
+            sum_options.update(population_spline=CubicSpline(deff, tables, axis=-1),
+                               population_delta=True)
+            if not kernels.available():
+                sums = _chunked_pumped_velocity_sums
         absorptive, dispersive, thermal = sums(*sum_inputs, **sum_options)
         if axial_optics:
             pump_absorption = (sums(*sum_inputs, **sum_options, same_direction=True)[0]
@@ -1015,6 +1049,11 @@ class SASScheme(Scheme):
                     rabi_rel=float(man.rabi_rel[t]),
                     saturation_max=float(b["probe_saturation_max"]),
                 ))
+        if pumped_maxwell:
+            background_alpha, background_chi = linear_hyperfine.species_complex_voigt(
+                scan, man, N, T, gamma_eff, offset=offset)
+            alpha += background_alpha
+            chi_real += background_chi
         return alpha, chi_real, probe_profiles
 
     # ---- generic Γ-unit hole-burning toy (pedagogical) ----
@@ -1591,9 +1630,9 @@ def _attenuation_figure_views(readout, xlabel, title, *, linewidth):
 def _pump_detuning_axis(omega, gamma_eff, covered_detunings=None):
     """Fine pump-state axis, optionally covering every requested detuning.
 
-    The legacy path uses the historical ±14Γ extent. A long-lived coated
-    reservoir must instead solve (not edge-clamp) the full scan+velocity domain,
-    because tiny one-pass errors accumulate over many returns.
+    The legacy path uses the historical ±14Γ extent. The Maxwell correction
+    and long-lived coated reservoirs require the full scan+velocity domain
+    because a clamped edge retains nonthermal populations.
     """
     omega = np.asarray(omega, dtype=float)
     gamma_eff = float(gamma_eff)
@@ -1614,14 +1653,17 @@ def _velocity_correlated_average(prepared_population, probe_profile, weights):
 
 def _velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
                    axis=None, tables=None, reservoir=None, thermal_needed=False,
-                   *, same_direction=False):
+                   *, same_direction=False, population_spline=None,
+                   population_delta=False):
     """NumPy path of `kernels.sas_velocity_sums`: same arguments, same sums."""
     probe_base = (detuning[:, None] + kv[None, :] if same_direction
                   else detuning[:, None] - kv[None, :])
     prepared = None
     if tables is not None:
         flat_deff = (detuning[:, None] + kv[None, :]).ravel()   # pump Δ_eff
-        if reservoir is None:
+        if population_spline is not None:
+            prepared = population_spline(flat_deff)[0].reshape(-1, *probe_base.shape)
+        elif reservoir is None:
             prepared = [np.interp(flat_deff, axis, table).reshape(probe_base.shape)
                         for table in tables[0]]
         else:
@@ -1647,11 +1689,21 @@ def _velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
             dispersive[t] = Dp @ weights
             continue
         w = (prepared[g_pos[t]] - prepared[e_pos[t]]) / p_ground[t]
+        if population_delta:
+            w -= 1.0
         absorptive[t] = _velocity_correlated_average(w, Lp, weights)
         dispersive[t] = _velocity_correlated_average(w, Dp, weights)
         if thermal_needed:
             thermal[t] = Lp @ weights
     return absorptive, dispersive, thermal
+
+
+def _chunked_pumped_velocity_sums(detuning, kv, *args, **kwargs):
+    """Bound the Automatic pumped NumPy fallback's scan × velocity arrays."""
+    rows = max(1, 100_000 // kv.size)
+    parts = [_velocity_sums(detuning[i:i + rows], kv, *args, **kwargs)
+             for i in range(0, detuning.size, rows)]
+    return tuple(np.concatenate(columns, axis=1) for columns in zip(*parts))
 
 
 def _basis_reset_atom(atom, transit_rate, source_ground):
