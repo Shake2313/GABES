@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, fields, replace
 
 import numpy as np
 
-from . import constants, hyperfine, species
+from . import constants, species
 from .core import comm_super, dissipator, thermal_reset_superoperator
 
 
@@ -171,13 +171,7 @@ def double_lambda_rb85(gamma_gg=None, gamma_opt=0.0):
     gamma_gg = constants.GAMMA_GG if gamma_gg is None else gamma_gg
     ground = (0, 1)
     excited = (2, 3)
-    ground_F = {0: 2, 1: 3}
-    excited_F = {2: 2, 3: 3}
-    decay = []
-    for e in excited:
-        weights = {g: hyperfine.CF2[(ground_F[g], excited_F[e])] for g in ground}
-        total = sum(weights.values())
-        decay.extend((e, g, constants.GAMMA * weights[g] / total) for g in ground)
+    decay = species.hyperfine_decay(species.RB85, "D1")
     dephasing = [(0, 1, gamma_gg), (1, 0, gamma_gg)]
     if gamma_opt:
         for g in ground:
@@ -190,7 +184,7 @@ def double_lambda_rb85(gamma_gg=None, gamma_opt=0.0):
         labels=("F=2", "F=3", "F'=2", "F'=3"),
         ground=ground,
         excited=excited,
-        decay=tuple(decay),
+        decay=decay,
         dephasing=tuple(dephasing),
         doppler_levels=excited,
     )

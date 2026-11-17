@@ -113,13 +113,10 @@ def test_f_resolved_manifold_branching_is_dipole_block_sums(iso, line):
     assert man.gamma == s.gamma
 
 
-def test_double_lambda_is_the_rb85_d1_manifold_with_the_legacy_gamma():
-    lumped = atoms.double_lambda_rb85().decay
-    manifold = species.build_manifold(species.RB85, "D1").atom.decay
-    assert [c[:2] for c in lumped] == [c[:2] for c in manifold]
-    legacy = constants.GAMMA / (species.RB85.gamma_D1_mhz * species.MHZ)
-    for (_e, _g, a), (_e2, _g2, b) in zip(lumped, manifold):
-        assert math.isclose(a / b, legacy, rel_tol=1e-14)
+def test_double_lambda_shares_the_rb85_d1_manifold_branching():
+    manifold = species.build_manifold(species.RB85, "D1")
+    assert atoms.double_lambda_rb85().decay == manifold.atom.decay
+    assert manifold.gamma == constants.GAMMA
 
 
 def test_rb85_zeeman_manifold_drives_and_emits_with_shared_signed_dipoles():
