@@ -2292,6 +2292,7 @@
       "priority": "P3",
       "effort": "medium",
       "status": "done",
+      "measure_decision_revisited_2026_11_17": "User decision 2026-11-17 revisits measure_decision for pumped SAS: remove the ±4σ truncation from the default pumped path. See sas-pumped-velocity-window.",
       "completed_at": "2026-11-03",
       "why": "Cheapest first: a fused compiled loop without temporaries, or the analytic Voigt for the pump-off thermal term. The pole form also applies (pump populations are rational in Delta+kv, the probe Lorentzian in Delta-kv, so the product averages by partial fractions) but it replaces the Gamma/8 interpolation table of a validated reference path.",
       "acceptance_criteria": [
@@ -5728,6 +5729,7 @@
       "priority": "P3",
       "effort": "large",
       "status": "in_progress",
+      "user_decision_2026_11_17": "User decision 2026-11-17: adopt the shared signed dipoles for V1 (species.build_manifold branching) and V2 (atoms.double_lambda_rb85 four-level branching) as value changes, accepting the measured splits (V1 up to 1.158e-10 relative, V2 up to 4.329e-7/2.836e-7 relative in G_s/G_c at 100 mm; displayed readouts identical). ⟦AI⟧ Each lands in its own commit citing this decision, with the FWM baseline recaptured when its bytes change. V1 reaches sealed GC records through the archive engine pin; the next pin bump treats its last-bit drift like the other historical anchors.",
       "implementation_2026_11_16": "⟦AI⟧ 875eb67/6254b16 unify the FWM reset and 24-level builder. 594 and 2,925 leaves matched by bytes. 0f74749 unifies V3 through a signed angular block, with 12,108 builder, 53,547 Magneto raw/view and 963 displayed leaves matching. 9d0be67 implements the V4 value decision. Practical Ultra still displays 1.0000. The FWM baseline recaptured with identical numerical values. Sealed quantum reservoirs keep their independent byte-pinned assembly.",
       "numerical_splits_2026_11_16": "⟦AI⟧ V1 and V2 retain their existing branch arithmetic. V1 exceeds the 1e-12 relative limit in 41/68 OD/SAS contexts (worst 1.158e-10 in paraffin real susceptibility). V2 exceeds the limit in 29/29 seeded FWM contexts (100 mm Gs/Gc up to 4.329e-7/2.836e-7 relative). Displayed values matched in both comparisons. Further value changes need user decision.",
       "remaining_2026_11_16": "⟦AI⟧ Remaining for consolidation candidate 2, in order: (1) route gabes/schemes/fwm/common.py thermal_transit_reset_superoperator through core.dissipator / AtomModel.with_reset; (2) build the 24-level model and reset of gabes/fwm_zeeman_response.py from species.level_structure and with_reset; (3) route quantum.reservoirs only if its sealed records stay byte-identical, otherwise document it as an independent assembly; (4) V1-V3 as refactors under the 1e-12 rule; (5) V4 as its own value commit. Steps 1-4 are refactors. V1 output also reaches sealed GC records through the archive engine pin; treat any last-bit drift at the next pin bump like the other historical anchors.",
@@ -5986,6 +5988,7 @@
       "priority": "P2",
       "effort": "medium",
       "status": "in_progress",
+      "user_decision_2026_11_17": "User decision 2026-11-17: new scanner runs use the engine conventions (Floquet order N_F=3, the engine's loss and noise readout, the converged velocity measure). The historical conventions (delta-T N_F=1, the frontier and v6 loss remaps, the sampled velocity measures) stay selectable to replay recorded outputs. ⟦AI⟧ Measured splits: delta-T N_F=1 against 3 up to 0.3221 dB; frontier remap up to 1.1021 dB at 121 C; v6 +0.70569 dB. Recorded reports keep their numbers, and the frontier skill text states which convention each number uses.",
       "implementation_2026_11_16": "⟦AI⟧ 8aa61fc exposes shared seeded transfer and noise stages, used by the engine, delta-T, frontier and v6 scans while retaining historical measures. 38,913 seeded and 6,249 scanner leaves matched by bytes. Focused checks 57 passed.",
       "value_splits_2026_11_16": "⟦AI⟧ Legacy delta-T N_F=1 versus engine N_F=3 differed at sampled trace points by up to 3.792/3.899 in Gs/Gc and 0.3221 dB. Matching N_F=1 reduced the sampled differences to roundoff. Frontier historical loss mapping shifts noise by up to 1.1021 dB at 121 C, and the v6 sample by +0.70569 dB. Keep the existing conventions pending a value decision on any further merge.",
       "problem": "⟦AI⟧ Consolidation candidate 13 (survey 2026-10-29). Squeezing scanners re-implement the density, coupling, gain, saturation and noise chain of fwm.seeded.compute_spectrum (scan_squeezing_delta_T.py still says 'Mirror compute_spectrum'; theory_max and the frontier skill script carry pieces too). The earlier IDS-formula drift was this kind of copy. Value changes since then (CRC density with isotope share e436346, exact Maxwell ead9cb5, scanner measure caf9fbb) may have split the scanners from the scheme.",
@@ -6084,6 +6087,18 @@
       "acceptance_criteria": [
         "⟦AI⟧ Use the shared population model to resolve two-beam coupling and check the pump-off and weak-probe limits against their established references."
       ]
+    },
+    {
+      "id": "sas-pumped-velocity-window",
+      "area": "gabes/schemes/sas.py (pumped velocity sums, doppler.velocity_grid cutoff_sigma=4.0) + gabes/linear_hyperfine.py (Exact Voigt)",
+      "title": "Remove the ±4σ velocity truncation from pumped SAS",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "ready",
+      "user_decision_2026_11_17": "User decision 2026-11-17: revisit the 2026-11-04 decision that kept the 1 m/s, ±4σ measure for pumped SAS (sas-od-dense-velocity-arithmetic). Remove the truncation from the default pumped path, either by widening the velocity window or by combining the Exact Voigt background with the grid-computed pump-induced change, whichever meets the reference at lower cost. ⟦AI⟧ Explicit Legacy and saved settings without a profile field keep replaying the ±4σ grid.",
+      "problem": "⟦AI⟧ The 2026-11-04 decision rested on the pump-off defaults, where the ±4σ cutoff leaves 1.9e-4 of the peak. b992d53 made Automatic use Exact Voigt at zero pump. Its reproduction case (pure 87Rb D2, 90 °C, 75 mm, zero pump and probe, 1,201 points) gives Legacy 71.65584 % and Exact 66.45873 % transmission at −1.400961020 GHz from the D2 centroid (−5.19712 percentage points; refined extremum 5.23601). The F=2→F′=3 resonance there lies at 4.053σ, outside the window; untruncated integration agrees with Exact to 6.18e-12. Pumped SAS keeps the ±4σ grid, so in optically thick cells its transmission is biased high and the smallest positive pump steps away from the zero-pump Exact curve by the same amount.",
+      "acceptance_criteria": ["⟦AI⟧ Build an independent dense pumped-SAS reference (untruncated or widened velocity range with a converged step) over a matrix that includes the 90 °C 87Rb D2 75 mm case, the Rb D1/D2 defaults, cold and hot cells, and weak to saturating pump. Freeze the tolerance and cost budget before collecting evidence.", "⟦AI⟧ As pump power goes to zero the default pumped result approaches the zero-pump Exact Voigt curve within 1e-6 absolute transmission (the OD budget decision), so the step at the mode boundary disappears.", "⟦AI⟧ Fresh-solve time and memory stay within the OD budget decision (at most twice the previous time under the same conditions, 512 MiB). Explicit Legacy and old saved settings replay bit-identically. Pump comparisons use one measure for every sample.", "⟦AI⟧ Own value commit citing this decision, with readout shifts at the defaults and in the hot case. Axial, coated-cell and finite-probe paths that share the grid either adopt the same measure or are listed with their remaining truncation."]
     }
   ],
   "_daily_report_sync_history": [
