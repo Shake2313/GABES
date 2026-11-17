@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from gabes import constants, core
+from gabes import constants, core, species
 from gabes.schemes import fwm
 
 
@@ -12,6 +12,16 @@ def _historical_atomic_data(monkeypatch):
     monkeypatch.setattr(constants, "GAMMA", 2.0 * np.pi * 5.746e6)
     monkeypatch.setattr(constants, "MASS_85RB", 1.4100e-25)
     monkeypatch.setattr(fwm, "OMEGA_EXCITED_HF", 2.0 * np.pi * 361.58e6)
+
+    # The stored anchors use the AutoOD line strengths and historical linewidth
+    # from the double-Lambda builder before the shared signed dipole adoption.
+    line_strengths = ((10.0 / 81.0, 35.0 / 81.0), (35.0 / 81.0, 28.0 / 81.0))
+    decay = tuple(
+        (excited, ground, constants.GAMMA * strength / sum(strengths))
+        for excited, strengths in enumerate(line_strengths, start=2)
+        for ground, strength in enumerate(strengths)
+    )
+    monkeypatch.setattr(species, "hyperfine_decay", lambda _isotope, _line: decay)
 
 
 def _fixture():
