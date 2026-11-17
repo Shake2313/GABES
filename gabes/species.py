@@ -391,17 +391,24 @@ def recommended(species_key, line):
 # Zeeman-resolved level structure (the one signed-dipole source)
 # =====================================================================
 def sublevels(fs):
-    """|F, m⟩ labels for integer F values `fs`: F in the given order, m = −F … F."""
-    return tuple((f, m) for f in fs for m in range(-f, f + 1))
+    """|F, m⟩ labels in the given F order, with m = −F … F."""
+    return tuple((f, m) for f in fs for m in _magnetic_numbers(f))
+
+
+def _magnetic_numbers(f):
+    if int(f) == f:
+        return range(-int(f), int(f) + 1)
+    twice_f = int(round(2 * f))
+    return tuple(m / 2 for m in range(-twice_f, twice_f + 1, 2))
 
 
 def signed_dipole_block(fg, fe, reduced=1.0):
-    """Polarization-resolved signed dipoles for one integer Fg-to-Fe block.
+    """Polarization-resolved signed dipoles for one Fg-to-Fe block.
 
     The default reduced amplitude leaves the closed-pair Clebsch-Gordan
     coefficients normalized over decay from each excited sublevel.
     """
-    mg, me = range(-fg, fg + 1), range(-fe, fe + 1)
+    mg, me = _magnetic_numbers(fg), _magnetic_numbers(fe)
     block = {q: np.zeros((len(mg), len(me))) for q in (-1, 0, 1)}
     for g, m in enumerate(mg):
         for e, m_e in enumerate(me):
@@ -440,11 +447,11 @@ class LevelStructure:
 
 @functools.lru_cache(maxsize=8)
 def level_structure(isotope, line):
-    """Signed (F, m) dipoles C_q, energies, Γ and d0² for `isotope` ('Rb85', …) on 'D1'/'D2'."""
-    iso = ISOTOPES[isotope]
+    """Signed dipoles C_q, energies, Γ and d0² for a registry key or isotope record."""
+    iso = isotope if isinstance(isotope, Isotope) else ISOTOPES[isotope]
     Je, nu, width, Ae, Be = iso.line(line)
-    fs = tuple(int(f) for f in f_values(iso.I, iso.Jg))
-    fes = tuple(int(f) for f in f_values(iso.I, Je))
+    fs = tuple(int(f) if int(f) == f else f for f in f_values(iso.I, iso.Jg))
+    fes = tuple(int(f) if int(f) == f else f for f in f_values(iso.I, Je))
     ground, excited = sublevels(fs), sublevels(fes)
     dipoles = {q: np.zeros((len(ground), len(excited))) for q in (-1, 0, 1)}
     g0 = 0
@@ -464,7 +471,7 @@ def level_structure(isotope, line):
     omega = 2*np.pi*nu
     d2 = 3*np.pi*constants.EPS_0*constants.HBAR*constants.C_LIGHT**3*gamma/omega**3
     return LevelStructure(
-        isotope, line, ground, excited,
+        iso.name, line, ground, excited,
         {q: _read_only(value) for q, value in dipoles.items()},
         _read_only(np.array([hf_energy_mhz(iso.A_S, 0, iso.I, iso.Jg, f) for f in fs])),
         _read_only(np.array([hf_energy_mhz(Ae, Be, iso.I, Je, f) for f, _ in excited])),
@@ -503,12 +510,32 @@ class Manifold:
 
 
 @functools.lru_cache(maxsize=64)
+def hyperfine_decay(iso, line):
+    """F-resolved spontaneous rates from the squared signed dipole blocks."""
+    structure = level_structure(iso.name if ISOTOPES.get(iso.name) is iso else iso, line)
+    ground_f = np.array([f for f, _ in structure.ground])
+    excited_f = np.array([f for f, _ in structure.excited])
+    ground_fs, excited_fs = np.unique(ground_f), np.unique(excited_f)
+    decay = []
+    for ie, fe in enumerate(excited_fs, start=len(ground_fs)):
+        weights = [sum(np.sum(c[np.ix_(ground_f == fg, excited_f == fe)]**2)
+                       for c in structure.dipoles.values())
+                   for fg in ground_fs]
+        total = np.sum(weights)
+        for ig, weight in enumerate(weights):
+            if weight > 0:
+                decay.append((ie, ig, structure.gamma * weight / total))
+    return tuple(decay)
+
+
+@functools.lru_cache(maxsize=64)
 def build_manifold(iso, line, transit_rate=0.0):
     """
     Build the full {Fg}×{Fe} hyperfine manifold for `iso` on `line` ('D1'/'D2').
 
-    Decay is CG-branched: Γ_{Fe→Fg} = Γ · S(Fg,Fe)/Σ_{Fg'} S(Fg',Fe) (Σ_Fg = Γ),
-    so an excited state preferentially decays toward the strongest ground link —
+    Decay branches according to the summed squared dipoles for each Fg–Fe
+    block, with total Γ for each Fe. An excited state preferentially decays
+    toward the strongest ground link —
     the mechanism that pumps population into the *other* ground hyperfine state.
     A transit-time relaxation moves every state toward the thermal ground
     distribution at `transit_rate` [rad/s] (atoms leaving/entering the beam),
@@ -535,27 +562,16 @@ def build_manifold(iso, line, transit_rate=0.0):
     p_ground = deg / deg.sum()
 
     # S is the absorption strength per atom in a ground manifold (row sum 1).
-    # T=(2Fg+1)*S sums initial sublevels and sets decay branching after column
-    # normalization. Keep the inherited sqrt(T/T_max) effective pump-Rabi
-    # prescription; it is not an individual Zeeman-transition matrix element.
+    # T=(2Fg+1)*S retains the effective pump-Rabi prescription sqrt(T/T_max).
     S = np.array([[line_strength(fg, fe, I, Jg, Je) for fe in Fe] for fg in Fg])
     T = deg[:, None] * S
     T_max = T.max()
-
-    # CG-branched spontaneous emission: Γ_{Fe→Fg} = Γ·T/Σ_{Fg'}T = Γ·T/(2Fe+1).
-    decay = []
-    for ie, fe in enumerate(Fe):
-        col = T[:, ie]
-        tot = col.sum()
-        for ig, fg in enumerate(Fg):
-            if col[ig] > 0:
-                decay.append((ng + ie, ig, gamma * col[ig] / tot))
 
     atom = AtomModel(
         name=f"sas_{iso.name}_{line}", n_levels=n,
         labels=tuple(f"g{F:g}" for F in Fg) + tuple(f"e{F:g}" for F in Fe),
         ground=ground, excited=excited,
-        decay=tuple(decay), dephasing=(), doppler_levels=excited,
+        decay=hyperfine_decay(iso, line), dephasing=(), doppler_levels=excited,
     )
     # Transit-time relaxation toward the thermal ground distribution
     # (drives ρ → Σ_g p_g|g⟩⟨g| with the laser off).

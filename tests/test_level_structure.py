@@ -92,22 +92,22 @@ def test_multilevel_atom_shares_the_level_structure(isotope, line):
         s.gamma, s.frequency_hz, s.dipole_sq, s.mass)
 
 
-@pytest.mark.parametrize("isotope, line", LINES)
-def test_f_resolved_manifold_branching_is_dipole_block_sums(isotope, line):
-    # build_manifold keeps the analytic 6j strengths; the dipole block sums give
-    # the same CG branching to rounding, and T·(2Je+1)/(2Jg+1) as block sums.
-    iso = species.ISOTOPES[isotope]
-    s = species.level_structure(isotope, line)
+@pytest.mark.parametrize("iso, line", [(species.ISOTOPES[name], line) for name, line in LINES]
+                         + [(species.K40, "D2")])
+def test_f_resolved_manifold_branching_is_dipole_block_sums(iso, line):
+    # The effective pump strength remains analytic. Spontaneous branching
+    # collapses the signed dipole blocks, including noninteger F.
+    s = species.level_structure(iso, line)
     man = species.build_manifold(iso, line)
     ratio = (2 * man.Je + 1) / (2 * man.Jg + 1)
     for fg in man.Fg:
         for fe in man.Fe:
             T = (2 * fg + 1) * species.line_strength(fg, fe, iso.I, man.Jg, man.Je)
-            assert math.isclose(_block_sum(s, int(fg), int(fe)), ratio * T,
+            assert math.isclose(_block_sum(s, fg, fe), ratio * T,
                                 rel_tol=1e-14, abs_tol=1e-15)
     ng = len(man.Fg)
     for e, g, rate in man.atom.decay:
-        fe, fg = int(man.Fe[e - ng]), int(man.Fg[g])
+        fe, fg = man.Fe[e - ng], man.Fg[g]
         branch = _block_sum(s, fg, fe) / (2 * fe + 1)
         assert math.isclose(rate, man.gamma * branch, rel_tol=1e-14)
     assert man.gamma == s.gamma
