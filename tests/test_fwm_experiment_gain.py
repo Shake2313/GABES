@@ -156,29 +156,44 @@ def test_invalid_inputs_are_reported_instead_of_generating_finite_fake_gains(nom
 
 
 def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_deviation(nominal_raw):
-    from gabes.schemes.fwm import FIDELITY_BALANCED, FWMScheme, seeded_operating_readout
+    from gabes.schemes import fwm
 
-    scheme = FWMScheme()
+    scheme = fwm.FWMScheme()
     context = measured.nominal_context()
     params = dict(scheme.defaults(), opd=context["D_GHz"], temp_c=context["T"]-273.15,
                   pump_mw=context["P_pump"]*1e3, probe_uw=context["P_probe"]*1e6,
                   cell_mm=context["L"]*1e3, pump_waist_um=context["w_pump"]*1e6,
                   probe_waist_um=context["w_probe"]*1e6,
-                  seeded_angle_deg=context["pump_probe_angle_deg"], resolution=FIDELITY_BALANCED)
+                  seeded_angle_deg=context["pump_probe_angle_deg"], resolution=fwm.FIDELITY_BALANCED)
     observed = measured.observations()
     nodes = measured.internal_delta_mhz_from_eom(observed["eom_MHz"])
     raw = scheme.compute(params)
     nominal = practical.evaluate(raw, nodes)
-    selected = seeded_operating_readout(raw, dict(params, experimental_gain_calibration=True,
-                                                   gain_calibration_model="2026-10-13 lab"))
+    selected = fwm.seeded_operating_readout(raw, dict(
+        params, experimental_gain_calibration=True, gain_calibration_model=fwm.MODEL_LAB))
     calibration = selected["experimental_gain_calibration"]
     assert calibration["applied"] and not calibration["context_changed"]
     assert calibration["source_model"]["velocity_measure"] == "exact"
     assert {"velocity_measure", "linewidth_hz", "rb85_mass_kg", "d1_excited_splitting_hz"}.issubset(
         calibration["source_model_differences"])
-    diagnostic = calibration["nominal_node_deviation"]
-    assert diagnostic["point_count"] == 23
+    assert calibration["source_model"]["scan_points"] > raw["probe_axis_GHz"].size
+    assert set(calibration["source_model_differences"]) == (
+        set(nominal["source_model_differences"]) | {"scan_points"})
+    assert calibration["profile"]["model_id"] == practical.MODEL_ID
     assert not calibration["profile"]["independent_validation"]
+
+    # v1's native-grid diagnostic stays comparable to the original fit;
+    # the app evaluates the same coefficients at directly solved coordinates.
+    native_diagnostic = calibration["nominal_node_deviation"]
+    exact_diagnostic = calibration["exact_nominal_node_deviation"]
+    assert native_diagnostic["point_count"] == exact_diagnostic["point_count"] == 23
+    coordinates = {
+        arm: raw["raman_center_minus_GHz"] + 1e-3 * positions
+        for arm, positions in nominal["source_delta_mhz"].items()
+    }
+    ultra = scheme.compute(dict(params, resolution=fwm.FIDELITY_ULTRA))
+    dense = fwm.compute_spectrum(**ultra["stark_recompute_context"],
+                                 extra_probe_points_GHz=np.unique(np.r_[*coordinates.values()]))
     live_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
     frozen_axis = nominal_raw["probe_axis_GHz"] * 1e3
     for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
@@ -188,14 +203,20 @@ def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_dev
         observed_ratio = observed[f"{arm}_ratio"]
         np.testing.assert_allclose(nominal[key] / observed_ratio, live_sample / frozen_sample,
                                    rtol=2e-13)
-        assert diagnostic["max_relative_error"][arm] == pytest.approx(
+        assert native_diagnostic["max_relative_error"][arm] == pytest.approx(
             np.max(np.abs(nominal[key] / observed_ratio - 1)))
+        rows = np.searchsorted(dense["probe_axis_GHz"], coordinates[arm])
+        np.testing.assert_array_equal(dense["probe_axis_GHz"][rows], coordinates[arm])
+        coefficient = np.exp(calibration["profile"]["arms"][arm]["log_total_coefficient_at_nodes"])
+        exact_corrected = dense[key][rows] * coefficient
+        assert exact_diagnostic["max_relative_error"][arm] == pytest.approx(
+            np.max(np.abs(exact_corrected / observed_ratio - 1)))
     changed_raw = scheme.compute(dict(params, pump_mw=350., temp_c=118.))
     changed = practical.calibrate_spectrum(changed_raw, enabled=True, selected_delta_mhz=150.)
     assert changed["applied"] and changed["context_changed"]
     assert changed["selected_point"]["available"]
     assert changed["nominal_node_deviation"] is None
-    assert changed["source_model_differences"] == calibration["source_model_differences"]
+    assert changed["source_model_differences"] == nominal["source_model_differences"]
     assert not np.allclose(changed["G_s"], calibration["G_s"])
     assert practical.calibrate_spectrum(raw, enabled=False)["nominal_node_deviation"] is None
     assert np.all(np.isfinite(changed["G_s"]))
