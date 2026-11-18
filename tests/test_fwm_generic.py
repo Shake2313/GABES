@@ -820,9 +820,13 @@ def test_beam_geometry_knobs_default_to_the_legacy_constants():
         fwm.SEEDED_DETECTION_EFFICIENCY_PCT)
 
     raw = scheme.compute(params)
+    assert raw["velocity_measure"] == "exact"
+    assert raw["response_estimator"]["method"] == fwm.RESPONSE_POLE
+    assert raw["response_estimator"]["solved_probe_points"] == raw["probe_axis_GHz"].size
     center = fwm.branch_center_GHz(params["opd"], -1)
     res = fwm.FWM_FIDELITY[fwm.normalize_fidelity(params["resolution"])]
-    legacy = fwm.compute_spectrum(
+    # Compare using the fixed waist defaults and the dense pole implementation.
+    fixed_geometry = fwm.compute_spectrum(
         params["opd"], T=params["temp_c"] + 273.15,
         P_pump=params["pump_mw"] * 1e-3, P_probe=params["probe_uw"] * 1e-6,
         line_strength=params["line_strength"],
@@ -835,14 +839,10 @@ def test_beam_geometry_knobs_default_to_the_legacy_constants():
         phase_detail=res["phase_detail"],
         pump_probe_angle_deg=params["seeded_angle_deg"],
         model_fidelity=fwm.normalize_fidelity(params["resolution"]),
-        response_method=res.get("response_method", fwm.RESPONSE_GRID),
-        scan_tolerance_dB=res.get("scan_tolerance_dB", fwm.SCAN_TOLERANCE_DB),
-        scan_tolerance_log10_gain=res.get(
-            "scan_tolerance_log10_gain", fwm.SCAN_TOLERANCE_LOG10_GAIN),
-        scan_start_stride=res.get("scan_start_stride", fwm.SCAN_START_STRIDE),
+        response_method=fwm.RESPONSE_POLE,
         velocity_measure=params["velocity_measure"], branch=-1)
     for key in ("probe_axis_GHz", "G_s", "G_c", "S_dB"):
-        assert np.array_equal(np.asarray(raw[key]), np.asarray(legacy[key])), \
+        assert np.array_equal(np.asarray(raw[key]), np.asarray(fixed_geometry[key])), \
             f"{key} drifted when the geometry became a knob"
     assert raw["w_pump_m"] == fwm.W_PUMP
     assert raw["w_probe_m"] == fwm.W_PROBE
