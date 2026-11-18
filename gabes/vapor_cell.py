@@ -42,6 +42,15 @@ def _least_squares_covariance(weighted_design: np.ndarray) -> np.ndarray:
     return inverse_design @ inverse_design.T
 
 
+class CellTemperatureError(ValueError):
+    """Cell temperatures that no sealed-cell vapor can satisfy."""
+
+
+COLD_PATH_TOLERANCE_K = 1e-9
+COLD_PATH_MESSAGE = ("The beam-path temperature must be at or above the cold-spot "
+                     "temperature; a colder beam path would hold supersaturated vapor.")
+
+
 def cold_spot_limited_density(cold_spot_density_m3, cold_spot_k, path_k):
     """Vapor density at ``path_k`` [K] when a colder reservoir at ``cold_spot_k``
     [K] fixes the pressure.
@@ -51,8 +60,14 @@ def cold_spot_limited_density(cold_spot_density_m3, cold_spot_k, path_k):
     ``cold_spot_density_m3`` is the saturated density at the reservoir (any
     isotope weighting already applied); ``path_k`` may be an array. The ratio is
     formed first, so equal temperatures return ``cold_spot_density_m3`` exactly.
+
+    The cold spot is the coldest point the vapor reaches, so a path below
+    ``cold_spot_k`` raises `CellTemperatureError` (user decision 2026-11-18).
     """
 
+    # Rounding in a °C to K conversion must not reject equal temperatures.
+    if np.any(np.asarray(path_k) < cold_spot_k - COLD_PATH_TOLERANCE_K):
+        raise CellTemperatureError(COLD_PATH_MESSAGE)
     return cold_spot_density_m3 * (cold_spot_k / path_k)
 
 
@@ -437,6 +452,7 @@ def fit_effective_temperature_calibration(
 
 __all__ = [
     "AxialCellProfile",
+    "CellTemperatureError",
     "CellTemperatureState",
     "LinearTemperatureCalibration",
     "SegmentedBeerLambert",

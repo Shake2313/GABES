@@ -261,7 +261,8 @@ class RydbergEITScheme(Scheme):
                 r["cold_spot_temp_c"], 15.0, 100.0, 0.5, "°C",
                 visible_if={"temperature_model": "Separated"},
                 help="Coldest reservoir temperature that fixes the sealed-cell vapor "
-                     "pressure. Local density is P_cold/(k_B T_effective)."),
+                     "pressure. Local density is P_cold/(k_B T_effective). It must not "
+                     "exceed the effective vapor temperature."),
             ParamSpec("coupling_rabi_mhz", "Coupling Rabi (anchor)", "Fields",
                       r["coupling_rabi_mhz"], 0.1, 20.0, 0.1, "MHz", advanced=True,
                       help="Anchor Ω_c/2π at the reference power & waist. The "

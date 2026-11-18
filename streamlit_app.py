@@ -307,10 +307,11 @@ def render_spectra():
     retained = reusable_solution(st.session_state.get("spectral-workspace-"+scheme.name),
                                  scheme, params, READOUT_CACHE_VERSION) if comparing else None
     from gabes.schemes.sas_axial import AxialInputError
+    from gabes.vapor_cell import CellTemperatureError
     try:
         raw = retained[0] if retained is not None else _cached_compute(
             scheme.name, recompute_items, cache_version)
-    except AxialInputError as error:
+    except (AxialInputError, CellTemperatureError) as error:
         st.error(str(error))
         return
     param_items = tuple(sorted(params.items()))

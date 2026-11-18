@@ -388,7 +388,8 @@ class SASScheme(Scheme):
                       help="Temperature of the atoms crossing the beam: it sets the "
                       "thermal velocity distribution (Doppler width, velocity "
                       "classes) and, at the cold-spot vapor pressure, the density "
-                      "n_sat(T_cold)·T_cold/T_Doppler. Ignored while the tie above is on."),
+                      "n_sat(T_cold)·T_cold/T_Doppler. It must be at or above the cell "
+                      "temperature. Ignored while the tie above is on."),
             ParamSpec(
                 "paraffin_coated", "Cell type", "Cell & beams", False,
                 advanced=True, choices=(False, True),

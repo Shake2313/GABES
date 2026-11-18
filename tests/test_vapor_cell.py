@@ -54,3 +54,34 @@ def test_axial_profile_uses_the_shared_density():
     expected = vapor_cell.cold_spot_limited_density(
         profile.cold_spot_density_m3, 39.0 + 273.15, temperature + 273.15)
     assert profile.density_m3.tobytes() == expected.tobytes()
+
+
+def test_beam_path_colder_than_the_cold_spot_is_rejected():
+    """User decision 2026-11-18: a colder beam path would hold supersaturated vapor."""
+    n_cold = species.number_density(species.RB85, 423.15)
+    with pytest.raises(vapor_cell.CellTemperatureError, match="at or above the cold-spot"):
+        vapor_cell.cold_spot_limited_density(n_cold, 423.15, 293.15)
+    with pytest.raises(vapor_cell.CellTemperatureError):
+        vapor_cell.cold_spot_limited_density(n_cold, 423.15, np.array([430.0, 423.0]))
+    # Equal temperatures after a °C to K conversion stay exact.
+    assert vapor_cell.cold_spot_limited_density(n_cold, 150.0 + 273.15, 150.0 + 273.15) == n_cold
+    state = vapor_cell.resolve_cell_temperature(
+        60.0, effective_vapor_temp_c=30.0, cold_spot_temp_c=45.0)
+    with pytest.raises(vapor_cell.CellTemperatureError):
+        state.beam_path_density_m3()
+
+
+def test_schemes_reject_a_beam_path_colder_than_the_cold_spot():
+    from gabes.schemes.sas import GENERIC, SASScheme
+
+    sas = SASScheme()
+    for medium in ("Rb (natural)", GENERIC):
+        params = dict(sas.defaults(), species=medium, temp_c=150.0,
+                      constrain_doppler_temp=False, doppler_temp_c=20.0, scan_points=401)
+        with pytest.raises(vapor_cell.CellTemperatureError):
+            sas.compute(params)
+    rydberg = RydbergEITScheme()
+    separated = dict(rydberg.defaults(), temperature_model="Separated",
+                     effective_temp_c=30.0, cold_spot_temp_c=45.0)
+    with pytest.raises(vapor_cell.CellTemperatureError):
+        rydberg.compute(separated)

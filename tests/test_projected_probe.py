@@ -10,6 +10,7 @@ from gabes import constants, species
 from gabes.atoms import AtomModel
 from gabes.optical_pumping import ProjectedProbe
 from gabes.schemes.sas import LEGACY_WEAK_PROBE, SASScheme
+from gabes.vapor_cell import CellTemperatureError
 
 
 def _line_areas(manifold):
@@ -276,7 +277,9 @@ def test_advanced_reference_rejects_beam_path_colder_than_cold_spot():
         "Finite-probe pumping reference", params)
     with pytest.raises(ValueError, match="at or above the cold-spot temperature"):
         scheme.projected_probe_reference(params)
-    assert scheme.compute(params)["probe_model"] == "weak_probe_legacy"
+    # User decision 2026-11-18: the main solve rejects the same supersaturated cell.
+    with pytest.raises(CellTemperatureError, match="at or above the cold-spot temperature"):
+        scheme.compute(params)
 
 
 def test_advanced_line_strength_is_reported_as_opacity_calibration():

@@ -45,6 +45,12 @@ def _values(params,key,spec):
     elif key=="residual_zeeman_mhz": values=[0.,current]
     else: values=[20.,30.,35.,40.,42.,45.,47.,50.,53.,55.]
     values=sorted({float(np.clip(v,spec.vmin,spec.vmax)) for v in values}|{current})
+    # The beam path may not be colder than the cold spot (vapor_cell); sample only
+    # separated temperatures the solve accepts.
+    if key=="effective_temp_c":
+        values=[v for v in values if v>=float(params.get("cold_spot_temp_c",-np.inf)) or v==current]
+    elif key=="cold_spot_temp_c":
+        values=[v for v in values if v<=float(params.get("effective_temp_c",np.inf)) or v==current]
     if str(params.get("doppler","off"))=="on" and len(values)>3:
         values=sorted({values[0],current,values[-1]})
     return values

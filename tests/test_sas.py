@@ -41,6 +41,7 @@ from gabes.schemes.sas import (  # noqa: E402
     _velocity_correlated_average,
 )
 from gabes.schemes.absorption import ODScheme  # noqa: E402
+from gabes.vapor_cell import CellTemperatureError  # noqa: E402
 from gabes.lineshape import narrowest_subdoppler, subdoppler_feature  # noqa: E402
 
 G = constants.GAMMA
@@ -940,10 +941,14 @@ def test_released_doppler_temperature_sets_width_and_ideal_gas_density():
     assert hot["alpha_unit"].max() < cold["alpha_unit"].max()
 
     # The mirror case: density temperature alone moves the area, not the width.
+    base = SAS.compute(_params(**common, doppler_temp_c=100.0))
     denser = SAS.compute(_params(**{**common, "temp_c": 80.0},
-                                 doppler_temp_c=60.0))
-    assert abs(denser["dopp_fwhm"] / cold["dopp_fwhm"] - 1.0) < 1e-12
-    assert _tz(denser["alpha_unit"], denser["scan"]) > 2.0 * area_cold
+                                 doppler_temp_c=100.0))
+    assert abs(denser["dopp_fwhm"] / base["dopp_fwhm"] - 1.0) < 1e-12
+    assert _tz(denser["alpha_unit"], denser["scan"]) > 2.0 * _tz(base["alpha_unit"], base["scan"])
+    # User decision 2026-11-18: a beam path colder than the cold spot is rejected.
+    with pytest.raises(CellTemperatureError):
+        SAS.compute(_params(**{**common, "temp_c": 80.0}, doppler_temp_c=60.0))
 
 
 def test_released_temperature_is_reported_and_labelled():
