@@ -141,7 +141,8 @@ def test_recompute_context_keeps_original_args_and_mutable_copies(context):
     saved = raw["stark_recompute_context"]
     signature = inspect.signature(fwm.compute_spectrum).parameters
     omitted_defaults = {"extra_probe_points_GHz": (), "angular_transverse_order": 0,
-                        "angular_transverse_cutoff": 5.0}
+                        "angular_transverse_cutoff": 5.0, "_readout_probe_points_GHz": (),
+                        "_sparse_pole_schur": False}
     assert set(saved) == set(signature) - {"pump_stark_fraction", *omitted_defaults}
     assert {key: signature[key].default for key in omitted_defaults} == omitted_defaults
     assert saved["branches"] == [-1]
@@ -165,6 +166,23 @@ def test_stark_recompute_retains_explicit_probe_coordinates(context):
     corrected = fwm.compute_spectrum(**raw["stark_recompute_context"], pump_stark_fraction=.25)
     np.testing.assert_array_equal(raw["probe_axis_GHz"], corrected["probe_axis_GHz"])
     assert coordinate in corrected["probe_axis_GHz"]
+
+
+def test_stark_replay_from_readout_points_restores_native_scan_and_sparse_solver(context):
+    center = (context["scan_min"] + context["scan_max"]) / 2
+    points = (center - .00019, center + .00027)
+    native_inputs = dict(context, velocity_measure="exact", _sparse_pole_schur=True)
+    readout = fwm.compute_spectrum(**native_inputs, _readout_probe_points_GHz=points)
+    np.testing.assert_array_equal(readout["probe_axis_GHz"], points)
+    saved = readout["stark_recompute_context"]
+    assert "_readout_probe_points_GHz" not in saved
+    assert saved["_sparse_pole_schur"] is True
+
+    replay = fwm.compute_spectrum(**saved, pump_stark_fraction=.25)
+    native = fwm.compute_spectrum(**native_inputs, pump_stark_fraction=.25)
+    assert native["probe_axis_GHz"].size > len(points)
+    for key in ("probe_axis_GHz", "G_s", "G_c", "T_field_small_signal"):
+        np.testing.assert_array_equal(replay[key], native[key])
 
 
 def test_zero_pump_spectrum_is_exact_identity(context):
