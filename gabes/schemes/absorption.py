@@ -422,13 +422,14 @@ def _mkey(params, new_key, old_key, scale, default):
 # =========================================================
 LAMBDA_COUPLING_POWER_REF_MW = 1.0
 LAMBDA_COUPLING_DIAMETER_REF_MM = 1.0
+LAMBDA_AUTO_DOPPLER = "Automatic"
 LAMBDA_JOINT_MAXWELL = "Joint Maxwell (reference)"
 LAMBDA_MAX_ANGLE_MRAD = 20.0
 
 
 class LambdaScheme(Scheme):
     cluster = "A — Absorption"
-    cache_version = "physical-units-v8-ne-optical-reference"
+    cache_version = "physical-units-v9-angled-joint-default"
     defaults_version = "physical-units-v3"
     supports_headless_observables = True
     model_comparison_parameter = "coupling_power_mw"
@@ -546,12 +547,13 @@ class LambdaScheme(Scheme):
                       0.01, 2.0, 0.01, "", advanced=True, recompute=False),
             ParamSpec("doppler", "Doppler (vapor motion)", "Numerics", d["dopp"],
                       choices=("on", "off"), advanced=True),
-            ParamSpec("angled_doppler_model", "Angled Doppler model", "Numerics", "Scalar",
-                      choices=("Scalar", LAMBDA_JOINT_MAXWELL), advanced=True,
+            ParamSpec("angled_doppler_model", "Angled Doppler model", "Numerics", LAMBDA_AUTO_DOPPLER,
+                      choices=(LAMBDA_AUTO_DOPPLER, "Scalar", LAMBDA_JOINT_MAXWELL), advanced=True,
                       visible_if={"doppler": "on"},
-                      help="The joint reference uses the same longitudinal velocity in both "
-                           "optical and Raman shifts, and averages transverse motion independently. "
-                           "Angled scans may take several seconds per condition."),
+                      help="Automatic uses joint Maxwell averaging for nonparallel beams with Doppler on. "
+                           "The optical and Raman shifts share the longitudinal velocity; "
+                           "the transverse motion is averaged independently. "
+                           "Angled scans can take several seconds. Select Scalar for the one-dimensional approximation."),
         ]
         return specs
 
@@ -653,8 +655,10 @@ class LambdaScheme(Scheme):
         gg_khz = _mkey(params, "buffer_ground_relax_khz", "gamma_gg", gamma_mhz * 1e3,
                        self._DEF[mode]["gg_khz"])
         angle_mrad = float(params.get("beam_angle_mrad", 0.0))
-        joint_selected = params.get("angled_doppler_model", "Scalar") == LAMBDA_JOINT_MAXWELL
         doppler_on = params.get("doppler", "off") == "on"
+        model = params.get("angled_doppler_model", LAMBDA_AUTO_DOPPLER)
+        joint_selected = model == LAMBDA_JOINT_MAXWELL or (
+            model == LAMBDA_AUTO_DOPPLER and doppler_on and angle_mrad != 0.0)
         if joint_selected and doppler_on and not 0.0 <= angle_mrad <= LAMBDA_MAX_ANGLE_MRAD:
             raise ValueError(f"Joint Maxwell beam angle must be in [0, {LAMBDA_MAX_ANGLE_MRAD:g}] mrad.")
         two_photon_k_ratio = self._two_photon_k_ratio(params, medium)

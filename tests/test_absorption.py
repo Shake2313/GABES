@@ -224,8 +224,7 @@ def test_lambda_angle_response_matches_explicit_stationary_hamiltonians(
         doppler_on, compiled, monkeypatch):
     """Separate probe scan and velocity shifts in an independent complex solve.
 
-    This verifies the retained one-dimensional velocity model, not the missing
-    transverse Maxwell average or an absolute alignment-tolerance prediction.
+    The explicit Scalar selection uses one longitudinal velocity coordinate.
     """
     from gabes import atoms, core, doppler, kernels
     from gabes.schemes.absorption import PROBE_RABI
@@ -236,7 +235,7 @@ def test_lambda_angle_response_matches_explicit_stationary_hamiltonians(
     sc = schemes.get("eit")
     params = _params(
         sc, doppler="on" if doppler_on else "off", beam_angle_mrad=10.0,
-        coupling_detuning_mhz=2.7)
+        coupling_detuning_mhz=2.7, angled_doppler_model="Scalar")
     detunings = 2 * np.pi * 1e6 * np.array([-11.0, -0.7, 0.0, 2.7, 8.0])
     monkeypatch.setattr(sc, "_scan", lambda *args, **kwargs: detunings)
     raw = sc.compute(params)

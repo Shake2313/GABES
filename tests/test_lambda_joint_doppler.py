@@ -15,7 +15,11 @@ from gabes.schemes.absorption import (
 def test_joint_mode_recovers_inactive_limits_exactly(mode, doppler_mode, angle, status):
     scheme = LambdaScheme()
     params = dict(scheme._default_values(mode), doppler=doppler_mode, beam_angle_mrad=angle)
-    scalar = scheme.compute(params)
+    automatic = scheme.compute(params)
+    scalar = scheme.compute(dict(params, angled_doppler_model="Scalar"))
+    assert automatic.keys() == scalar.keys()
+    for key, expected in scalar.items():
+        np.testing.assert_array_equal(automatic[key], expected)
     opt_in = scheme.compute(dict(params, angled_doppler_model=LAMBDA_JOINT_MAXWELL))
     assert opt_in.pop("joint_doppler") == {"status": status}
     assert scalar.keys() == opt_in.keys()
@@ -57,11 +61,10 @@ def _direct_cartesian_mean(scan, raw, params, *, step_z, order_x, cutoff):
     return np.asarray(result)
 
 
-def test_joint_reference_matches_direct_held_out_points_and_reports_scalar_delta():
+def test_angled_default_matches_direct_held_out_points_and_reports_scalar_delta():
     scheme = LambdaScheme()
-    params = dict(scheme._default_values("eit"), beam_angle_mrad=0.7,
-                  coupling_detuning_mhz=2.4, species="\u00b9\u00b3\u00b3Cs", line="D2",
-                  angled_doppler_model=LAMBDA_JOINT_MAXWELL)
+    params = dict(scheme.defaults(), beam_angle_mrad=0.7,
+                  coupling_detuning_mhz=2.4, species="\u00b9\u00b3\u00b3Cs", line="D2")
     raw = scheme.compute(params)
     assert raw["joint_doppler"]["status"] == "converged"
     assert raw["joint_doppler"]["transverse_cutoff_check"]["cutoff_sigma"] == 7.
@@ -85,10 +88,9 @@ def test_joint_reference_matches_direct_held_out_points_and_reports_scalar_delta
         * evidence["raman_rms"]["sigma_velocity_m_s"] / (2*np.pi))
 
 
-def test_unconverged_transverse_average_withholds_cpt_width_and_group_index():
+def test_default_unconverged_transverse_average_withholds_cpt_width_and_group_index():
     scheme = LambdaScheme()
-    params = dict(scheme._default_values("cpt"), doppler="on", beam_angle_mrad=5.,
-                  angled_doppler_model=LAMBDA_JOINT_MAXWELL)
+    params = dict(scheme._default_values("cpt"), doppler="on", beam_angle_mrad=5.)
     raw = scheme.compute(params)
     evidence = raw["joint_doppler"]
     assert evidence["status"] == "not_converged"
@@ -100,9 +102,12 @@ def test_unconverged_transverse_average_withholds_cpt_width_and_group_index():
     assert window["group_delay_s"] is None
 
 
-def test_joint_mode_rejects_angles_outside_its_control_range():
+@pytest.mark.parametrize("angle", [-0.1, 20.1, float("nan")])
+@pytest.mark.parametrize("model", [None, LAMBDA_JOINT_MAXWELL])
+def test_joint_mode_rejects_angles_outside_its_control_range(angle, model):
     scheme = LambdaScheme()
-    params = dict(scheme._default_values("eit"), beam_angle_mrad=20.1,
-                  angled_doppler_model=LAMBDA_JOINT_MAXWELL)
+    params = dict(scheme.defaults(), beam_angle_mrad=angle)
+    if model is not None:
+        params["angled_doppler_model"] = model
     with pytest.raises(ValueError, match="beam angle"):
         scheme.compute(params)
