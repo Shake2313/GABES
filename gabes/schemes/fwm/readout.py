@@ -1,7 +1,7 @@
 """FWM gain calibration, noise and selected-point readout."""
 from .. import fwm
 from ...fwm_gain_calibration import (
-    MODEL_LAB, calibrate_spectrum as calibrate_experimental_gain, evaluate as
+    MODEL_LAB, MODEL_LAB_REFIT, calibrate_spectrum as calibrate_experimental_gain, evaluate as
     evaluate_experimental_gain,
 )
 from .common import (
@@ -277,7 +277,7 @@ def _focused_readout_reference(encoded_context, extra_probe_points):
                             extra_probe_points_GHz=extra_probe_points)
 
 
-def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration):
+def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration, lab_model=MODEL_LAB):
     if not raw.get("focused_readout_reference"):
         return raw, "CACHED_GRID_INTERPOLATION"
     expected = raw.get("gain_budget", {}).get("displayed", {})
@@ -295,7 +295,9 @@ def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration):
     if lab_calibration:
         measured_nodes = fwm_measured_gain.internal_delta_mhz_from_eom(
             fwm_measured_gain.observations()["eom_MHz"])
-        warp = fwm_experiment_gain.source_detunings(np.r_[gain_axis, measured_nodes])
+        model_id = (fwm_experiment_gain.REFIT_MODEL_ID if lab_model == MODEL_LAB_REFIT
+                    else fwm_experiment_gain.MODEL_ID)
+        warp = fwm_experiment_gain.source_detunings(np.r_[gain_axis, measured_nodes], model_id=model_id)
         extra = np.concatenate((extra, *(in_span(delta) for delta in warp.values())))
     extra = tuple(np.setdiff1d(extra, native).tolist())
     estimator = raw["response_estimator"]
@@ -329,7 +331,7 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
     phase_view = params.get("squeezing_view") == SQUEEZING_QUADRATURE_PHASE
     gain_model = params.get("gain_calibration_model", MODEL_LAB)
     gain_requested = params.get("experimental_gain_calibration", False)
-    lab_calibration = gain_requested and gain_model == MODEL_LAB
+    lab_calibration = gain_requested and gain_model in (MODEL_LAB, MODEL_LAB_REFIT)
     gain_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
     if gain_requested:
         gain_axis = np.unique(np.r_[gain_axis, tpd])
@@ -341,7 +343,7 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
     coordinate_status = "CACHED_GRID_INTERPOLATION"
     if params.get("exact_readout_coordinates", False):
         source, coordinate_status = _focused_readout_source(raw, tpd, gain_axis,
-                                                            lab_calibration=lab_calibration)
+                                                            lab_calibration=lab_calibration, lab_model=gain_model)
     op = fwm.operating_point(source, tpd, branch=-1)
     native_indices = np.searchsorted(source["probe_axis_GHz"], raw["probe_axis_GHz"])
     experimental_gain = calibrate_experimental_gain(

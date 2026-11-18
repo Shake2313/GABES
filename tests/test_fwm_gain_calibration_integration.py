@@ -74,12 +74,12 @@ def test_model_control_is_readout_only_and_lab_preset_is_stable():
     scheme = fwm.FWMScheme()
     specs = {s.name: s for s in scheme.param_schema()}
     control = specs["gain_calibration_model"]
-    assert control.default == calibration.MODEL_LAB
+    assert control.default == calibration.MODEL_LAB_REFIT
     assert control.choices == calibration.MODELS
     assert not control.recompute
     assert "gain_calibration_model" not in scheme.recompute_keys()
     presets = {p.name: p.values for p in scheme.presets()}
-    assert presets["2026-10-13 experiment"]["gain_calibration_model"] == calibration.MODEL_LAB
+    assert presets["2026-10-13 experiment"]["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
     assert presets["2026-10-13 experiment"]["experimental_gain_calibration"]
     assert not presets["Sim Gold Reference"]["experimental_gain_calibration"]
 
@@ -322,11 +322,25 @@ def test_generic_rail_model_selection_and_lab_preset_reset(literature_boundary):
     assert "fwm__gain_calibration_model" not in [s.key for s in app.selectbox]
     app.selectbox(key="fwm___named_default").select("builtin:0").run()
     assert not app.exception
-    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB
+    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_REFIT
     app.selectbox(key="fwm__gain_calibration_model").select(calibration.MODEL_LITERATURE).run()
     assert not app.exception
     assert app.session_state["view"]["experimental_gain_calibration"]["model_id"] == "test_literature"
     app.selectbox(key="fwm___named_default").select("builtin:1").run()
     app.selectbox(key="fwm___named_default").select("builtin:0").run()
     assert not app.exception
-    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB
+    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_REFIT
+
+
+def test_old_saved_lab_settings_and_missing_selector_keep_original_fit():
+    from gabes_ui.defaults_store import create_default, parse_default
+
+    scheme = fwm.FWMScheme()
+    defaults = scheme.defaults()
+    saved = create_default(scheme, "Original lab", dict(
+        defaults, experimental_gain_calibration=True, gain_calibration_model=calibration.MODEL_LAB))
+    assert parse_default(scheme, saved)["params"]["gain_calibration_model"] == calibration.MODEL_LAB
+    del saved["params"]["gain_calibration_model"]
+    assert parse_default(scheme, saved)["params"]["gain_calibration_model"] == calibration.MODEL_LAB
+    assert defaults["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert calibration.profile(model=calibration.MODEL_LAB_REFIT)["model_id"] == lab.REFIT_MODEL_ID

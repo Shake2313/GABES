@@ -8,15 +8,16 @@ from . import fwm_experiment_gain
 
 
 MODEL_LAB = "2026-10-13 lab"
+MODEL_LAB_REFIT = "2026-10-13 lab (exact-source refit)"
 MODEL_LITERATURE = "Multi-paper literature (experimental)"
 MODEL_CHI = "Multi-paper χ propagation (experimental)"
 MODEL_STARK = "Multi-paper pump/Stark + χ (experimental)"
 MODEL_ZEEMAN = "Multi-paper Zeeman pump + χ (experimental)"
-MODELS = (MODEL_LAB, MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
+MODELS = (MODEL_LAB_REFIT, MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN, MODEL_LAB)
 
 
 def _module(model):
-    if model == MODEL_LAB:
+    if model in (MODEL_LAB, MODEL_LAB_REFIT):
         return fwm_experiment_gain
     if model == MODEL_LITERATURE:
         from . import fwm_literature_gain
@@ -33,14 +34,18 @@ def _module(model):
     raise ValueError(f"Unknown FWM gain calibration model: {model!r}")
 
 
+def _version(model):
+    return {"model_id": fwm_experiment_gain.REFIT_MODEL_ID} if model == MODEL_LAB_REFIT else {}
+
+
 def profile(*, model=MODEL_LAB):
-    result = _module(model).profile()
+    result = _module(model).profile(**_version(model))
     result["calibration_model"] = model
     return result
 
 
 def evaluate(raw, delta_mhz, *, enabled=True, model=MODEL_LAB):
-    result = _module(model).evaluate(raw, delta_mhz, enabled=enabled)
+    result = _module(model).evaluate(raw, delta_mhz, enabled=enabled, **_version(model))
     result["calibration_model"] = model
     result.setdefault("display_name", model)
     return result
@@ -49,7 +54,7 @@ def evaluate(raw, delta_mhz, *, enabled=True, model=MODEL_LAB):
 def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None,
                        model=MODEL_LAB):
     result = _module(model).calibrate_spectrum(
-        raw, enabled=enabled, selected_delta_mhz=selected_delta_mhz)
+        raw, enabled=enabled, selected_delta_mhz=selected_delta_mhz, **_version(model))
     result["calibration_model"] = model
     result.setdefault("display_name", model)
     return result

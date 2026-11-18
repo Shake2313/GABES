@@ -6,12 +6,13 @@ they do not replace it with a measured lookup curve. Outside measured support,
 only the correction coefficient holds its boundary value: the model continues.
 """
 import copy
+from pathlib import Path
 
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
 from . import fwm_measured_gain as measured
-from .fwm_calibration_common import calibration_axis, sample_model_gain
+from .fwm_calibration_common import cached_profile_loader, calibration_axis, sample_model_gain
 
 # Historical evaluators import the previous private names directly.
 _axis = calibration_axis
@@ -105,10 +106,25 @@ _FROZEN_SOURCE_MODEL = {
 }
 
 
-def profile():
+REFIT_MODEL_ID = "fwm_20261013_warp_affine_residual_v2"
+_refit_record = cached_profile_loader(
+    lambda: Path(__file__).with_name("data") / "fwm_lab_gain_refit_v2.json")
+
+
+def _arm_coefficients(model_id):
+    if model_id == MODEL_ID:
+        return _ARMS
+    if model_id == REFIT_MODEL_ID:
+        return _refit_record()["arms"]
+    raise ValueError(f"Unknown lab gain calibration version: {model_id!r}")
+
+
+def profile(*, model_id=MODEL_ID):
     """Fresh calibration metadata; empirical fit, not independent validation."""
-    return {
-        "model_id": MODEL_ID,
+    arms = _arm_coefficients(model_id)
+    refit = model_id == REFIT_MODEL_ID
+    result = {
+        "model_id": model_id,
         "measurement_date": "2026-10-13",
         "source_workbook_sha256": measured.SOURCE_WORKBOOK_SHA256,
         "calibration_record": "analysis/fwm_experiment_20261022/gain_profile.json",
@@ -130,8 +146,17 @@ def profile():
         "node_agreement": "Exact 23-point development fit on the frozen source arrays only",
         "canonical_transfer_modified": False,
         "noise_covariance_calibrated": False,
-        "arms": copy.deepcopy(_ARMS),
+        "arms": copy.deepcopy(arms),
     }
+    if refit:
+        result.pop("calibration_record_commit")
+        result.update(
+            calibration_record="analysis/fast_tier/fwm_lab_gain_refit_2026_11_18/fit/profile.json",
+            frozen_source_model=dict(_refit_record()["frozen_source_model"]),
+            source_coordinates="exact arm-specific detunings in the current Ultra pole solution",
+            node_agreement="23 development points at exact source coordinates on the pinned Ultra model",
+        )
+    return result
 
 
 def _context_changes(raw):
@@ -153,18 +178,18 @@ def _context_changes(raw):
     return changes
 
 
-def source_detunings(delta_mhz, *, enabled=True):
+def source_detunings(delta_mhz, *, enabled=True, model_id=MODEL_ID):
     """Return the atomic detunings sampled for each lab calibration arm."""
     delta = np.asarray(delta_mhz, dtype=float)
     return {
         arm: (fit["source_center_delta_mhz"]
               + fit["frequency_scale"] * (delta - fit["measured_peak_delta_mhz"]))
         if enabled else delta
-        for arm, fit in _ARMS.items()
+        for arm, fit in _arm_coefficients(model_id).items()
     }
 
 
-def evaluate(raw, delta_mhz, *, enabled=True):
+def evaluate(raw, delta_mhz, *, enabled=True, model_id=MODEL_ID):
     """Evaluate corrected gains at arbitrary internal detunings, including tails.
 
     Detector/noise sliders are absent from this API. Its frozen correction acts
@@ -177,10 +202,13 @@ def evaluate(raw, delta_mhz, *, enabled=True):
     tolerance = 64*np.finfo(float).eps*max(1.0, float(np.max(np.abs(_NODES))))
     within = (delta >= _NODES[0]-tolerance) & (delta <= _NODES[-1]+tolerance)
     changed = _context_changes(raw)
+    calibration_profile = profile(model_id=model_id)
     source_model = raw.get("gain_source_model")
     source_model_differences = None if source_model is None else [
-        key for key, frozen_value in _FROZEN_SOURCE_MODEL.items()
+        key for key, frozen_value in calibration_profile["frozen_source_model"].items()
         if key in source_model and source_model[key] != frozen_value
+        and not (model_id == REFIT_MODEL_ID and key == "scan_points"
+                 and source_model[key] >= frozen_value)
     ]
     result = {
         "applied": bool(enabled),
@@ -195,12 +223,12 @@ def evaluate(raw, delta_mhz, *, enabled=True):
                    "EMPIRICAL_CALIBRATION_CHANGED_CONDITIONS" if changed else "EMPIRICAL_CALIBRATION"),
         "point_status": np.where(within, "CALIBRATED_MEASUREMENT_REGION", "EXTRAPOLATED_FREQUENCY"),
         "source_delta_mhz": {}, "outside_atomic_scan": {},
-        "profile": profile(),
+        "profile": calibration_profile,
         "gain_quantity": _GAIN_QUANTITY,
     }
-    source_positions = source_detunings(delta, enabled=enabled)
+    source_positions = source_detunings(delta, enabled=enabled, model_id=model_id)
     for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
-        fit = _ARMS[arm]
+        fit = calibration_profile["arms"][arm]
         positions = source_positions[arm]
         sample, outside = _sample_model(axis, raw[key], positions, arm=arm)
         if enabled:
@@ -214,10 +242,10 @@ def evaluate(raw, delta_mhz, *, enabled=True):
     return result
 
 
-def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
+def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None, model_id=MODEL_ID):
     """Return a nonmutating calibrated view on the cached spectrum's own axis."""
     axis = _axis(raw)
-    result = evaluate(raw, axis, enabled=enabled)
+    result = evaluate(raw, axis, enabled=enabled, model_id=model_id)
     if not enabled:
         # Preserve the exact uncalibrated result; log interpolation at its knots
         # would otherwise introduce unnecessary roundoff in a disabled toggle.
@@ -225,7 +253,7 @@ def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
         result["G_c"] = np.array(raw["G_c"], copy=True)
     result["nominal_node_deviation"] = None
     if enabled and not result["context_changed"] and result["source_model"] is not None:
-        fitted_nodes = evaluate(raw, _NODES)
+        fitted_nodes = evaluate(raw, _NODES, model_id=model_id)
         result["nominal_node_deviation"] = {
             "scope": "training nodes at nominal apparatus settings; no acceptance threshold",
             "point_count": int(_NODES.size),
@@ -235,7 +263,7 @@ def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
             },
         }
     if selected_delta_mhz is not None:
-        selected = evaluate(raw, float(selected_delta_mhz), enabled=enabled)
+        selected = evaluate(raw, float(selected_delta_mhz), enabled=enabled, model_id=model_id)
         result["selected_point"] = {
             "G_s": float(selected["G_s"]), "G_c": float(selected["G_c"]),
             "available": True, "applied": bool(enabled),

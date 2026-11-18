@@ -12,7 +12,7 @@ from .common import (
 )
 from ..base import ExtraView, ParamSpec, Preset, Scheme
 from ...fwm_gain_calibration import (
-    MODELS as GAIN_CALIBRATION_MODELS, MODEL_CHI, MODEL_LAB, MODEL_LITERATURE, MODEL_STARK,
+    MODELS as GAIN_CALIBRATION_MODELS, MODEL_CHI, MODEL_LAB, MODEL_LAB_REFIT, MODEL_LITERATURE, MODEL_STARK,
     MODEL_ZEEMAN, calibrate_spectrum as calibrate_experimental_gain,
 )
 from .readout import (
@@ -63,9 +63,9 @@ class FWMScheme(Scheme):
 
     def migrate_default_params(self, params):
         replay_flags = ("gain_closure_enabled", "legacy_gain_calibration_fixture")
-        if not any(name in params for name in replay_flags):
-            return params
         migrated = dict(params)
+        # Saved settings without a model selector used the original lab fit.
+        migrated.setdefault("gain_calibration_model", MODEL_LAB)
         for name in replay_flags:
             if name in migrated and not isinstance(migrated[name], bool):
                 raise ValueError(f"{name} must be true or false.")
@@ -171,10 +171,10 @@ class FWMScheme(Scheme):
                            "The first calculation takes longer. The adaptive atomic scan stays separate. "
                            "Other empirical gain models keep their existing sampling."),
             ParamSpec("gain_calibration_model", "Gain calibration model",
-                      "Detection & scaling", MODEL_LAB,
+                      "Detection & scaling", MODEL_LAB_REFIT,
                       choices=GAIN_CALIBRATION_MODELS, recompute=False,
                       visible_if=dict(seeded, experimental_gain_calibration=True),
-                      help="The 10/13 model follows the laboratory gain measurements. "
+                      help="The 10/13 refit uses exact source coordinates. The original lab fit is available for replay. "
                            "Literature options correct gains or complex susceptibility; "
                            "pump/Stark also recomputes the atomic response before propagation. "
                            "Zeeman pump uses a cached 24-state response with optical pumping, "
@@ -396,7 +396,7 @@ class FWMScheme(Scheme):
             seed_input_assumption=fwm_measured_gain.SEED_INPUT_ASSUMPTION,
         )
         practical = dict(values, experimental_gain_calibration=True,
-                         gain_calibration_model=MODEL_LAB,
+                         gain_calibration_model=MODEL_LAB_REFIT,
                          noise_model=NOISE_EXPERIMENTAL_JASPERSE, jasperse_loss_pct=0.0)
         return [
             Preset("2026-10-13 experiment", practical,
@@ -422,7 +422,7 @@ class FWMScheme(Scheme):
                     seed_classical_rin_scaled=0.0,
                     measured_gain_calibration=False, seed_input_assumption="",
                     experimental_gain_calibration=False,
-                    gain_calibration_model=MODEL_LAB,
+                    gain_calibration_model=MODEL_LAB_REFIT,
                     noise_model=NOISE_EXPERIMENTAL_JASPERSE, jasperse_loss_pct=0.0,
                     loss_pct=SEEDED_POST_CELL_LOSS_PCT,
                     transit_rate_khz=100.0,
@@ -879,11 +879,13 @@ class FWMScheme(Scheme):
                 if point["context_changed"]:
                     status_label += " · changed conditions"
                 if experimental_gain["source_model_differences"]:
-                    status_label += " · updated source model"
+                    status_label += (" · different source settings" if gain_model == MODEL_LAB_REFIT
+                                     else " · updated source model")
                 gain_help = (
                     "Empirically corrected pump-on output / pump-off seed reference. "
-                    "The frozen fit used an older atomic model. Its coefficients continue "
-                    "to apply to the current model beyond the 10/13 measured interval.")
+                    + ("The refit uses the Ultra model at exact source coordinates. "
+                       if gain_model == MODEL_LAB_REFIT else "The frozen fit used an older atomic model. ")
+                    + "The correction continues beyond the 10/13 measured interval.")
             for index, key, arm in ((1, "G_s", "probe"), (2, "G_c", "conjugate")):
                 metrics[index] = _power_gain_metric(
                     (f"Zeeman pump + χ {arm} gain" if zeeman_gain else
@@ -958,7 +960,11 @@ class FWMScheme(Scheme):
                     "| Calibrated gain basis | Pump-on arm output / measured pump-off seed output |\n"
                     "| Continuation | Applied outside measurement support and across changed operating conditions |\n"
                 )
-                if experimental_gain["source_model_differences"]:
+                if gain_model == MODEL_LAB_REFIT:
+                    measured_rows += (
+                        "| Fit source | Ultra, untruncated Maxwell, exact arm-specific coordinates |\n"
+                        "| Fit scope | All 23 points trained the empirical residual |\n")
+                elif experimental_gain["source_model_differences"]:
                     measured_rows += (
                         "| Source model | Updated atomic model with the frozen fit coefficients |\n"
                         "| Fit scope | Exact agreement at the 23 training points applies to the frozen source arrays |\n"

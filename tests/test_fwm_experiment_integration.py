@@ -23,7 +23,7 @@ def experimental_case():
                   after_cell_eff_pct=94.5, qe_pct=92.0,
                   seed_classical_rin_scaled=0.0,
                   noise_model=fwm.NOISE_EXPERIMENTAL_JASPERSE,
-                  experimental_gain_calibration=True)
+                  experimental_gain_calibration=True, gain_calibration_model=fwm.MODEL_LAB)
     raw = scheme.compute(params)
     return scheme, params, raw
 
@@ -165,11 +165,13 @@ def test_live_cursor_uses_calibrated_gain_and_committed_nf(experimental_case):
         plt.close(view["figure"])
 
 
-def test_full_view_routes_both_practical_models_and_branch_coordinates(experimental_case):
+@pytest.mark.parametrize("selection", [fwm.MODEL_LAB, fwm.MODEL_LAB_REFIT])
+def test_full_view_routes_both_practical_models_and_branch_coordinates(experimental_case, selection):
     import matplotlib.pyplot as plt
-    from gabes.fwm_experiment_gain import calibrate_spectrum
+    from gabes.fwm_gain_calibration import calibrate_spectrum
     from gabes.fwm_experiment_noise import experimental_jasperse_readout
     scheme, params, raw = experimental_case
+    params = dict(params, gain_calibration_model=selection)
     plus = dict(raw, branch=1, probe_axis_GHz=(raw["probe_axis_GHz"]
                 +raw["raman_center_plus_GHz"]-raw["raman_center_minus_GHz"]))
     full = {"D_GHz": params["opd"], "minus": raw, "plus": plus}
@@ -179,7 +181,7 @@ def test_full_view_routes_both_practical_models_and_branch_coordinates(experimen
         assert set(figure._gabes_experimental_jasperse_readout) == {"minus", "plus"}
         for index, branch in enumerate(("minus", "plus")):
             spec = full[branch]
-            gains = calibrate_spectrum(spec, enabled=True)
+            gains = calibrate_spectrum(spec, enabled=True, model=selection)
             noise = experimental_jasperse_readout(spec, params, gains=gains)
             assert figure._gabes_experimental_gain_calibration[branch]["applied"]
             np.testing.assert_array_equal(figure.axes[0].lines[index].get_xdata(), spec["probe_axis_GHz"])
@@ -213,25 +215,28 @@ def test_opt_in_exact_readout_recovers_native_passive_eligibility_without_changi
     assert phase["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
 
 
-def test_opt_in_lab_warp_uses_exact_mapped_gains_and_reuses_source_on_detector_change():
+@pytest.mark.parametrize("selection", [fwm.MODEL_LAB, fwm.MODEL_LAB_REFIT])
+def test_opt_in_lab_warp_uses_exact_mapped_gains_and_reuses_source_on_detector_change(selection):
     from gabes import fwm_experiment_gain as lab
 
     scheme = fwm.FWMScheme()
     params = next(p.values for p in scheme.presets() if p.name == "2026-10-13 experiment")
+    params = dict(params, gain_calibration_model=selection)
+    model_id = lab.REFIT_MODEL_ID if selection == fwm.MODEL_LAB_REFIT else lab.MODEL_ID
     raw = scheme.compute(params)
     exact_params = dict(params, exact_readout_coordinates=True)
     fwm._focused_readout_reference.cache_clear()
     exact = fwm.seeded_operating_readout(raw, exact_params)
     prior = fwm.seeded_operating_readout(raw, params)
     tpd = params["tpd"]
-    coordinates = lab.source_detunings(tpd)
+    coordinates = lab.source_detunings(tpd, model_id=model_id)
     probe = raw["raman_center_minus_GHz"]
     context = dict(raw["stark_recompute_context"], response_method=fwm.RESPONSE_POLE)
     dense = fwm.compute_spectrum(**context, extra_probe_points_GHz=(
         probe + float(coordinates["probe"]) * 1e-3,
         probe + float(coordinates["conjugate"]) * 1e-3,
     ))
-    expected = lab.evaluate(dense, tpd)
+    expected = lab.evaluate(dense, tpd, model_id=model_id)
     for key in ("G_s", "G_c"):
         assert exact["gain_operating_point"][key] == pytest.approx(expected[key], rel=2e-12)
     assert exact["gain_operating_point"]["G_c"] != pytest.approx(prior["gain_operating_point"]["G_c"])

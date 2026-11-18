@@ -68,11 +68,19 @@ def test_affine_fit_and_frozen_coefficients_have_reproducible_source_metadata():
             np.testing.assert_allclose(value, record["arms"][arm][key], rtol=1e-13, atol=1e-13)
 
 
-def test_wide_frequency_continuation_uses_current_model_not_a_clamped_gain(nominal_raw):
+@pytest.mark.parametrize("model_id", [practical.MODEL_ID, practical.REFIT_MODEL_ID])
+def test_wide_frequency_continuation_uses_current_model_not_a_clamped_gain(nominal_raw, model_id):
     delta = np.array([-1e6, -550., -100., -25., 25., 100., 550., 1e6])
-    first = practical.evaluate(nominal_raw, delta)
+    first = practical.evaluate(nominal_raw, delta, model_id=model_id)
     assert first["applied"]
     assert not np.any(first["within_measured_support"])
+    for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
+        fit = first["profile"]["arms"][arm]
+        sizes = np.exp(fit["log_total_coefficient_at_nodes"])
+        unscaled, _ = practical._sample_model(practical._axis(nominal_raw), nominal_raw[key],
+                                              first["source_delta_mhz"][arm], arm=arm)
+        boundary = np.where(delta < 0, sizes[0], sizes[-1])
+        np.testing.assert_allclose(first[key], unscaled*boundary, atol=1e-14, rtol=1e-13)
     assert np.all(first["point_status"] == "EXTRAPOLATED_FREQUENCY")
     for key in ("G_s", "G_c"):
         assert np.all(np.isfinite(first[key]))
@@ -83,8 +91,8 @@ def test_wide_frequency_continuation_uses_current_model_not_a_clamped_gain(nomin
     changed["G_c"] *= .6
     changed["input_pump_power_W"] *= 1.1
     changed["temperature_K"] += 5
-    second = practical.evaluate(changed, [-100., -25., 25., 100.])
-    original = practical.evaluate(nominal_raw, [-100., -25., 25., 100.])
+    second = practical.evaluate(changed, [-100., -25., 25., 100.], model_id=model_id)
+    original = practical.evaluate(nominal_raw, [-100., -25., 25., 100.], model_id=model_id)
     np.testing.assert_allclose(second["G_s"], 1.4*original["G_s"], rtol=1e-13)
     np.testing.assert_allclose(second["G_c"], .6*original["G_c"], rtol=1e-13)
     assert second["applied"] and second["context_changed"]
@@ -161,7 +169,8 @@ def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_dev
     nodes = measured.internal_delta_mhz_from_eom(observed["eom_MHz"])
     raw = scheme.compute(params)
     nominal = practical.evaluate(raw, nodes)
-    selected = seeded_operating_readout(raw, dict(params, experimental_gain_calibration=True))
+    selected = seeded_operating_readout(raw, dict(params, experimental_gain_calibration=True,
+                                                   gain_calibration_model="2026-10-13 lab"))
     calibration = selected["experimental_gain_calibration"]
     assert calibration["applied"] and not calibration["context_changed"]
     assert calibration["source_model"]["velocity_measure"] == "exact"
@@ -191,3 +200,30 @@ def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_dev
     assert practical.calibrate_spectrum(raw, enabled=False)["nominal_node_deviation"] is None
     assert np.all(np.isfinite(changed["G_s"]))
     assert np.all(np.isfinite(changed["G_c"]))
+
+
+def test_refit_recovers_all_measured_points_on_direct_ultra_source_rows():
+    from gabes.schemes import fwm
+
+    scheme = fwm.FWMScheme()
+    preset = next(p.values for p in scheme.presets() if p.name == "2026-10-13 experiment")
+    raw = scheme.compute(dict(preset, resolution=fwm.FIDELITY_ULTRA, velocity_measure="exact"))
+    obs = measured.observations()
+    nodes = measured.internal_delta_mhz_from_eom(obs["eom_MHz"])
+    arms = practical.profile(model_id=practical.REFIT_MODEL_ID)["arms"]
+    coordinates = {
+        arm: raw["raman_center_minus_GHz"] + 1e-3 * (
+            fit["source_center_delta_mhz"] + fit["frequency_scale"] * (nodes-fit["measured_peak_delta_mhz"]))
+        for arm, fit in arms.items()
+    }
+    dense = fwm.compute_spectrum(**raw["stark_recompute_context"],
+                                 extra_probe_points_GHz=np.unique(np.r_[*coordinates.values()]))
+    assert dense["response_estimator"]["pole_guard_fallback_rows"] == 0
+    evaluated = practical.evaluate(dense, nodes, model_id=practical.REFIT_MODEL_ID)
+    assert not evaluated["source_model_differences"]
+    for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
+        rows = np.searchsorted(dense["probe_axis_GHz"], coordinates[arm])
+        np.testing.assert_array_equal(dense["probe_axis_GHz"][rows], coordinates[arm])
+        corrected = dense[key][rows]*np.exp(arms[arm]["log_total_coefficient_at_nodes"])
+        np.testing.assert_allclose(corrected, evaluated[key], atol=0, rtol=1e-8)
+        np.testing.assert_allclose(corrected, obs[arm+"_ratio"], atol=0, rtol=1e-8)

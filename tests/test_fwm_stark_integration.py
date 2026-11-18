@@ -69,9 +69,9 @@ def test_stark_choice_is_opt_in_lazy_and_lab_default_is_preserved(case, response
     assert calibration._module(calibration.MODEL_STARK) is stark
     assert calibration.profile(model=calibration.MODEL_STARK)["model_id"] == stark.MODEL_ID
     assert control.choices == calibration.MODELS and not control.recompute
-    assert control.default == scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB
+    assert control.default == scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
     assert "gain_calibration_model" not in scheme.recompute_keys()
-    assert next(p for p in scheme.presets() if p.name == "2026-10-13 experiment").values["gain_calibration_model"] == calibration.MODEL_LAB
+    assert next(p for p in scheme.presets() if p.name == "2026-10-13 experiment").values["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
 
 
 def test_stark_off_is_exact_without_recompute_context(case, response_boundary):
