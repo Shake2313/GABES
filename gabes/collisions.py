@@ -1,6 +1,7 @@
 """Pressure and density coefficients for the optical D-line reference.
 
-Coefficients below are linear-frequency slopes. Pressure is Ne partial
+Ne pressure and Rb density coefficients below are linear-frequency slopes.
+The Cs resonance self-broadening reference uses an angular-frequency FWHM. Pressure is Ne partial
 pressure in Torr at the operating condition. A negative shift moves the
 atomic resonance to lower frequency: delta_eff = delta_laser - shift.
 """
@@ -176,11 +177,40 @@ def pressure_effects(isotope, line, pressure_torr, temperature_k, *,
                            p, "opt-in reference", c, tuple(warnings))
 
 
-def self_broadening_reference(isotope, line, density_m3):
+@dataclass(frozen=True)
+class SelfBroadeningRate:
+    """Angular FWHM per density and its two uncertainty estimates."""
+
+    coefficient_rad_s_m3: float
+    measurement_error_rad_s_m3: float
+    relative_uncertainty: float  # Including inter-study spread (project bound).
+
+
+# Jabbour et al., Eqs. (3), (4a,b): k_br*N is the Lorentzian angular FWHM.
+CS_SELF_BROADENING = {
+    "D1": SelfBroadeningRate(5.7e-13, 1.0e-13, 0.2297),
+    "D2": SelfBroadeningRate(6.7e-13, 1.1e-13, 0.2179),
+}
+_JABBOUR = "https://doi.org/10.1016/0022-4073(95)00115-2"
+
+
+def self_broadening_reference(isotope, line, density_m3, *, cs_reference=False):
     """Measured density-linear FWHM [rad/s], with explicit support status."""
     density = float(density_m3)
     if not math.isfinite(density) or density < 0:
         raise ValueError("self-broadening density must be finite and nonnegative")
+    if cs_reference and isotope == "Cs133" and line in CS_SELF_BROADENING:
+        rate = CS_SELF_BROADENING[line]
+        relative_bound = rate.relative_uncertainty
+        fwhm = rate.coefficient_rad_s_m3 * density
+        return fwhm, dict(
+            status="opt-in reference", isotope=isotope, line=line, source=_JABBOUR,
+            locator="Jabbour et al. (1995), Eqs. (3), (4a,b) and Table 2",
+            density_m3=density, applied_fwhm_rad_s=fwhm, coefficient_rad_s_m3=rate.coefficient_rad_s_m3,
+            measurement_uncertainty_rad_s_m3=rate.measurement_error_rad_s_m3,
+            relative_uncertainty=relative_bound, uncertainty_rad_s=fwhm * relative_bound,
+            warning=f"Cs {line} coefficient uncertainty including inter-study spread "
+                    f"is {relative_bound:.2%}, above the 20% default threshold.")
     coefficient = SELF_BROADENING_COEFFICIENTS.get((isotope, line))
     if coefficient is None:
         return 0.0, dict(status="unsupported", reason="No adopted self-broadening coefficient.")

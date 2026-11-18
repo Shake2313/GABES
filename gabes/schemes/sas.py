@@ -36,6 +36,8 @@ References:  Smith & Hughes, Am. J. Phys. 72, 631 (2004) (hyperfine pumping);
 Preston, Am. J. Phys. 64, 1432 (1996); Steck alkali D-line data; the lab AutoOD
 calculator (pump-off 85Rb D1 absolute scale).
 """
+from functools import partial
+
 import numpy as np
 
 from .. import (atoms, collisions, constants, doppler, kernels, linear_hyperfine, observables,
@@ -244,7 +246,7 @@ def _probe_scope_text(raw, params):
             "mF state and polarization dependence are not resolved.")
         if raw["line"] == "D1":
             detail += " D1 also has no closed hyperfine cycling transition."
-        if raw.get("self_broadening"):
+        if raw.get("self_broadening", {}).get("status") == "unsupported":
             detail += " The Cs–Cs self-broadening contribution is omitted."
         if pump_on:
             detail += (
@@ -311,6 +313,9 @@ class SASScheme(Scheme):
             cell.append("Paraffin")
         if params.get("ne_pressure_torr", 0.) > 0:
             cell.append("Buffer")
+        if params.get("species") == species.CS133.label and params.get("cs_self_broadening_reference"):
+            rate = collisions.CS_SELF_BROADENING[params.get("line", "D1")]
+            cell.append(f"Cs width ±{rate.relative_uncertainty:.2%}")
         return dict(fields=("species", "rb_composition", "rb85_fraction", "line", "temp_c", "cell_mm",
                             "constrain_doppler_temp", "doppler_temp_c", "paraffin_coated", "ne_pressure_torr"),
                     line="line", cell=" ".join(cell),
@@ -393,6 +398,12 @@ class SASScheme(Scheme):
                      "beam passages using a nominal coated-cell reservoir. This changes "
                      "atomic pumping only; it does not apply a coating transmission loss.",
             ),
+            ParamSpec("cs_self_broadening_reference", "Cs self-broadening", "Cell & beams",
+                      False, choices=(False, True), advanced=True,
+                      choice_labels={False: "Off", True: "Jabbour reference (high uncertainty)"},
+                      visible_if={"species": species.CS133.label},
+                      help="Add a Cs density-dependent optical linewidth. The coefficient "
+                           "uncertainty including inter-study spread exceeds 20%."),
             ParamSpec("optical_collision_model", "Optical collisions", "Cell & beams",
                       collisions.LEGACY_COLLISIONS, choices=collisions.COLLISION_CHOICES,
                       advanced=True,
@@ -613,6 +624,9 @@ class SASScheme(Scheme):
 
     def solve_param_keys(self, params):
         keys = super().solve_param_keys(params)
+        if ("cs_self_broadening_reference" not in params
+                or params.get("species") != species.CS133.label):
+            keys = tuple(key for key in keys if key != "cs_self_broadening_reference")
         if "weak_probe_profile" not in params:
             keys = tuple(key for key in keys if key != "weak_probe_profile")
         if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
@@ -635,9 +649,17 @@ class SASScheme(Scheme):
             return raw
         if segmented:
             components, reference, *_ = _isotope_composition(params)
-            return sas_axial.compute(params, uniform=self._compute_species,
-                                     components=components, reference=reference,
-                                     response=self._component_response)
+            cs_reference = reference == species.CS133 and params.get("cs_self_broadening_reference", False)
+            response = self._component_response
+            if cs_reference:
+                response = partial(response, cs_axial_reference=True)
+            raw = sas_axial.compute(params, uniform=self._compute_species, components=components,
+                                    reference=reference, response=response)
+            if cs_reference:
+                density = raw["axial_cell"]["density_m3"][reference.name]
+                raw["axial_cell"]["cs_self_fwhm_rad_s"] = (
+                    raw["self_broadening"]["coefficient_rad_s_m3"] * density)
+            return raw
         return self._compute_species(params)
 
     def quantitative_export(self, params, optical_readout):
@@ -705,6 +727,7 @@ class SASScheme(Scheme):
         # that limit on the legacy path exactly (and avoid an unnecessary solve).
         paraffin_memory = paraffin_coated and power > 0.0
         reference = _measured_collision_mode(params)
+        cs_reference = iso_ref == species.CS133 and params.get("cs_self_broadening_reference", False)
         weak_profile = _weak_probe_profile(params)
         applied_profile = weak_profile["applied"] if weak_profile is not None else None
         exact_weak_probe = applied_profile == EXACT_WEAK_PROBE
@@ -727,16 +750,20 @@ class SASScheme(Scheme):
             N = _species_path_density(iso, T_density, T_doppler, weight)
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
             pump_atom = man.atom
+            if reference or cs_reference:
+                self_fwhm, self_reports[iso.name] = collisions.self_broadening_reference(
+                    iso.name, line, N, cs_reference=cs_reference)
             if reference:
                 effects = collisions.pressure_effects(iso.name, line, pressure, T_doppler)
-                self_fwhm, self_report = collisions.self_broadening_reference(iso.name, line, N)
                 buffer_gamma = max(buffer_gamma, effects.fwhm_rad_s)
                 offset += effects.shift_rad_s
                 gamma_eff = man.gamma + self_fwhm + effects.fwhm_rad_s
                 pump_atom = pump_atom.with_optical_dephasing(
                     (self_fwhm + effects.fwhm_rad_s) / 2 + np.pi * extra_fwhm)
                 collision_reports[iso.name] = effects.readout()
-                self_reports[iso.name] = self_report
+            elif cs_reference:
+                gamma_eff = man.gamma + self_fwhm + buffer_gamma
+                pump_atom = pump_atom.with_optical_dephasing(self_fwhm / 2)
             else:
                 gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
             if extra_fwhm:
@@ -917,7 +944,9 @@ class SASScheme(Scheme):
         if reference:
             result["optical_collisions"] = collision_reports
             result["self_broadening_reference"] = self_reports
-        if iso_ref.name == species.CS133.name:
+        if cs_reference:
+            result["self_broadening"] = self_reports[iso_ref.name]
+        elif iso_ref.name == species.CS133.name:
             result["self_broadening"] = {
                 "status": "unsupported",
                 "isotope": iso_ref.name,
@@ -930,7 +959,8 @@ class SASScheme(Scheme):
             }
         return result
 
-    def _component_response(self, b, scan, T, *, axial_optics=False, pump_attenuation=False):
+    def _component_response(self, b, scan, T, *, axial_optics=False, pump_attenuation=False,
+                            cs_axial_reference=False):
         """(α, Re χ, finite-probe transition profiles) for one isotope.
 
         Both quadratures come from the same complex line profile
@@ -950,6 +980,12 @@ class SASScheme(Scheme):
         iso, k = b["iso"], man.k_vec
         ng = len(man.Fg)
         gamma_eff = b["gamma_eff"]
+        pump_atom = b.get("pump_atom", man.atom)
+        if cs_axial_reference:
+            # The axial solver supplies this segment's density and legacy Ne width.
+            self_fwhm, _ = collisions.self_broadening_reference(iso.name, man.line, N, cs_reference=True)
+            gamma_eff += self_fwhm
+            pump_atom = pump_atom.with_optical_dephasing(self_fwhm / 2)
 
         pumped_maxwell = b.get("pumped_maxwell", False)
         if pumped_maxwell:
@@ -971,7 +1007,6 @@ class SASScheme(Scheme):
                     float(DS.min() + kv.min()), float(DS.max() + kv.max()))
             deff = _pump_detuning_axis(
                 om, gamma_eff, covered_detunings=covered_detunings)
-            pump_atom = b.get("pump_atom", man.atom)
             if b.get("paraffin_memory", False):
                 basis_pops = _basis_reset_pump_pops(
                     man, Hp, deff, b["transit_rate"], pump_atom=pump_atom)
@@ -1263,13 +1298,17 @@ class SASScheme(Scheme):
         self_broadening = raw.get("self_broadening")
         if self_broadening:
             optical_readout["self_broadening"] = self_broadening
-            metrics.append(dict(
-                label="Self-broadening", value=f"Unsupported for Cs {raw['line']}",
-                kind="status",
-                help="The Cs–Cs width contribution is omitted. The natural width "
-                     "and configured buffer-gas broadening still apply. "
-                     + self_broadening["reason"],
-            ))
+            if self_broadening["status"] == "opt-in reference":
+                fwhm = self_broadening["applied_fwhm_rad_s"] / species.MHZ
+                metric = dict(label="Self-broadening",
+                              value=f"{fwhm:.4g} MHz (high uncertainty, ±{self_broadening['relative_uncertainty']:.2%})",
+                              kind="status", help=self_broadening["warning"] +
+                              " Added optical FWHM at the cell-center density.")
+            else:
+                metric = dict(label="Self-broadening", value=f"Unsupported for Cs {raw['line']}",
+                              kind="status", help="The Cs–Cs width contribution is omitted. The natural width "
+                              "and configured buffer-gas broadening still apply. " + self_broadening["reason"])
+            metrics.append(metric)
         if raw.get("rb_composition") == RB_COMPOSITION_CUSTOM:
             fraction = float(raw["rb85_fraction"])
             metrics.append(dict(

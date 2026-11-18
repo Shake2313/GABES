@@ -46,11 +46,22 @@ broadening.
   established 0.69(4) x 10^-7 Hz cm^3 slope, measured up to 3e20 m^-3. The
   D2 reference has its own 1.10(17) x 10^-7 Hz cm^3 slope, measured by
   attenuated total reflection at 3.8e20 to 3.7e21 m^-3. Application below
-  that range is an impact-regime extension. Cs self-broadening remains
-  unsupported for both lines. [Weller et al. 2011](https://doi.org/10.1088/0953-4075/44/19/195006),
+  that range is an impact-regime extension. [Weller et al. 2011](https://doi.org/10.1088/0953-4075/44/19/195006),
   [Kondo et al. 2006](https://doi.org/10.1103/PhysRevA.73.062504).
 
-Uncertainty in each slope is the larger of the primary measurement uncertainty
+- For ¹³³Cs in OD/SAS, select **Cs self-broadening → Jabbour reference**
+  in the advanced cell settings to add the Cs–Cs optical width. The default
+  is off. This setting can be combined with either Ne model in a uniform cell.
+  Segmented cells use the local Cs density in each segment with legacy Ne.
+  Jabbour et al. give angular-frequency FWHM slopes of 5.7(1.0) and
+  6.7(1.1) × 10⁻¹³ rad s⁻¹ m³ for D1 and D2. The linear-frequency width
+  in Hz is the slope times density divided by 2π. The optical coherence
+  damping rate is half the angular FWHM. The project bounds including
+  inter-study spread are 22.97% and 21.79%. Measurements used a pure Cs
+  cell at 272–326 °C. The app extends the impact line-core slopes to its
+  lower operating temperatures. [Jabbour et al. 1995, Eqs. 3–4 and Table 2](https://doi.org/10.1016/0022-4073(95)00115-2).
+
+For the Ne coefficients, uncertainty in each slope is the larger of the primary measurement uncertainty
 and the largest root-sum-square of another measurement's reported uncertainty
 and its difference from the primary value. This is a comparison bound, with
 no Gaussian coverage claim. Linear propagation multiplies the bound by the

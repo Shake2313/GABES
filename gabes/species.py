@@ -276,8 +276,8 @@ def rb85_steck_density(T):
 def self_broadening(iso, N):
     """Modelled collisional self-broadening β·N added to Γ_nat [rad/s].
 
-    Cs has no adopted coefficient. Its contribution is omitted pending a
-    coefficient that meets the default uncertainty criterion.
+    Cs contributes zero in this default model. Its line-specific, opt-in
+    coefficient and uncertainty are available in collisions.self_broadening_reference.
     """
     if iso.name == CS133.name:
         return np.zeros_like(N, dtype=float)[()]
