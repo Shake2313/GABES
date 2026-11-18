@@ -191,43 +191,42 @@ def test_full_view_routes_both_practical_models_and_branch_coordinates(experimen
         plt.close(figure)
 
 
-def test_opt_in_exact_readout_recovers_native_passive_eligibility_without_changing_raw():
+def test_focused_exact_readout_uses_solved_native_passive_eligibility():
     scheme = fwm.FWMScheme()
     gold = next(p.values for p in scheme.presets() if p.name == "Sim Gold Reference")
     params = dict(gold, tpd=393.25, noise_model=fwm.NOISE_PASSIVE_L1)
     raw = scheme.compute(params)
-    approximate = fwm.seeded_operating_readout(raw, params)
-    exact = fwm.seeded_operating_readout(raw, dict(params, exact_readout_coordinates=True))
-    assert approximate["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
-    assert exact["readout_coordinate_status"] == "DENSE_POLE_READOUT_COORDINATES"
-    assert not approximate["noise_operating_point"]["passive_l1_available"]
+    exact = fwm.seeded_operating_readout(raw, params)
+    assert exact["readout_certification_scope"] == "FOCUSED_EXACT_MAXWELL_TESTED_CASES"
+    assert exact["readout_coordinate_status"] in {
+        "NATIVE_SOURCE_GRID", "DENSE_POLE_READOUT_COORDINATES"}
     assert exact["noise_operating_point"]["passive_l1_available"]
-    assert raw["response_estimator"]["solved_probe_points"] < len(raw["probe_axis_GHz"])
-    balanced = scheme.compute(dict(params, resolution=fwm.FIDELITY_BALANCED))
-    expected = fwm.seeded_operating_readout(balanced, params)
+    assert raw["response_estimator"]["solved_probe_points"] == len(raw["probe_axis_GHz"])
+    ultra = scheme.compute(dict(params, resolution=fwm.FIDELITY_ULTRA))
+    expected = fwm.seeded_operating_readout(ultra, params)
+    assert expected["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
     for key in ("G_s", "G_c"):
         np.testing.assert_array_equal(exact["gain_curve"][key], expected["gain_curve"][key])
     np.testing.assert_array_equal(exact["passive_l1_readout"]["NF_dB"],
                                   expected["passive_l1_readout"]["NF_dB"])
     phase = fwm.seeded_operating_readout(raw, dict(
         params, exact_readout_coordinates=True, squeezing_view=fwm.SQUEEZING_QUADRATURE_PHASE))
-    assert phase["readout_coordinate_status"] == "DENSE_POLE_READOUT_COORDINATES"
     assert phase["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
 
 
 @pytest.mark.parametrize("selection", [fwm.MODEL_LAB, fwm.MODEL_LAB_REFIT])
-def test_opt_in_lab_warp_uses_exact_mapped_gains_and_reuses_source_on_detector_change(selection):
+def test_focused_lab_warp_uses_exact_gains_and_separate_curve_cache(selection):
     from gabes import fwm_experiment_gain as lab
 
     scheme = fwm.FWMScheme()
     params = next(p.values for p in scheme.presets() if p.name == "2026-10-13 experiment")
-    params = dict(params, gain_calibration_model=selection)
+    params = dict(params, gain_calibration_model=selection, tpd=7.123)
     model_id = lab.REFIT_MODEL_ID if selection == fwm.MODEL_LAB_REFIT else lab.MODEL_ID
     raw = scheme.compute(params)
-    exact_params = dict(params, exact_readout_coordinates=True)
+    original = {key: raw[key].copy() for key in ("G_s", "G_c", "T_canonical_small_signal")}
     fwm._focused_readout_reference.cache_clear()
-    exact = fwm.seeded_operating_readout(raw, exact_params)
-    prior = fwm.seeded_operating_readout(raw, params)
+    exact = fwm.seeded_operating_readout(raw, params)
+    prior = fwm.seeded_operating_readout(dict(raw, focused_readout_reference=False), params)
     tpd = params["tpd"]
     coordinates = lab.source_detunings(tpd, model_id=model_id)
     probe = raw["raman_center_minus_GHz"]
@@ -240,9 +239,22 @@ def test_opt_in_lab_warp_uses_exact_mapped_gains_and_reuses_source_on_detector_c
     for key in ("G_s", "G_c"):
         assert exact["gain_operating_point"][key] == pytest.approx(expected[key], rel=2e-12)
     assert exact["gain_operating_point"]["G_c"] != pytest.approx(prior["gain_operating_point"]["G_c"])
+    assert exact["experimental_gain_calibration"]["profile"]["model_id"] == model_id
     assert exact["experimental_gain_calibration"]["exact_nominal_node_deviation"]["point_count"] == 23
+    assert exact["readout_coordinate_status"] == "DENSE_POLE_READOUT_COORDINATES"
+    audit = exact["readout_source_provenance"]
+    assert audit["mapped_curve_and_training"]["requested_probe_points"] > 400
+    assert 0 < audit["selected_readout"]["requested_probe_points"] <= 3
+    assert audit["selected_readout"]["adjacent_orders"] == (3, 2)
+    for source in audit.values():
+        assert source["interpolation"] == "none"
+        assert source["pole_guard_max_relative"] <= fwm.POLE_GUARD_RTOL
     misses = fwm._focused_readout_reference.cache_info().misses
-    changed = fwm.seeded_operating_readout(raw, dict(exact_params, qe_pct=60.0))
+    changed = fwm.seeded_operating_readout(raw, dict(params, qe_pct=60.0))
     assert fwm._focused_readout_reference.cache_info().misses == misses
     assert changed["noise_operating_point"]["NF"] != exact["noise_operating_point"]["NF"]
     np.testing.assert_array_equal(changed["gain_curve"]["G_c"], exact["gain_curve"]["G_c"])
+    fwm.seeded_operating_readout(raw, dict(params, tpd=10.284))
+    assert fwm._focused_readout_reference.cache_info().misses == misses + 1
+    for key, values in original.items():
+        np.testing.assert_array_equal(raw[key], values)

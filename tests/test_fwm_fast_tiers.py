@@ -130,9 +130,13 @@ def test_app_tiers_use_the_pole_response_on_the_ultra_display_axis():
     ultra_axis = fwm.probe_scan_axis_GHz(
         params["opd"], 401, 0, None, center - fwm.WINDOW_GHZ, center + fwm.WINDOW_GHZ,
         branches=(-1,))
-    assert fast["response_estimator"]["method"] == fwm.RESPONSE_POLE_ADAPTIVE
-    assert balanced["response_estimator"]["method"] == fwm.RESPONSE_POLE
+    assert scheme._seeded_compute_inputs(dict(
+        params, resolution=fwm.FIDELITY_FAST, velocity_measure="truncated")
+    )["response_method"] == fwm.RESPONSE_POLE_ADAPTIVE
     for raw in (fast, balanced):
+        assert raw["response_estimator"]["method"] == fwm.RESPONSE_POLE
+        assert raw["response_estimator"]["solved_probe_points"] == 401
+        assert raw["response_estimator"]["interpolation"] == "none"
         assert raw["response_estimator"]["velocity_measure"] == "exact"
         np.testing.assert_array_equal(raw["probe_axis_GHz"], ultra_axis)
         for key in ("G_s", "G_c", "S_dB"):

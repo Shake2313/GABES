@@ -2,7 +2,8 @@
 from .. import fwm
 from .common import (
     BIPHOTON_MODELS, BIPHOTON_MODEL_LABELS, BIPHOTON_PREDICTIVE, CS_CHANNEL_795, CS_CHANNEL_917,
-    CS_CHANNEL_LABELS, DEFAULT_BRANCH, FIDELITY_FAST, FIDELITY_LABELS, FWM_FIDELITY, L_CELL,
+    CS_CHANNEL_LABELS, DEFAULT_BRANCH, FIDELITY_BALANCED, FIDELITY_FAST, FIDELITY_LABELS,
+    FWM_FIDELITY, L_CELL,
     MODE_BIPHOTON, MODE_LABELS, MODE_SEEDED, PHASE_LEGACY, PHASE_ULTRA, PRED_V_FWHM_TOL,
     PROBE_WAVELENGTH_NM, QE_DETECTOR, RESPONSE_POLE, SCAN_START_STRIDE, SCAN_TOLERANCE_DB,
     SCAN_TOLERANCE_LOG10_GAIN, SEEDED_FLOQUET_ORDER, SEEDED_PHASE_ANGLE_DEG,
@@ -39,7 +40,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v30-faddeeva-absorption"
+    cache_version = "fwm-experimental-jasperse-gain-v31-focused-exact"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -166,10 +167,9 @@ class FWMScheme(Scheme):
                            "outside its data range and after changing operating conditions."),
             ParamSpec("exact_readout_coordinates", "Exact source coordinates", "Numerics", False,
                       control="checkbox", recompute=False, advanced=True, visible_if=seeded,
-                      help="Use a cached dense reference for focused gain and noise, including the "
-                           "selected detuning and the 10/13 lab model's mapped source points. "
-                           "The first calculation takes longer. The adaptive atomic scan stays separate. "
-                           "Other empirical gain models keep their existing sampling."),
+                      help="Use exact source coordinates for compatible readouts. Fast and Balanced "
+                           "already use them for focused intensity-difference readouts with Exact Maxwell "
+                           "and either 10/13 gain calibration or uncalibrated gains."),
             ParamSpec("gain_calibration_model", "Gain calibration model",
                       "Detection & scaling", MODEL_LAB_REFIT,
                       choices=GAIN_CALIBRATION_MODELS, recompute=False,
@@ -617,6 +617,8 @@ class FWMScheme(Scheme):
             floquet_order=params.get("floquet_order", SEEDED_FLOQUET_ORDER),
             enforce_floquet_convergence=True,
             response_method=_tier_response_method(fidelity, velocity_measure),
+            **({"_sparse_pole_schur": True} if velocity_measure == "exact"
+               and fidelity in (FIDELITY_FAST, FIDELITY_BALANCED) else {}),
             scan_tolerance_dB=res.get("scan_tolerance_dB", SCAN_TOLERANCE_DB),
             scan_tolerance_log10_gain=res.get(
                 "scan_tolerance_log10_gain", SCAN_TOLERANCE_LOG10_GAIN),
@@ -1155,6 +1157,18 @@ class FWMScheme(Scheme):
                 "| Separate rounded-power ratios | probe 111/8 = 13.875; conjugate 109/8 = 13.625 |\n"
                 "| Held-out comparison | Liu: 6.445 vs 8; McCormick: 1.926 vs 9 (4.7× low); conditional |\n"
             )
+        source_provenance = selected.get("readout_source_provenance", {})
+        certification = selected["readout_certification_scope"]
+        if certification == "FOCUSED_EXACT_MAXWELL_TESTED_CASES":
+            certification = (
+                "Exact Maxwell at sampled coordinates. Gate scope: named cases outside "
+                "the Passive L1 roundoff band.")
+        readout_audit = "".join(
+            f"| {label} | {entry['solved_probe_points']} solved, "
+            f"{entry.get('pole_guard_fallback_rows', 0)} guard fallbacks |\n"
+            for label, key in (("Calibrated curve and training", "mapped_curve_and_training"),
+                               ("Selected detuning", "selected_readout"))
+            if (entry := source_provenance.get(key)) is not None)
         diagnostics_table = (
             f"| Check | Value |\n|---|---|\n"
             f"| Model scope | Gain-only diagnostic (physical squeezing unavailable) |\n"
@@ -1198,8 +1212,9 @@ class FWMScheme(Scheme):
             f"| Maxwell average | "
             f"{raw.get('response_estimator', {}).get('velocity_average', 'unavailable')} |\n"
             f"| Atomic readout source coordinates | {selected['readout_coordinate_status']} |\n"
-            f"| Displayed readout scope | {selected['readout_certification_scope']} |\n"
-            f"| Noise-trace status | {raw.get('squeezing_status', 'unavailable')} |\n"
+            f"| Displayed readout scope | {certification} |\n"
+            + readout_audit
+            + f"| Noise-trace status | {raw.get('squeezing_status', 'unavailable')} |\n"
             f"| Transit reset γ_t / 2π | "
             f"{raw.get('transit_reset_rate_rad_s', np.nan)/(2*np.pi*1e3):.3f} kHz |\n"
             f"| Combined residual coupling | "
@@ -1236,6 +1251,7 @@ class FWMScheme(Scheme):
             "noise_model": noise_model,
             "readout_coordinate_status": selected["readout_coordinate_status"],
             "readout_certification_scope": selected["readout_certification_scope"],
+            **({"readout_source_provenance": source_provenance} if source_provenance else {}),
             "dressed_cell_absorption": cell_absorption,
             "sidebar_readouts": sidebar_readouts,
             "measured_gain_reference": measured_reference,

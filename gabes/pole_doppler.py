@@ -122,6 +122,36 @@ class PoleResidues:
         return self.c0 - np.einsum("rok,rk->ro", self.res, mean)
 
 
+def _row_nonzeros(nonzero):
+    """Packed ascending nonzero column indices and lengths for each row."""
+    counts = np.count_nonzero(nonzero, axis=1)
+    columns = np.zeros((counts.size, counts.max(initial=0)), dtype=np.int64)
+    for row, count in enumerate(counts):
+        columns[row, :count] = np.flatnonzero(nonzero[row])
+    return counts, columns
+
+
+def _connected_blocks(pattern):
+    """Pack sorted row indices of disconnected components of an affine block."""
+    adjacent = pattern | pattern.T
+    labels = np.full(pattern.shape[0], -1, dtype=np.int64)
+    components = 0
+    for start in range(labels.size):
+        if labels[start] >= 0:
+            continue
+        pending = [start]
+        labels[start] = components
+        while pending:
+            row = pending.pop()
+            neighbors = np.flatnonzero(adjacent[row] & (labels < 0))
+            labels[neighbors] = components
+            pending.extend(neighbors.tolist())
+        components += 1
+    if components < 2:
+        return None
+    return _row_nonzeros(labels[None, :] == np.arange(components)[:, None])
+
+
 class AffineShiftSystem:
     """Pole–residue factory for ``(A00 + t*A01 - D*S) x = rhs`` with readouts ``W x``.
 
@@ -129,7 +159,7 @@ class AffineShiftSystem:
     ``S`` restricted to its row/column support must be invertible.
     """
 
-    def __init__(self, A00, A01, S, rhs, readouts):
+    def __init__(self, A00, A01, S, rhs, readouts, *, sparse_schur=False):
         A00 = np.asarray(A00)
         A01 = np.asarray(A01)
         S = np.asarray(S)
@@ -163,6 +193,15 @@ class AffineShiftSystem:
         self.eR = np.ascontiguousarray(rhs[R], dtype=np.float64)
         self.WR = np.ascontiguousarray(readouts[:, R])
         self.WN = np.ascontiguousarray(readouts[:, N])
+        self._sparse_products = None
+        self._null_blocks = None
+        if sparse_schur:
+            self._null_blocks = _connected_blocks((self.NN0 != 0) | (self.NN1 != 0))
+            self._sparse_products = (
+                _row_nonzeros((self.RN0 != 0) | (self.RN1 != 0)),
+                _row_nonzeros(self.S_RR_inv != 0),
+                _row_nonzeros(self.WN != 0),
+            )
 
     def _schur(self, t):
         """Stage 1: ``Z``, ``g``, ``c0`` and ``weff`` for every scan parameter."""
@@ -170,7 +209,7 @@ class AffineShiftSystem:
             return kernels.pole_schur_rows(
                 self.NN0, self.NN1, self.NR0, self.NR1, self.RN0, self.RN1,
                 self.RR0, self.RR1, self.S_RR_inv, self.eN, self.eR,
-                self.WR, self.WN, t)
+                self.WR, self.WN, t, self._sparse_products, self._null_blocks)
         tt = t[:, None, None]
         NN = self.NN0[None] + tt * self.NN1[None]
         NR = self.NR0[None] + tt * self.NR1[None]

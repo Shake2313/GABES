@@ -310,3 +310,26 @@ def test_shift_invert_system_needs_no_regular_doppler_free_block():
     expected = sum(w * _direct(A00, A01, S, rhs, W, t, D) for D, w in zip(nodes, weights))
     np.testing.assert_allclose(poles.discrete_mean(nodes, weights), expected,
                                rtol=1e-8, atol=1e-12)
+
+
+
+def test_sparse_schur_preserves_dense_products_with_affine_null_blocks():
+    a00 = np.array([[4.0, 0.0, 0.5, 0.3, 0.0],
+                    [0.125, 2.0, 0.0, 0.0, 0.0],
+                    [0.2, 0.7, 5.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.15, 3.0, 0.0],
+                    [0.0, 0.0, 0.3, 0.0, 6.0]])
+    a01 = np.diag([0.25, 0.125, 0.5, 0.125, 0.1])
+    a01[4, 1] = 0.2
+    shift = np.zeros_like(a00)
+    shift[0, 2], shift[2, 0] = 1.0, -1.0
+    rhs = np.array([1.0, 2.0, 3.0, 4.0, 1.25])
+    readout = np.array([[1.0, 0.0, 2.0j, 0.0, 0.0], [0.0, 1.0j, 1.0, 0.0, 0.0]])
+    dense = pole_doppler.AffineShiftSystem(a00, a01, shift, rhs, readout)
+    sparse = pole_doppler.AffineShiftSystem(a00, a01, shift, rhs, readout, sparse_schur=True)
+    scan = np.linspace(-0.4, 0.4, 9)
+    counts, indices = sparse._null_blocks
+    np.testing.assert_array_equal(counts, [2, 1])
+    np.testing.assert_array_equal(indices[0], [0, 2])
+    for expected, got in zip(dense._schur(scan), sparse._schur(scan)):
+        np.testing.assert_array_equal(got, expected)

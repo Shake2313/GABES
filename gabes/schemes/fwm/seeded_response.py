@@ -580,7 +580,7 @@ def chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis, bra
 
 
 def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders, *,
-                         return_real_forms=False):
+                         return_real_forms=False, sparse_schur=False):
     """Real pole–residue systems for both finite seed configurations and orders.
 
     Returns ``{(seed, order): (AffineShiftSystem, reference Rabi frequency)}``
@@ -627,7 +627,8 @@ def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders, *,
                 L_r, Cd_r, Cp_r, S_r, order, OMEGA_HF, float(branch), n,
                 ((0, w_probe), (1, w_conj)))
             systems[(seed, order)] = (form if return_real_forms else
-                                      pole_doppler.AffineShiftSystem(*form), reference)
+                                      pole_doppler.AffineShiftSystem(
+                                          *form, sparse_schur=sparse_schur), reference)
     return systems
 
 

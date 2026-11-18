@@ -747,17 +747,53 @@ def affine_scan_chi(base, A_coef, B_coef, scan, kv, weights, coh_idx, n_levels):
 # bookkeeping around it and remain cacheable (no ctypes pointers).
 # ---------------------------------------------------------------------------
 def pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
-                    eN, eR, WR, WN, t):
-    """Solve the stationary Schur block at each scan point."""
+                    eN, eR, WR, WN, t, sparse_products=None, null_blocks=None):
+    """Solve the stationary Schur block at each scan point.
+
+    A sparse multiplication plan lists the columns that may be nonzero in
+    R-N, the inverse shift and the N-space readouts, in ascending order.
+    Null-space blocks list disjoint row indices of the affine system.
+    """
+    products = ((None,) * 6 if sparse_products is None else
+                tuple(array for product in sparse_products for array in product))
+    blocks = (None, None) if null_blocks is None else null_blocks
     Z, g, c0, weff, failures = _pole_schur_rows(
-        NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv, eN, eR, WR, WN, t)
+        NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv, eN, eR, WR, WN, t,
+        *products, *blocks)
     _check_lu_batch("pole_schur_rows", failures, scan=t)
     return Z, g, c0, weff
 
 
+@njit(cache=True)
+def _solve_pole_null_blocks(NN0, NN1, B, t, counts, rows):
+    """Apply the existing real LU to each connected component and every RHS."""
+    n_rhs = B.shape[1]
+    for block in range(counts.size):
+        count = counts[block]
+        A = np.empty((count, count), np.float64)
+        rhs = np.empty((count, n_rhs), np.float64)
+        piv = np.empty(count, np.int64)
+        for j in range(count):
+            row = rows[block, j]
+            for k in range(count):
+                col = rows[block, k]
+                A[j, k] = NN0[row, col] + t * NN1[row, col]
+            rhs[j, :] = B[row, :]
+        status = _lu_factor_real(A, piv)
+        if status == _LU_OK:
+            status = _lu_solve_real(A, piv, rhs)
+        if status != _LU_OK:
+            return status
+        for j in range(count):
+            B[rows[block, j], :] = rhs[j, :]
+    return _LU_OK
+
+
 @njit(cache=True, parallel=True)
 def _pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
-                    eN, eR, WR, WN, t):
+                    eN, eR, WR, WN, t, rn_counts, rn_columns,
+                    shift_counts, shift_columns, wn_counts, wn_columns,
+                    block_counts, block_rows):
     """Per row: Z = S_RR⁻¹(A_RR − A_RN A_NN⁻¹ A_NR), g, readout constants.
 
     Returns ``Z`` (rows, nR, nR), ``g = S_RR⁻¹(A_RN y − e_R)`` (rows, nR),
@@ -775,56 +811,71 @@ def _pole_schur_rows(NN0, NN1, NR0, NR1, RN0, RN1, RR0, RR1, S_RR_inv,
     failures = np.zeros((n_rows, 3), np.int64)
     for i in prange(n_rows):
         ti = t[i]
-        A = np.empty((nN, nN), np.float64)
         B = np.empty((nN, nR + 1), np.float64)
         RN = np.empty((nR, nN), np.float64)
         K = np.empty((nR, nR), np.float64)
         u = np.empty(nR, np.float64)
-        piv = np.empty(nN, np.int64)
         for a in range(nN):
-            for b in range(nN):
-                A[a, b] = NN0[a, b] + ti * NN1[a, b]
             for b in range(nR):
                 B[a, b] = NR0[a, b] + ti * NR1[a, b]
             B[a, nR] = eN[a]
         for a in range(nR):
-            for b in range(nN):
+            count = nN if rn_counts is None else rn_counts[a]
+            for j in range(count):
+                b = j if rn_columns is None else rn_columns[a, j]
                 RN[a, b] = RN0[a, b] + ti * RN1[a, b]
-        status = _lu_factor_real(A, piv)
-        if status == _LU_OK:
-            status = _lu_solve_real(A, piv, B)
+        if block_counts is None:
+            A = np.empty((nN, nN), np.float64)
+            piv = np.empty(nN, np.int64)
+            for a in range(nN):
+                for b in range(nN):
+                    A[a, b] = NN0[a, b] + ti * NN1[a, b]
+            status = _lu_factor_real(A, piv)
+            if status == _LU_OK:
+                status = _lu_solve_real(A, piv, B)
+        else:
+            status = _solve_pole_null_blocks(NN0, NN1, B, ti, block_counts, block_rows)
         if status != _LU_OK:
             failures[i, 0] = status
             failures[i, 1], failures[i, 2] = 0, 0
             continue
         for a in range(nR):
+            count = nN if rn_counts is None else rn_counts[a]
             for b in range(nR):
                 acc = RR0[a, b] + ti * RR1[a, b]
-                for k in range(nN):
+                for j in range(count):
+                    k = j if rn_columns is None else rn_columns[a, j]
                     acc -= RN[a, k] * B[k, b]
                 K[a, b] = acc
             acc = -eR[a]
-            for k in range(nN):
+            for j in range(count):
+                k = j if rn_columns is None else rn_columns[a, j]
                 acc += RN[a, k] * B[k, nR]
             u[a] = acc
         for a in range(nR):
+            count = nR if shift_counts is None else shift_counts[a]
             for b in range(nR):
                 acc = 0.0
-                for k in range(nR):
+                for j in range(count):
+                    k = j if shift_columns is None else shift_columns[a, j]
                     acc += S_RR_inv[a, k] * K[k, b]
                 Z[i, a, b] = acc
             acc = 0.0
-            for k in range(nR):
+            for j in range(count):
+                k = j if shift_columns is None else shift_columns[a, j]
                 acc += S_RR_inv[a, k] * u[k]
             g[i, a] = acc
         for r in range(n_ro):
+            count = nN if wn_counts is None else wn_counts[r]
             acc_c = 0.0 + 0.0j
-            for k in range(nN):
+            for j in range(count):
+                k = j if wn_columns is None else wn_columns[r, j]
                 acc_c += WN[r, k] * B[k, nR]
             c0[i, r] = acc_c
             for b in range(nR):
                 acc_c = WR[r, b]
-                for k in range(nN):
+                for j in range(count):
+                    k = j if wn_columns is None else wn_columns[r, j]
                     acc_c -= WN[r, k] * B[k, b]
                 weff[i, r, b] = acc_c
     return Z, g, c0, weff, failures

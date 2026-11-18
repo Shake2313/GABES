@@ -844,9 +844,10 @@ TPD_LIMIT_MHZ = 500.0
 # finite-Floquet solve per (probe detuning, Maxwell class) on a 1 m/s, 4σ grid.
 # Fast and Balanced evaluate the same steady state, the same Maxwell measure and
 # the same atomic response exactly through poles and residues (one eigenproblem
-# per probe detuning instead of ~1,600 solves); Balanced solves all 401 probe
-# detunings, Fast solves an adaptively refined subset and splines the averaged
-# responses between them.  The two-branch full probe-scan view uses the same
+# per probe detuning instead of ~1,600 solves). Focused Exact Maxwell solves
+# all 401 probe detunings at both accelerated tiers, so displayed Passive L1
+# eligibility is evaluated from solved values. Historical 4-sigma keeps Fast
+# adaptive sampling. The two-branch full probe-scan view uses the same
 # model and measure but solves every displayed probe detuning for both pole
 # tiers: its 0.4 MHz resonance windows are finer than the display resolution the
 # adaptive refinement was validated at. Retired cross-coupling and local gain
@@ -883,6 +884,8 @@ RESOLUTION = FWM_FIDELITY
 def _tier_response_method(fidelity, velocity_measure, *, full_scan=False):
     if fidelity == FIDELITY_ULTRA and velocity_measure == "truncated":
         return RESPONSE_GRID
+    if fidelity == FIDELITY_FAST and velocity_measure == "exact":
+        return RESPONSE_POLE
     method = FWM_FIDELITY[fidelity]["response_method"]
     return RESPONSE_POLE if full_scan else method
 

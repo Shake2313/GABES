@@ -32,3 +32,22 @@ def test_current_detector_and_seed_noise_controls_are_outside_atomic_cache():
     keys = set(scheme.recompute_keys())
     assert {"after_cell_eff_pct", "qe_pct", "loss_pct", "seed_classical_rin_scaled",
             "measured_gain_calibration"}.isdisjoint(keys)
+
+
+def test_single_extra_coordinate_preserves_dense_response_and_uses_two_audit_rows():
+    s = fwm.FWMScheme()
+    params = s.defaults()
+    context = s._seeded_compute_inputs(params)
+    native = fwm.probe_scan_axis_GHz(
+        context["D_GHz"], context["coarse_points"], 0, None,
+        context["scan_min"], context["scan_max"], branches=(context["branch"],))
+    point = native[201] + 0.00091
+    dense = fwm.compute_spectrum(**context, extra_probe_points_GHz=(point,))
+    extra = fwm.compute_spectrum(**context, _readout_probe_points_GHz=(point,))
+    assert extra["response_estimator"]["solved_probe_points"] == 2
+    assert extra["floquet_convergence"]["comparison_order"] == 2
+    assert extra["probe_axis_GHz"][1] == point
+    index = int(np.searchsorted(dense["probe_axis_GHz"], point))
+    for key in ("G_s", "G_c", "T_canonical_small_signal", "omega_probe_rad_s",
+                "omega_conjugate_rad_s"):
+        np.testing.assert_array_equal(extra[key][1], dense[key][index])

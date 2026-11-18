@@ -224,7 +224,8 @@ def compute_spectrum(D_GHz, *,
                      eom_other_sidebands_power=0.0,
                      eom_seed_spectrum_provenance="not supplied",
                      eom_seed_spectrum_status="not supplied",
-                     eom_seed_spectrum_application="unapplied"):
+                     eom_seed_spectrum_application="unapplied",
+                     _readout_probe_points_GHz=(), _sparse_pole_schur=False):
     """Mean-field seeded-FWM pipeline at Δ = 2π·D_GHz·1e9.
 
     ``excess_noise_model`` controls only an optional phenomenological pump-scatter
@@ -249,7 +250,9 @@ def compute_spectrum(D_GHz, *,
         gain_closure_enabled, legacy_gain_calibration_fixture)
     stark_recompute_context = copy.deepcopy({
         key: value for key, value in locals().items()
-        if key != "pump_stark_fraction" and (key != "extra_probe_points_GHz" or np.size(value))
+        if key not in {"pump_stark_fraction", "_readout_probe_points_GHz"}
+        and (key != "extra_probe_points_GHz" or np.size(value))
+        and (key != "_sparse_pole_schur" or value)
         and (key not in {"angular_transverse_order", "angular_transverse_cutoff"}
              or angular_transverse_order)})
     branch = _single_branch(branch, branches)
@@ -342,11 +345,22 @@ def compute_spectrum(D_GHz, *,
         D_GHz, coarse_points, fine_points, window_mhz, scan_min, scan_max,
         branches=(branch,))
     extra = np.asarray(extra_probe_points_GHz, dtype=float)
-    if (extra.ndim != 1 or np.any(~np.isfinite(extra))
-            or np.any(extra < probe_axis_GHz[0]) or np.any(extra > probe_axis_GHz[-1])
-            or np.any(np.abs(extra - D_GHz) <= PUMP_OVERLAP_EXCLUSION_MHZ * 1e-3)):
+    readout_points = np.asarray(_readout_probe_points_GHz, dtype=float)
+    if readout_points.size and extra.size:
+        raise ValueError("readout-only coordinates cannot extend a native scan")
+    requested = readout_points if readout_points.size else extra
+    if (requested.ndim != 1 or np.any(~np.isfinite(requested))
+            or np.any(requested < probe_axis_GHz[0]) or np.any(requested > probe_axis_GHz[-1])
+            or np.any(np.abs(requested - D_GHz) <= PUMP_OVERLAP_EXCLUSION_MHZ * 1e-3)):
         raise ValueError("extra probe points must be finite and within the sampled probe span")
-    if extra.size:
+    if readout_points.size:
+        requested = np.unique(readout_points)
+        if requested.size < 2:
+            # The adjacent-order audit requires two distinct coordinates.
+            anchor = probe_axis_GHz[0] if requested[0] != probe_axis_GHz[0] else probe_axis_GHz[-1]
+            requested = np.sort(np.r_[requested, anchor])
+        probe_axis_GHz = requested
+    elif extra.size:
         probe_axis_GHz = np.unique(np.r_[probe_axis_GHz, extra])
     k_pump_vac, k_probe_vac, k_conj_vac = seeded_option_a_wavenumbers(
         D_GHz, probe_axis_GHz, legacy_centroid=legacy_mean_field_fixture)
@@ -399,7 +413,8 @@ def compute_spectrum(D_GHz, *,
     pole_systems = None
     if response_method != RESPONSE_GRID and not angular_transverse_order:
         pole_systems = fwm._seeded_pole_systems(
-            Op_A, Op_B, Os_ref, Oc_ref, branch, atom_T, response_orders)
+            Op_A, Op_B, Os_ref, Oc_ref, branch, atom_T, response_orders,
+            sparse_schur=_sparse_pole_schur)
     angular_reference = None
     if angular_transverse_order:
         if not enforce_floquet_convergence or legacy_mean_field_fixture:
@@ -535,6 +550,9 @@ def compute_spectrum(D_GHz, *,
             tolerance_log10_gain=scan_tolerance_log10_gain,
             start_stride=scan_start_stride, guard=guard_rows, grid_rows=grid_rows)
         chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = high_response
+    if _sparse_pole_schur and pole_systems is not None:
+        response_estimator["schur_products"] = (
+            "compiled structural blocks and nonzeros" if kernels.available() else "dense NumPy")
     response_estimator["absorption_diagnostics"] = LINEAR_ABSORPTION_MODEL
     response_estimator["velocity_classes"] = int(v_grid.size)
     response_estimator["velocity_measure"] = velocity_measure
