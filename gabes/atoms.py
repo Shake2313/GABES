@@ -44,6 +44,10 @@ class AtomModel:
                               # separate from emission_ops so elastic collisions,
                               # depolarization, etc. cannot acquire spontaneous-
                               # emission or TOC provenance.
+    generator_terms: tuple = field(default=(), repr=False)
+                              # closed-form vec(ρ) superoperators added after the
+                              # channels (`with_reset(direct=True)`); a field, so
+                              # copies rebuilt from the fields keep them.
 
     lindblad: np.ndarray = field(init=False, repr=False)
     S_v: np.ndarray = field(init=False, repr=False)
@@ -70,6 +74,8 @@ class AtomModel:
         `direct=True` applies the closed-form sum for normalized populations
         without enumerating the jumps. Use it when the caller consumes only
         the superoperator and needs to preserve its replacement arithmetic.
+        The sum is kept in `generator_terms`, so later copies such as
+        `with_optical_dephasing` rebuild it instead of dropping it.
         """
         if len(populations) != len(self.ground):
             raise ValueError("reset populations must align with `ground`")
@@ -78,10 +84,12 @@ class AtomModel:
             full[list(self.ground)] = populations
             if not np.isclose(full.sum(), 1.0, atol=1e-12, rtol=0.0):
                 raise ValueError("direct reset populations must sum to one")
+            term = thermal_reset_superoperator(rate, full)
             clone = copy(self)
             if name is not None:
                 clone.name = name
-            clone.lindblad = self.lindblad + thermal_reset_superoperator(rate, full)
+            clone.generator_terms = self.generator_terms + (term,)
+            clone.lindblad = self.lindblad + term
             clone.S_v = self.S_v.copy()
             return clone
         reset = tuple((s, g, rate * p) for s in range(self.n_levels)
@@ -136,6 +144,8 @@ class AtomModel:
         for (i, j, rate) in self.dephasing:
             idx = self.rho_index(i, j)
             D[idx, idx] -= rate
+        for term in self.generator_terms:                # closed-form additions
+            D = D + term
         return D
 
     def _build_velocity_shift(self):
@@ -171,7 +181,7 @@ def double_lambda_rb85(gamma_gg=None, gamma_opt=0.0):
     gamma_gg = constants.GAMMA_GG if gamma_gg is None else gamma_gg
     ground = (0, 1)
     excited = (2, 3)
-    decay = species.hyperfine_decay(species.RB85, "D1")
+    decay = species.hyperfine_decay(species.RB85, "D1")   # f_values layout: F=2,3 then F'=2,3
     dephasing = [(0, 1, gamma_gg), (1, 0, gamma_gg)]
     if gamma_opt:
         for g in ground:

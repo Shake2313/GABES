@@ -89,9 +89,13 @@ class AffineScan:
 
     def quadrature_classes(self, scan, T, mass, k_vec):
         """Maxwell (v, weights) resolving the narrowest pole of these scan points, for
-        a response there with no closed form (the finite-IF phasor)."""
-        return _strip_classes(self._pole_rows(scan, _shift_sigma(T, mass, k_vec))[1],
-                              T, mass, k_vec)
+        a response there with no closed form (the finite-IF phasor). Like
+        `maxwell_mean`, a failed eigendecomposition falls back to the finest strip."""
+        try:
+            damping = self._pole_rows(scan, _shift_sigma(T, mass, k_vec))[1]
+        except np.linalg.LinAlgError:
+            damping = np.zeros(np.size(scan))
+        return _strip_classes(damping, T, mass, k_vec)
 
     def _pole_rows(self, scan, sigma):
         """Pole rows of the coherence, their damping and the rows the guard rejects.

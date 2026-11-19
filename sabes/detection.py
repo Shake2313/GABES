@@ -35,13 +35,13 @@ from typing import Tuple
 
 import math
 
-from gabes import detection as photodetection
+from gabes import constants, detection as photodetection
 
 from .calibration import default_calibration
 from .layout import parts as layout_parts
 from .noise import EOMNoiseBudget, build_eom_noise_budget
 
-ELEMENTARY_CHARGE = 1.602176634e-19
+ELEMENTARY_CHARGE = constants.ELEMENTARY_CHARGE
 
 # Separation over beam radius below which a Gaussian tail is no longer a fair
 # description of "these beams are resolved": at 3 the overlap integral is already

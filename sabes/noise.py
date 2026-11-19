@@ -19,8 +19,10 @@ from typing import Tuple
 
 import math
 
+from gabes import constants
 
-ELEMENTARY_CHARGE_C = 1.602176634e-19
+
+ELEMENTARY_CHARGE_C = constants.ELEMENTARY_CHARGE
 _MATCH_TOLERANCE_HZ = 1.0
 
 

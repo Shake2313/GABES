@@ -511,11 +511,17 @@ class Manifold:
 
 @functools.lru_cache(maxsize=64)
 def hyperfine_decay(iso, line):
-    """F-resolved spontaneous rates from the squared signed dipole blocks."""
+    """F-resolved spontaneous rates from the squared signed dipole blocks.
+
+    Returns (excited index, ground index, rate) for an F-resolved AtomModel whose
+    levels are the ground F in `f_values` order followed by the excited F in
+    `f_values` order, the layout `build_manifold` builds. A builder with another
+    layout must remap the indices.
+    """
     structure = level_structure(iso.name if ISOTOPES.get(iso.name) is iso else iso, line)
     ground_f = np.array([f for f, _ in structure.ground])
     excited_f = np.array([f for f, _ in structure.excited])
-    ground_fs, excited_fs = np.unique(ground_f), np.unique(excited_f)
+    ground_fs, excited_fs = f_values(iso.I, iso.Jg), f_values(iso.I, iso.line(line)[0])
     decay = []
     for ie, fe in enumerate(excited_fs, start=len(ground_fs)):
         weights = [sum(np.sum(c[np.ix_(ground_f == fg, excited_f == fe)]**2)

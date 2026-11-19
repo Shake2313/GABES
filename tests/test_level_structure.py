@@ -144,3 +144,17 @@ def test_single_pair_zeeman_is_a_normalized_dipole_block(fg, fe):
     sign = np.sign(sum(np.sum(m.real * block[q]) for m, q in zip(mine, (-1, 0, 1))))
     for m, q in zip(mine, (-1, 0, 1)):  # one overall phase per closed pair
         np.testing.assert_allclose(m, sign * block[q] / scale, rtol=1e-14, atol=1e-15)
+
+
+def test_direct_reset_survives_later_field_rebuilds():
+    """A closed-form reset must not vanish when a later copy rebuilds the generator."""
+    base = atoms.lambda3()
+    rate, p = 3.7e5, [0.25, 0.75]
+    direct = base.with_reset(rate, p, direct=True)
+    channels = base.with_reset(rate, p)
+    np.testing.assert_allclose(direct.lindblad, channels.lindblad, atol=1e-6)
+    for derive in (lambda a: a.with_optical_dephasing(2.0e6),
+                   lambda a: a.with_reset(1.0e3, [0.5, 0.5])):
+        np.testing.assert_allclose(derive(direct).lindblad, derive(channels).lindblad,
+                                   atol=1e-6)
+    assert len(direct.generator_terms) == 1 and base.generator_terms == ()

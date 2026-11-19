@@ -1046,3 +1046,49 @@ def test_quantitative_export_rejects_overlapping_discriminators(monkeypatch):
     assert result["status"] == "unresolved"
     assert result["linewidth_mhz"] is None and result["lock_slope_per_mhz"] is None
     assert all("Competing" in check["reason"] for check in result["checks"])
+
+
+def test_pumped_maxwell_with_no_pump_keeps_only_the_exact_background():
+    """If the solve finds no pump while the profile chose the correction, W - 1 = 0."""
+    params = _params(species=RB85_KEY, line="D1", probe_power_uw=0.0, scan_points=401,
+                     weak_probe_profile=AUTO_WEAK_PROBE)
+    off = SAS.compute(dict(params, pump_power_mw=0.0))
+    with patch("gabes.species.pump_rabi_from_power", return_value=0.0):
+        on = SAS.compute(dict(params, pump_power_mw=0.5))
+    assert on["weak_probe_profile"]["applied"] == PUMPED_MAXWELL
+    for key in ("alpha_unit", "chi_real_unit"):
+        np.testing.assert_allclose(on[key], off[key], rtol=1e-12,
+                                   atol=1e-12 * np.max(np.abs(off[key])))
+
+
+def test_spline_population_sums_weight_every_reservoir_source():
+    """The NumPy spline path, its chunked form and the kernel share one source weighting."""
+    from scipy.interpolate import CubicSpline
+    from gabes import kernels
+    from gabes.schemes.sas import _chunked_pumped_velocity_sums, _velocity_sums
+
+    rng = np.random.default_rng(7)
+    axis = np.linspace(-40.0, 40.0, 161) * G
+    shape = np.exp(-(axis / (6.0 * G)) ** 2)
+    tables = np.stack([np.stack([0.5 - 0.3 * shape, 0.1 * shape, 0.4 - 0.2 * shape]),
+                       np.stack([0.5 + 0.2 * shape, 0.05 * shape, 0.4 + 0.1 * shape])])
+    detuning = np.linspace(-5.0, 5.0, 5) * G
+    kv = np.linspace(-20.0, 20.0, 40001) * G
+    weights = np.exp(-(kv / (8.0 * G)) ** 2)
+    weights /= weights.sum()
+    reservoir = rng.uniform(0.2, 0.8, size=(detuning.size, 2))
+    reservoir /= reservoir.sum(axis=1, keepdims=True)
+    args = (detuning, kv, weights, np.array([0.0, 3.0 * G]), 0.5 * G, [0, 2], [1, 1],
+            np.array([0.5, 0.4]))
+    options = dict(axis=axis, tables=tables, reservoir=reservoir,
+                   population_spline=CubicSpline(axis, tables, axis=-1), population_delta=True)
+    whole = _velocity_sums(*args, **options)
+    chunked = _chunked_pumped_velocity_sums(*args, **options)
+    source0 = _velocity_sums(*args, **dict(options, reservoir=None))
+    for got, want in zip(chunked, whole):
+        np.testing.assert_allclose(got, want, rtol=1e-12, atol=1e-15)
+    assert np.max(np.abs(whole[0] - source0[0])) > 0.1 * np.max(np.abs(source0[0]))
+    if kernels.available():
+        compiled = kernels.sas_velocity_sums(*args, **options)
+        for got, want in zip(compiled[:2], whole[:2]):
+            np.testing.assert_allclose(got, want, rtol=1e-9, atol=1e-12)

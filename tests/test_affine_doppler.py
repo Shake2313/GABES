@@ -197,3 +197,19 @@ def test_doppler_off_never_reaches_the_maxwell_mean(monkeypatch, name):
 
     monkeypatch.setattr(AffineScan, "maxwell_mean", refuse)
     assert np.all(np.isfinite(scheme.compute(p)["chi_bar"]))
+
+
+def test_quadrature_classes_fall_back_when_the_pole_form_fails(monkeypatch):
+    """Like maxwell_mean, a failed eigendecomposition gives the finest strip grid."""
+    affine, scan = _maxwell_scan()
+
+    def fail(*_args, **_kwargs):
+        raise np.linalg.LinAlgError("forced")
+
+    monkeypatch.setattr(AffineScan, "_pole_rows", fail)
+    v, w = affine.quadrature_classes(scan[:2], T, MASS, K)
+    expected = doppler.maxwell_strip_grid(
+        T, MASS, K, affine_doppler.STRIP_FLOOR_SIGMAS * SIGMA,
+        affine_doppler.QUADRATURE_ERROR, affine_doppler.BULK_SIGMAS)
+    np.testing.assert_array_equal(v, expected[0])
+    assert w.sum() == pytest.approx(1.0)

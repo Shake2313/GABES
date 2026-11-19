@@ -25,7 +25,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from gabes import detection
+from gabes import constants, detection
 
 #: A reading whose numbers come from the model's physics.
 COMPUTED = "computed"
@@ -36,7 +36,7 @@ SYNTHESISED = "synthesised"
 HEAD_OPTICAL = "optical"
 HEAD_PHOTOCURRENT = "photocurrent"
 
-ELEMENTARY_CHARGE = 1.602176634e-19
+ELEMENTARY_CHARGE = constants.ELEMENTARY_CHARGE   # kept for importers
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,7 @@ class PhotocurrentSignal:
 def shot_noise_a_per_rthz(responsivity, optical_power_w):
     """sqrt(2 e I) for a photocurrent I = R * P, per root hertz."""
     current = max(float(responsivity) * float(optical_power_w), 0.0)
-    return float(np.sqrt(2.0 * ELEMENTARY_CHARGE * current))
+    return float(np.sqrt(detection.shot_noise_current_psd(current)))
 
 
 def quantum_efficiency(responsivity_a_per_w, wavelength_nm):

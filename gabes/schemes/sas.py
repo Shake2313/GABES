@@ -1047,16 +1047,22 @@ class SASScheme(Scheme):
                       np.asarray(man.p_ground)[ground])
         sum_options = dict(axis=None if pump_off else deff, tables=tables,
                            reservoir=reservoir, thermal_needed=finite_probe)
-        if pumped_maxwell:
-            from scipy.interpolate import CubicSpline
-            # A cutoff on the pump-state table would reuse nonthermal endpoint
-            # populations at far-detuned velocities. Interpolate over the full
-            # detuning domain of the correction at the inherited table spacing.
-            sum_options.update(population_spline=CubicSpline(deff, tables, axis=-1),
-                               population_delta=True)
-            if not kernels.available():
-                sums = _chunked_pumped_velocity_sums
-        absorptive, dispersive, thermal = sums(*sum_inputs, **sum_options)
+        if pumped_maxwell and pump_off:
+            # The profile and the solve can disagree on whether a tiny power
+            # drives the pump; with no pump the correction W − 1 is exactly zero
+            # and only the exact Voigt background below remains.
+            absorptive = dispersive = thermal = np.zeros((np.size(om), DS.size))
+        else:
+            if pumped_maxwell:
+                from scipy.interpolate import CubicSpline
+                # A cutoff on the pump-state table would reuse nonthermal endpoint
+                # populations at far-detuned velocities. Interpolate over the full
+                # detuning domain of the correction at the inherited table spacing.
+                sum_options.update(population_spline=CubicSpline(deff, tables, axis=-1),
+                                   population_delta=True)
+                if not kernels.available():
+                    sums = _chunked_pumped_velocity_sums
+            absorptive, dispersive, thermal = sums(*sum_inputs, **sum_options)
         if axial_optics:
             pump_absorption = (sums(*sum_inputs, **sum_options, same_direction=True)[0]
                                if pump_attenuation and not pump_off else absorptive)
@@ -1702,7 +1708,15 @@ def _velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
     if tables is not None:
         flat_deff = (detuning[:, None] + kv[None, :]).ravel()   # pump Δ_eff
         if population_spline is not None:
-            prepared = population_spline(flat_deff)[0].reshape(-1, *probe_base.shape)
+            values = population_spline(flat_deff).reshape(
+                tables.shape[:2] + probe_base.shape)
+            if reservoir is None:
+                prepared = values[0]
+            else:
+                # Same source weighting as the compiled kernel.
+                prepared = np.zeros(values.shape[1:])
+                for source in range(values.shape[0]):
+                    prepared += reservoir[:, source, None] * values[source]
         elif reservoir is None:
             prepared = [np.interp(flat_deff, axis, table).reshape(probe_base.shape)
                         for table in tables[0]]
@@ -1718,7 +1732,8 @@ def _velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
                 prepared.append(local)
     absorptive = np.empty((omega.size, detuning.size))
     dispersive = np.empty_like(absorptive)
-    thermal = absorptive if prepared is None else np.empty_like(absorptive)
+    # Zero when unused, as the compiled kernel returns it.
+    thermal = absorptive if prepared is None else np.zeros_like(absorptive)
     for t in range(omega.size):
         arg = probe_base - omega[t]
         denom = arg ** 2 + hwhm ** 2
@@ -1738,10 +1753,11 @@ def _velocity_sums(detuning, kv, weights, omega, hwhm, g_pos, e_pos, p_ground,
     return absorptive, dispersive, thermal
 
 
-def _chunked_pumped_velocity_sums(detuning, kv, *args, **kwargs):
+def _chunked_pumped_velocity_sums(detuning, kv, *args, reservoir=None, **kwargs):
     """Bound the Automatic pumped NumPy fallback's scan × velocity arrays."""
     rows = max(1, 100_000 // kv.size)
-    parts = [_velocity_sums(detuning[i:i + rows], kv, *args, **kwargs)
+    parts = [_velocity_sums(detuning[i:i + rows], kv, *args, **kwargs,
+                            reservoir=None if reservoir is None else reservoir[i:i + rows])
              for i in range(0, detuning.size, rows)]
     return tuple(np.concatenate(columns, axis=1) for columns in zip(*parts))
 
