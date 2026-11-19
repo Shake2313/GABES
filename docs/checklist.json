@@ -527,6 +527,31 @@
   ],
   "items": [
     {
+      "id": "affine-doppler-rejected-row-grid",
+      "area": "gabes/affine_doppler.py",
+      "title": "⟦AI⟧ Size fallback velocity grids after a pole guard rejection",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "status": "needs_decision",
+      "acceptance_criteria": [
+        "⟦AI⟧ Measure slider-end paths and controlled rejection of a known narrow response.",
+        "⟦AI⟧ After approval, pin synthetic-failure behavior and verify accepted-row outputs remain bit-identical."
+      ],
+      "decision_required": "⟦AI⟧ Choose how to size rejected-row and finite-IF grids after reviewing the error, runtime and cap behavior."
+    },
+    {
+      "id": "rb85-d1-selective-faddeeva-lines",
+      "area": "gabes/linear_hyperfine.py",
+      "title": "⟦AI⟧ Evaluate only requested Rb-85 D1 hyperfine lines",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P3",
+      "status": "ready",
+      "acceptance_criteria": [
+        "⟦AI⟧ Preserve output bytes, dtype and NaN pattern for single-line, ground-manifold and total absorption, including the OD components.",
+        "⟦AI⟧ Compare FWM arm timings, regression tests and the focused baseline hash."
+      ]
+    },
+    {
       "id": "sabes-profiler-design-contract",
       "area": "docs/ui_redesign/ + docs/SABES/ + gabes_ui/sabes/ design contract",
       "title": "⟦AI⟧ 광로 클릭 중심 시안과 표시 계약 확정",
@@ -6648,6 +6673,40 @@
     "source": "docs/grand_challenge/rydberg_opacity_2026_10_23/README.md",
     "validation": "docs/grand_challenge/rydberg_opacity_2026_10_23/full_pytest_receipt.json",
     "official_grand_challenges_unchanged": true
+  },
+  "_consolidation_code_review_2026_11_18": {
+    "origin": "ai_execution_of_human_request",
+    "reviewer": "Claude Code, code-review skill (xhigh)",
+    "reviewed_on": "2026-11-18",
+    "reviewed_head": "51eaa267636243c848ec05b1310a20c2c1787d04",
+    "source_label": "codex_handoff_review_leftovers_2026_11_19.md",
+    "source_text_sha256": "1261b746691ec3fcf34e9525c7ee967aeb5b884d7504debeee2df24131375cbf",
+    "human_request": "지금 진행하고 있는 사항들을 제외하고, 마지막으로 푸시된 버전 기준으로 지금까지의 통합 작업에 한해서 리뷰해볼 수 있을까요?",
+    "handoff_quoted_approval": "Yes, fix them.",
+    "adoption_status": "eight_fixes_pushed_two_findings_registered",
+    "new_items": [
+      "affine-doppler-rejected-row-grid",
+      "rb85-d1-selective-faddeeva-lines"
+    ],
+    "scope": "⟦AI⟧ Claude reviewed 42 pushed consolidation commits through 51eaa26 and excluded work in progress.",
+    "fixed_findings": {
+      "54d169c": [
+        "⟦AI⟧ 1. SAS could use supersaturated beam-path density when the beam path was colder than the cold spot.",
+        "⟦AI⟧ 2. The shared cold-spot helper now rejects that temperature ordering in every solve with a 1e-9 K rounding tolerance."
+      ],
+      "65bbcb8": [
+        "⟦AI⟧ 3. Rydberg finite-IF quadrature falls back on a pole decomposition LinAlgError.",
+        "⟦AI⟧ 4. Generator rebuilds retain the reset terms from with_reset(direct=True).",
+        "⟦AI⟧ 6. The SAS NumPy spline path weights reservoir sources, slices each chunk and initializes the thermal buffer.",
+        "⟦AI⟧ 7. Pumped Maxwell SAS at zero pump returns its exact Voigt background.",
+        "⟦AI⟧ 8. Hyperfine decay follows the supplied F ordering.",
+        "⟦AI⟧ 9. SABES uses the shared elementary charge and shot-noise PSD."
+      ]
+    },
+    "open_at_handoff": {
+      "5": "affine-doppler-rejected-row-grid",
+      "10": "rb85-d1-selective-faddeeva-lines"
+    }
   },
   "_external_code_review_2026_10_30": {
     "origin": "ai_review_of_external_feedback",
