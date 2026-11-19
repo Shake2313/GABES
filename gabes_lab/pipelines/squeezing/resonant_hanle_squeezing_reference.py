@@ -690,11 +690,9 @@ def absolute_field_sensitivity(
     P_c_diode = P_ref0 * reference_path_eff
     I_s = R * P_s_diode
     I_c = R * P_c_diode
-    optical_shot_i = np.sqrt(2.0 * constants.ELEMENTARY_CHARGE
-                             * np.maximum(I_s + weight * weight * I_c,
-                                          1e-300))
-    dark_i = np.sqrt(2.0 * constants.ELEMENTARY_CHARGE
-                     * detector_dark_current_A
+    optical_shot_i = np.sqrt(detection.shot_noise_current_psd(
+        np.maximum(I_s + weight * weight * I_c, 1e-300)))
+    dark_i = np.sqrt(detection.shot_noise_current_psd(detector_dark_current_A)
                      * np.maximum(1.0 + weight * weight, 0.0))
     detector_i = np.sqrt(detector_current_noise * detector_current_noise
                          * np.maximum(1.0 + weight * weight, 0.0)

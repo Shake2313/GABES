@@ -88,7 +88,7 @@ from gabes_lab.pipelines.squeezing._velocity_measure import (
 )
 from gabes_lab.blocks.runner import start_run  # noqa: E402
 
-from gabes import constants, hyperfine, observables                 # noqa: E402
+from gabes import beam, constants, hyperfine, observables           # noqa: E402
 from gabes.core import blas_single_thread                           # noqa: E402
 from gabes.schemes import fwm                                       # noqa: E402
 
@@ -739,7 +739,7 @@ def sec_paper_db():
     for name in Pd:
         if name in wd and wd[name] > 0:
             P, w = Pd[name] * 1e-3, wd[name] * 1e-6
-            inten[name] = 2 * P / (math.pi * w ** 2) * 1e-4
+            inten[name] = beam.peak_intensity(P, w) * 1e-4
             rabi[name] = constants.rabi_freq(P, w) / (2 * math.pi) / 1e6
     # How tightly did 10 independent labs converge on each variable?  This is an
     # empirical tolerance ranking, completely independent of the engine and of

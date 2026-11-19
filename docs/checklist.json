@@ -564,13 +564,14 @@
       "origin": "ai_execution_of_human_request",
       "priority": "P3",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "problem": "⟦AI⟧ At 21009ee, resonant_hanle_squeezing_reference.py writes the shot-noise current 2eI inline (optical and dark terms) instead of gabes.detection.shot_noise_current_psd, and variable_audit/scan_variable_audit.py writes the Gaussian peak intensity 2P/(πw²) instead of gabes.beam.peak_intensity.",
       "acceptance_criteria": [
         "⟦AI⟧ First confirm that neither script reproduces a sealed archive record. If one does, leave it unchanged and close this item with that reason.",
         "⟦AI⟧ Otherwise route both through the shared helpers; outputs move by at most 1e-12 relative and written report values stay identical."
       ],
-      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19."
+      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19.",
+      "evidence_2026_11_20": "⟦AI⟧ Archive analysis, docs and validators reference historical source copies or backup inventories. No sealed gate hashes the live product scripts. Routed both optical and dark shot-noise terms and the paper-table peak intensity through the shared helpers. Across four Hanle inputs, two dark-current settings, balance modes and the ten-paper table, 1,229 recursive leaves (including Python type, dtype, shape and bytes) and three rendered Markdown outputs were identical. Both focused suites passed (13 tests). Local runner receipts: runs/residuals_2026_11_20/pipeline_formulas/{before,after}/."
     },
     {
       "id": "affine-doppler-rejected-row-grid",
