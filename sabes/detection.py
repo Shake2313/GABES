@@ -41,7 +41,7 @@ from .calibration import default_calibration
 from .layout import parts as layout_parts
 from .noise import EOMNoiseBudget, build_eom_noise_budget
 
-ELEMENTARY_CHARGE = constants.ELEMENTARY_CHARGE
+ELEMENTARY_CHARGE = constants.ELEMENTARY_CHARGE   # kept for importers
 
 # Separation over beam radius below which a Gaussian tail is no longer a fair
 # description of "these beams are resolved": at 3 the overlap integral is already
@@ -353,7 +353,7 @@ def readout(geom, chain, gains, settings, detection=None, calibration=None):
                     f"an independently supplied detector input")
 
     bandwidth = 1.0
-    shot = math.sqrt(2.0 * ELEMENTARY_CHARGE * responsivity * total * bandwidth)
+    shot = math.sqrt(photodetection.shot_noise_current_psd(responsivity * total) * bandwidth)
     electronic = responsivity * nep
     if shot <= 0.0:
         clearance = -math.inf
@@ -382,7 +382,8 @@ def power_for_clearance(target_db, calibration=None):
     responsivity = calibration.value("pd_responsivity_a_per_w")
     nep = calibration.value("bpd_nep_w_per_rthz")
     ratio_sq = 10.0 ** (float(target_db) / 10.0)
-    return ratio_sq * responsivity * nep ** 2 / (2.0 * ELEMENTARY_CHARGE)
+    # Shot PSD is linear in power: per watt it is the PSD of the responsivity current.
+    return ratio_sq * (responsivity * nep) ** 2 / photodetection.shot_noise_current_psd(responsivity)
 
 
 def focal_length_for_density(target_w_per_cm2, power_w, radius_at_lens_m,

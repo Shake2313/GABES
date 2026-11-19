@@ -221,7 +221,7 @@
     "local_run": "runs/beam_self_action/20261116_final",
     "artifacts": "⟦AI⟧ PNG/PDF, raw propagation arrays, susceptibility tables, convergence evidence, focused-test receipt and exact source snapshots; run.json status complete and output hashes verified. Result artifacts remain ignored under runs/."
   },
-  "_consolidation_program_status_2026_11_16": {"source": "Consolidation survey of 2026-10-29 (16 candidates), reviewed against the code on 2026-11-16.", "done": ["1 atomic data", "4 Doppler averages", "5 stationary solves", "6 linewidth crossing", "7 detection and Planck", "8 vapor cell", "9 beam power to Rabi", "10 CSV decoding", "11 FWM gain-calibration modules", "12 fwm package split", "3 code move (c7c86c3)", "2 dissipator, reset, g-factors, dipoles, Zeeman generator", "16 SABES shared UI", "3 weak-probe absorption on Faddeeva", "2 level builders and resets", "13 scanner chain and conventions"], "closed_in_main": {"14": "⟦AI⟧ Grand Challenge audit scripts live in GABES-archive; new scripts there use shared harnesses. Nothing left in main.", "15": "⟦AI⟧ pytest.ini replaces conftest path setup; no single_thread fixture copies remain; sys.path edits remain only in the direct-run scripts tests/capture_baseline.py and tests/verify_hanle_eit_eia.py."}, "remaining": {}, "status": "finished", "next_after": "User request 2026-11-16: finish consolidation first; then the Fast package (fwm-lab-gain-calibration-refit, fwm-fast-displayed-readout-error-certificate, skill gabes-fast-tier)."},
+  "_consolidation_program_status_2026_11_16": {"source": "Consolidation survey of 2026-10-29 (16 candidates), reviewed against the code on 2026-11-16.", "done": ["1 atomic data", "4 Doppler averages", "5 stationary solves", "6 linewidth crossing", "7 detection and Planck", "8 vapor cell", "9 beam power to Rabi", "10 CSV decoding", "11 FWM gain-calibration modules", "12 fwm package split", "3 code move (c7c86c3)", "2 dissipator, reset, g-factors, dipoles, Zeeman generator", "16 SABES shared UI", "3 weak-probe absorption on Faddeeva", "2 level builders and resets", "13 scanner chain and conventions"], "closed_in_main": {"14": "⟦AI⟧ Grand Challenge audit scripts live in GABES-archive; new scripts there use shared harnesses. Nothing left in main.", "15": "⟦AI⟧ pytest.ini replaces conftest path setup; no single_thread fixture copies remain; sys.path edits remain only in the direct-run scripts tests/capture_baseline.py and tests/verify_hanle_eit_eia.py."}, "remaining": {}, "residual_sweep_2026_11_19": "⟦AI⟧ Human request 2026-11-19: '통합 작업 완료율 다시 체크해주시고, 남은 작업 확인해주세요', then 'Yes, do it' to fixing the SABES copies and recording the rest. A grep sweep of gabes, gabes_ui, sabes and gabes_lab at 21009ee found no copied physical constants. It found (a) four inline 2eI shot-noise copies in sabes/detection.py (readout, power_for_clearance) and sabes/noise.py (build_eom_noise_budget), now routed through gabes.detection.shot_noise_current_psd: 7 of 4,275 snapshot leaves moved by at most 2.75e-16 relative, the derived table is identical and 302 SABES/detection tests passed; (b) magneto-doppler-fallback-policy; (c) thermal-speed-shared-helper; (d) gabes-lab-pipeline-shared-formulas. In-place flags.writeable freezes of cached arrays were not counted as copies. These follow-ups do not reopen the program.", "status": "finished", "next_after": "User request 2026-11-16: finish consolidation first; then the Fast package (fwm-lab-gain-calibration-refit, fwm-fast-displayed-readout-error-certificate, skill gabes-fast-tier)."},
   "_physics_extension_policy_2026_11_13": {"decision": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.", "applies_to": ["od-sas-segmented-cell-propagation", "lambda-spectrum-validity", "fwm-finite-seed-angular-doppler-production", "collisional-coefficient-provenance-and-pressure-shift"], "coefficient_source_rule": "User decision 2026-11-13: take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning."},
   "_od_package_scope_2026_11_13": {
     "provenance": "User decisions 2026-11-13 on the separate Codex OD/SAS model package, each choosing the ⟦AI⟧-recommended option. ⟦AI⟧ The lane order, registered item IDs and file ownership are coordination records.",
@@ -526,6 +526,52 @@
     }
   ],
   "items": [
+    {
+      "id": "magneto-doppler-fallback-policy",
+      "area": "gabes/schemes/magneto.py",
+      "title": "⟦AI⟧ Decide whether the magneto exact-Doppler fallback adopts the shared rejected-row refinement",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "needs_decision",
+      "problem": "⟦AI⟧ MagnetoScheme._exact_doppler_average runs the same pole-mean, guard and grid-fallback sequence as affine_doppler.AffineScan in its own code. Its guard is relative to the largest direct value of the scan, by design: the affine per-row guard is stricter, so the two were not shared (2026-11-02, 57bf5a2). Its fallback averages rejected rows on a fixed grid sized from half the homogeneous width (_maxwell_fallback_grid with 0.5·γ_hom) and has no convergence check. Since 21009ee, Λ and Rydberg refine rejected rows until two successive relative changes are at most 1e-8 and withhold the row at 351,811 classes (user decision B+D, 2026-11-19). No magneto defect is known; the two fallback policies now differ.",
+      "decision_required": "Move the magneto rejected-row fallback onto the shared affine_doppler refinement (convergence-checked, withheld at the cap; changes rejected rows only), or keep the fixed γ_hom/2 grid and record why?",
+      "acceptance_criteria": [
+        "⟦AI⟧ Measure how often magneto rows fail the guard at the defaults, the five reference presets and the recompute slider ends, from the existing Doppler ledger (fallback_rows, fallback_classes).",
+        "⟦AI⟧ If adopted: accepted rows stay bit-identical, a forced-rejection test pins convergence and the withheld state, and any changed displayed value lands in its own value commit."
+      ],
+      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19."
+    },
+    {
+      "id": "thermal-speed-shared-helper",
+      "area": "gabes/doppler.py",
+      "title": "⟦AI⟧ One helper for the Maxwell speed sqrt(k_B T / m)",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P3",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ The one-dimensional Maxwell speed sqrt(k_B T/m) is written inline about 20 times in 12 engine files: doppler, linear_hyperfine, schemes/sas, schemes/sas_probe_reference, schemes/fwm (seeded, seeded_response, biphoton), schemes/absorption, affine_doppler, magneto_multilevel, dressed_cell_absorption and quantum/inflow. The copies agree; no shared helper exists.",
+      "acceptance_criteria": [
+        "⟦AI⟧ Add one helper in gabes/doppler, or a lower module if import cycles require it, and route the engine copies through it.",
+        "⟦AI⟧ Recursive snapshots of every caller at the defaults and recompute slider ends are bit-identical; sealed code and fixtures stay untouched."
+      ],
+      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19."
+    },
+    {
+      "id": "gabes-lab-pipeline-shared-formulas",
+      "area": "gabes_lab/pipelines/squeezing",
+      "title": "⟦AI⟧ Route two squeezing pipelines through the shared shot-noise and peak-intensity helpers",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P3",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ At 21009ee, resonant_hanle_squeezing_reference.py writes the shot-noise current 2eI inline (optical and dark terms) instead of gabes.detection.shot_noise_current_psd, and variable_audit/scan_variable_audit.py writes the Gaussian peak intensity 2P/(πw²) instead of gabes.beam.peak_intensity.",
+      "acceptance_criteria": [
+        "⟦AI⟧ First confirm that neither script reproduces a sealed archive record. If one does, leave it unchanged and close this item with that reason.",
+        "⟦AI⟧ Otherwise route both through the shared helpers; outputs move by at most 1e-12 relative and written report values stay identical."
+      ],
+      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19."
+    },
     {
       "id": "affine-doppler-rejected-row-grid",
       "area": "gabes/affine_doppler.py",

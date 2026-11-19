@@ -19,10 +19,10 @@ from typing import Tuple
 
 import math
 
-from gabes import constants
+from gabes import constants, detection
 
 
-ELEMENTARY_CHARGE_C = constants.ELEMENTARY_CHARGE
+ELEMENTARY_CHARGE_C = constants.ELEMENTARY_CHARGE   # kept for importers
 _MATCH_TOLERANCE_HZ = 1.0
 
 
@@ -200,7 +200,7 @@ def build_eom_noise_budget(chain, gains, optics_transmission,
         chain.wanted_seed_sideband_power_w
         * (gain_s * probe_transmission + gain_c * conjugate_transmission))
     twin_current = responsivity * desired_detector_power
-    twin_shot = 2.0 * ELEMENTARY_CHARGE_C * twin_current
+    twin_shot = detection.shot_noise_current_psd(twin_current)
 
     eom_frequency_hz = abs(chain.seed_offset_hz)
     modes = []
@@ -211,7 +211,7 @@ def build_eom_noise_budget(chain, gains, optics_transmission,
         if detector_power <= 0.0:
             continue
         current = responsivity * detector_power
-        shot_psd = 2.0 * ELEMENTARY_CHARGE_C * current
+        shot_psd = detection.shot_noise_current_psd(current)
         classical_rin_psd = current ** 2 * rin
         order = (int(round(line.offset_hz / eom_frequency_hz))
                  if eom_frequency_hz > 0.0 else 0)
