@@ -545,11 +545,15 @@
       "title": "⟦AI⟧ Evaluate only requested Rb-85 D1 hyperfine lines",
       "origin": "ai_execution_of_human_request",
       "priority": "P3",
-      "status": "ready",
+      "status": "done",
       "acceptance_criteria": [
         "⟦AI⟧ Preserve output bytes, dtype and NaN pattern for single-line, ground-manifold and total absorption, including the OD components.",
         "⟦AI⟧ Compare FWM arm timings, regression tests and the focused baseline hash."
-      ]
+      ],
+      "completed_at": "2026-11-19",
+      "validation_2026_11_19": "⟦AI⟧ All 3,600 direct results and 89 OD/FWM caller cases (main readout, both branches and the angular reference) retained their numerical bytes and displayed data.",
+      "performance_2026_11_19": "⟦AI⟧ On a 401-point axis at 394.15 K, median _arm_linear_od time fell from 510.884 to 259.406 µs for F=2 and from 537.170 to 288.216 µs for F=3.",
+      "tests_2026_11_19": "⟦AI⟧ 267 focused tests passed across 14 modules, including the FWM compatibility baseline, with seven edge-input cases rechecked with RuntimeWarning treated as an error."
     },
     {
       "id": "sabes-profiler-design-contract",

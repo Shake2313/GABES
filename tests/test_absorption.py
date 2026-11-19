@@ -128,6 +128,56 @@ def test_hyperfine_profiles_preserve_line_centers_and_strength(doppler_on, press
     assert info["optical_collisions"] == effects.readout()
 
 
+@np.errstate(invalid="ignore")
+def test_fwm_hyperfine_selects_lines_before_evaluation(monkeypatch):
+    from unittest.mock import Mock
+
+    from gabes import hyperfine, linear_hyperfine as linear
+
+    beam = np.array([0.9, np.nan, -2.5])
+    scan = linear._fwm_absorption_axis(beam)
+    _, all_lines, info = linear.rb85_d1_alpha_faddeeva(scan, 394.15)
+    evaluate = Mock(wraps=linear.line_absorption)
+    monkeypatch.setattr(linear, "line_absorption", evaluate)
+
+    for transition in hyperfine.TRANSITIONS:
+        evaluate.reset_mock()
+        component = linear.analytic_hyperfine_line(beam, 394.15, *transition)
+        assert evaluate.call_count == 1
+        np.testing.assert_array_equal(component, all_lines[transition], strict=True)
+
+    # A caller can supply a one-shot iterable in any order.
+    selected = hyperfine.TRANSITIONS[:2]
+    evaluate.reset_mock()
+    total, components, filtered_info = linear.rb85_d1_alpha_faddeeva(
+        scan, 394.15, lines=iter([selected[1], selected[0], selected[1]]))
+    assert list(components) == list(selected)
+    assert evaluate.call_count == len(selected)
+    assert filtered_info == info
+    np.testing.assert_array_equal(total, all_lines[selected[0]] + all_lines[selected[1]], strict=True)
+
+
+@pytest.mark.parametrize("ground", [None, 2, 3])
+@pytest.mark.parametrize("weights", [None, {2: 0.25, 3: 1.1}])
+def test_fwm_ground_absorption_keeps_weighted_sum_order(ground, weights, monkeypatch):
+    from unittest.mock import Mock
+
+    from gabes import linear_hyperfine as linear
+
+    beam = np.linspace(-3.5, 3.5, 401)
+    _, all_lines, _ = linear.rb85_d1_alpha_faddeeva(linear._fwm_absorption_axis(beam), 323.15)
+    expected = np.zeros_like(beam)
+    for (fg, _), component in all_lines.items():
+        if ground is None or fg == ground:
+            expected = expected + (1.0 if weights is None else weights[fg]) * component
+
+    evaluate = Mock(wraps=linear.line_absorption)
+    monkeypatch.setattr(linear, "line_absorption", evaluate)
+    actual = linear.hyperfine_alpha_analytic(beam, 323.15, ground, weights)
+    assert evaluate.call_count == (4 if ground is None else 2)
+    np.testing.assert_array_equal(actual, expected, strict=True)
+
+
 def test_hyperfine_self_broadening_monotone():
     from gabes import hyperfine
     g_cold = hyperfine.self_broadened_gamma(hyperfine.number_density(323.15))

@@ -24,12 +24,13 @@ def line_absorption(detuning, integrated_alpha, homogeneous_fwhm, sigma=0.0):
 
 
 def rb85_d1_alpha_faddeeva(scan, T, *, line_strength=1.0, doppler_on=True,
-                           buffer_gamma=0.0, shift_rad_s=0.0):
+                           buffer_gamma=0.0, shift_rad_s=0.0, lines=None):
     """Four Rb-85 D1 lines referenced to the Rb-87 F=2 to F'=2 marker.
 
     The historical OD/FWM line areas already include thermal population
     through the population per magnetic sublevel. Keep that absolute scale
-    while evaluating the profile with the exact Maxwell average.
+    while evaluating the profile with the exact Maxwell average. An optional
+    iterable of (Fg, Fe) pairs selects lines in the usual transition order.
     """
     scan = np.asarray(scan, dtype=float)
     density = hyperfine.number_density(T)
@@ -40,7 +41,10 @@ def rb85_d1_alpha_faddeeva(scan, T, *, line_strength=1.0, doppler_on=True,
                   / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
     alpha = np.zeros_like(scan)
     components = {}
+    requested = None if lines is None else set(lines)
     for line in hyperfine.TRANSITIONS:
+        if requested is not None and line not in requested:
+            continue
         center = 2.0 * np.pi * hyperfine.LINE_SHIFT_HZ[line] + shift_rad_s
         area = line_strength * area_scale * hyperfine.CF2[line]
         component = line_absorption(scan - center, area, gamma, sigma)
@@ -58,7 +62,8 @@ def _fwm_absorption_axis(beam_GHz):
 
 def analytic_hyperfine_line(beam_GHz, T, Fg, Fe):
     """Rb-85 D1 component on the FWM frequency axis, in inverse metres."""
-    _, lines, _ = rb85_d1_alpha_faddeeva(_fwm_absorption_axis(beam_GHz), T)
+    _, lines, _ = rb85_d1_alpha_faddeeva(
+        _fwm_absorption_axis(beam_GHz), T, lines=((Fg, Fe),))
     return lines[Fg, Fe]
 
 
@@ -68,14 +73,16 @@ def hyperfine_alpha_analytic(beam_GHz, T, ground_F=None, population_factors=None
     An optional ground-manifold filter gives one arm's lines. The historical
     `population_factors` argument is retained for explicit external callers.
     """
-    total, lines, _ = rb85_d1_alpha_faddeeva(_fwm_absorption_axis(beam_GHz), T)
+    requested = None if ground_F is None else (
+        line for line in hyperfine.TRANSITIONS if line[0] == ground_F)
+    total, lines, _ = rb85_d1_alpha_faddeeva(
+        _fwm_absorption_axis(beam_GHz), T, lines=requested)
     if ground_F is None and population_factors is None:
         return total
     alpha = np.zeros_like(total)
     for (Fg, _), component in lines.items():
-        if ground_F is None or Fg == ground_F:
-            weight = 1.0 if population_factors is None else population_factors[Fg]
-            alpha = alpha + weight * component
+        weight = 1.0 if population_factors is None else population_factors[Fg]
+        alpha = alpha + weight * component
     return alpha
 
 
