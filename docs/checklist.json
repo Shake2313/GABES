@@ -534,13 +534,15 @@
       "priority": "P3",
       "effort": "medium",
       "status": "needs_decision",
-      "problem": "⟦AI⟧ MagnetoScheme._exact_doppler_average runs the same pole-mean, guard and grid-fallback sequence as affine_doppler.AffineScan in its own code. Its guard is relative to the largest direct value of the scan, by design: the affine per-row guard is stricter, so the two were not shared (2026-11-02, 57bf5a2). Its fallback averages rejected rows on a fixed grid sized from half the homogeneous width (_maxwell_fallback_grid with 0.5·γ_hom) and has no convergence check. Since 21009ee, Λ and Rydberg refine rejected rows until two successive relative changes are at most 1e-8 and withhold the row at 351,811 classes (user decision B+D, 2026-11-19). No magneto defect is known; the two fallback policies now differ.",
+      "problem": "⟦AI⟧ SinglePairMagnetoReference._exact_doppler_average is the unregistered 87Rb single-pair reference. The registered UnifiedMagnetoScheme uses Gauss–Legendre quadrature in magneto_multilevel and does not call this fallback. The reference keeps the pole guard relative to the largest direct scan value (57bf5a2). Its previous fixed γ_hom/2 grid had no convergence test. The Λ and Rydberg policy in 21009ee requires two consecutive relative changes ≤1e-8 and withholds unresolved rows at 351,811 classes.",
       "decision_required": "Move the magneto rejected-row fallback onto the shared affine_doppler refinement (convergence-checked, withheld at the cap; changes rejected rows only), or keep the fixed γ_hom/2 grid and record why?",
       "acceptance_criteria": [
         "⟦AI⟧ Measure how often magneto rows fail the guard at the defaults, the five reference presets and the recompute slider ends, from the existing Doppler ledger (fallback_rows, fallback_classes).",
         "⟦AI⟧ If adopted: accepted rows stay bit-identical, a forced-rejection test pins convergence and the withheld state, and any changed displayed value lands in its own value commit."
       ],
-      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19."
+      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19.",
+      "measurement_2026_11_20": "⟦AI⟧ Defaults, five reference regimes and one-at-a-time active magnetic-scan slider ends with Doppler on: 158 labeled cases, 20,378 attempted B rows. 157 cases returned 20,257 rows. One natural rejection at Buffer LCA, zero transverse field and B=0 (row 60, relative guard residual 0.021271534, threshold 1e-6). The fixed 135-class grid differs in the nonzero circular coherence by 7.72e-8 relative from the converged 1,127-class grid. The EIA peak preset at zero transverse field raised LinAlgError before guard evaluation in both versions (121 attempted rows). This separate pole-construction issue is open for the reference model. Local evidence: runs/magneto_policy_20261120/{before,after}_extended_complete/.",
+      "decision_2026_11_20": "User authorized the agent’s recommended option in advance on 2026-11-20. ⟦AI⟧ Adopt the shared convergence-checked fallback for rejected rows in the single-pair reference and retain the scan-relative guard. Keep the registered Magneto app path unchanged."
     },
     {
       "id": "thermal-speed-shared-helper",
