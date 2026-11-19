@@ -1,6 +1,146 @@
 {
+  "_sabes_profiler_completion_plan_2026_11_17": {
+    "provenance": "사용자 직접 요청 2026-11-17: 빔 프로파일러 UI 완성까지의 계획을 수립하고 체크리스트에 반영.",
+    "user_requirements": [
+      "사용자 설명: SABES의 원래 목적은 빔 경로상의 아무 지점을 찍으면 그 지점의 빔 모양을 보여주는 기능.",
+      "사용자 디자인 요청: 공개 시뮬레이터·상용 소프트웨어를 참고해 높은 기준의 시안을 먼저 만들고 실제 기능 코드를 맞춤.",
+      "사용자 수정: blue/red 비교는 구현 가능성 예시였으므로 전용 비교 UI 제외.",
+      "기존 사용자 요청 유지: 임의 Rb85/Rb87 혼합비, D1/D2 주변 초미세 전이·디튜닝, 기존 Rb87 D1 검증 보존과 주파수 기준 통일."
+    ],
+    "status": "plan-recorded-not-implemented",
+    "adoption_status": "⟦AI⟧ 이번 요청은 계획 등록. 아래 단계·정량 기준은 실행안이며 기존 시안의 시각적 채택이나 신규 구현 완료를 의미하지 않음.",
+    "goal": "⟦AI⟧ 광학 테이블에서 빔과 위치를 선택하면 해당 기준면의 2D 분포·단면·판독값·계산 범위를 함께 확인. Gaussian 조회는 모델링된 모든 경로, Rb 수치장은 검증 가능한 단일 빔 경로와 셀 내부까지 연결.",
+    "completion_boundary": "⟦AI⟧ 모든 위치의 선택 기능과 모든 위치에서 동일한 물리 정확도는 구별. 미측정 길이·미지원 소자·FWM 생성 빔은 출처/근사/미지원 상태를 명시. 측정되지 않은 거리를 만들어 전체 정밀 예측을 주장하지 않음.",
+    "stages": [
+      {
+        "step": "BP0",
+        "id": "sabes-profiler-design-contract",
+        "title": "⟦AI⟧ 광로 클릭 중심 시안과 표시 계약 확정"
+      },
+      {
+        "step": "BP1",
+        "id": "sabes-profiler-route-plane-contract",
+        "title": "⟦AI⟧ 광로·물리 거리·기준면의 공통 계약 정리"
+      },
+      {
+        "step": "BP2",
+        "id": "sabes-profiler-linked-gaussian-inspector",
+        "title": "⟦AI⟧ 클릭한 위치의 Gaussian 2D 프로파일 연결"
+      },
+      {
+        "step": "BP3",
+        "id": "sabes-profiler-field-route-transport",
+        "title": "⟦AI⟧ Rb 수치장을 지원 광로의 관측면까지 전달"
+      },
+      {
+        "step": "BP4",
+        "id": "sabes-profiler-in-cell-planes",
+        "title": "⟦AI⟧ 셀 내부 임의 위치와 전파 지도의 단면 연결"
+      },
+      {
+        "step": "BP5",
+        "id": "single-beam-camera-plane-refinement",
+        "title": "⟦AI⟧ 선택 관측면의 프로파일 수렴을 독립 검증"
+      },
+      {
+        "step": "BP6",
+        "id": "sabes-profiler-state-cache-performance",
+        "title": "⟦AI⟧ 선택 상태·캐시·응답성·실패 복구 완성"
+      },
+      {
+        "step": "BP7",
+        "id": "sabes-profiler-reproducible-export",
+        "title": "⟦AI⟧ 선택 면의 그림·원시 데이터·조건 내보내기"
+      },
+      {
+        "step": "BP8",
+        "id": "sabes-profiler-workspace-implementation",
+        "title": "⟦AI⟧ 빔 프로파일러 통합 완료 검수"
+      }
+    ],
+    "execution_order": "⟦AI⟧ BP0 시안 보완과 BP1 거리·기준면 계약 조사 병행 가능. BP2→BP3→BP4 후 BP5 수치 검증과 BP6 상태·성능 병행, BP7 내보내기·가이드, BP8 통합 마감. 개별 status/depends_on/activation_trigger가 실행 상태의 단일 출처.",
+    "existing_foundations": [
+      "⟦AI⟧ sabes-layout-model·sabes-optical-table-view·sabes-virtual-instruments 완료 이력 유지. 클릭→국소 Gaussian 상태/1D trace가 기반이며 2D inspector 완료로 승격하지 않음.",
+      "⟦AI⟧ _sabes_single_beam_profiler_ui_2026_11_17의 opt-in 연결·검증 이력 유지. 현재 Rb UI는 테이블의 ProbeReading을 받지 않고 셀 출구/자유공간 카메라를 별도 조회.",
+      "⟦AI⟧ _sabes_profiler_design_first_2026_11_17의 기록 재생 시안을 상세 패널의 출발점으로 사용. 광로 클릭 중심 시안과 실제 상태들은 BP0에서 보완."
+    ],
+    "design_reference": "runs/beam_profiler_ui_design/20261117T083330Z-b992d53/design-brief.json",
+    "preview": "runs/beam_profiler_ui_design/20261117T083330Z-b992d53/beam-profiler-concept.html",
+    "stack": "⟦AI⟧ 기존 NumPy/SciPy·공용 Gaussian/복소장 전파·Streamlit v2·Canvas/SVG·gabes_ui 토큰 사용. 새 전파 엔진이나 상용 소프트웨어 의존성 도입 불필요. 공개 코드 직접 도입은 필요성·라이선스 검토 후 별도 판단.",
+    "separate_future_scope": {
+      "status": "parked",
+      "registry": "_rb_mixture_self_action_2026_11_16.deferred:joint-multifrequency-beam-response",
+      "reason": "⟦AI⟧ FWM probe/conjugate의 자기일관 공간 생성, 여러 주파수·편광의 공동 응답, 열렌즈/수차/횡방향 원자 수송, 카메라 하드웨어 취득은 별도 물리·장치 범위.",
+      "activation_trigger": "⟦AI⟧ 사용자가 해당 확장을 요청하고 관측량·대표 조건·reference·검증 기준을 정한 뒤 별도 계획 활성화."
+    },
+    "review_scope": "⟦AI⟧ 계획/체크리스트/탐색용 문서만 갱신. 물리·UI 구현, 수치값, 기존 검증 기록 변경 없음.",
+    "planning_notes": "⟦AI⟧ 거리 실측 캠페인은 별도 유지. 명시한 가정 거리로 UI/모델 개발 가능하며, 미측정 항목 때문에 전체 계획을 중단하지 않음. 새 정량 허용치와 성능치는 달성 목표이며 현재 통과 수치가 아님."
+  },
+  "_sabes_profiler_design_first_2026_11_17": {
+    "provenance": "사용자 직접 요청: 공개 빔 프로파일 시뮬레이션 코드와 상용 빔 프로파일러를 참고해 높은 디자인 기준과 UI 시안을 먼저 수립. 그 뒤 실제 기능 코드를 시안에 맞춤.",
+    "user_steering": "사용자 수정: blue/red 비교는 구현 가능성의 예시였으므로 전용 비교 UI에서 제외.",
+    "status": "proposal-ready-for-review",
+    "direction": "⟦AI⟧ 현재 선택한 하나의 빔을 탐색하는 작업 화면. 2D 분포·직교 단면·판독값 동시 표시, 전파·수치 검사는 탭으로 분리. 기존 SABES 색·IBM Plex 글꼴 유지. 광학 테이블에서 여는 집중 보기로 제안.",
+    "scope": "⟦AI⟧ Design/reference investigation and interactive recorded-data prototype only; no production UI or solver changes.",
+    "criteria": "runs/beam_profiler_ui_design/20261117T083330Z-b992d53/design-brief.json",
+    "preview": "runs/beam_profiler_ui_design/20261117T083330Z-b992d53/beam-profiler-concept.html",
+    "implementation_gate": "User-requested design-first workflow: review the concrete design/criteria before adapting the working UI. The proposed visual layout has not yet been adopted.",
+    "deferred": [
+      {
+        "id": "sabes-profiler-workspace-implementation",
+        "status": "awaiting-design-review",
+        "reason": "User requested a high-standard design first, then fit working code to it.",
+        "tracked_by": "items:sabes-profiler-workspace-implementation",
+        "planning_update_2026_11_17": "⟦AI⟧ 이번 요청은 계획 등록. 아래 단계·정량 기준은 실행안이며 기존 시안의 시각적 채택이나 신규 구현 완료를 의미하지 않음."
+      }
+    ],
+    "completion_plan": "_sabes_profiler_completion_plan_2026_11_17",
+    "goal_alignment": "⟦AI⟧ 광학 테이블에서 빔과 위치를 선택하면 해당 기준면의 2D 분포·단면·판독값·계산 범위를 함께 확인. Gaussian 조회는 모델링된 모든 경로, Rb 수치장은 검증 가능한 단일 빔 경로와 셀 내부까지 연결."
+  },
+  "_sabes_single_beam_profiler_ui_2026_11_17": {
+    "provenance": "User request 2026-11-17: connect the physically/numerically verified single-beam propagation to the SABES beam-profiler UI.",
+    "status": "implemented-opt-in-ui",
+    "previous_decision": "User 2026-11-16 deferred SABES UI until physical/numerical verification. The original two deferral records retain that reason and now link here as their resolution.",
+    "implementation_scope": "⟦AI⟧ Optional Beam profiler > Rb single-beam mode, explicit Run, custom D1/D2 and arbitrary Rb composition, isolated pre-cell pump/selected seed input, full/absorption-only/vacuum fields, free-space camera navigation, strict JSON and complex-array NPZ export. Existing Gaussian optics mode and apparatus/FWM settings remain unchanged.",
+    "implementation_choices": [
+      "⟦AI⟧ Source-chain modes are nominally at cell centre; map by -L/2 to entrance radius/curvature. Retain geometry wavelength as provenance, use the selected physical frequency for atomic response and propagation. Actual waist position is unmeasured.",
+      "⟦AI⟧ Imported line uses its own power/frequency; other spectral lines and other arm are explicitly absent. Reject non-unit M2, elliptic polarization, and generated probe/conjugate as single-beam input. Profiler isotope fraction and reset remain separate declared settings.",
+      "⟦AI⟧ Separate atomic-table/cell/camera caches; stale changed inputs hide old results. Cache keys include complete conditions and kL-dependent atomic acceptance; numerical source hashes and NumPy/SciPy versions invalidate cached outputs.",
+      "⟦AI⟧ Default UI preset is the Rb87 D1 blue reference with physical laser k, 2.4 mm half-window, 128x128 mesh, 80 axial steps, adaptive 17-to-129 intensity nodes, 4x input-peak ceiling, order 6/8 and cutoff 6/7. Propagation refinement is on by default.",
+      "⟦AI⟧ Atomic convergence, cell grid/step/window/table convergence and energy/boundary budgets remain distinct. Unassessed/failed results are labelled; dark output or inadequate phase fit has no radius/focal-length claim. Camera is free space only, without downstream optics or coupled FWM; its power/boundary budgets are checked, while arbitrary camera-plane radius/profile convergence is explicitly unassessed."
+    ],
+    "code": [
+      "gabes/single_beam_profile.py",
+      "sabes/single_beam.py",
+      "gabes_ui/sabes/beam_profiler.py",
+      "gabes_ui/sabes/page.py"
+    ],
+    "guide": "docs/beam_self_action.md",
+    "validation": "⟦AI⟧ Focused UI/integration checks: 392 passed in 30.23 s, covering SABES/new profiler AppTests, frequency, nonlinear response, paraxial propagation, affected pipelines and repository-size guards. This is not a fresh full-repository or archive GC-suite claim. Final claim-scope label/metadata edit: 28 affected tests passed in 12.40 s. Real browser atomic calculation, camera 500-to-700 mm navigation, 2D view, source invalidation and mobile inputs passed; screenshots precede only the final validation wording change. No new numerical equations changed.",
+    "production_smoke": "⟦AI⟧ Actual blue reference passed atomic interpolation/quadrature, all four cell refinements and camera budgets. At 500 mm after cell: radius 0.431914404 mm; relative lens power +2.98024 m^-1 with resolved focusing sign. Camera radius differs from the original compatibility benchmark by 4.02e-5 relative. Fresh atomic build 39.82 s (22 fitted nodes/53 response evaluations); cell+refinements 4.77 s; camera 0.099 s. Timings describe this run, not a runtime guarantee.",
+    "local_runs": {
+      "focused_tests": "runs/single_beam_ui_validation/20261117T031658Z-b992d53",
+      "atomic_and_backend_smoke": "runs/single_beam_profile_smoke/20261117T030659Z-b992d53",
+      "ui_default_backend_smoke": "runs/single_beam_profile_ui_smoke/20261117T030905Z-b992d53",
+      "browser": "runs/ui_audit/single_beam_live/20261117T032259Z-b992d53",
+      "default_ui_comparison": "runs/ui_audit/single_beam_comparison/20261117T032618Z-b992d53"
+    },
+    "scope": "⟦AI⟧ Numerical single-CW-line, linear-polarization, B=0, coherent M2=1, local steady-state model on one chosen D manifold. Joint multifrequency response, other-fine-line broadband polarizability, transverse transport, thermal lens, collisions and experimental calibration remain outside this UI implementation.",
+    "deferred": [
+      {
+        "id": "single-beam-camera-plane-refinement",
+        "status": "outside-current-validation",
+        "reason": "⟦AI⟧ Optional next extension: retain refined exit fields and compare independently propagated camera profiles/radii. Current implementation exposes camera_convergence.assessed=false and checks cell convergence plus free-space energy/window budgets. Not an adopted user requirement.",
+        "tracked_by": "items:single-beam-camera-plane-refinement",
+        "planning_update_2026_11_17": "⟦AI⟧ BP5 completion-plan proposal; original unassessed scope retained. Registration is not a passed camera-plane validation."
+      }
+    ],
+    "completion_continuation": "_sabes_profiler_completion_plan_2026_11_17"
+  },
   "_rb_mixture_self_action_2026_11_16": {
     "provenance": "User request 2026-11-16: implement stages 1-4 for all Rb85/Rb87 fractions, D1/D2 hyperfine transitions and detunings; preserve the existing Rb87 D1 verification and unify frequency references. SABES UI integration follows validation.",
+    "status": "numerically-verified",
+    "implementation_scope": "⟦AI⟧ Shared full optical OBE for all four isotope/line combinations; exact sparse solve, explicit stable optical frequency, full-state shared populations, density-once mixture polarization, physical-laser Doppler and propagation k, adaptive intensity tables and headless validation campaigns.",
     "value_decisions": [
       {
         "source": "User explicit frequency-unification request 2026-11-16",
@@ -10,7 +150,76 @@
         "source": "User explicit frequency-unification request 2026-11-16",
         "change": "⟦AI⟧ Correct SABES carrier metadata from fine centroid to the declared Rb85 D1 F=2 to Fprime=3 OPD origin (+1921.50267275 MHz). Existing Gaussian geometry wavelength and FWM numeric detuning remain unchanged; both wavelengths are explicit metadata."
       }
-    ]
+    ],
+    "preservation": "⟦AI⟧ 3423 legacy full-OBE entries bit-identical; 49 propagation arrays, 60 readouts and 232 acceptance entries bit-identical; six recomputed Maxwell nodes bit-identical to original tables.",
+    "code": [
+      "gabes/optical_bloch.py",
+      "gabes/optical_frequency.py",
+      "gabes/nonlinear_response.py",
+      "gabes_lab/pipelines/rb_spectrum_validation.py",
+      "gabes_lab/pipelines/rb_beam_validation.py"
+    ],
+    "validation": "⟦AI⟧ Full repository: python -m pytest -q --durations=20 ->2635 passed,1 skipped,57 existing datetime.utcnow deprecation warnings,593.77s; source hashes unchanged throughout. Spectrum: all20 allowed transitions,64 weak and24 finite frequency samples,4 compositions; separate Re/Im weak Voigt and8 finite line/wing quadrature refinements passed. Propagation:16 cases (D1/D2, two wing frequencies, four compositions), atomic table/order/cutoff plus transverse grid/window/z/table/weak-limit and complex-field checks passed. Legacy raw/readout/acceptance snapshots remain bit-identical. No archive GC campaign run in main.",
+    "deferred": [
+      {
+        "id": "sabes-propagated-field-profiler",
+        "status": "implemented-opt-in-ui",
+        "reason": "User: connect UI after physical/numerical validation.",
+        "resolved_date": "2026-11-17",
+        "resolved_by": "_sabes_single_beam_profiler_ui_2026_11_17"
+      },
+      {
+        "id": "joint-multifrequency-beam-response",
+        "status": "outside-current-single-beam-scope",
+        "reason": "⟦AI⟧ Pump/seed/sideband cross-saturation and coherent Raman/FWM require joint atomic response; independent single-beam responses cannot be summed for shared atoms."
+      }
+    ],
+    "scope": "⟦AI⟧ One CW x-linear beam, B=0, fixed effective reset, local independent Maxwell classes. Chosen D-line manifold includes all hyperfine/Zeeman states; remote other-fine-line contributions, collisions, transverse transport and experimental calibration excluded. Arbitrary f85 in [0,1] is supported by the continuous mixture law, not exhaustively sampled.",
+    "recommendations": [
+      {
+        "id": "sparse-stationary-solver-core-placement",
+        "status": "ai-proposal-not-adopted",
+        "reason": "⟦AI⟧ The new exact sparse stationary helper is shared in optical_bloch, with no scheme-local copy. Move this generic numerical helper into core in the next behavior-preserving consolidation after concurrent core work lands; preserve full state outputs and refresh source fingerprints."
+      }
+    ],
+    "local_runs": {
+      "spectra": "runs/rb_spectrum/all_dlines_validated",
+      "propagation": "runs/rb_beam_validation/20261116_verified",
+      "legacy_preservation": "runs/beam_self_action_regression/20261116T104024Z-f9e185f",
+      "full_suite": "runs/rb_extension_full_suite/20261116T104809Z-a24efff"
+    },
+    "numerical_results": "⟦AI⟧ At recorded samples: spectrum quadrature maximum phase change3.70e-7rad; propagation maximum width refinement1.078e-6 relative, complex exit-field shape difference2.776e-6, transmission difference5.571e-9 relative. These are sample-condition convergence results, not a certificate over every continuous input. The very small Rb85 D1 +6500MHz wing lens is labelled numerical sign unresolved; propagation remains converged.",
+    "archive_handoff": "⟦AI⟧ Shared optical OBE entry-point extraction and opt-in Voigt Doppler-wavevector parameter preserve old defaults. When GABES-archive updates its engine pin, run its affected shared-engine/GC checks there; main results are not a GC-suite claim."
+  },
+  "_single_beam_self_action_2026_11_16": {
+    "provenance": "User request 2026-11-16: proceed with the proposed pure 87Rb D1 single-beam condition, first produce blue/red self-(de)focusing verification figures; connect SABES UI only after physical and numerical validation.",
+    "status": "numerically-verified",
+    "implementation_scope": "⟦AI⟧ shared full-OBE mean-only Maxwell response, bounded complex chi(I) interpolation, scalar 2D paraxial propagation, reproducible headless verification pipeline; existing SABES and PSR behavior unchanged.",
+    "conditions": "⟦AI⟧ numerical example, not measured apparatus settings: 100 C, 50 mm cell, 0.4 mm entrance waist, 2 W/cm2 peak, +/-1500 MHz from upper-F=2 line-strength centroid, fixed effective reset 5e5 s^-1, x-linear/B=0/M2=1.",
+    "code": [
+      "gabes/nonlinear_response.py",
+      "gabes/paraxial.py",
+      "gabes_lab/pipelines/beam_self_action.py"
+    ],
+    "guide": "docs/beam_self_action.md",
+    "deferred": [
+      {
+        "id": "sabes-propagated-field-profiler",
+        "status": "implemented-opt-in-ui",
+        "reason": "User 2026-11-16: SABES UI connection follows physical/numerical verification.",
+        "resolved_date": "2026-11-17",
+        "resolved_by": "_sabes_single_beam_profiler_ui_2026_11_17"
+      },
+      {
+        "id": "single-beam-physical-extensions",
+        "status": "outside-first-scope",
+        "reason": "⟦AI⟧ transverse atomic memory/transport, measured transit parameters, thermal lens, collision/buffer effects, 85Rb generalization and coupled FWM fields need separate validation."
+      }
+    ],
+    "validation": "⟦AI⟧ 53 focused tests passed; final pipeline/cache subset 12 passed after low-intensity probe adjustment. Full-OBE response, analytic propagation limits, passive energy budgets, absorption-only controls, independent transverse/domain/z/table refinement, phase-curvature sign margins and weak-intensity limit passed. No full repository/GC suite: opt-in new path only.",
+    "result": "⟦AI⟧ At the chosen reference conditions, camera radii 50 cm after cell: red 0.609469 mm, blue 0.431897 mm; absorption-only controls 0.530083/0.530050 mm. Transmissions 0.902445/0.902056. Fitted relative lens powers -1.21358/+3.01229 m^-1. Maximum width refinement 1.97e-6 relative; lens-power refinement 0.1711%. Local numerical model, not experimental validation.",
+    "local_run": "runs/beam_self_action/20261116_final",
+    "artifacts": "⟦AI⟧ PNG/PDF, raw propagation arrays, susceptibility tables, convergence evidence, focused-test receipt and exact source snapshots; run.json status complete and output hashes verified. Result artifacts remain ignored under runs/."
   },
   "_consolidation_program_status_2026_11_16": {"source": "Consolidation survey of 2026-10-29 (16 candidates), reviewed against the code on 2026-11-16.", "done": ["1 atomic data", "4 Doppler averages", "5 stationary solves", "6 linewidth crossing", "7 detection and Planck", "8 vapor cell", "9 beam power to Rabi", "10 CSV decoding", "11 FWM gain-calibration modules", "12 fwm package split", "3 code move (c7c86c3)", "2 dissipator, reset, g-factors, dipoles, Zeeman generator", "16 SABES shared UI", "3 weak-probe absorption on Faddeeva", "2 level builders and resets", "13 scanner chain and conventions"], "closed_in_main": {"14": "⟦AI⟧ Grand Challenge audit scripts live in GABES-archive; new scripts there use shared harnesses. Nothing left in main.", "15": "⟦AI⟧ pytest.ini replaces conftest path setup; no single_thread fixture copies remain; sys.path edits remain only in the direct-run scripts tests/capture_baseline.py and tests/verify_hanle_eit_eia.py."}, "remaining": {}, "status": "finished", "next_after": "User request 2026-11-16: finish consolidation first; then the Fast package (fwm-lab-gain-calibration-refit, fwm-fast-displayed-readout-error-certificate, skill gabes-fast-tier)."},
   "_physics_extension_policy_2026_11_13": {"decision": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.", "applies_to": ["od-sas-segmented-cell-propagation", "lambda-spectrum-validity", "fwm-finite-seed-angular-doppler-production", "collisional-coefficient-provenance-and-pressure-shift"], "coefficient_source_rule": "User decision 2026-11-13: take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning."},
@@ -317,6 +526,216 @@
     }
   ],
   "items": [
+    {
+      "id": "sabes-profiler-design-contract",
+      "area": "docs/ui_redesign/ + docs/SABES/ + gabes_ui/sabes/ design contract",
+      "title": "⟦AI⟧ 광로 클릭 중심 시안과 표시 계약 확정",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP0",
+      "priority": "P2",
+      "effort": "small",
+      "status": "ready",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "⟦AI⟧ 기존 기록 재생 시안을 광학 테이블 클릭 → 관측면 표식 → 프로파일 패널 흐름으로 보완. 독립 시뮬레이터가 기본 진입점이 되지 않게 구성. blue/red 전용 비교는 제외.",
+        "⟦AI⟧ 1440×900에서 선택 빔·기준면·거리, XY 강도, X/Y 단면, 정의된 반경·광출력을 함께 판독. 영상 영역 ≥420×420 CSS px 목표. 테이블 맥락과 선택 위치를 유지하며 상세 보기 왕복.",
+        "⟦AI⟧ 선택·중첩 광로·소자 직전/직후·셀 내부 위치 입력, 미선택/계산 중/이전 조건/실패/암출력/미지원 상태를 구체적 시안으로 제시. 390/320px에서는 순차 배치하고 선택 정보를 유지.",
+        "⟦AI⟧ 기존 theme/Plex/숫자·단위·컴포넌트 재사용. Profile/Propagation/Checks와 조건 편집을 구분하고 참조 자료의 8개 디자인 기준을 연결. 사용자 피드백과 채택된 시안 버전 기록; 현재 시안은 미채택 제안.",
+        "⟦AI⟧ 표시 계약에 source/branch/segment/plane, native field·axes, metrics·정의, validation scope, display state 포함. Gaussian M²>1의 포락선은 고유한 위상을 정하지 않으므로 복소장·위상 미제공 또는 명시적 가정으로 구분. 여러 주파수 성분의 파워 합에서 위상 생성 금지.",
+        "⟦AI⟧ 총세기는 기존 공통 Gaussian 포락선과 시간평균 파워 합 가정을 표시. 서로 다른 주파수 성분의 위상은 선택한 한 성분에만 정의하며, independent nonlinear 응답 합산은 하지 않음."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-route-plane-contract",
+      "area": "sabes/layout/ + sabes/beamline.py + sabes/single_beam.py",
+      "title": "⟦AI⟧ 광로·물리 거리·기준면의 공통 계약 정리",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP1",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "ready",
+      "depends_on": [],
+      "acceptance_criteria": [
+        "⟦AI⟧ 현재 모든 Link의 source/branch/stage와 path_m, 측정·보정·가정·미측정 출처를 목록화. 그림 좌표에서 실제 길이 추정 금지. 새 위치 조회는 미측정 길이를 0 m로 조용히 해석하지 않고 기준면 근사 또는 위치 미확정으로 반환.",
+        "⟦AI⟧ branch_id/segment_id, 구간 거리 s_m, 기준면, 소자 직전·직후, 국소 횡단 좌표의 방향을 하나의 관측면 ID로 표현. 확대·이동·그림 재배치와 물리 위치를 분리.",
+        "⟦AI⟧ 광로 겹침의 후보 목록·선택 정책, 소자 경계·셀 입구/출구/내부·빔 없는 지점 처리 정의. 광로 선택과 소자 편집의 클릭 충돌을 해소. 전체 XYZ 실측을 선행 조건으로 요구하지 않음.",
+        "⟦AI⟧ SABES 장치 모드의 셀 중심 기준을 입구로 변환하는 기존 계약과 physical frequency/geometry wavelength 구분 보존. 길이·waist·주파수 기준의 값 변경은 기존 기록과 분리해 체크리스트에 근거·결정 등록.",
+        "⟦AI⟧ 알려진 거리의 시작/중간/끝, 렌즈 직전·직후, 두 경로 교차, 미측정 구간에서 위치 해석을 검증. 기존 layout/가상 계측기 호출자의 결과 보존 범위를 스냅샷으로 확인."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-linked-gaussian-inspector",
+      "area": "gabes_ui/sabes/ + sabes/instruments/ + existing Gaussian optics",
+      "title": "⟦AI⟧ 클릭한 위치의 Gaussian 2D 프로파일 연결",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP2",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "parked",
+      "depends_on": [
+        "sabes-profiler-design-contract",
+        "sabes-profiler-route-plane-contract"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 기존 beam_at·Gaussian 상태를 공통 관측면 계약에 연결. 모든 모델링된 광로를 선택 가능하게 하고 측정 길이·가정 길이·기준면 근사를 구별. 길이가 없는 구간의 위치별 정확성을 주장하지 않음.",
+        "⟦AI⟧ 관측면 XY 강도·X/Y 단면·교차선·중심·광출력·반경을 같은 상태에서 갱신. coherent M²=1 한 성분에만 정의된 위상 제공; Gaussian 포락선 M²와 측정 M²를 구분.",
+        "⟦AI⟧ 클릭·숫자 거리 입력·키보드 이동이 동일 관측면을 선택. 10개 이상 대표 위치와 렌즈 양쪽에서 q 전파 해석해와 대조; 충분히 해상된 Gaussian의 반경·파워 상대 오차 ≤0.1%.",
+        "⟦AI⟧ 확대·색 범위·선형/로그·표시 정규화·교차선 이동으로 native 배열·파워·반경이 바뀌지 않음. 화면 crop과 분석 ROI 구분; 초기 범위에서 분석 ROI 추가하지 않음.",
+        "⟦AI⟧ 기존 광학 테이블 zoom/pan·소자 편집·다른 가상 계측기와 양립. 테이블 재진입에도 선택 빔·관측 위치를 유지하고 삭제·변경된 경로는 명시적으로 무효화."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-field-route-transport",
+      "area": "gabes/paraxial.py + gabes/single_beam_profile.py + sabes/ field-route adapter",
+      "title": "⟦AI⟧ Rb 수치장을 지원 광로의 관측면까지 전달",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP3",
+      "priority": "P1",
+      "effort": "large",
+      "status": "parked",
+      "depends_on": [
+        "sabes-profiler-route-plane-contract",
+        "sabes-profiler-linked-gaussian-inspector"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 검증된 셀 출구 복소장 E(x,y)를 Gaussian 반경으로 축약하지 않고 전달. gabes.paraxial의 FFT 전파·thin_lens와 기존 beam/Jones 연산 재사용; 공용 물리·수치 복제 및 UI 내 계산식 추가 금지.",
+        "⟦AI⟧ 자유공간·이상적 얇은 렌즈·명시된 개구·scalar 손실·지원 편광 분기의 적용표 작성. 국소 좌표/미러 방향 변환과 소자 순서 반영. 알려진 개구는 진폭 마스크로 회절 전파; 미지 개구나 미지원 소자는 생략 여부와 제한을 표시.",
+        "⟦AI⟧ 장치 파워에 이미 포함된 손실을 장 전파에 중복 적용하지 않음. 무손실 파워 보존, 수동 손실/개구의 파워 비증가, 렌즈 뒤 Gaussian 해석해와 비Gaussian fixture를 검사.",
+        "⟦AI⟧ 한 spectral component의 pump/seed를 격리한 가상 단일 빔 경로임을 유지. 실제 FWM probe/conjugate에 단일 빔 출구장을 대입하지 않음. 해당 경로는 명시한 Gaussian 근사 또는 수치장 미지원 상태로 조회.",
+        "⟦AI⟧ Rb85 fraction 0–1, D1/D2·초미세 전이·디튜닝 및 물리 주파수 기준은 현재 API 재사용. M²=1·선형 편광·B=0·단일 CW 성분 등의 적용 범위 유지. D1/D2×순수85/순수87/자연비/중간 혼합비 대표 사례와 주파수 기준 변경의 동일 물리 주파수 보존 확인."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-in-cell-planes",
+      "area": "gabes/paraxial.py + gabes/single_beam_profile.py + gabes_ui/sabes/",
+      "title": "⟦AI⟧ 셀 내부 임의 위치와 전파 지도의 단면 연결",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP4",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "parked",
+      "depends_on": [
+        "sabes-profiler-field-route-transport"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 메모리 상한을 둔 복소장 체크포인트와 앞방향 구간 재전파로 셀 내부 임의 z의 XY장을 제공. 현재 중심선 세기 배열을 전체 XY 복소장으로 간주하거나 세기만 보간해 위상 생성 금지.",
+        "⟦AI⟧ 셀 입구·출구와 내부 임의 10개 지점의 좌표·장·반경·파워를 전체 전파 reference와 비교. 비균일 z에서 요청 위치와 실제 계산 위치를 구별; 샘플 snapping이면 실제 위치 표시.",
+        "⟦AI⟧ x-z 지도·반경 곡선·테이블의 관측면·XY 영상·단면·내보내기가 같은 plane ID를 사용. 셀 전후에서 구간 좌표와 누적 거리를 명확히 변환.",
+        "⟦AI⟧ 중간 지점 조회 때문에 원자 응답 표를 다시 풀지 않음. 체크포인트 간격·격자·메모리 사용량과 새 구간 계산 시간을 기록. 흡수·비선형 셀을 출구장으로 역전파해 복원하지 않음."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "single-beam-camera-plane-refinement",
+      "area": "gabes/single_beam_profile.py + tests/test_single_beam_profile.py + affected validation pipelines",
+      "title": "⟦AI⟧ 선택 관측면의 프로파일 수렴을 독립 검증",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP5",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "parked",
+      "depends_on": [
+        "sabes-profiler-field-route-transport",
+        "sabes-profiler-in-cell-planes"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 기존 deferred single-beam-camera-plane-refinement의 실행 항목. refined exit/checkpoint fields를 보존하거나 필요 시 재계산하고, 같은 광학 경로·관측면까지 각각 전파해 독립 비교.",
+        "⟦AI⟧ 원자 표/속도 평균, 셀 격자·z step·window·응답 보간, 관측면 격자·window/개구 해상도, 에너지·경계 예산을 별도 검사. 셀 통과만으로 임의 카메라 면의 profile convergence를 통과 처리하지 않음.",
+        "⟦AI⟧ 증거 수집 전 case matrix·오차 norm·허용치 고정. 제안 목표: 밝고 해상된 면의 파워 상대 차이 ≤0.1%, 유한하고 window 확대에 수렴하는 2차 모멘트 반경의 상대 차이 ≤0.1%, 공통 좌표로 비교한 2D 세기의 적분 L1 상대 차이 ≤1%. 정량 위상은 global phase 제거·저세기 마스크 후 별도 오차 기준을 먼저 등록.",
+        "⟦AI⟧ 셀 내부·출구·자유공간·렌즈 초점 부근·개구 회절·암출력/경계 손실을 포함. D1/D2와 대표 혼합비는 기존 검증 사례 재사용; 지원된다는 사실을 모든 디튜닝에서 검증 완료로 표시하지 않음.",
+        "⟦AI⟧ 평가 안 됨/실패/통과를 면별 표시하고 정량 배지는 실제 통과 범위에만 부여. 기존 Rb87 D1 검증 배열·판독값은 호환 경로에서 보존; 새 비교의 기준 완화가 필요하면 이유·미달값을 기록하고 자동 통과로 바꾸지 않음.",
+        "⟦AI⟧ 하드 개구 회절 등에서 전체 면의 2차 모멘트가 수렴하지 않으면 반경을 미정의/window 의존으로 표시. 계산 window로 잘라 얻은 반경을 고유 빔 반경으로 제시하지 않음. 필요 시 명시한 물리적 수집 영역 또는 포함 파워 반경을 별도 정의하고 독립 수렴 기준 적용."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-state-cache-performance",
+      "area": "gabes_ui/sabes/beam_profiler.py + shared UI state/components",
+      "title": "⟦AI⟧ 선택 상태·캐시·응답성·실패 복구 완성",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP6",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "parked",
+      "depends_on": [
+        "sabes-profiler-linked-gaussian-inspector",
+        "sabes-profiler-field-route-transport",
+        "sabes-profiler-in-cell-planes"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 물리 입력, 원자 응답, 셀 전파, 출구 광학 경로, 관측면, 표시 상태를 분리. 주파수·혼합비·입사장 변경은 필요한 상위 계산을 무효화하고 관측 위치만 변경할 때 원자·전체 셀 재계산 0회.",
+        "⟦AI⟧ 소자 변경은 해당 소자 이후 결과만 무효화. cache key에 실제 source/plane/optics/수치 설정·코드 지문 포함. 늦게 끝난 이전 요청이 현재 선택을 덮어쓰지 않게 요청 버전 검사.",
+        "⟦AI⟧ 미선택·계산 전·Running·Stale·Failed·Dark/undefined·지원 범위 밖 상태별 화면/재시도/내보내기 정책 구현. 이전 결과는 현재 조건의 결과로 표시하거나 내보내지 않음.",
+        "⟦AI⟧ 기준 PC·브라우저·격자·조건을 고정해 각 30회 측정: 로컬 교차선/표시 전환 p95 ≤100 ms, 캐시된 관측면 탐색 p95 ≤1 s 목표. 첫 계산·미캐시 구간 재전파는 별도 시간/메모리 보고; 목표 미달은 남은 일로 기록.",
+        "⟦AI⟧ 명시적 Run, 진행 표시·안전한 중단/결과 폐기·재시도 제공. 입력 편집 중 자동으로 비싼 전체 계산 반복하지 않음. 메모리 상한·캐시 회수와 세션/빔 전환 상태 분리 확인."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-reproducible-export",
+      "area": "gabes_ui/sabes/ + docs/beam_self_action.md + shared export helpers",
+      "title": "⟦AI⟧ 선택 면의 그림·원시 데이터·조건 내보내기",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP7",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "parked",
+      "depends_on": [
+        "single-beam-camera-plane-refinement",
+        "sabes-profiler-state-cache-performance"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 선택 면의 강도/위상 그림, X/Y 단면 CSV, native 복소장 NPZ(정의된 경우), 조건·판독값 JSON을 실제 다운로드로 제공. 시안의 export preview를 완료 기능으로 간주하지 않음.",
+        "⟦AI⟧ source/component/branch/segment/plane·실제 거리·국소 축·물리 주파수와 기준·Rb 혼합비·D line·입사장/셀/광학 조건·단위·반경 정의·수렴 상태·가정/미측정 출처·표시 설정·코드 지문 포함.",
+        "⟦AI⟧ 내보낸 native 배열로 파워·반경을 다시 계산한 상대 오차 ≤10⁻⁶. 0/암출력은 absolute tolerance와 null 상태로 검증; JSON의 NaN/Infinity 금지. 화면 축소 배열을 native로 표기하지 않음.",
+        "⟦AI⟧ 화면·단면·숫자·파일 모두 동일 plane/조건 버전인지 round-trip 확인. 위상 미정의 Gaussian M²>1 또는 다성분 합에는 가짜 복소장 파일을 만들지 않음.",
+        "⟦AI⟧ 현재 Gaussian/단일 빔 설정과 기존 내보내기와의 호환 또는 명시적 migration 제공. 사용자 가이드에 광로 선택→거리 조절→모델/수렴 확인→내보내기 절차 반영."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
+    {
+      "id": "sabes-profiler-workspace-implementation",
+      "area": "docs/checklist.json + gabes_ui/sabes/ + affected tests + gabes_lab/tools/ UI audit",
+      "title": "⟦AI⟧ 빔 프로파일러 통합 완료 검수",
+      "origin": "ai_execution_of_human_request",
+      "program": "sabes-profiler-completion",
+      "step": "BP8",
+      "priority": "P2",
+      "effort": "medium",
+      "status": "parked",
+      "depends_on": [
+        "sabes-profiler-reproducible-export",
+        "single-beam-camera-plane-refinement",
+        "sabes-profiler-state-cache-performance"
+      ],
+      "activation_trigger": "⟦AI⟧ 선행 항목 완료 및 BP0의 디자인 기준 채택 기록 후 활성화. 계획 등록을 구현 착수나 완료로 간주하지 않음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ BP0–BP7 완료와 증거 경로가 모두 존재할 때만 전체 완료. 대표 광로 10곳 이상에서 클릭→단면/수치→거리 이동→조건 변경/계산→내보내기 end-to-end 확인. FWM 공간 모델 구현을 이 완료의 선행 조건으로 추가하지 않음.",
+        "⟦AI⟧ 1440×900·1024px·390×844·320px·200% 확대 및 밝은/어두운 테마 실브라우저 캡처 확인. 페이지 가로 넘침·라벨 잘림 없음, 키보드/터치·focus-visible·본문 대비 ≥4.5:1, 색 외 상태 구분 확인.",
+        "⟦AI⟧ gaussian/수치장·위상·중첩 광로·미측정 거리·소자 경계·dark/stale/error·미지원·수렴 실패·캐시 메모리 상한 상태 포함. 테이블 zoom/pan과 다른 가상 계측기 및 기존 SABES 탭을 점검.",
+        "⟦AI⟧ 변경 범위 테스트·ui_audit·실제 브라우저 조작/성능/다운로드로 검증. 스타일/문서는 내용·링크·렌더 검사, 국소 동작은 영향 테스트. 공용 엔진·수치가 넓게 변하면 변경 정착 후 전체 pytest 1회; GC는 archive의 pin 갱신·영향 검증으로 인계.",
+        "⟦AI⟧ 검증 결과·실측 성능·남은 모델 제한을 가이드/로그/checklist에 기록하고 기존 개별 프로파일러 진입점을 일관된 inspector로 정리. 결과·캡처는 runner의 runs/에 저장, archive 출판 경로 사용; 완료 주장에 시안 검수를 실제 엔진 검증으로 혼용하지 않음."
+      ],
+      "last_reviewed_at": "2026-11-17"
+    },
     {
       "id": "magneto-budker-quantitative-regime",
       "area": "gabes/magneto_multilevel.py + gabes/schemes/magneto_budker.py",

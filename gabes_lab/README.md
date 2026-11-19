@@ -11,8 +11,11 @@
 |---|---|
 | `blocks/` | 물리 없는 작은 도우미. 아래 블록 표. |
 | `pipelines/rydberg_cell_heating/` | Rydberg 셀 가열 검증 흐름: 설정 기반 온도 스윕, 측정 CSV 겹쳐 그리기, 출처 매니페스트, 그림, XeLaTeX 보고서 입력. 사용법은 그 폴더의 [README](pipelines/rydberg_cell_heating/README.md). |
+| `pipelines/beam_self_action.py` | ⁸⁷Rb D1 단일 빔 비선형 전파·수렴 검증·그림. [사용법](../docs/beam_self_action.md). |
 | `pipelines/squeezing/` | 85Rb D1 이중 Λ FWM squeezing 스캐너. 결과는 `runs/squeezing/<scan>/`. |
 | `tools/` | 개발 도구: `ui_audit`(화면 측정), `benchmark_psr_thermal`·`benchmark_psr_propagation`, 저장소 관리 `split_boundary`·`migration_manifest`. |
+
+- `python -m gabes_lab.tools.single_beam_ui_audit`: SABES 단일 빔 UI의 실제 원자 계산·카메라 이동·seed 선택·데스크톱/모바일 검사. 캡처·상호작용 기록은 `runs/ui_audit/single_beam_live/`. 최초 계산 수 분 소요 가능.
 
 ## 블록
 
@@ -100,3 +103,6 @@ python -m gabes_lab.blocks.publish_to_archive runs/squeezing/my_scan/<run> --arc
 1. 블록을 고치면 `python -m pytest -q tests/test_lab_blocks.py`와 그 블록을 쓰는 호출부의 테스트.
 2. 호출부를 블록으로 옮기면 같은 입력으로 전후 출력을 비교함(`snapshot compare`, JSON·PNG 바이트). 실행 시각처럼 매번 바뀌는 값만 차이로 허용함.
 3. 출력 위치를 바꾸면 기본 위치로 한 번 실행해 `run.json`이 `complete`인지 확인함.
+
+- `python -m gabes_lab.pipelines.rb_spectrum_validation`: full Rb D1/D2 hyperfine spectra and isotope-mixture numerical checks.
+- `python -m gabes_lab.pipelines.rb_beam_validation`: arbitrary-mixture single-beam propagation, adaptive intensity tables and independent numerical refinement.

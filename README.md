@@ -105,6 +105,11 @@ numerical reference modes with separate experimental applicability.
 
 Run `python -m gabes_lab.tools.current_scheme_examples` for reproducible
 headless OD, CPT and Rydberg examples with input and source provenance.
+The opt-in [single-beam self-action workflow](docs/beam_self_action.md) tests
+Rb87 D1 nonlinear diffraction and extends the same full OBE to arbitrary Rb85/Rb87 mixtures on D1/D2 with explicit optical-frequency references. In SABES, choose
+**Beam profiler → Rb single-beam** for explicit cell propagation, convergence
+checks, free-space camera profiles and field export; **Gaussian optics** retains
+the existing instrument readout.
 
 Roadmap (parking lot): group-index / slow-light readout (OD/SAS now returns the
 dispersive refractive index, but no group quantity), Raman gain, higher-order

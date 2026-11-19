@@ -817,6 +817,7 @@ def _render_table_tab(result, calibration, host, detection):
         "not yet implemented</span></div>",
         unsafe_allow_html=True)
 
+    profiler_mode = "Gaussian optics"
     left, right = st.columns([1, 1])
     with left:
         st.markdown("###### Selected optic")
@@ -841,6 +842,9 @@ def _render_table_tab(result, calibration, host, detection):
             help="Click anywhere on the table to put its head there. The "
                  "oscilloscope and the spectrum analyser read through a "
                  "photodiode, as they do on the bench.")
+        if choice == "Beam profiler":
+            profiler_mode = st.radio("Profiler model", ("Gaussian optics", "Rb single-beam"),
+                                     key=_key("profiler_model"), horizontal=True)
         if choice == "Oscilloscope":
             st.caption("Bench: Monitor+ mainly probe, Monitor− mainly conjugate; "
                        "gain switch 10⁵ V/A. Output termination is unknown, so "
@@ -854,9 +858,20 @@ def _render_table_tab(result, calibration, host, detection):
             probed = layout.beam_at(part, probe[0], probe[1], result.chain,
                                     twin_states=twin, detection=detection,
                                     calibration=calibration)
-        _render_probe_panel(probed)
-        if probed is not None and probed.mode_scope:
-            st.caption(probed.mode_scope)
+        if profiler_mode == "Rb single-beam":
+            st.caption("Choose an incident cell beam below. Profiles are shown at the cell exit "
+                       "and a free-space camera plane.")
+        else:
+            _render_probe_panel(probed)
+            if probed is not None and probed.mode_scope:
+                st.caption(probed.mode_scope)
+
+    if choice == "Beam profiler" and profiler_mode == "Rb single-beam":
+        from gabes_ui.sabes.beam_profiler import render_profiler
+        st.divider()
+        render_profiler(result.chain, temperature_c=settings.cell_temp_c,
+                        cell_length_m=calibration.value("cell_length_mm")*1e-3)
+        return
 
     if probed is not None:
         if probed.link.beam == "reference":
