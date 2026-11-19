@@ -57,6 +57,8 @@ SWEEP_PROPAGATION_CACHE_SIZE = 160
 SUPERHET_CLASS_CHUNK = 16384     # velocity classes per finite-IF batch solve
 MIRROR_TIE_RTOL = 1e-5           # mirror slope maxima of a symmetric line are one tie
 READOUT_REFINEMENT_RTOL = 0.05
+DOPPLER_PARTIAL = "PARTIALLY_AVAILABLE_DOPPLER_UNCONVERGED"
+DOPPLER_UNAVAILABLE = "UNAVAILABLE_DOPPLER_UNCONVERGED"
 
 
 def _finite_scenario_envelope(curves):
@@ -112,7 +114,7 @@ class RydbergEITScheme(Scheme):
     caption = ("85Rb cascade EIT / microwave Autler-Townes electrometry. "
                "The static optical spectrum follows the 5S-5P-40D ladder; "
                "the 37 GHz RF leg dresses 40D-39F.")
-    cache_version = "rydberg-eit-v9-readout-and-layered-cache"
+    cache_version = "rydberg-eit-v10-adaptive-doppler-fallback"
     defaults_version = "rydberg-eit-v7-optical-detunings"
     supports_headless_observables = True
     model_comparison_parameter = "lo_rabi_mhz"
@@ -630,13 +632,15 @@ class RydbergEITScheme(Scheme):
         return beam.transit_broadening_mhz(
             T, d, mass=constants.MASS_85RB, factor=TRANSIT_FACTOR)
 
-    def _scan_chi(self, atom, h_of, scan, probe, vapor):
+    def _scan_chi(self, atom, h_of, scan, probe, vapor, *, fallback_rows=None):
         """χ̄(scan) for one dephasing configuration: the v = 0 class when `vapor` is
         None, else the exact Maxwell average for vapor = (T, mass, k_vec). The probe
         detuning lives in H. Shared by the compensated / uncompensated solves and the
         Fig. 2(b) probe-power sweep."""
         affine = affine_doppler.AffineScan(atom, h_of, (1, 0), probe)
-        return affine.stationary(scan) if vapor is None else affine.maxwell_mean(scan, *vapor)
+        if vapor is None:
+            return affine.stationary(scan)
+        return affine.maxwell_mean(scan, *vapor, fallback_rows=fallback_rows)
 
     @staticmethod
     def _inhomogeneous(chi, scan, fwhm_mhz):
@@ -764,12 +768,15 @@ class RydbergEITScheme(Scheme):
         key = (probe, self._atomic_scan_key(h_fields, params, scan, gd, rf_deph, vapor))
 
         def solve():
-            chi = self._scan_chi(self._atom(gd, rf_deph), h_of, scan, probe, vapor)
-            return self._cache_array(chi)
+            fallback_rows = []
+            chi = self._scan_chi(self._atom(gd, rf_deph), h_of, scan, probe, vapor,
+                                 fallback_rows=fallback_rows)
+            return self._cache_array(chi), fallback_rows
 
         # Raw callers can modify their own arrays without poisoning later sweeps.
-        chi = self._cached_sweep_value(
-            "_static_atomic_cache", STATIC_ATOMIC_CACHE_SIZE, key, solve).copy()
+        cached_chi, fallback_rows = self._cached_sweep_value(
+            "_static_atomic_cache", STATIC_ATOMIC_CACHE_SIZE, key, solve)
+        chi = cached_chi.copy()
         chi_uncomp = self._inhomogeneous(chi, scan, zeeman)
 
         return dict(
@@ -783,6 +790,8 @@ class RydbergEITScheme(Scheme):
             dephasing_model="correlated_phase_lindblad",
             chi_bar=chi,
             chi_bar_uncomp=chi_uncomp,
+            **({"doppler_fallback_rows": [row.copy() for row in fallback_rows]}
+               if fallback_rows else {}),
             N=N,
             T=T,
             heater_setpoint_c=temperature_state.heater_setpoint_c,
@@ -1119,6 +1128,19 @@ class RydbergEITScheme(Scheme):
                   + raw["density_dephasing_mhz"] + raw["transit_mhz"]) * MHZ
         return ground, raw["rf_dephasing_mhz"] * MHZ
 
+    @staticmethod
+    def _velocity_averaged_if_phasor(base, atom, kv, weights, omega_if, operator):
+        """Coherently average the complex finite-IF observable on one velocity grid."""
+        class_phasors = np.empty(kv.size, dtype=complex)
+        for first in range(0, kv.size, SUPERHET_CLASS_CHUNK):
+            part = slice(first, first + SUPERHET_CLASS_CHUNK)
+            liouvillian = (base[None, :, :]
+                           + kv[part, None, None] * atom.S_v[None, :, :])
+            class_phasors[part] = electrometry.weak_signal_response_from_liouvillian(
+                liouvillian, 4, omega_if, signal_transition=(2, 3)
+            ).real_observable_phasor_per_angular_rabi(operator)
+        return electrometry.coherent_weighted_average(class_phasors, weights)
+
     def _superheterodyne_atomic_phasors(
             self, raw, params, x, transmission, static_indices=None):
         """Finite-IF atomic response before RF and detector calibration."""
@@ -1134,25 +1156,25 @@ class RydbergEITScheme(Scheme):
             affine = affine_doppler.AffineScan(
                 atom, lambda s: self._hamiltonian_at_scan_detuning(raw, params, s),
                 (1, 0), raw["probe_rabi_mhz"] * MHZ)
-            velocity, weights = affine.quadrature_classes(
-                raw["scan"][indices], raw["T"], constants.MASS_85RB, raw["k_vec"])
-            kv = raw["k_vec"] * velocity
-            absorption_phasors = np.empty(indices.size, dtype=complex)
-            for slot, index in enumerate(indices):
+
+            def coherent_phasor(slot, velocity, weights):
+                index = indices[slot]
+                kv = raw["k_vec"] * velocity
                 H = self._hamiltonian_at_scan_detuning(
                     raw, params, raw["scan"][index])
                 base = core.build_liouvillian(H, atom)
-                class_phasors = np.empty(kv.size, dtype=complex)
-                for first in range(0, kv.size, SUPERHET_CLASS_CHUNK):
-                    part = slice(first, first + SUPERHET_CLASS_CHUNK)
-                    liouvillian = (base[None, :, :]
-                                   + kv[part, None, None] * atom.S_v[None, :, :])
-                    class_phasors[part] = electrometry.weak_signal_response_from_liouvillian(
-                        liouvillian, 4, omega_if, signal_transition=(2, 3)
-                    ).real_observable_phasor_per_angular_rabi(operator)
-                absorption_phasors[slot] = electrometry.coherent_weighted_average(
-                    class_phasors, weights)
+                return self._velocity_averaged_if_phasor(
+                    base, atom, kv, weights, omega_if, operator)
+
+            fallback_rows = []
+            absorption_phasors = affine.quadrature_mean(
+                raw["scan"][indices], raw["T"], constants.MASS_85RB, raw["k_vec"],
+                coherent_phasor, fallback_rows=fallback_rows)
             optimization_scope = "static-slope points; coherent Doppler average"
+            if fallback_rows:
+                # Store scan indices rather than positions in the slope-point subset.
+                rows = tuple(dict(row, row=int(indices[row["row"]])) for row in fallback_rows)
+                return indices, absorption_phasors, optimization_scope, rows
         else:
             indices = np.arange(raw["scan"].size, dtype=int)
             liouvillian = self._finite_if_liouvillians(
@@ -1194,15 +1216,19 @@ class RydbergEITScheme(Scheme):
                float(params.get("if_khz", self._REF["if_khz"])))
 
         def solve():
-            indices, phasors, scope = self._superheterodyne_atomic_phasors(
+            indices, phasors, scope, *diagnostics = self._superheterodyne_atomic_phasors(
                 raw, params, x, transmission, static_indices=static_indices)
-            return self._cache_array(indices), self._cache_array(phasors), scope
+            return self._cache_array(indices), self._cache_array(phasors), scope, *diagnostics
 
-        return self._cached_sweep_value("_superhet_atomic_cache",
-                                        SUPERHET_ATOMIC_CACHE_SIZE, key, solve)
+        response = self._cached_sweep_value("_superhet_atomic_cache",
+                                            SUPERHET_ATOMIC_CACHE_SIZE, key, solve)
+        if len(response) > 3:
+            # The caller can export or edit diagnostics without mutating the cache.
+            return (*response[:3], tuple(row.copy() for row in response[3]))
+        return response
 
     def _superheterodyne_readout(
-            self, raw, params, x, transmission, atomic_response=None):
+            self, raw, params, x, transmission, atomic_response=None, *, fallback_rows=None):
         """Finite-IF atomic response with RF and detector calibration."""
         if raw["lo_rabi_mhz"] <= 0.0 or self._opacity_scale(raw, params) == 0.0:
             return None
@@ -1211,7 +1237,14 @@ class RydbergEITScheme(Scheme):
         if atomic_response is None:
             atomic_response = self._cached_superheterodyne_atomic_phasors(
                 raw, params, x, transmission)
-        indices, absorption_phasors, optimization_scope = atomic_response
+        indices, absorption_phasors, optimization_scope = atomic_response[:3]
+        if len(atomic_response) > 3:
+            rows = atomic_response[3]
+            if fallback_rows is not None:
+                fallback_rows.extend(row.copy() for row in rows)
+            # A missing candidate prevents selecting the optimum over the sampled set.
+            if any(row["status"] == "unresolved" for row in rows):
+                return None
         if response_reused and str(params.get("doppler", self._REF["doppler"])) == "on":
             optimization_scope = "fixed nominal static-gradient sampled point (opacity scenario)"
 
@@ -1354,12 +1387,18 @@ class RydbergEITScheme(Scheme):
     @classmethod
     def _eit_features(cls, x, T_trans, center_mhz=0.0):
         """Compatibility FWHM and contrast for the probe-power and heating sweeps."""
+        if not np.all(np.isfinite(T_trans)):
+            return float("nan"), float("nan")
         feature = cls._eit_validity(x, T_trans, center_mhz)
         width = feature["fwhm_mhz"]
         return (float("nan") if width is None else width, feature["contrast"])
 
     def _static_readout_validity(self, x, transmission, center, window=None):
         """Compare nested grids over the same measured scan extent."""
+        if not np.all(np.isfinite(transmission)):
+            return dict(status="unavailable-nonfinite-scan", numerical_convergence="unresolved",
+                        fwhm_mhz=None, peaks=[], measured_peaks=[])
+
         def features(stride):
             offset = int(np.argmin(np.abs(x - center))) % stride
             # Preserve the original endpoints so the half-height gate is checked
@@ -1404,12 +1443,17 @@ class RydbergEITScheme(Scheme):
                         if raw["lo_rabi_mhz"] <= 0 else None)
         width = (eit_validity["fwhm_mhz"] if eit_validity is not None else None)
         width = float("nan") if width is None else width
+        static_rows = raw.get("doppler_fallback_rows", ())
+        static_unresolved = any(row["status"] == "unresolved" for row in static_rows)
+        finite_if_rows = []
         slope = (np.nanmax(np.abs(np.gradient(T_trans, x)))
                  if np.ptp(T_trans) > 0.0 else 0.0)
+        if static_unresolved:
+            slope = float("nan")
         if_delta = max(float(params.get("if_khz", self._REF["if_khz"])) / 1000.0,
                        1e-9)
         if_valid = (x >= x[0] + if_delta) & (x <= x[-1] - if_delta)
-        if if_valid.any():
+        if if_valid.any() and not static_unresolved:
             t_hi = np.interp(x[if_valid] + if_delta, x, T_trans)
             t_lo = np.interp(x[if_valid] - if_delta, x, T_trans)
             if_readout = (t_hi - t_lo) / (2.0 * if_delta)
@@ -1505,15 +1549,16 @@ class RydbergEITScheme(Scheme):
                     help="The EIT window must pass numerical width, scan-edge and "
                          "refinement checks before the linewidth becomes a headline value."))
         metrics.extend([
-            dict(label="Max spectral slope", value=f"{slope:.3f} /MHz",
+            dict(label="Max spectral slope", value="—" if static_unresolved else f"{slope:.3f} /MHz",
                  help="Largest static dT/dnu; used internally for electrometry tests."),
-            dict(label="IF discriminator", value=f"{if_disc:.3f} /MHz",
+            dict(label="IF discriminator", value="—" if static_unresolved else f"{if_disc:.3f} /MHz",
                  help="Finite-difference transmission discriminator at the selected "
                       "IF offset; a static proxy for a lock-in/superhet readout."),
             dict(label="IF optimum detuning",
                  value=(f"{if_detuning:+.2f} MHz" if np.isfinite(if_detuning) else "—"),
                  help="Selected optical scan coordinate where the finite-IF discriminator is largest."),
-            dict(label="Transmission at resonance", value=f"{T_trans[ic]:.3f}"),
+            dict(label="Transmission at resonance",
+                 value=f"{T_trans[ic]:.3f}" if np.isfinite(T_trans[ic]) else "—"),
         ])
         if sam is not None:
             metrics.append(dict(
@@ -1537,9 +1582,16 @@ class RydbergEITScheme(Scheme):
                     value=f"{at_field_v_m / sam.field_v_m:.3f}",
                     help="Optically inferred AT field divided by the independent "
                          "standard-antenna-method field."))
-        if raw["lo_rabi_mhz"] > 0:
+        if static_unresolved:
+            metrics.append(dict(label="Static Doppler integration", kind="status",
+                                value="unconverged",
+                                help="A rejected velocity integral reached its class cap."))
+        if raw["lo_rabi_mhz"] > 0 and not static_unresolved:
             superhet = self._superheterodyne_readout(
-                raw, params, x, T_trans, atomic_response=atomic_response)
+                raw, params, x, T_trans, atomic_response=atomic_response,
+                fallback_rows=finite_if_rows)
+        doppler_unresolved = static_unresolved or any(
+            row["status"] == "unresolved" for row in finite_if_rows)
         if superhet is not None:
             sensitivity = superhet["sensitivity"]
             noise = superhet["noise"]
@@ -1604,9 +1656,11 @@ class RydbergEITScheme(Scheme):
                     "Total sensitivity", "AT status", "PSN-limited sensitivity")
         elif raw["lo_rabi_mhz"] > 0:
             metrics.append(dict(
-                label="Sensitivity status", value="no finite optical response",
-                kind="status", help="No field sensitivity is available at zero "
-                     "effective opacity or without a finite detector response."))
+                label="Sensitivity status",
+                value="Doppler integral unconverged" if doppler_unresolved else "no finite optical response",
+                kind="status", help=("A velocity integral reached its class cap before convergence."
+                                     if doppler_unresolved else "No field sensitivity is available at zero "
+                                     "effective opacity or without a finite detector response.")))
             preferred_heroes = (
                 "Sensitivity status", "RF field from fitted Ω_RF", "AT status")
         else:
@@ -1616,7 +1670,9 @@ class RydbergEITScheme(Scheme):
                 ("Transmission at resonance", "EIT status", "IF discriminator")
             )
         finite_if_validity = superhet["validity"] if superhet is not None else None
-        if finite_if_validity is not None and finite_if_validity["status"] != "resolved":
+        if raw["lo_rabi_mhz"] > 0 and doppler_unresolved:
+            finite_if_validity = dict(status="doppler-unconverged", numerical_convergence="unresolved")
+        elif finite_if_validity is not None and finite_if_validity["status"] != "resolved":
             metrics.append(dict(
                 label="Sensitivity status", value=finite_if_validity["status"], kind="status",
                 help="The numeric sensitivity is retained as a provisional model estimate."))
@@ -1635,13 +1691,15 @@ class RydbergEITScheme(Scheme):
         metrics = ([by_label[label] for label in hero_labels]
                    + [metric for metric in metrics
                       if metric["label"] not in selected])
+        prediction_status = DOPPLER_PARTIAL if doppler_unresolved else "PREDICTED"
         metrics.append(dict(
-            label="Prediction scope", value="PREDICTED · opacity uncalibrated",
+            label="Prediction scope", value=f"{prediction_status} · opacity uncalibrated",
             kind="status", help="The opacity and its scenario range are assumed; "
                  "absolute sensitivity and sweep optima lack held-out validation."))
         opacity_spec = opacity.opacity_spec(params)
         sensitivity_readout = dict(
             status=("NOT_APPLICABLE_NO_LO" if raw["lo_rabi_mhz"] <= 0 else
+                    DOPPLER_UNAVAILABLE if doppler_unresolved else
                     "UNAVAILABLE_ZERO_OPACITY" if opacity_spec["value"] == 0 else
                     "UNAVAILABLE_NO_FINITE_RESPONSE"),
             total_field_asd_nv_cm_per_sqrt_hz=None,
@@ -1673,8 +1731,10 @@ class RydbergEITScheme(Scheme):
                 reference_balance_detuning_mhz=superhet["reference_balance_detuning_mhz"],
                 reference_detector_power_w=superhet["reference_detector_power_w"],
             )
+        if finite_if_rows:
+            sensitivity_readout["doppler_fallback_rows"] = finite_if_rows
         trust_readout = dict(
-            prediction_status="PREDICTED",
+            prediction_status=prediction_status,
             calibration_status="UNCALIBRATED",
             experimental_visibility="NOT_ASSESSED",
             numerical_convergence={
@@ -1683,7 +1743,8 @@ class RydbergEITScheme(Scheme):
                                      ("finite_if", finite_if_validity))},
             eit_validity=eit_validity,
             at_validity=at_validity,
-            transmitted_probe_power_w=float(raw["probe_power_uw"] * 1.0e-6 * T_trans[ic]),
+            transmitted_probe_power_w=(float(raw["probe_power_uw"] * 1.0e-6 * T_trans[ic])
+                                       if np.isfinite(T_trans[ic]) else None),
             rf_dipole_provenance=self._rf_dipole_provenance(params),
             effective_opacity=opacity_spec,
             atomic_line_strength=float(raw.get("atomic_line_strength", 1.0)),
@@ -1702,19 +1763,21 @@ class RydbergEITScheme(Scheme):
             eit_width_mhz=(float(width) if raw["lo_rabi_mhz"] <= 0
                            and np.isfinite(width) else None),
             at_split_mhz=at_split_mhz,
-            max_slope_per_mhz=float(slope),
+            max_slope_per_mhz=None if static_unresolved else float(slope),
             if_discriminator_per_mhz=(float(if_disc) if np.isfinite(if_disc) else None),
             if_optimum_detuning_mhz=(float(if_detuning)
                                     if np.isfinite(if_detuning) else None),
-            resonance_transmission=float(T_trans[ic]),
+            resonance_transmission=float(T_trans[ic]) if np.isfinite(T_trans[ic]) else None,
             finite_if=sensitivity_readout,
         )
+        if static_rows:
+            trust_readout["doppler_fallback_rows"] = [row.copy() for row in static_rows]
         return dict(
             x=x, T_trans=T_trans, xphys=xphys, width=width, metrics=metrics,
             resonance_scan_mhz=center_mhz,
             max_slope_per_mhz=float(slope), if_discriminator_per_mhz=float(if_disc),
             rydberg_readout=trust_readout, effective_opacity=opacity_spec,
-            prediction_status="PREDICTED",
+            prediction_status=prediction_status,
             superhet=superhet, effective_atoms=self._effective_atom_number(raw, params),
             at_split_mhz=at_split_mhz, at_field_v_m=at_field_v_m,
             at_peak_positions_mhz=at_peak_positions_mhz,
@@ -1771,8 +1834,10 @@ class RydbergEITScheme(Scheme):
                     axR.axvline(superhet["optimum_detuning_mhz"], color="gray",
                                 ls=":", lw=0.8)
                 else:
-                    axR.text(0.5, 0.5, "No finite optical response",
-                             transform=axR.transAxes, ha="center")
+                    status = ro["rydberg_readout"]["finite_if"]["status"]
+                    message = ("Doppler integral unconverged" if status == DOPPLER_UNAVAILABLE
+                               else "No finite optical response")
+                    axR.text(0.5, 0.5, message, transform=axR.transAxes, ha="center")
                 axR.set_ylabel("|dT| per 1 kHz SIG")
                 axR.set_title(
                     f"Finite-IF linear response ({float(params.get('if_khz', self._REF['if_khz'])):.0f} kHz IF)")
@@ -1875,7 +1940,7 @@ class RydbergEITScheme(Scheme):
                                   at_peak_positions_mhz=ro["at_peak_positions_mhz"],
                                   finite_if=ro["superhet"]),
             effective_opacity=ro["effective_opacity"],
-            prediction_status="PREDICTED",
+            prediction_status=ro["prediction_status"],
             comparison=comparison)
 
     def extra_views(self):
@@ -1895,6 +1960,9 @@ class RydbergEITScheme(Scheme):
                 for scenario in scenarios:
                     scenario_params = dict(
                         pr, effective_opacity_participation=scenario["value"])
+                    if any(row["status"] == "unresolved" for row in raw.get("doppler_fallback_rows", ())):
+                        scenario["prediction_status"] = DOPPLER_PARTIAL
+                        scenario.setdefault("unresolved_probe_power_uw", []).append(float(p_uw))
                     for key, chi_key in (("comp", "chi_bar"),
                                          ("uncomp", "chi_bar_uncomp")):
                         x, transmission, _ = self._cached_sweep_transmission(
@@ -1909,14 +1977,15 @@ class RydbergEITScheme(Scheme):
                     amplitudes = np.asarray(scenario[key]["amp"])
                     widths = np.asarray(scenario[key]["width"])
                     valid = np.isfinite(widths)
+                    complete = scenario["prediction_status"] != DOPPLER_PARTIAL
                     scenario["optima"][key] = dict(
                         peak_amplitude_power_uw=(
                             float(powers[int(np.argmax(amplitudes))])
-                            if np.any(amplitudes > 0) else None),
+                            if complete and np.any(amplitudes > 0) else None),
                         minimum_linewidth_power_uw=(
                             float(powers[int(np.argmin(
                                 np.where(valid, widths, np.inf)))])
-                            if valid.any() else None),
+                            if complete and valid.any() else None),
                     )
             nominal = next(s for s in scenarios if s["value"] == spec["value"])
             return dict(
@@ -1924,7 +1993,7 @@ class RydbergEITScheme(Scheme):
                 scan_axis=self._scan_axis(params),
                 two_photon_resonance_scan_mhz=self._resonance_scan_mhz(params),
                 uncomp=nominal["uncomp"], opacity_scenarios=scenarios,
-                effective_opacity=spec, prediction_status="PREDICTED",
+                effective_opacity=spec, prediction_status=nominal["prediction_status"],
                 calibration_status="UNCALIBRATED",
                 uncertainty_scope="assumed opacity scenarios; not a confidence interval",
                 optimum_scope="sampled model optimum; not an experimental recommendation",
@@ -1957,7 +2026,7 @@ class RydbergEITScheme(Scheme):
                         labelled_incomplete.add(ax)
             aW.set_ylabel("EIT linewidth [MHz]")
             aW.set_xlabel("Probe power [uW]")
-            figF.suptitle("PREDICTED: assumed opacity scenarios (not a confidence interval)",
+            figF.suptitle(f"{s['prediction_status']}: assumed opacity scenarios (not a confidence interval)",
                           fontsize=10)
             figF.tight_layout()
             return figF
@@ -2027,6 +2096,8 @@ class RydbergEITScheme(Scheme):
                     if at_ro["superhet"] is not None and atomic_response is None:
                         atomic_response = at_ro["superhet"]["atomic_response"]
                     sensitivity = at_ro["rydberg_readout"]["finite_if"]
+                    if DOPPLER_PARTIAL in (ro["prediction_status"], at_ro["prediction_status"]):
+                        scenario["prediction_status"] = DOPPLER_PARTIAL
                     for field, source in (
                         ("psn_sensitivity_nv_cm_sqrt_hz", "psn_field_asd_nv_cm_per_sqrt_hz"),
                         ("total_sensitivity_nv_cm_sqrt_hz", "total_field_asd_nv_cm_per_sqrt_hz"),
@@ -2040,10 +2111,11 @@ class RydbergEITScheme(Scheme):
                 values = np.asarray(scenario["total_sensitivity_nv_cm_sqrt_hz"])
                 valid = np.isfinite(values)
                 best_index = int(np.argmin(np.where(valid, values, np.inf)))
+                has_optimum = valid.any() and DOPPLER_UNAVAILABLE not in scenario["finite_if_status"]
                 scenario["best_sensitivity_temperature_c"] = (
-                    float(temperatures[best_index]) if valid.any() else None)
+                    float(temperatures[best_index]) if has_optimum else None)
                 scenario["best_total_sensitivity_nv_cm_sqrt_hz"] = (
-                    float(values[best_index]) if valid.any() else None)
+                    float(values[best_index]) if has_optimum else None)
             nominal = next(s for s in scenarios if s["value"] == spec["value"])
             return dict(
                 temperatures_c=temperatures.tolist(),
@@ -2058,7 +2130,7 @@ class RydbergEITScheme(Scheme):
                 best_sensitivity_temperature_c=nominal["best_sensitivity_temperature_c"],
                 best_total_sensitivity_nv_cm_sqrt_hz=nominal["best_total_sensitivity_nv_cm_sqrt_hz"],
                 opacity_scenarios=scenarios, effective_opacity=spec,
-                prediction_status="PREDICTED", calibration_status="UNCALIBRATED",
+                prediction_status=nominal["prediction_status"], calibration_status="UNCALIBRATED",
                 optimization_scope=scenario_scope,
                 uncertainty_scope="assumed opacity scenarios; not a confidence interval",
                 optimum_scope="sampled model optimum; not an experimental recommendation",
@@ -2138,7 +2210,7 @@ class RydbergEITScheme(Scheme):
             ax_density.legend(fontsize=8)
             for ax in axes.ravel():
                 ax.grid(alpha=0.25)
-            fig.suptitle("PREDICTED: assumed opacity range (not a confidence interval)",
+            fig.suptitle(f"{sweep['prediction_status']}: assumed opacity range (not a confidence interval)",
                          fontsize=10)
             fig.tight_layout()
             return fig

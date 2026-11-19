@@ -9,8 +9,8 @@ constant operators once. Every scan point is a rational function of kv
 (`pole_doppler`), so `maxwell_mean` returns the probe coherence ρ_eg / Ω_p averaged
 over the Maxwell distribution in closed form: one small eigendecomposition per
 point, no velocity grid and no cutoff. A point that misses the guard is summed on
-a grid fine enough for its poles (the compiled affine kernel when Numba is
-available, a batched solve otherwise). `stationary` is the single v = 0 class.
+successively finer grids until its complex response converges (or is withheld
+at the class cap). `stationary` is the single v = 0 class.
 """
 import math
 
@@ -22,7 +22,8 @@ POLE_GUARD_RTOL = 1e-6      # pole form vs a direct solve of the v = 0 class, ev
 POLE_LIMIT_SIGMAS = 1e8     # farther poles are rounding modes; 1e4 already cuts a real one
 BULK_SIGMAS = 6.0           # velocity span where a pole must be damped and a grid reaches
 STRIP_FLOOR_SIGMAS = 1e-4   # narrowest pole a grid resolves; real ones stay above 9e-4 σ
-QUADRATURE_ERROR = 1e-8     # nominal trapezoid error of a resolving grid
+QUADRATURE_ERROR = 1e-8     # trapezoid target and rejected-row complex refinement tolerance
+_NUMPY_CLASS_BATCH = 2048   # bound the fallback stack of dense Liouvillians
 
 
 def _shift_sigma(T, mass, k_vec):
@@ -35,6 +36,73 @@ def _strip_classes(damping, T, mass, k_vec):
     sigma = _shift_sigma(T, mass, k_vec)
     strip = float(np.clip(np.min(damping), STRIP_FLOOR_SIGMAS * sigma, sigma))
     return doppler.maxwell_strip_grid(T, mass, k_vec, strip, QUADRATURE_ERROR, BULK_SIGMAS)
+
+
+def _quadrature_values(rows, velocity, weights, evaluate):
+    """A singular class solve in a batch invalidates only its own scan row."""
+    try:
+        return np.asarray(evaluate(rows, velocity, weights), dtype=complex)
+    except np.linalg.LinAlgError:
+        values = np.full(rows.size, complex(np.nan, np.nan))
+        if rows.size > 1:
+            for i in range(rows.size):
+                try:
+                    values[i] = evaluate(rows[i:i + 1], velocity, weights)[0]
+                except np.linalg.LinAlgError:
+                    pass  # this row must refine again or reach the cap
+        return values
+
+
+def _refine_rejected(out, failed, evaluate, temperature, mass, k_vec, fallback_rows):
+    """Refine the complex observable on rejected rows, dropping each as it converges.
+
+    evaluate(rows, velocity, weights) returns one weighted mean per local row.
+    Two consecutive relative changes must pass. The floor grid has 351,811
+    classes (6 sigma, 1e-8 step criterion). Values still unresolved there
+    stay unavailable, including persistent nonfinite responses.
+    """
+    rows = np.flatnonzero(failed)
+    if not rows.size:
+        return
+    previous = np.full(rows.size, complex(np.nan, np.nan))
+    agreements = np.zeros(rows.size, dtype=int)
+    sigma = _shift_sigma(temperature, mass, k_vec)
+    strip_fraction = 1.0
+    total_classes = 0
+    refinement = 0
+    while rows.size:
+        velocity, weights = _strip_classes([strip_fraction * sigma], temperature, mass, k_vec)
+        classes = velocity.size
+        total_classes += classes
+        values = _quadrature_values(rows, velocity, weights, evaluate)
+        scale = np.maximum(np.abs(previous), np.abs(values))
+        # Exact zero followed by zero agrees. Near-zero values keep the same
+        # relative test as every other row; there is no arbitrary absolute floor.
+        finite = np.isfinite(previous) & np.isfinite(values) & np.isfinite(scale)
+        change = np.full(rows.size, np.nan)
+        with np.errstate(invalid="ignore", over="ignore"):
+            np.divide(np.abs(values - previous), scale, out=change, where=finite & (scale > 0.))
+        change[finite & (scale == 0.)] = 0.
+        passed = change <= QUADRATURE_ERROR
+        agreements = np.where(passed, agreements + 1, 0)
+        converged = agreements >= 2
+        at_cap = strip_fraction == STRIP_FLOOR_SIGMAS
+        finished = converged | at_cap
+        out[rows[converged]] = values[converged]
+        if at_cap:
+            out[rows[~converged]] = complex(np.nan, np.nan)
+        if fallback_rows is not None:
+            for i in np.flatnonzero(finished):
+                fallback_rows.append(dict(
+                    row=int(rows[i]), status="converged" if converged[i] else "unresolved",
+                    classes=int(classes), total_classes=int(total_classes),
+                    relative_change=float(change[i]) if np.isfinite(change[i]) else None,
+                    refinements=refinement))
+        rows = rows[~finished]
+        previous = values[~finished]
+        agreements = agreements[~finished]
+        strip_fraction = max(0.5 * strip_fraction, STRIP_FLOOR_SIGMAS)
+        refinement += 1
 
 
 class AffineScan:
@@ -70,32 +138,78 @@ class AffineScan:
                 np.ascontiguousarray(w, dtype=float), e * n + g, n)
         return out / self.probe_omega
 
-    def maxwell_mean(self, scan, T, mass, k_vec):
-        """χ̄(scan) = E[ρ_eg(s, kv)] / Ω_p for kv = k_vec·v of a Maxwell vapor."""
-        sigma = _shift_sigma(T, mass, k_vec)
+    def _guarded_poles(self, scan, sigma):
         try:
-            poles, damping, failed = self._pole_rows(scan, sigma)
+            return self._pole_rows(scan, sigma)
         except np.linalg.LinAlgError:
+            return None, np.zeros(scan.size), np.ones(scan.size, dtype=bool)
+
+    def maxwell_mean(self, scan, T, mass, k_vec, *, fallback_rows=None):
+        """Exact Gaussian means, with independent refinement on rejected rows.
+
+        Optional fallback_rows receives one diagnostic per rejected row.
+        An unresolved value is complex NaN.
+        """
+        sigma = _shift_sigma(T, mass, k_vec)
+        poles, _, failed = self._guarded_poles(scan, sigma)
+        if poles is None:
             out = np.empty(scan.size, dtype=complex)
-            damping = np.zeros(scan.size)
-            failed = np.ones(scan.size, dtype=bool)
         else:
             out = poles.gaussian_mean(0.0, sigma)[:, 0] / self.probe_omega
-            failed |= ~np.isfinite(out)
-        if failed.any():
-            v, w = _strip_classes(damping[failed], T, mass, k_vec)
-            out[failed] = self._class_sum(scan[failed], k_vec * v, w)
+            failed = failed | ~np.isfinite(out)
+
+        def integrate(rows, velocity, weights):
+            kv = k_vec * velocity
+            if kernels.available() or kv.size <= _NUMPY_CLASS_BATCH:
+                return self._class_sum(scan[rows], kv, weights)
+            # The NumPy solver builds a dense generator stack per class.
+            # Bound that temporary on rejection grids; keep global weights.
+            values = np.zeros(rows.size, dtype=complex)
+            for first in range(0, kv.size, _NUMPY_CLASS_BATCH):
+                sl = slice(first, first + _NUMPY_CLASS_BATCH)
+                values += self._class_sum(scan[rows], kv[sl], weights[sl])
+            return values
+
+        _refine_rejected(out, failed, integrate, T, mass, k_vec, fallback_rows)
         return out
 
     def quadrature_classes(self, scan, T, mass, k_vec):
-        """Maxwell (v, weights) resolving the narrowest pole of these scan points, for
-        a response there with no closed form (the finite-IF phasor). Like
-        `maxwell_mean`, a failed eigendecomposition falls back to the finest strip."""
-        try:
-            damping = self._pole_rows(scan, _shift_sigma(T, mass, k_vec))[1]
-        except np.linalg.LinAlgError:
-            damping = np.zeros(np.size(scan))
-        return _strip_classes(damping, T, mass, k_vec)
+        """Size a shared grid from accepted static poles, or use the floor if none pass.
+
+        A grid alone cannot certify another observable. Use quadrature_mean
+        to refine the actual complex readout on rejected rows.
+        """
+        _, damping, failed = self._guarded_poles(scan, _shift_sigma(T, mass, k_vec))
+        accepted = damping[~failed]
+        return _strip_classes(accepted if accepted.size else [0.0], T, mass, k_vec)
+
+    def quadrature_mean(self, scan, T, mass, k_vec, evaluate, *, fallback_rows=None):
+        """Average an independent observable on guarded and refined grids.
+
+        evaluate(slot, velocities, weights) returns one complex weighted mean.
+        Accepted slots retain their original common-grid result even in mixed
+        batches. Rejected slots never use the rejected pole's reported width.
+        """
+        _, damping, failed = self._guarded_poles(scan, _shift_sigma(T, mass, k_vec))
+        out = np.empty(scan.size, dtype=complex)
+        if not np.all(failed):
+            # The original finite-IF result for accepted companions used this
+            # shared grid. Preserve its rounding; a rejected row never uses it.
+            usable = damping[~np.isnan(damping)]
+            v, w = _strip_classes(usable, T, mass, k_vec)
+            accepted = np.flatnonzero(~failed)
+            for slot in accepted:
+                try:
+                    out[slot] = evaluate(slot, v, w)
+                except np.linalg.LinAlgError:
+                    out[slot] = complex(np.nan, np.nan)
+            # The static guard cannot catch a nonfinite external observable.
+            failed = failed.copy()
+            failed[accepted] = ~np.isfinite(out[accepted])
+        _refine_rejected(out, failed,
+                         lambda rows, v, w: [evaluate(row, v, w) for row in rows],
+                         T, mass, k_vec, fallback_rows)
+        return out
 
     def _pole_rows(self, scan, sigma):
         """Pole rows of the coherence, their damping and the rows the guard rejects.
@@ -169,17 +283,33 @@ def joint_maxwell_mean(scan, temperature, mass, longitudinal_k, conditional_scan
     proportional order. Use both complex coherence and its scan derivative so
     a converged envelope cannot mask an unconverged dispersion readout.
     """
+    longitudinal_fallback = []
+    unresolved = np.zeros(scan.size, dtype=bool)
+
     def transverse_mean(order, cutoff):
         velocity, weights = doppler.maxwell_legendre_grid(
             temperature, mass, order, cutoff)
         mean = np.zeros_like(scan, dtype=complex)
         for vx, weight in zip(velocity, weights):
+            rows = []
             mean += weight * conditional_scan(vx).maxwell_mean(
-                scan, temperature, mass, longitudinal_k)
+                scan, temperature, mass, longitudinal_k, fallback_rows=rows)
+            for record in rows:
+                longitudinal_fallback.append(dict(record, transverse_order=order,
+                                                  cutoff_sigma=cutoff, velocity_m_s=float(vx)))
+                if record["status"] == "unresolved":
+                    unresolved[record["row"]] = True
+        mean[unresolved] = complex(np.nan, np.nan)
         return mean
 
     def difference(a, b):
         def normalized_error(x, y):
+            if unresolved.any():
+                # Withhold unresolved rows and derivatives that use them.
+                valid = np.isfinite(x) & np.isfinite(y)
+                if not valid.any():
+                    return None
+                x, y = x[valid], y[valid]
             scale = max(float(np.max(np.abs(x))), np.finfo(float).tiny)
             return float(np.max(np.abs(x - y))) / scale
 
@@ -187,6 +317,10 @@ def joint_maxwell_mean(scan, temperature, mass, longitudinal_k, conditional_scan
             coherence=normalized_error(a, b),
             derivative=normalized_error(np.gradient(a, scan), np.gradient(b, scan)),
         )
+
+    def within_tolerance(errors):
+        return (errors is not None
+                and all(value is not None and value <= rtol for value in errors.values()))
 
     if len(transverse_orders) < 2 or any(
             lower >= upper for lower, upper in zip(transverse_orders, transverse_orders[1:])):
@@ -197,21 +331,24 @@ def joint_maxwell_mean(scan, temperature, mass, longitudinal_k, conditional_scan
         mean = transverse_mean(order, cutoff_sigma)
         refinement = None if previous is None else difference(mean, previous)
         history.append(dict(order=order, cutoff_sigma=cutoff_sigma, difference=refinement))
-        if refinement is not None and max(refinement.values()) <= rtol:
+        if within_tolerance(refinement) or unresolved.all():
             break
         previous = mean
     cutoff_check = None
-    if refinement is not None and max(refinement.values()) <= rtol:
+    if within_tolerance(refinement):
         wider_cutoff = cutoff_sigma + 1.0
         wider_order = math.ceil(order * wider_cutoff / cutoff_sigma)
         wider = transverse_mean(wider_order, wider_cutoff)
         cutoff_check = dict(order=wider_order, cutoff_sigma=wider_cutoff,
                             difference=difference(wider, mean))
         mean = wider
-    converged = (cutoff_check is not None
-                 and max(cutoff_check["difference"].values()) <= rtol)
-    return mean, dict(status="converged" if converged else "not_converged",
-                      relative_tolerance=rtol, transverse_refinement=history,
-                      transverse_cutoff_check=cutoff_check,
-                      longitudinal_method="conditional Maxwell pole mean with guarded direct fallback",
-                      transverse_method="Gauss-Legendre weighted by the Maxwell density")
+    converged = (not unresolved.any() and cutoff_check is not None
+                 and within_tolerance(cutoff_check["difference"]))
+    evidence = dict(status="converged" if converged else "not_converged",
+                    relative_tolerance=rtol, transverse_refinement=history,
+                    transverse_cutoff_check=cutoff_check,
+                    longitudinal_method="conditional Maxwell pole mean with guarded direct fallback",
+                    transverse_method="Gauss-Legendre weighted by the Maxwell density")
+    if longitudinal_fallback:
+        evidence["longitudinal_fallback"] = longitudinal_fallback
+    return mean, evidence

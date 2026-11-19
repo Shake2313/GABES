@@ -130,7 +130,8 @@ def test_same_physical_point_has_same_stationary_and_finite_if_response_on_eithe
     np.testing.assert_allclose(rawp["chi_bar"][1], rawc["chi_bar"][1], rtol=2e-10, atol=1e-20)
     velocity = np.array([-40.,0.,40.])
     weights = np.array([.2,.6,.2])
-    monkeypatch.setattr(rydberg.affine_doppler.AffineScan, "quadrature_classes", lambda *a: (velocity,weights))
+    monkeypatch.setattr(rydberg.affine_doppler.doppler, "maxwell_strip_grid",
+                        lambda *a, **kw: (velocity,weights))
     pp, pc = dict(pp,doppler=doppler),dict(pc,doppler=doppler)
     rawp, rawc = dict(rawp,scan=np.array([2.*MHZ])),dict(rawc,scan=np.array([-1.*MHZ]))
     ap = probe._superheterodyne_atomic_phasors(rawp,pp,np.array([2.]),np.ones(1),static_indices=np.array([0]))

@@ -167,8 +167,8 @@ def test_doppler_on_scheme_matches_a_resolving_velocity_grid(monkeypatch, name, 
     class_sum, maxwell_mean = AffineScan._class_sum, AffineScan.maxwell_mean
     fallback, checked = [], []
 
-    def checked_mean(self, scan, T, mass, k_vec):
-        out = maxwell_mean(self, scan, T, mass, k_vec)
+    def checked_mean(self, scan, T, mass, k_vec, **kwargs):
+        out = maxwell_mean(self, scan, T, mass, k_vec, **kwargs)
         rows = np.arange(0, scan.size, 40)
         v, w = self.quadrature_classes(scan[rows], T, mass, k_vec)
         np.testing.assert_allclose(out[rows], class_sum(self, scan[rows], k_vec * v, w),
@@ -200,7 +200,7 @@ def test_doppler_off_never_reaches_the_maxwell_mean(monkeypatch, name):
 
 
 def test_quadrature_classes_fall_back_when_the_pole_form_fails(monkeypatch):
-    """Like maxwell_mean, a failed eigendecomposition gives the finest strip grid."""
+    """A bare grid with no accepted rows retains the conservative floor."""
     affine, scan = _maxwell_scan()
 
     def fail(*_args, **_kwargs):
@@ -213,3 +213,160 @@ def test_quadrature_classes_fall_back_when_the_pole_form_fails(monkeypatch):
         affine_doppler.QUADRATURE_ERROR, affine_doppler.BULK_SIGMAS)
     np.testing.assert_array_equal(v, expected[0])
     assert w.sum() == pytest.approx(1.0)
+
+
+def test_rejected_infinite_strip_converges_to_independent_two_level_voigt(monkeypatch):
+    from scipy.special import wofz
+
+    gamma = 0.002 * SIGMA
+    omega = 0.05 * gamma
+    atom = atoms.two_level(gamma)
+    scan = SIGMA * np.array([0.21, 0.143])
+    affine = AffineScan(atom, lambda s: np.array([[0., omega / 2], [omega / 2, -s]]),
+                        (1, 0), omega)
+    original = affine.maxwell_mean(scan, T, MASS, K)
+    real_poles = affine._pole_rows
+
+    def one_rejected(scan, sigma):
+        poles, damping, failed = real_poles(scan, sigma)
+        assert not failed.any()
+        failed[1], damping[1] = True, np.inf
+        return poles, damping, failed
+
+    monkeypatch.setattr(affine, "_pole_rows", one_rejected)
+    records = []
+    value = affine.maxwell_mean(scan, T, MASS, K, fallback_rows=records)
+    width = np.sqrt((gamma / 2)**2 + omega**2 / 2)
+    pole = -1j * np.sqrt(np.pi / 2) / SIGMA * wofz((scan + 1j * width) / (np.sqrt(2) * SIGMA))
+    expected = 0.5 * (pole.real + 1j * gamma / (2 * width) * pole.imag)
+    assert value[:1].tobytes() == original[:1].tobytes()
+    np.testing.assert_allclose(value[1], expected[1], rtol=1e-8, atol=0.)
+    v, w = affine_doppler._strip_classes([np.inf], T, MASS, K)
+    aliased = affine._class_sum(scan[1:], K * v, w)[0]
+    assert abs(aliased - expected[1]) > 0.5 * abs(expected[1])
+    assert [(r["row"], r["status"]) for r in records] == [(1, "converged")]
+    assert records[0]["refinements"] >= 2 and records[0]["relative_change"] <= 1e-8
+
+
+def test_masked_grid_and_accepted_phasor_compatibility_in_mixed_batch(monkeypatch):
+    affine, _ = _maxwell_scan()
+    scan = np.arange(2.)
+    monkeypatch.setattr(affine, "_pole_rows", lambda *args: (
+        None, SIGMA * np.array([1., 1e-2]), np.array([False, True])))
+    masked, _ = affine.quadrature_classes(scan, T, MASS, K)
+    assert masked.size == 37
+    sampled = {0: [], 1: []}
+    legacy_v, legacy_w = affine_doppler._strip_classes(SIGMA * np.array([1., 1e-2]), T, MASS, K)
+
+    def phasor(slot, v, w):
+        sampled[slot].append(v.size)
+        return np.dot(w, v + 1j) if slot == 0 else 0j
+
+    records = []
+    result = affine.quadrature_mean(scan, T, MASS, K, phasor, fallback_rows=records)
+    assert result[:1].tobytes() == np.array([np.dot(legacy_w, legacy_v + 1j)]).tobytes()
+    assert sampled == {0: [3521], 1: [37, 73, 143]}
+    assert result[1] == 0j and records[0]["relative_change"] == 0.
+
+
+def test_two_complex_changes_required_and_unresolved_rows_withheld_at_cap(monkeypatch):
+    affine, _ = _maxwell_scan()
+    scan = np.arange(4.)
+    monkeypatch.setattr(affine, "_pole_rows", lambda *args: (
+        None, np.full(4, np.inf), np.ones(4, dtype=bool)))
+    samples = [[] for _ in scan]
+
+    def phasor(slot, v, w):
+        samples[slot].append(v.size)
+        if slot == 0:  # First two grids agree, third differs in phase only.
+            return 1e-30 * (1j if len(samples[slot]) <= 2 else -1j)
+        if slot == 1:
+            return 0j
+        if slot == 2:
+            return np.nan + 1j
+        return complex(0., len(samples[slot]) % 2)
+
+    records = []
+    values = affine.quadrature_mean(scan, T, MASS, K, phasor, fallback_rows=records)
+    assert [len(s) for s in samples[:2]] == [5, 3]
+    assert samples[2][-1] == samples[3][-1] == 351_811
+    assert values[0] == -1e-30j and values[1] == 0.
+    assert np.isnan(values[2:]).all()
+    by_row = {r["row"]: r for r in records}
+    assert [by_row[i]["status"] for i in range(4)] == ["converged"] * 2 + ["unresolved"] * 2
+    assert by_row[2]["relative_change"] is None
+    assert by_row[3]["relative_change"] == 1. and by_row[3]["total_classes"] == sum(samples[3])
+
+
+def test_joint_mean_propagates_capped_longitudinal_rows():
+    scan = np.arange(5.)
+
+    class Conditional:
+        def maxwell_mean(self, scan, *args, fallback_rows):
+            fallback_rows.append(dict(row=0, status="unresolved", classes=351811,
+                                      total_classes=928209, relative_change=0.3, refinements=14))
+            return np.array([np.nan + 1j * np.nan, 1, 2, 3, 4])
+
+    mean, info = affine_doppler.joint_maxwell_mean(
+        scan, T, MASS, K, lambda vx: Conditional(), transverse_orders=(2, 4))
+    assert np.isnan(mean[0])
+    np.testing.assert_allclose(mean[1:], scan[1:])
+    assert info["status"] == "not_converged"
+    assert all(row["row"] == 0 and row["classes"] == 351811 and "velocity_m_s" in row
+               for row in info["longitudinal_fallback"])
+
+
+def test_numpy_rejection_limits_class_batch_and_preserves_global_weights(monkeypatch):
+    affine, _ = _maxwell_scan()
+    scan = np.arange(1.)
+    monkeypatch.setattr(affine, "_pole_rows", lambda *args: (
+        None, np.array([np.inf]), np.array([True])))
+    monkeypatch.setattr(kernels, "available", lambda: False)
+    sizes = []
+
+    def narrow_sum(rows, kv, weights):
+        sizes.append(kv.size)
+        assert kv.size <= 2048
+        return np.full(rows.size, weights @ (1. / (0.143 - kv / SIGMA + 0.001j)))
+
+    monkeypatch.setattr(affine, "_class_sum", narrow_sum)
+    records = []
+    result = affine.maxwell_mean(scan, T, MASS, K, fallback_rows=records)
+    assert max(sizes) == 2048 and records[0]["status"] == "converged"
+    from scipy.special import wofz
+    expected = -1j * np.sqrt(np.pi / 2) * wofz((0.143 + 0.001j) / np.sqrt(2))
+    np.testing.assert_allclose(result, expected, rtol=1e-8, atol=0.)
+
+
+def test_singular_class_solve_withholds_only_its_row(monkeypatch):
+    affine, _ = _maxwell_scan()
+    scan = np.arange(3.)
+    monkeypatch.setattr(affine, "_pole_rows", lambda *args: (
+        None, np.full(3, np.inf), np.ones(3, dtype=bool)))
+
+    def class_sum(detunings, kv, weights):
+        if 1. in detunings:
+            raise np.linalg.LinAlgError("forced singular class")
+        return (detunings + 1j) * weights.sum()
+
+    monkeypatch.setattr(affine, "_class_sum", class_sum)
+    records = []
+    out = affine.maxwell_mean(scan, T, MASS, K, fallback_rows=records)
+    assert np.isnan(out[1])
+    np.testing.assert_allclose(out[[0, 2]], [1j, 2 + 1j])
+    cap = next(r for r in records if r["status"] == "unresolved")
+    assert (cap["row"], cap["classes"], cap["relative_change"]) == (1, 351811, None)
+
+    # A static pole can pass even though the separate phasor solve is singular.
+    monkeypatch.setattr(affine, "_pole_rows", lambda *args: (
+        None, np.full(3, np.inf), np.array([False, False, True])))
+    records = []
+
+    def phasor(slot, velocity, weights):
+        if slot == 1:
+            raise np.linalg.LinAlgError("forced singular dynamical phasor")
+        return complex(slot, 1)
+
+    out = affine.quadrature_mean(scan, T, MASS, K, phasor, fallback_rows=records)
+    assert np.isnan(out[1]) and out[0] == 1j and out[2] == 2 + 1j
+    assert {(r["row"], r["status"]) for r in records} == {(1, "unresolved"), (2, "converged")}

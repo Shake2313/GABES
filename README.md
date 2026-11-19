@@ -130,7 +130,10 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
     quadrature.
   - `affine_doppler.py` — `AffineScan`, the exact Maxwell average of a Λ/Rydberg
     scan whose Liouvillian is base + s·A + kv·S_v (pole form with a per-row guard,
-    fallback on a grid that resolves the rows' narrowest pole).
+    with direct Maxwell integration for rejected rows). The fallback checks the
+    complex response on successively finer grids, including the actual phasor
+    at finite IF. It requires two consecutive relative changes within 1e-8
+    and withholds the readout if it reaches 351,811 classes without convergence.
   - `atoms.py` — `AtomModel` (level scheme as data; `with_reset` adds the
     transit/thermal reset γ(ρ_th·Trρ − ρ)) + factories
     (`two_level`, `lambda3`, `sas_atom`, `double_lambda_rb85`).

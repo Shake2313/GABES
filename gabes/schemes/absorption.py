@@ -72,7 +72,7 @@ def _od_atom(natural_and_self, effects, reference):
 
 
 def _solve_chi_avg(atom, build_H0, probe_coh, scan, params, h_dep,
-                   probe_omega=None, k_vec=None, mass=None, scan_shift=None):
+                   probe_omega=None, k_vec=None, mass=None, scan_shift=None, fallback_rows=None):
     """
     χ̄(scan) = probe coherence ρ_eg / Ω_p, Doppler-averaged over the Maxwell
     velocity distribution (optical shift plus optional per-level residual shifts).
@@ -120,7 +120,8 @@ def _solve_chi_avg(atom, build_H0, probe_coh, scan, params, h_dep,
     # Scan-dependent H (Λ): the optical background and any optional residual
     # two-photon Doppler, per scan point.
     return affine_doppler.AffineScan(
-        atom, build_H0, probe_coh, om_p, scan_shift).maxwell_mean(scan, T, mass, k_vec)
+        atom, build_H0, probe_coh, om_p, scan_shift).maxwell_mean(
+            scan, T, mass, k_vec, fallback_rows=fallback_rows)
 
 
 def _hyperfine_alpha(scan, params, line_strength=None):
@@ -429,7 +430,7 @@ LAMBDA_MAX_ANGLE_MRAD = 20.0
 
 class LambdaScheme(Scheme):
     cluster = "A — Absorption"
-    cache_version = "physical-units-v9-angled-joint-default"
+    cache_version = "physical-units-v10-adaptive-pole-fallback"
     defaults_version = "physical-units-v3"
     supports_headless_observables = True
     model_comparison_parameter = "coupling_power_mw"
@@ -690,10 +691,11 @@ class LambdaScheme(Scheme):
             params, medium=medium, mode=mode, Oc_mhz=Oc_mhz,
             Dc_mhz=Dc_mhz, gg_khz=gg_khz)
         scan_shift = core.comm_super(np.diag([0.0, 0.0, 1.0]))
+        fallback = []
         chi_bar = _solve_chi_avg(
             atom, build_H0, (2, 0), scan, params, h_dep=True,
             probe_omega=probe, k_vec=medium["k_vec"], mass=medium["mass"],
-            scan_shift=scan_shift)
+            scan_shift=scan_shift, fallback_rows=fallback)
         raw = dict(scan=scan, chi_bar=chi_bar, N=medium["N"], T=medium["T"], Dc=Dc,
                     L=params.get("cell_mm", 10.0) * 1e-3, ls=1.0,
                     gamma=gamma, gamma_mhz=gamma_mhz, k_vec=medium["k_vec"],
@@ -717,6 +719,11 @@ class LambdaScheme(Scheme):
                 raw["chi_bar"], raw["joint_doppler"] = self._joint_doppler(
                     scan, medium, angle_mrad, build_H0,
                     gg_khz * KHZ, probe, scan_shift, elastic_hwhm=elastic_hwhm)
+        if fallback:
+            if "scalar_chi_bar" in raw:
+                raw["joint_doppler"]["scalar_reference_fallback"] = fallback
+            else:
+                raw["doppler_fallback"] = fallback
         return raw
 
     @classmethod
@@ -784,11 +791,19 @@ class LambdaScheme(Scheme):
         window = _lambda_window_readout(x, T_trans, xphys, ic, raw, L) if m != "at" else None
         joint = raw.get("joint_doppler")
         joint_failed = joint is not None and joint["status"] == "not_converged"
-        if joint_failed and window is not None:
+        static_fallback = raw.get("doppler_fallback", [])
+        longitudinal = (joint or {}).get("longitudinal_fallback", [])
+        scalar_reference = (joint or {}).get("scalar_reference_fallback", [])
+        integration_issue = None
+        if joint_failed:
+            integration_issue = "Joint Maxwell refinement exceeded its bound."
+        if any(r["status"] == "unresolved" for r in (*static_fallback, *longitudinal)):
+            integration_issue = "Longitudinal Doppler refinement reached its class cap."
+        if integration_issue and window is not None:
             window.update(status="velocity_not_converged", width_mhz=None,
                           group_index=None, group_delay_s=None)
         metrics = self._metrics(m, x, alpha, T_trans, ic, center, raw, params, window,
-                                joint_failed=joint_failed)
+                                integration_issue=integration_issue, joint_failed=joint_failed)
         details = [
             ("Medium", f"{raw.get('medium_label', '85Rb')} {raw.get('line', 'D1')}"),
             ("Γ / 2π", f"{raw.get('gamma_mhz', GAMMA_MHZ):.4f} MHz"),
@@ -809,6 +824,15 @@ class LambdaScheme(Scheme):
             regime=m, experimental_visibility="not assessed",
             window=window,
         )
+        if static_fallback:
+            readout["doppler_fallback"] = static_fallback
+        for label, rows in (("Doppler fallback", static_fallback),
+                            ("Joint longitudinal fallback", longitudinal),
+                            ("Scalar reference fallback", scalar_reference)):
+            if rows:
+                capped = sum(r["status"] == "unresolved" for r in rows)
+                details.append((label, f"{len(rows)} row evaluations, {capped} unresolved, "
+                                       f"largest grid {max(r['classes'] for r in rows)} classes"))
         if "optical_collisions" in raw:
             readout["optical_collisions"] = raw["optical_collisions"]
             details.extend(_collision_rows(raw))
@@ -829,18 +853,23 @@ class LambdaScheme(Scheme):
                     transmission_at_resonance=float(T_trans[ic] - scalar_transmission[ic]),
                     transmission_absolute_max=float(np.max(np.abs(T_trans - scalar_transmission))),
                 )
+                # A missing longitudinal row invalidates a full-curve maximum.
+                delta = {k: v if np.isfinite(v) else None for k, v in delta.items()}
                 readout["joint_doppler"] = dict(joint, difference_from_scalar=delta)
+                center_delta = delta["transmission_at_resonance"]
                 details.extend([
-                    ("Joint minus scalar, T at resonance", f"{delta['transmission_at_resonance']:+.4f}"),
+                    ("Joint minus scalar, T at resonance",
+                     f"{center_delta:+.4f}" if center_delta is not None else "unresolved"),
                     ("Raman Doppler RMS", f"{joint['raman_rms']['total_rms_hz'] / 1e3:.2f} kHz"),
                 ])
         return dict(metrics=metrics, figure=fig, tables=[derived_table(details)],
                     lambda_readout=readout)
 
     def _metrics(self, mode, x, alpha, T_trans, ic, center, raw, params, window,
-                 *, joint_failed=False):
-        center_transmission = None if joint_failed else float(T_trans[ic])
-        center_display = "—" if joint_failed else f"{center_transmission:.3f}"
+                 *, integration_issue=None, joint_failed=False):
+        center_transmission = (float(T_trans[ic]) if np.isfinite(T_trans[ic]) and not joint_failed
+                               else None)
+        center_display = "—" if center_transmission is None else f"{center_transmission:.3f}"
         if mode == "at":
             # A real AT doublet needs two *resolved local maxima*. Taking the
             # largest sample on either side of centre always returns a nonzero
@@ -851,7 +880,7 @@ class LambdaScheme(Scheme):
             right = local[x[local] > center]
             resolved = False
             split = np.nan
-            if not joint_failed and left.size and right.size:
+            if not integration_issue and left.size and right.size:
                 il = int(left[np.nanargmax(alpha[left])])
                 ir = int(right[np.nanargmax(alpha[right])])
                 valley = float(np.nanmin(alpha[il:ir + 1]))
@@ -870,15 +899,13 @@ class LambdaScheme(Scheme):
             if not resolved:
                 return [
                     dict(label="AT status", kind="status", tier="hero",
-                         value=("velocity integration not converged" if joint_failed
+                         value=("velocity integration not converged" if integration_issue
                                 else "doublet unresolved"),
-                         help=("Joint Maxwell refinement exceeded its bound."
-                               if joint_failed else "No pair of absorption maxima with "
+                         help=(integration_issue or "No pair of absorption maxima with "
                                "resolvable central contrast exists in the displayed spectrum.")),
                     dict(label="AT splitting", value="—",
                          numeric_value=None, unit="MHz",
-                         help=("Joint Maxwell refinement exceeded its bound."
-                               if joint_failed else "Withheld because the spectrum "
+                         help=(integration_issue or "Withheld because the spectrum "
                                "does not contain a resolved Autler-Townes doublet.")),
                     dict(label="Expected ≈ Ω_c", value=f"{expected:.1f} MHz",
                          numeric_value=float(expected), unit="MHz",
@@ -927,8 +954,7 @@ class LambdaScheme(Scheme):
         if not width_valid:
             metrics.append(dict(
                 label="Window status", value=window["status"].replace("_", " "), kind="status",
-                help=("Joint Maxwell refinement exceeded its bound." if joint_failed else
-                      "The current opacity/coupling settings do not produce a "
+                help=(integration_issue or "The current opacity/coupling settings do not produce a "
                       "measurable transparency-window FWHM in this scan."),
                 tier="hero"))
         return metrics

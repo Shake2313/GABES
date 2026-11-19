@@ -32,6 +32,7 @@ def _reading(key,label,value,unit="",*,status=None,reason=None):
 
 def _if_status(status):
     return {"PREDICTED":"predicted · uncalibrated", "NOT_APPLICABLE_NO_LO":"RF off",
+            "UNAVAILABLE_DOPPLER_UNCONVERGED":"Doppler integral unconverged",
             "UNAVAILABLE_ZERO_OPACITY":"zero effective opacity"}.get(status,"no finite optical response")
 
 

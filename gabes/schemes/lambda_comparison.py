@@ -54,7 +54,8 @@ def _readouts(view, readout, mode):
     metrics = {m["label"]: m for m in view["metrics"]}
     central = metrics["Transmission at center" if mode == "at" else "Transmission at resonance"]
     joint = readout.get("joint_doppler")
-    velocity_unconverged = joint is not None and joint["status"] == "not_converged"
+    velocity_unconverged = ((joint is not None and joint["status"] == "not_converged") or
+                            any(r["status"] == "unresolved" for r in readout.get("doppler_fallback", [])))
     rows = [dict(key="coupling_rabi", label="Effective Ωc/2π", value=readout["coupling_rabi_mhz"], unit="MHz"),
             dict(key="central_transmission", label="Resonance transmission", value=central["numeric_value"], unit="1")]
     if mode == "at":
@@ -70,7 +71,7 @@ def _readouts(view, readout, mode):
     scale = 1000. if width_metric["unit"] == "kHz" else 1.
     x, transmission = np.asarray(readout["x_mhz"]), np.asarray(readout["transmission"])
     center = int(np.argmin(np.abs(x-readout["center_mhz"])))
-    floor = float(np.nanmin(transmission))
+    floor = float(np.nanmin(transmission)) if not velocity_unconverged else np.nan
     contrast = float(transmission[center]-floor)
     half = (transmission[center]+floor)/2
     left = right = np.nan
@@ -158,6 +159,8 @@ def coupling_comparison(scheme, params, *, resolve_raw, current_raw=None, curren
                            readouts=_readouts(view, readout, mode))
         if "joint_doppler" in readout:
             curve["joint_doppler"] = readout["joint_doppler"]
+        if "doppler_fallback" in readout:
+            curve["doppler_fallback"] = readout["doppler_fallback"]
         curves.append(curve)
     panels = [dict(key="transmission", title="Transmission", y_label="Transmission T", unit="1", cut_group="intensity"),
               dict(key="optical_depth", title="Optical depth", y_label="Optical depth OD", unit="1", cut_group="intensity"),

@@ -111,3 +111,88 @@ def test_joint_mode_rejects_angles_outside_its_control_range(angle, model):
         params["angled_doppler_model"] = model
     with pytest.raises(ValueError, match="beam angle"):
         scheme.compute(params)
+
+
+@pytest.mark.parametrize("mode,joint", [("eit", False), ("at", False), ("cpt", True)])
+def test_capped_velocity_row_withholds_metrics_comparisons_and_json(monkeypatch, mode, joint):
+    import json
+    from gabes import affine_doppler
+    from gabes_ui.export import build_export_payload
+
+    def capped(self, scan, temperature, mass, k_vec, *, fallback_rows=None):
+        row = len(scan) // 2
+        response = np.full(scan.shape, -1e-10j)
+        response[row] = complex(np.nan, np.nan)
+        fallback_rows.append(dict(row=row, status="unresolved", classes=351811,
+                                  total_classes=500000, relative_change=.01, refinements=14))
+        return response
+
+    monkeypatch.setattr(affine_doppler.AffineScan, "maxwell_mean", capped)
+    scheme = LambdaScheme()
+    params = dict(scheme.defaults(), **scheme._default_values(mode))
+    params.update(doppler="on", beam_angle_mrad=1. if joint else 0.)
+    raw = scheme.compute(params)
+    view = scheme.headless_observables(raw, params)
+    data = view["lambda_readout"]
+    if joint:
+        evidence = data["joint_doppler"]
+        assert evidence["status"] == "not_converged"
+        assert all(r["status"] == "unresolved" for r in evidence["longitudinal_fallback"])
+        assert evidence["difference_from_scalar"]["complex_chi_relative_max"] is None
+    else:
+        assert data["doppler_fallback"] == raw["doppler_fallback"]
+    metrics = {m["label"]: m for m in view["metrics"]}
+    center = "Transmission at center" if mode == "at" else "Transmission at resonance"
+    assert metrics[center]["numeric_value"] is None
+    if mode == "at":
+        assert metrics["AT splitting"]["numeric_value"] is None
+    else:
+        assert data["window"]["status"] == "velocity_not_converged"
+        assert data["window"]["width_mhz"] is None
+        assert data["window"]["group_index"] is None
+
+    comparison = scheme.model_comparison(params, resolve_raw=scheme.compute,
+                                         current_raw=raw, current_view=view)
+    for curve in comparison["series"]:
+        center_row = len(curve["x"]) // 2
+        assert curve["observables"]["transmission"][center_row] is None
+        values = {r["key"]: r["value"] for r in curve["readouts"]}
+        assert values["central_transmission"] is None
+        assert values["doublet_spacing" if mode == "at" else "window_width"] is None
+        if mode != "at":
+            assert values["contrast"] is None
+        assert ("joint_doppler" if joint else "doppler_fallback") in curve
+    bundle = build_export_payload(scheme=scheme, raw=raw, params=params, view=view,
+                                  plot_payloads=[], comparison_payload=None,
+                                  cache_version=scheme.cache_version, readout_cache_version="test")
+    saved = json.loads(json.dumps(bundle, allow_nan=False))["view"]["lambda_readout"]
+    assert saved["transmission"][len(raw["scan"]) // 2] is None
+    assert ("joint_doppler" if joint else "doppler_fallback") in saved
+
+
+def test_unresolved_scalar_comparison_keeps_converged_joint_readout(monkeypatch):
+    from gabes import affine_doppler
+
+    first_call = True
+
+    def means(self, scan, temperature, mass, k_vec, *, fallback_rows=None):
+        nonlocal first_call
+        response = -1e-10j * (1 + .5 * scan / np.max(np.abs(scan)))
+        if first_call:
+            response[0] = complex(np.nan, np.nan)
+            fallback_rows.append(dict(row=0, status="unresolved", classes=351811,
+                                      total_classes=500000, relative_change=.01, refinements=14))
+            first_call = False
+        return response
+
+    monkeypatch.setattr(affine_doppler.AffineScan, "maxwell_mean", means)
+    scheme = LambdaScheme()
+    params = dict(scheme.defaults(), doppler="on", beam_angle_mrad=1.)
+    raw = scheme.compute(params)
+    readout = scheme.headless_observables(raw, params)["lambda_readout"]
+    joint = readout["joint_doppler"]
+    assert joint["status"] == "converged"
+    assert joint["scalar_reference_fallback"][0]["row"] == 0
+    assert joint["difference_from_scalar"]["complex_chi_relative_max"] is None
+    assert joint["difference_from_scalar"]["transmission_at_resonance"] is not None
+    assert np.isfinite(readout["transmission"]).all()

@@ -729,3 +729,142 @@ def test_rydberg_view_declares_experimental_csv_overlay():
     view = sc.headless_observables(sc.compute(params), params)
     assert view["comparison"]["axis_index"] == 0
     assert view["comparison"]["x_unit"] == "MHz"
+
+
+def test_rejected_finite_if_row_recovers_direct_complex_response(monkeypatch):
+    """A constant-in-velocity atom isolates the exact coherent response reference."""
+    import copy
+    from gabes import affine_doppler
+
+    scheme = RydbergEITScheme()
+    params = dict(scheme.recommended_defaults(scheme.defaults())["AT electrometry"], doppler="off")
+    raw = scheme.compute(params)
+    x, trans, _ = scheme._transmission(raw["chi_bar"], raw, params)
+    selected = np.array([110, 620])
+    atom = copy.copy(scheme._atom(*scheme._finite_if_dephasing(raw)))
+    atom.S_v = np.zeros_like(atom.S_v)
+    monkeypatch.setattr(scheme, "_atom", lambda *args: atom)
+    _, stationary, _ = scheme._superheterodyne_atomic_phasors(raw, params, x, trans)
+    params = dict(params, doppler="on")
+    monkeypatch.setattr(affine_doppler.AffineScan, "_guarded_poles",
+                        lambda self, scan, sigma: (None, np.full(2, sigma), np.array([False, False])))
+    _, accepted, _ = scheme._superheterodyne_atomic_phasors(raw, params, x, trans, selected)
+    monkeypatch.setattr(affine_doppler.AffineScan, "_guarded_poles",
+                        lambda self, scan, sigma: (None, np.array([sigma, np.inf]), np.array([False, True])))
+    _, phasors, _, rows = scheme._superheterodyne_atomic_phasors(raw, params, x, trans, selected)
+    assert rows[0]["row"] == selected[1] and rows[0]["status"] == "converged"
+    assert rows[0]["refinements"] == 2
+    np.testing.assert_array_equal(phasors[:1], accepted[:1])
+    np.testing.assert_allclose(phasors, stationary[selected], rtol=1e-10, atol=0.0)
+    monkeypatch.setattr(scheme, "_static_slope_indices", lambda *args: selected)
+    view = scheme.headless_observables(raw, params)
+    assert view["rydberg_readout"]["finite_if"]["status"] == "PREDICTED"
+    assert view["rydberg_readout"]["finite_if"]["doppler_fallback_rows"] == list(rows)
+    view["rydberg_spectrum"]["finite_if"]["atomic_response"][3][0]["status"] = "modified"
+    repeated = scheme.headless_observables(raw, params)
+    assert repeated["rydberg_readout"]["finite_if"]["doppler_fallback_rows"] == list(rows)
+
+
+def test_finite_if_unresolved_phase_withholds_sensitivity_at_real_cap(monkeypatch):
+    """A unit-magnitude response whose phase changes on every level cannot converge."""
+    import json
+    from gabes import affine_doppler
+    from gabes_ui import export
+
+    scheme = RydbergEITScheme()
+    params = dict(scheme.recommended_defaults(scheme.defaults())["AT electrometry"], doppler="on")
+    raw = scheme.compute(params)
+    indices = np.array([140, 660])
+    monkeypatch.setattr(scheme, "_static_slope_indices", lambda *args: indices)
+    monkeypatch.setattr(affine_doppler.AffineScan, "_guarded_poles",
+                        lambda self, scan, sigma: (None, np.array([sigma, np.inf]), np.array([False, True])))
+    calls = []
+    def rotating_phasor(base, atom, kv, weights, *args):
+        calls.append(kv.size)
+        return np.exp(1j * np.log(kv.size))
+    monkeypatch.setattr(scheme, "_velocity_averaged_if_phasor", rotating_phasor)
+    view = scheme.headless_observables(raw, params)
+    data = view["rydberg_readout"]["finite_if"]
+    assert data["status"] == "UNAVAILABLE_DOPPLER_UNCONVERGED"
+    assert data["total_field_asd_nv_cm_per_sqrt_hz"] is None
+    assert any(m["value"] == "Doppler integral unconverged" for m in view["metrics"])
+    row, = data["doppler_fallback_rows"]
+    assert row["row"] == indices[1] and row["status"] == "unresolved"
+    assert row["classes"] == calls[-1] == 351811
+    assert row["total_classes"] == sum(calls[1:])
+    payload = export.build_export_payload(
+        scheme=scheme, raw=raw, params=params, view=view, plot_payloads=[],
+        comparison_payload=None, cache_version=scheme.cache_version, readout_cache_version="test")
+    saved = json.loads(json.dumps(payload, allow_nan=False))["view"]["rydberg_readout"]
+    assert saved["prediction_status"] == rydberg_scheme.DOPPLER_PARTIAL
+    assert saved["finite_if"]["validity"]["status"] == "doppler-unconverged"
+    assert saved["finite_if"] == data
+    assert saved["numerical_convergence"]["finite_if"] == "unresolved"
+
+
+def test_static_unresolved_row_preserves_companions_and_withholds_derived_readouts(monkeypatch):
+    from gabes import affine_doppler
+
+    scheme = RydbergEITScheme()
+    params = dict(scheme.recommended_defaults(scheme.defaults())["AT electrometry"], doppler="on")
+    grid = np.linspace(-5., 5., 11) * MHZ
+    monkeypatch.setattr(scheme, "_scan", lambda _: grid)
+    reference = RydbergEITScheme()
+    monkeypatch.setattr(reference, "_scan", lambda _: grid)
+    accepted = reference.compute(params)["chi_bar"]
+    original = affine_doppler.AffineScan._pole_rows
+    def reject_center(self, scan, sigma):
+        poles, damping, failed = original(self, scan, sigma)
+        assert not failed.any()
+        failed[5], damping[5] = True, np.inf
+        return poles, damping, failed
+    monkeypatch.setattr(affine_doppler.AffineScan, "_pole_rows", reject_center)
+    def unavailable(self, scan, kv, weights):
+        np.testing.assert_array_equal(scan, grid[5:6])
+        return np.full(scan.size, complex(np.nan, np.nan))
+    monkeypatch.setattr(affine_doppler.AffineScan, "_class_sum", unavailable)
+    raw = scheme.compute(params)
+    rest = np.arange(grid.size) != 5
+    np.testing.assert_array_equal(raw["chi_bar"][rest], accepted[rest])
+    assert np.isnan(raw["chi_bar"][5])
+    row, = raw["doppler_fallback_rows"]
+    assert (row["row"], row["status"], row["classes"]) == (5, "unresolved", 351811)
+    monkeypatch.setattr(scheme, "_superheterodyne_atomic_phasors",
+                        lambda *a, **kw: pytest.fail("IF optimum from incomplete static scan"))
+    view = scheme.headless_observables(raw, params)["rydberg_readout"]
+    assert view["max_slope_per_mhz"] is None and view["resonance_transmission"] is None
+    assert view["if_discriminator_per_mhz"] is None and view["at_split_mhz"] is None
+    assert view["finite_if"]["status"] == "UNAVAILABLE_DOPPLER_UNCONVERGED"
+    assert view["doppler_fallback_rows"] == list(raw["doppler_fallback_rows"])
+
+
+def test_doppler_gap_withholds_sweep_optima_preserving_other_samples(monkeypatch):
+    scheme = RydbergEITScheme()
+    params = scheme.recommended_defaults(scheme.defaults())["AT electrometry"]
+    eit = scheme.compute(dict(params, view="EIT", lo_rabi_mhz=0.0))
+    at = scheme.compute(params)
+    def scans(condition):
+        raw = (eit if condition.get("view") == "EIT" else at).copy()
+        if condition["probe_power_uw"] == 0.5 or condition["temp_c"] == 42.0:
+            for key in ("chi_bar", "chi_bar_uncomp"):
+                raw[key] = raw[key].copy()
+                raw[key][20] = complex(np.nan, np.nan)
+            raw["doppler_fallback_rows"] = [dict(row=20, status="unresolved", classes=351811)]
+        return raw
+    monkeypatch.setattr(scheme, "compute", scans)
+    power, heat = scheme.extra_views()
+    power_data = power.compute(params)
+    assert power_data["prediction_status"] == rydberg_scheme.DOPPLER_PARTIAL
+    for scenario in power_data["opacity_scenarios"]:
+        assert scenario["unresolved_probe_power_uw"] == [0.5]
+        for key in ("comp", "uncomp"):
+            assert np.isnan(scenario[key]["amp"][0]) and np.isfinite(scenario[key]["amp"][1:]).all()
+            assert set(scenario["optima"][key].values()) == {None}
+    heat_data = heat.compute(params)
+    for scenario in heat_data["opacity_scenarios"]:
+        assert scenario["best_sensitivity_temperature_c"] is None
+        assert scenario["best_total_sensitivity_nv_cm_sqrt_hz"] is None
+        gap = heat_data["temperatures_c"].index(42.0)
+        assert scenario["finite_if_status"][gap] == rydberg_scheme.DOPPLER_UNAVAILABLE
+        assert np.isnan(scenario["total_sensitivity_nv_cm_sqrt_hz"][gap])
+        assert np.isfinite(scenario["total_sensitivity_nv_cm_sqrt_hz"][0])

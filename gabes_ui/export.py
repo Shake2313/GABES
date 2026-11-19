@@ -229,6 +229,7 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
     lambda_readout = view.get("lambda_readout")
     include_lambda_reference = lambda_readout is not None and (
         "optical_collisions" in lambda_readout or "joint_doppler" in lambda_readout
+        or "doppler_fallback" in lambda_readout
     )
     return {
         "generated_at_utc": datetime.utcnow().isoformat() + "Z",
