@@ -12,7 +12,8 @@ from dataclasses import replace
 
 import numpy as np
 
-from .. import beam, constants, core, doppler, kernels, observables, pole_doppler, species, zeeman
+from .. import (affine_doppler, beam, constants, core, kernels, observables,
+                pole_doppler, species, zeeman)
 from ..lineshape import level_crossing
 from ..magneto_noise import (DEFAULT_BEAM_DIAMETER_MM, DEFAULT_DETECTION_EFFICIENCY,
                              DEFAULT_NOISE_BANDWIDTH_HZ, shot_noise_reference,
@@ -47,11 +48,10 @@ SAMPLED_GRID_RTOL = 0.05
 DOPPLER_OFF = "off: v = 0 class only"
 DOPPLER_EXACT = "exact untruncated Maxwell average (pole–residue)"
 # A pole-form B row is kept only if it reproduces the direct v = 0 solve to this
-# relative accuracy; other rows are averaged on FALLBACK velocity grids.
+# relative accuracy. Rejected rows use the shared convergence-checked quadrature.
 POLE_GUARD_RTOL = 1e-6
 POLE_LIMIT_SIGMAS = 1e4          # poles farther than this from the bulk are rounding modes
 FALLBACK_SIGMAS = 6.0
-FALLBACK_QUADRATURE_ERROR = 1e-6
 
 
 def _transition_label(Fg, Fe):
@@ -67,16 +67,6 @@ def _parse_transition(label):
     """(Fg, Fe) from a transition label, or None if it can't be parsed."""
     nums = re.findall(r"\d+", str(label))
     return (int(nums[0]), int(nums[1])) if len(nums) >= 2 else None
-
-
-def _maxwell_fallback_grid(T, mass, k_vec, gamma_hwhm):
-    """Uniform Maxwell velocity grid for B rows the pole form cannot certify.
-
-    The optical response of one velocity class is analytic within the homogeneous
-    half-width ``gamma_hwhm`` [rad/s] of the real Δ_eff axis.
-    """
-    return doppler.maxwell_strip_grid(T, mass, k_vec, gamma_hwhm,
-                                      FALLBACK_QUADRATURE_ERROR, FALLBACK_SIGMAS)
 
 
 def _transition_strength(Fg, Fe):
@@ -704,22 +694,25 @@ class SinglePairMagnetoReference(Scheme):
                 return self._steady_state_buffer(light, deff, atom.S_v, atom.n_levels), None
 
             if doppler_on:
-                def grid_average(rows):
-                    v, wt = _maxwell_fallback_grid(
-                        T, RB87.mass, K_D1_RB87, 0.5 * gamma_homogeneous)
-                    out_p = np.empty(rows.size, dtype=complex)
-                    out_m = np.empty(rows.size, dtype=complex)
-                    for part in np.array_split(np.arange(rows.size), -(-rows.size // 8)):
-                        rho_v, _ = solve(rows[part], dL - K_D1_RB87 * v)
-                        cp_v, cm_v, _ = self._coherences(atom, rho_v, Om, drive)
-                        out_p[part] = cp_v @ wt
-                        out_m[part] = cm_v @ wt
-                    return out_p, out_m, int(v.size)
+                def grid_average(rows, velocity, weights):
+                    # The NumPy solver stacks a dense matrix per velocity class.
+                    # Bound even a single field row on the finest rejection grid.
+                    dimension = atom.n_levels ** 2 * (2 if Cd_xy is not None else 1)
+                    batch = 2048 if kernels.available() else max(1, 2_000_000 // dimension ** 2)
+                    means = np.zeros((rows.size, 2), dtype=complex)
+                    for i, row in enumerate(rows):
+                        for start in range(0, velocity.size, batch):
+                            part = slice(start, start + batch)
+                            rho, _ = solve(slice(row, row + 1), dL - K_D1_RB87 * velocity[part])
+                            cp, cm, _ = self._coherences(atom, rho[0], Om, drive)
+                            means[i, 0] += cp @ weights[part]
+                            means[i, 1] += cm @ weights[part]
+                    return means
 
                 chi_p, chi_m, occupation_mean = self._exact_doppler_average(
                     atom, C_xy, C_z, Cd_xy, b_z, gamma_out, gamma_in, Om,
                     center=dL, sigma=K_D1_RB87 * sigma_v,
-                    grid_average=grid_average, ledger=doppler)
+                    temperature=T, grid_average=grid_average, ledger=doppler)
                 if Cd_xy is not None:
                     light_region_occupation = occupation_mean
                 chi_probe = (np.conj(drive.get(+1, 0.0)) * chi_p
@@ -761,6 +754,8 @@ class SinglePairMagnetoReference(Scheme):
             density_convention=DENSITY_CONVENTION,
             absolute_scale_status=ABSOLUTE_SCALE_STATUS,
         )
+        if "fallback_details" in doppler:
+            raw["doppler_fallback_details"] = doppler["fallback_details"]
         if cell_type == CELL_PARAFFIN:
             raw["gamma_light_dephasing"] = gamma_light_dephasing
         return raw
@@ -866,7 +861,7 @@ class SinglePairMagnetoReference(Scheme):
 
     @staticmethod
     def _exact_doppler_average(atom, C_xy, C_z, Cd_xy, b_z, gamma_out, gamma_in, Om,
-                               center, sigma, grid_average, ledger):
+                               center, sigma, temperature, grid_average, ledger):
         """Untruncated Maxwell average of the light-region σ± coherences per B row.
 
         Only the light region carries the optical Doppler shift, so with the trace
@@ -880,8 +875,9 @@ class SinglePairMagnetoReference(Scheme):
 
         A row is kept if its pole form reproduces a direct solve of the v = 0 class
         to POLE_GUARD_RTOL and has no undamped pole inside the Maxwell bulk; other
-        rows are replaced by ``grid_average(rows)``.  Returns (chi_p, chi_m, mean
-        light occupation) and records the guard in ``ledger``.
+        rows use progressively finer Maxwell grids until both circular
+        coherences converge or are withheld. Returns (chi_p, chi_m, mean light
+        occupation) and records the guard and any rejected rows in ``ledger``.
         """
         n = atom.n_levels
         M = n * n
@@ -943,13 +939,14 @@ class SinglePairMagnetoReference(Scheme):
         ledger["guard_max_relative"] = float(np.max(relative))
         ledger["min_pole_distance_mhz"] = float(np.min(damping) / (2 * np.pi * 1e6))
 
-        chi_p, chi_m = mean[:, 0].copy(), mean[:, 1].copy()
-        rows = np.flatnonzero(failed)
-        if rows.size:
-            chi_p[rows], chi_m[rows], classes = grid_average(rows)
-            ledger["fallback_rows"] = int(rows.size)
-            ledger["fallback_classes"] = classes
-        return chi_p, chi_m, float(np.mean(occupation))
+        if np.any(failed):
+            details = []
+            affine_doppler.refine_rejected(mean, failed, grid_average, temperature,
+                                          RB87.mass, K_D1_RB87, details)
+            ledger["fallback_rows"] = len(details)
+            ledger["fallback_classes"] = max(row["classes"] for row in details)
+            ledger["fallback_details"] = details
+        return mean[:, 0].copy(), mean[:, 1].copy(), float(np.mean(occupation))
 
     @staticmethod
     def _coherences(atom, rho, Om, drive):
@@ -1006,6 +1003,29 @@ class SinglePairMagnetoReference(Scheme):
         alpha = k * np.imag(xprobe)
         T_trans = np.exp(-alpha * L)
         rotation = 0.25 * k * L * np.real(xp - xm)
+        unresolved = [entry["row"] for entry in raw.get("doppler_fallback_details", [])
+                      if entry["status"] == "unresolved"]
+        if unresolved:
+            # Noise, width, contrast and peak SNR assume a complete field scan.
+            # Keep the sampled trace with gaps, without inventing a replacement.
+            wants_rotation = params.get("signal_type") == SIGNAL_NMOR
+            fig = None
+            if include_figures:
+                import matplotlib.pyplot as plt
+
+                fig, ax = plt.subplots(figsize=(8.5, 4.6))
+                ax.plot(x, rotation * 1e3 if wants_rotation else T_trans)
+                ax.set_xlabel("Commanded magnetic field B  [uT]")
+                ax.set_ylabel("Circular-birefringence diagnostic  [mrad]"
+                              if wants_rotation else "Transmission")
+                fig.tight_layout()
+            status = "unresolved Doppler rows at the refinement cap"
+            return dict(metrics=[dict(label="Field scan", value=status, kind="status", tier="hero")],
+                        figure=fig, hero_count=1,
+                        magneto_readout=dict(status=status, unresolved_rows=unresolved),
+                        tables=[derived_table([
+                            ("Unresolved Doppler B rows", ", ".join(map(str, unresolved))),
+                            ("Scan-dependent readouts", "unavailable")])])
         diagnostic = _zero_field_diagnostics(physical_x, alpha, rotation)
         physical_zero_available = _scan_contains_zero(physical_x)
         bg, amp = diagnostic["background"], diagnostic["amplitude"]

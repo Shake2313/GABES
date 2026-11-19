@@ -529,11 +529,11 @@
     {
       "id": "magneto-doppler-fallback-policy",
       "area": "gabes/schemes/magneto.py",
-      "title": "⟦AI⟧ Decide whether the magneto exact-Doppler fallback adopts the shared rejected-row refinement",
+      "title": "⟦AI⟧ Apply the shared rejected-row refinement to the single-pair Magneto reference",
       "origin": "ai_execution_of_human_request",
       "priority": "P3",
       "effort": "medium",
-      "status": "needs_decision",
+      "status": "done",
       "problem": "⟦AI⟧ SinglePairMagnetoReference._exact_doppler_average is the unregistered 87Rb single-pair reference. The registered UnifiedMagnetoScheme uses Gauss–Legendre quadrature in magneto_multilevel and does not call this fallback. The reference keeps the pole guard relative to the largest direct scan value (57bf5a2). Its previous fixed γ_hom/2 grid had no convergence test. The Λ and Rydberg policy in 21009ee requires two consecutive relative changes ≤1e-8 and withholds unresolved rows at 351,811 classes.",
       "decision_required": "Move the magneto rejected-row fallback onto the shared affine_doppler refinement (convergence-checked, withheld at the cap; changes rejected rows only), or keep the fixed γ_hom/2 grid and record why?",
       "acceptance_criteria": [
@@ -542,7 +542,19 @@
       ],
       "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19.",
       "measurement_2026_11_20": "⟦AI⟧ Defaults, five reference regimes and one-at-a-time active magnetic-scan slider ends with Doppler on: 158 labeled cases, 20,378 attempted B rows. 157 cases returned 20,257 rows. One natural rejection at Buffer LCA, zero transverse field and B=0 (row 60, relative guard residual 0.021271534, threshold 1e-6). The fixed 135-class grid differs in the nonzero circular coherence by 7.72e-8 relative from the converged 1,127-class grid. The EIA peak preset at zero transverse field raised LinAlgError before guard evaluation in both versions (121 attempted rows). This separate pole-construction issue is open for the reference model. Local evidence: runs/magneto_policy_20261120/{before,after}_extended_complete/.",
-      "decision_2026_11_20": "User authorized the agent’s recommended option in advance on 2026-11-20. ⟦AI⟧ Adopt the shared convergence-checked fallback for rejected rows in the single-pair reference and retain the scan-relative guard. Keep the registered Magneto app path unchanged."
+      "decision_2026_11_20": "User authorized the agent’s recommended option in advance on 2026-11-20. ⟦AI⟧ Adopt the shared convergence-checked fallback for rejected rows in the single-pair reference and retain the scan-relative guard. Keep the registered Magneto app path unchanged.",
+      "evidence_2026_11_20": "⟦AI⟧ The two complex circular coherences converge together, using each component's own scale. A capped row is withheld and leaves a gap; the reference withholds scan-dependent metrics. In 157 completed cases, all 20,256 accepted B rows matched bit for bit for χ+, χ− and χprobe. The single rejected Buffer LCA row converged at 1,127 classes (2,228 evaluated). At this endpoint, peak shot-noise SNR changed from 0.003105× to 0.0002614× and central width from unavailable to 2.260 µT. At 9,009 classes the cross-check gives 0.0002634× and 2.240 µT; the very weak feature makes the last width digits grid-sensitive. 34 focused checks plus four physical forced-rejection comparisons passed, including both-channel convergence and withholding at 351,811 classes. Local evidence: runs/magneto_policy_20261120/{comparison,finer,singular}/.",
+      "joint_validation_2026_11_20": "⟦AI⟧ Joint M1/M2/M3 product suite in an isolated checkout: python -m pytest -q --durations=20 reported 2,771 passed, one optional local AutoOD reference skipped, 61 warnings, 650.99 s. All tracked product and test inputs were hashed before and after the run. The first invocation in the shared checkout collected an ignored 11-19 diagnostic and exited during collection. Isolated full receipt: runs/residuals_2026_11_20/product_suite_isolated/run.json."
+    },
+    {
+      "id": "single-pair-magneto-zero-transverse-singular-poles",
+      "area": "gabes/schemes/magneto.py",
+      "title": "⟦AI⟧ Investigate the singular shifted-pole construction in the single-pair EIA reference",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P3",
+      "status": "parked",
+      "problem": "⟦AI⟧ At the EIA peak preset, Doppler on and zero residual transverse field, the reference raises LinAlgError in the shifted pole construction before the existing guard. All 121 rows reproduce independently at the prior and current behavior. The registered multilevel scheme uses a separate solver. Outside the approved rejected-row change.",
+      "evidence": "⟦AI⟧ See magneto-doppler-fallback-policy and runs/magneto_policy_20261120/singular/."
     },
     {
       "id": "thermal-speed-shared-helper",

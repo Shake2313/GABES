@@ -38,12 +38,12 @@ def _strip_classes(damping, T, mass, k_vec):
     return doppler.maxwell_strip_grid(T, mass, k_vec, strip, QUADRATURE_ERROR, BULK_SIGMAS)
 
 
-def _quadrature_values(rows, velocity, weights, evaluate):
+def _quadrature_values(rows, velocity, weights, evaluate, shape):
     """A singular class solve in a batch invalidates only its own scan row."""
     try:
         return np.asarray(evaluate(rows, velocity, weights), dtype=complex)
     except np.linalg.LinAlgError:
-        values = np.full(rows.size, complex(np.nan, np.nan))
+        values = np.full(shape, complex(np.nan, np.nan))
         if rows.size > 1:
             for i in range(rows.size):
                 try:
@@ -53,18 +53,19 @@ def _quadrature_values(rows, velocity, weights, evaluate):
         return values
 
 
-def _refine_rejected(out, failed, evaluate, temperature, mass, k_vec, fallback_rows):
+def refine_rejected(out, failed, evaluate, temperature, mass, k_vec, fallback_rows):
     """Refine the complex observable on rejected rows, dropping each as it converges.
 
-    evaluate(rows, velocity, weights) returns one weighted mean per local row.
-    Two consecutive relative changes must pass. The floor grid has 351,811
+    evaluate(rows, velocity, weights) returns weighted complex means with the
+    same trailing dimensions as out. Every component of a row must pass the
+    relative test on two consecutive refinements. The floor grid has 351,811
     classes (6 sigma, 1e-8 step criterion). Values still unresolved there
     stay unavailable, including persistent nonfinite responses.
     """
     rows = np.flatnonzero(failed)
     if not rows.size:
         return
-    previous = np.full(rows.size, complex(np.nan, np.nan))
+    previous = np.full((rows.size, *out.shape[1:]), complex(np.nan, np.nan))
     agreements = np.zeros(rows.size, dtype=int)
     sigma = _shift_sigma(temperature, mass, k_vec)
     strip_fraction = 1.0
@@ -74,15 +75,16 @@ def _refine_rejected(out, failed, evaluate, temperature, mass, k_vec, fallback_r
         velocity, weights = _strip_classes([strip_fraction * sigma], temperature, mass, k_vec)
         classes = velocity.size
         total_classes += classes
-        values = _quadrature_values(rows, velocity, weights, evaluate)
+        values = _quadrature_values(rows, velocity, weights, evaluate, previous.shape)
         scale = np.maximum(np.abs(previous), np.abs(values))
         # Exact zero followed by zero agrees. Near-zero values keep the same
         # relative test as every other row; there is no arbitrary absolute floor.
         finite = np.isfinite(previous) & np.isfinite(values) & np.isfinite(scale)
-        change = np.full(rows.size, np.nan)
+        change = np.full(values.shape, np.nan)
         with np.errstate(invalid="ignore", over="ignore"):
             np.divide(np.abs(values - previous), scale, out=change, where=finite & (scale > 0.))
         change[finite & (scale == 0.)] = 0.
+        change = change.reshape(rows.size, -1).max(axis=1)
         passed = change <= QUADRATURE_ERROR
         agreements = np.where(passed, agreements + 1, 0)
         converged = agreements >= 2
@@ -170,7 +172,7 @@ class AffineScan:
                 values += self._class_sum(scan[rows], kv[sl], weights[sl])
             return values
 
-        _refine_rejected(out, failed, integrate, T, mass, k_vec, fallback_rows)
+        refine_rejected(out, failed, integrate, T, mass, k_vec, fallback_rows)
         return out
 
     def quadrature_classes(self, scan, T, mass, k_vec):
@@ -206,7 +208,7 @@ class AffineScan:
             # The static guard cannot catch a nonfinite external observable.
             failed = failed.copy()
             failed[accepted] = ~np.isfinite(out[accepted])
-        _refine_rejected(out, failed,
+        refine_rejected(out, failed,
                          lambda rows, v, w: [evaluate(row, v, w) for row in rows],
                          T, mass, k_vec, fallback_rows)
         return out

@@ -4,7 +4,7 @@ Unregistered single-pair reference: exact Maxwell light-region average.
   Exactness : the closed-form average matches a converged velocity grid solved
               by the unchanged steady-state kernels (forced guard fallback).
   Off path  : doppler="off" never builds a pole system.
-  Fallback  : the grid step resolves the homogeneous optical Lorentzian.
+  Fallback  : both circular coherences must converge or the B row is withheld.
   Provenance: raw keys and the Derived table name the Doppler method.
 
     pytest tests/test_magneto_doppler.py
@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 
-from gabes import constants, doppler, pole_doppler  # noqa: E402
+from gabes import pole_doppler  # noqa: E402
 from gabes.schemes import magneto  # noqa: E402
 from gabes.schemes.magneto import SinglePairMagnetoReference  # noqa: E402
 
@@ -59,7 +59,11 @@ def test_exact_average_matches_a_converged_velocity_grid(name):
     assert exact["doppler_guard_max_relative"] <= magneto.POLE_GUARD_RTOL
     assert exact["doppler_min_pole_distance_mhz"] > 0.0
     assert grid["doppler_fallback_rows"] == params["scan_points"]
-    assert grid["doppler_fallback_classes"] > 50
+    details = grid["doppler_fallback_details"]
+    assert {record["row"] for record in details} == set(range(params["scan_points"]))
+    assert all(record["status"] == "converged" for record in details)
+    assert all(record["relative_change"] <= 1e-8 for record in details)
+    assert grid["doppler_fallback_classes"] == max(record["classes"] for record in details)
     for key in FIELDS:
         assert _relative(exact[key], grid[key]) <= 1e-5, key
 
@@ -102,25 +106,53 @@ def test_doppler_off_never_builds_a_pole_system():
     assert raw["doppler_fallback_rows"] == 0
 
 
-def test_fallback_grid_resolves_the_homogeneous_lorentzian():
-    T = 298.15
-    gamma_hwhm = 0.5 * magneto.GAMMA_D1
-    v, wt = magneto._maxwell_fallback_grid(T, magneto.RB87.mass, magneto.K_D1_RB87,
-                                           gamma_hwhm)
-    step = magneto.K_D1_RB87 * (v[1] - v[0])
-    assert np.exp(-2 * np.pi * gamma_hwhm / step) <= (
-        magneto.FALLBACK_QUADRATURE_ERROR * (1 + 1e-9))
-    sigma_v = np.sqrt(constants.KB * T / magneto.RB87.mass)
-    assert v[-1] >= magneto.FALLBACK_SIGMAS * sigma_v
-    assert np.isclose(wt.sum(), 1.0, rtol=0.0, atol=1e-12)
+@pytest.mark.parametrize("singular", [False, True])
+def test_rejected_row_requires_both_circular_coherences(monkeypatch, singular):
+    scheme = SinglePairMagnetoReference()
+    params = _params("Buffer Hanle", scan_points=5)
+    baseline = scheme.compute(params)
+    original_mean = pole_doppler.PoleResidues.gaussian_mean
+    original_average = scheme._exact_doppler_average
 
-    # The grid average of the unit-area Lorentzian reproduces the Voigt profile.
-    sigma_d = magneto.K_D1_RB87 * sigma_v
-    for detuning in (0.0, 0.7 * sigma_d, 3.0 * sigma_d):
-        arg = detuning - magneto.K_D1_RB87 * v
-        grid = np.sum(wt * (gamma_hwhm / np.pi) / (arg ** 2 + gamma_hwhm ** 2))
-        voigt = doppler.voigt_profile(detuning, 2 * gamma_hwhm, sigma_d)
-        assert abs(grid / voigt - 1.0) <= 1e-5
+    def reject_two(self, *args):
+        means = original_mean(self, *args)
+        means[[0, 2], 0] = np.nan
+        return means
+
+    def controlled_average(*args, **kwargs):
+        def grid(rows, velocity, weights):
+            if singular and 2 in rows:
+                raise np.linalg.LinAlgError("forced singular steady state")
+            # A tiny second component must pass on its own scale. Row 0
+            # agrees on the first two grids, then changes only in phase.
+            changed = velocity.size >= 143
+            other = [1j if slot == 0 and changed else -1j for slot in rows]
+            for i in np.flatnonzero(rows == 2):
+                other[i] = np.nan
+            return np.column_stack([np.full(rows.size, 1e-10), 1e-30 * np.array(other)])
+        kwargs["grid_average"] = grid
+        return original_average(*args, **kwargs)
+
+    monkeypatch.setattr(pole_doppler.PoleResidues, "gaussian_mean", reject_two)
+    monkeypatch.setattr(scheme, "_exact_doppler_average", controlled_average)
+    raw = scheme.compute(params)
+    records = {row["row"]: row for row in raw["doppler_fallback_details"]}
+    assert records[0]["status"] == "converged" and records[0]["refinements"] == 4
+    assert records[2]["status"] == "unresolved"
+    assert records[2]["classes"] == raw["doppler_fallback_classes"] == 351_811
+    assert records[2]["relative_change"] is None
+    assert raw["chi_p"][0] == 1e-10 and raw["chi_m"][0] == 1e-30j
+    accepted = [1, 3, 4]
+    for key in FIELDS:
+        assert np.isnan(raw[key][2].real) and np.isnan(raw[key][2].imag)
+        assert raw[key][accepted].tobytes() == baseline[key][accepted].tobytes()
+    view = scheme.headless_observables(raw, params)
+    assert view["magneto_readout"]["unresolved_rows"] == [2]
+    assert "cap" in view["metrics"][0]["value"]
+    assert all("SNR" not in metric["label"] for metric in view["metrics"])
+    derived = next(table["markdown"] for table in view["tables"]
+                   if table["title"] == "Derived quantities")
+    assert "Unresolved Doppler B rows" in derived
 
 
 def test_exact_average_is_reported_and_replaces_the_class_knob():
