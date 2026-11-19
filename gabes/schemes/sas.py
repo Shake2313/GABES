@@ -746,7 +746,7 @@ class SASScheme(Scheme):
             man = species.build_manifold(
                 iso, line, transit_rate=0.0 if paraffin_memory else gt)
             offset = 2 * np.pi * (man.nu0 - nu_ref)
-            sigma_v = np.sqrt(constants.KB * T_doppler / iso.mass)
+            sigma_v = constants.thermal_speed(T_doppler, iso.mass)
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
             N = _species_path_density(iso, T_density, T_doppler, weight)
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
@@ -1129,7 +1129,7 @@ class SASScheme(Scheme):
                 Hp[0, e] = Hp[e, 0] = Op / 2
             L0_pump = core.build_liouvillian(Hp, atom)
 
-        sigma_v = np.sqrt(constants.KB * T_doppler / constants.MASS_85RB)
+        sigma_v = constants.thermal_speed(T_doppler, constants.MASS_85RB)
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
         v, wt = doppler.velocity_grid(T_doppler, dv=3.0, cutoff_sigma=3.5)
         kv = K_VEC * v

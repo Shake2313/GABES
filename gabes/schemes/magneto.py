@@ -664,7 +664,7 @@ class SinglePairMagnetoReference(Scheme):
         chi_p = np.zeros(b_ut.size, dtype=complex)
         chi_m = np.zeros(b_ut.size, dtype=complex)
         doppler_on = params["doppler"] == "on"
-        sigma_v = math.sqrt(constants.KB * T / RB87.mass)
+        sigma_v = constants.thermal_speed(T, RB87.mass, sqrt=math.sqrt)
         doppler = dict(method=DOPPLER_EXACT if doppler_on else DOPPLER_OFF,
                        guard_max_relative=None, fallback_rows=0, fallback_classes=0,
                        min_pole_distance_mhz=None)

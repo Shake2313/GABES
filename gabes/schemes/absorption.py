@@ -189,7 +189,7 @@ class ODScheme(Scheme):
     # ---- hyperfine (validated full-D1) ----
     def _compute_hyperfine(self, params):
         T = params["temp_c"] + 273.15
-        sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
+        sigma_v = constants.thermal_speed(T, constants.MASS_85RB)
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
         N = hyperfine.number_density(T)
         effects = _ne_optics(params, T)
@@ -275,7 +275,7 @@ class ODScheme(Scheme):
     # ---- single bare 2-level line (validation backbone) ----
     def _compute_single(self, params):
         T = params["temp_c"] + 273.15
-        sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
+        sigma_v = constants.thermal_speed(T, constants.MASS_85RB)
         dopp_fwhm = np.sqrt(8 * np.log(2)) * K_VEC * sigma_v
         effects = _ne_optics(params, T)
         reference = _ne_reference_selected(params)

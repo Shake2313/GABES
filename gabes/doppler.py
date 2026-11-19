@@ -92,7 +92,7 @@ def maxwell_legendre_grid(T, mass=constants.MASS_85RB, order=24,
     if not np.isfinite(cutoff_sigma) or cutoff_sigma <= 0.0:
         raise ValueError("cutoff_sigma must be finite and positive")
 
-    sigma = np.sqrt(constants.KB * T / mass)
+    sigma = constants.thermal_speed(T, mass)
     nodes, legendre_weights = np.polynomial.legendre.leggauss(order)
     limit = cutoff_sigma * sigma
     velocity = limit * nodes
@@ -157,7 +157,7 @@ def noncollinear_raman_rms_budget(
         raise ValueError("Raman-Doppler inputs must be finite")
     if T <= 0.0 or mass <= 0.0:
         raise ValueError("T and mass must be positive")
-    sigma_v = np.sqrt(constants.KB * T / mass)
+    sigma_v = constants.thermal_speed(T, mass)
     axial = abs(k_pump - k_probe * np.cos(theta)) * sigma_v
     transverse = abs(k_probe * np.sin(theta)) * sigma_v
     total = float(np.hypot(axial, transverse))
@@ -175,7 +175,7 @@ def noncollinear_raman_rms_budget(
 def velocity_grid(T, mass=constants.MASS_85RB, dv=1.0, cutoff_sigma=3.0,
                   *, normalize=True):
     """1-D Maxwell grid; normalize=False leaves the omitted tail mass out."""
-    sigma = np.sqrt(constants.KB * T / mass)
+    sigma = constants.thermal_speed(T, mass)
     v_limit = np.ceil(cutoff_sigma * sigma / dv) * dv
     v = np.arange(-v_limit, v_limit + 0.5 * dv, dv)
     pdf = np.exp(-v**2 / (2 * sigma**2)) / (np.sqrt(2 * np.pi) * sigma)
@@ -191,7 +191,7 @@ def maxwell_strip_grid(T, mass, k_vec, strip, error=1e-6, cutoff_sigma=6.0):
     `error`; a step that ignores the strip aliases the resonance instead of
     averaging it. The grid spans ±cutoff_sigma.
     """
-    sigma_v = math.sqrt(constants.KB * T / mass)
+    sigma_v = constants.thermal_speed(T, mass, sqrt=math.sqrt)
     step = 2 * math.pi * strip / math.log(1.0 / error) / k_vec
     half = math.ceil(cutoff_sigma * sigma_v / step) * step
     v = np.arange(-half, half + 0.5 * step, step)

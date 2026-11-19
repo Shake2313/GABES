@@ -35,7 +35,7 @@ def rb85_d1_alpha_faddeeva(scan, T, *, line_strength=1.0, doppler_on=True,
     scan = np.asarray(scan, dtype=float)
     density = hyperfine.number_density(T)
     gamma = hyperfine.self_broadened_gamma(density) + buffer_gamma
-    sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
+    sigma_v = constants.thermal_speed(T, constants.MASS_85RB)
     sigma = K_VEC * sigma_v if doppler_on else 0.0
     area_scale = (math.pi * K_VEC * hyperfine.DIPOLE_SQ * density
                   / (constants.HBAR * constants.EPS_0) / hyperfine.N_GROUND_SUBLEVELS)
@@ -103,7 +103,7 @@ def species_complex_voigt(scan, manifold, density_m3, temperature_k,
     """
     scan = np.asarray(scan, dtype=float)
     if doppler_wavevector_per_m is None:
-        sigma = manifold.k_vec * math.sqrt(constants.KB * temperature_k / manifold.iso.mass)
+        sigma = manifold.k_vec * constants.thermal_speed(temperature_k, manifold.iso.mass, sqrt=math.sqrt)
     else:
         wavevector = np.asarray(doppler_wavevector_per_m, dtype=float)
         if not np.isfinite(wavevector).all() or np.any(wavevector <= 0):
@@ -112,7 +112,7 @@ def species_complex_voigt(scan, manifold, density_m3, temperature_k,
             wavevector = np.broadcast_to(wavevector, scan.shape)
         except ValueError as error:
             raise ValueError("Doppler wavevector must broadcast to the scan shape") from error
-        sigma = wavevector * math.sqrt(constants.KB * temperature_k / manifold.iso.mass)
+        sigma = wavevector * constants.thermal_speed(temperature_k, manifold.iso.mass, sqrt=math.sqrt)
     scale = sigma * math.sqrt(2.0)
     normalization = sigma * math.sqrt(2.0 * math.pi)
     strengths = species.line_integrated_alpha(manifold.iso, manifold.line, density_m3)

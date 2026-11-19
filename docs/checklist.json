@@ -546,18 +546,19 @@
     },
     {
       "id": "thermal-speed-shared-helper",
-      "area": "gabes/doppler.py",
+      "area": "gabes/constants.py and 14 engine consumers",
       "title": "⟦AI⟧ One helper for the Maxwell speed sqrt(k_B T / m)",
       "origin": "ai_execution_of_human_request",
       "priority": "P3",
       "effort": "small",
-      "status": "ready",
-      "problem": "⟦AI⟧ The one-dimensional Maxwell speed sqrt(k_B T/m) is written inline about 20 times in 12 engine files: doppler, linear_hyperfine, schemes/sas, schemes/sas_probe_reference, schemes/fwm (seeded, seeded_response, biphoton), schemes/absorption, affine_doppler, magneto_multilevel, dressed_cell_absorption and quantum/inflow. The copies agree; no shared helper exists.",
+      "status": "done",
+      "problem": "⟦AI⟧ The 8b346ba inventory contained 23 one-dimensional Maxwell velocity standard deviation expressions in 14 files (16 NumPy roots, 7 math.sqrt roots). The shared helper preserves the operation order and each caller's scalar, array and domain behavior. Most-probable, mean and relative speeds retain their own definitions.",
       "acceptance_criteria": [
         "⟦AI⟧ Add one helper in gabes/doppler, or a lower module if import cycles require it, and route the engine copies through it.",
         "⟦AI⟧ Recursive snapshots of every caller at the defaults and recompute slider ends are bit-identical; sealed code and fixtures stay untouched."
       ],
-      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19."
+      "found_2026_11_19": "⟦AI⟧ Residual consolidation sweep; see _consolidation_program_status_2026_11_16.residual_sweep_2026_11_19.",
+      "evidence_2026_11_20": "⟦AI⟧ At defaults and recompute endpoints, 409 before/after scheme and panel comparisons matched: 402 result pairs with 1,674,818 deterministic leaves, plus seven identical temperature rejections. Captured Python types, shape, dtype, bytes, tables and plotted values. Elapsed time was excluded. Independent direct calls matched all 3,223 contract/inflow/kinetic leaves and 1,225 deterministic integration leaves; 57 exported curves and a real finite-power projected probe were also verified. 267 focused tests passed including the FWM regression. Baseline SHA-256 8f4104c92c098cf6c4ff675edd221d6f3b90d6d093e2ac764b74a2ef62f17845. Local evidence: runs/residuals_2026_11_20/m1/comparison/ and runs/consolidation_residuals_2026_11_20/{m1_contract,m1_direct}/. At the next archive pin containing this refactor, check quantum/inflow, fwm_quantum/kinetic, affine_doppler, linear_hyperfine and magneto_multilevel."
     },
     {
       "id": "gabes-lab-pipeline-shared-formulas",

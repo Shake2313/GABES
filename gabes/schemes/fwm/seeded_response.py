@@ -637,7 +637,7 @@ def _finite_seed_angular_rows(forms, delta, one_photon, T, pump_k, probe_k, thet
     """Conditional analytic longitudinal Maxwell mean for each transverse node."""
     vx, weights = doppler.maxwell_legendre_grid(T, order=transverse_order,
                                                cutoff_sigma=transverse_cutoff)
-    sigma_v = np.sqrt(constants.KB * T / constants.MASS_85RB)
+    sigma_v = constants.thermal_speed(T, constants.MASS_85RB)
     rows = {key: np.empty((len(delta), 2), dtype=complex) for key in forms}
     theta = float(theta)
     for row, (lab_delta, k_probe) in enumerate(zip(delta, probe_k)):

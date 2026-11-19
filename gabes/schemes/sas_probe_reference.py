@@ -102,7 +102,7 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
     for isotope, fraction, density in isotope_densities:
         man = species.build_manifold(isotope, line, transit_rate=transit)
         offset = 2 * np.pi * (man.nu0 - nu_ref)
-        sigma = man.k_vec * np.sqrt(constants.KB * temperature_k / isotope.mass)
+        sigma = man.k_vec * constants.thermal_speed(temperature_k, isotope.mass)
         hwhm = (man.gamma + species.self_broadening(isotope, density)) / 2 + transit
         probe = ProjectedProbe(man, hwhm, transit)
         saturation = probe.peak_saturation(intensity)

@@ -411,7 +411,7 @@ class GenericFWMSolver:
         ill-defined. This is only the *starting* step; `_converged_predictive_
         waveform` halves it further until the waveform width converges.
         """
-        sigma_v = math.sqrt(constants.KB * T / iso.mass)
+        sigma_v = constants.thermal_speed(T, iso.mass, sqrt=math.sqrt)
         Gamma_i = max(self.topology.levels[1].gamma_mhz, 0.1) * MHZ_ANG
         Gamma_e = max(self.topology.levels[2].gamma_mhz, 0.1) * MHZ_ANG
         Oc = max(coupling.rabi_mhz, 1e-6) * MHZ_ANG

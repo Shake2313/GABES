@@ -28,7 +28,7 @@ _NUMPY_CLASS_BATCH = 2048   # bound the fallback stack of dense Liouvillians
 
 def _shift_sigma(T, mass, k_vec):
     """Maxwell standard deviation of kv [rad/s]."""
-    return k_vec * math.sqrt(constants.KB * T / mass)
+    return k_vec * constants.thermal_speed(T, mass, sqrt=math.sqrt)
 
 
 def _strip_classes(damping, T, mass, k_vec):

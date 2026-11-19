@@ -12,7 +12,7 @@ import numpy as np
 from scipy.special import ndtri
 from scipy.stats import qmc
 
-from gabes.constants import KB
+from gabes.constants import thermal_speed
 from .contracts import GeneratorFrequencyAxis, readonly_array
 from .transport import BallisticPath
 
@@ -101,7 +101,7 @@ class ThermalInflowQuadrature:
         if not np.allclose(tau, flight.min(axis=1), rtol=1e-12, atol=0):
             raise ValueError('residence must be the true first-exit box chord')
         lengths = hi-lo
-        sigma = np.sqrt(KB*self.temperature_K/self.mass_kg)
+        sigma = thermal_speed(self.temperature_K, self.mass_kg)
         expected_rate = self.density_m3*(np.prod(lengths)/lengths[normal])*sigma/np.sqrt(2*np.pi)/2**power
         if not np.allclose(rate, expected_rate, rtol=1e-12, atol=0):
             raise ValueError('node rates must equal explicit Maxwell boundary flux, without fitting')
@@ -167,7 +167,7 @@ def maxwell_box_inflow(lower_corner_m, upper_corner_m, *, temperature_K, mass_kg
     if not isinstance(source, str) or not source.strip():
         raise ValueError('independent density, temperature and geometry provenance required')
     lengths = hi-lo
-    sigma = np.sqrt(KB*temp/mass)
+    sigma = thermal_speed(temp, mass)
     count = 2**power
     entries, velocities, rates, times, faces = [], [], [], [], []
     for face, child in enumerate(np.random.SeedSequence(seed).spawn(6)):

@@ -56,7 +56,7 @@ class CarrierGeometry:
             temperature = float(temperature_K)
             if not np.isfinite(temperature) or temperature <= 0:
                 raise ValueError('positive finite kinetic temperature required')
-            result['unresolved_loop_doppler_rms_rad_s'] = float(np.linalg.norm(mismatch)*np.sqrt(c.KB*temperature/c.MASS_85RB))
+            result['unresolved_loop_doppler_rms_rad_s'] = float(np.linalg.norm(mismatch)*c.thermal_speed(temperature, c.MASS_85RB))
         if length_m is not None:
             length = float(length_m)
             if not np.isfinite(length) or length < 0:

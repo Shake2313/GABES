@@ -380,7 +380,7 @@ def compute_spectrum(D_GHz, *,
     exact_velocity = velocity_measure == "exact"
     if exact_velocity and response_method == RESPONSE_GRID:
         raise ValueError("The exact Maxwell measure requires a pole response method")
-    gaussian_sigma = (K_VEC * np.sqrt(constants.KB * T / constants.MASS_85RB)
+    gaussian_sigma = (K_VEC * constants.thermal_speed(T, constants.MASS_85RB)
                       if exact_velocity else None)
     velocity_step = VELOCITY_STEP_MPS if velocity_step is None else velocity_step
     velocity_cutoff = VELOCITY_CUTOFF_SIGMA if velocity_cutoff is None else velocity_cutoff
@@ -932,7 +932,7 @@ def compute_spectrum(D_GHz, *,
         "combined_line_strength_residual": factors.combined_residual,
         "effective_line_strength": coupling_ls,
         "N_atoms": N_atoms,
-        "sigma_v": np.sqrt(constants.KB * T / constants.MASS_85RB),
+        "sigma_v": constants.thermal_speed(T, constants.MASS_85RB),
         "n_velocity": v_grid.size,
         "Op_A_2pi_GHz": Op_A / (2 * np.pi) / 1e9,
         "Os_2pi_MHz": Os / (2 * np.pi) / 1e6,

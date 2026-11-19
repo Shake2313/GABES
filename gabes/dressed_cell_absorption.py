@@ -375,7 +375,7 @@ def _cached_selected_absorption(D_GHz, T, P_pump, P_probe, w_pump, w_probe,
     optical = constants.C_LIGHT*np.array([float(ks[0]), float(kc[0])])
     area = float(observables.gaussian_mode_area(w_probe))
     center = 2*np.pi*D_GHz*1e9
-    sigma = float(np.sqrt(constants.KB*T/constants.MASS_85RB))
+    sigma = float(constants.thermal_speed(T, constants.MASS_85RB))
     bound = velocity_cutoff*sigma
     excited = np.diag([0., 0., 1., 1.])
     base = fwm.pump_hamiltonian_at_Deff_zero(pump_rabi, pump_rabi)

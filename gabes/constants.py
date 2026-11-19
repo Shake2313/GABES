@@ -60,6 +60,15 @@ GAMMA_GG = 2 * np.pi * GAMMA_GG_2PI
 RB_GROUND_COHERENCE_XSECTION = 1.9e-18
 
 
+def thermal_speed(T, mass, *, sqrt=np.sqrt):
+    """One-dimensional Maxwell velocity standard deviation in m/s (T in K, mass in kg).
+
+    NumPy handles arrays and NumPy scalars. Pass math.sqrt to retain Python
+    scalar return and domain semantics in scalar-only calculations.
+    """
+    return sqrt(KB * T / mass)
+
+
 def mean_relative_speed(T, mass=None):
     """Mean relative speed of like atoms, v̄ = √(8 kB T / π μ), μ = m/2 [m/s]."""
     mass = MASS_85RB if mass is None else mass

@@ -128,7 +128,7 @@ def velocity_quadrature(atom, laser_from_centroid_mhz, temp_k, *, order=6, doppl
     """
     if not doppler:
         return np.array([0.0]), np.array([1.0]), 0.0
-    sigma = atom.frequency_hz/constants.C_LIGHT * math.sqrt(constants.KB*temp_k/atom.mass) / 1e6
+    sigma = atom.frequency_hz/constants.C_LIGHT * constants.thermal_speed(temp_k, atom.mass, sqrt=math.sqrt) / 1e6
     hwhm = (0.5 * atom.gamma + elastic_hwhm) / species.MHZ
     cutoff_sigma = float(cutoff_sigma)
     shifts = np.asarray(extra_shifts_mhz, dtype=float).ravel()
