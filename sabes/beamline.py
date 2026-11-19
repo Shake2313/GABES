@@ -30,6 +30,7 @@ from typing import Tuple
 import math
 
 from gabes import constants
+from gabes.optical_frequency import RbOpticalFrequency
 
 from .beamstate import (BeamState, JONES_H, JONES_V, linear_jones,
                         monochromatic)
@@ -186,6 +187,19 @@ class SourceChain:
     warnings: Tuple[str, ...] = ()
     eom_output: BeamState | None = None
     etalon_filters: Tuple[EtalonFilter, ...] = ()
+    carrier_frequency: RbOpticalFrequency | None = None
+
+    @property
+    def frequency_metadata(self):
+        """Physical carrier with the separately preserved Gaussian geometry reference."""
+        carrier = (self.carrier_frequency.as_dict() if self.carrier_frequency is not None
+                   else dict(absolute_hz=self.pump.carrier_hz,
+                             reference_kind="legacy absolute carrier; structured reference unavailable"))
+        return dict(carrier=carrier,
+                    source_detuning_reference="Rb85 D1 F=2 to F'=3; positive is blue",
+                    gaussian_geometry_wavelength_m=self.pump.mode.wavelength_m,
+                    gaussian_geometry_reference="fixed Rb85 D1 fine-centroid wavelength for compatibility",
+                    scope="carrier metadata corrected; Gaussian geometry and FWM OPD model unchanged")
 
     @property
     def pump_power_w(self):
@@ -356,10 +370,16 @@ def build_source_chain(settings=None, calibration=None):
         return beam
 
     # ---------------- common: ECDL -> TA -> split ----------------
+    # FWM OPD is referenced to F=2 -> F'=3, not the fine-structure centroid.
+    # Preserve the established Gaussian geometry wavelength; physical carrier
+    # wavelength is exposed separately through SourceChain.frequency_metadata.
+    carrier_frequency = RbOpticalFrequency.from_detuning(
+        "Rb85", "D1", settings.opd_ghz*1e9, reference="hyperfine_transition",
+        ground_f=2, excited_f=3)
     beam = monochromatic(
         settings.ecdl_power_mw * 1e-3, WAVELENGTH_M,
         waist_m=0.5e-3, m2=1.0,
-        carrier_hz=constants.NU_D1_85RB + settings.opd_ghz * 1.0e9)
+        carrier_hz=carrier_frequency.absolute_hz)
     record("common", "ECDL output", beam)
 
     beam = LossElement(c("loss_ecdl_to_ta")).apply(beam)
@@ -499,7 +519,7 @@ def build_source_chain(settings=None, calibration=None):
     return SourceChain(
         pump=pump, seed=seed, seed_offset_hz=seed_offset_hz,
         eom_output=eom_output, etalon_filters=tuple(etalon_filters),
-        stages=tuple(stages), warnings=tuple(warnings))
+        stages=tuple(stages), warnings=tuple(warnings), carrier_frequency=carrier_frequency)
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,17 @@
 {
+  "_rb_mixture_self_action_2026_11_16": {
+    "provenance": "User request 2026-11-16: implement stages 1-4 for all Rb85/Rb87 fractions, D1/D2 hyperfine transitions and detunings; preserve the existing Rb87 D1 verification and unify frequency references. SABES UI integration follows validation.",
+    "value_decisions": [
+      {
+        "source": "User explicit frequency-unification request 2026-11-16",
+        "change": "⟦AI⟧ New generic response uses physical laser k for Doppler/absorption/propagation. Original Rb87 D1 compatibility path retains its isotope-centroid k."
+      },
+      {
+        "source": "User explicit frequency-unification request 2026-11-16",
+        "change": "⟦AI⟧ Correct SABES carrier metadata from fine centroid to the declared Rb85 D1 F=2 to Fprime=3 OPD origin (+1921.50267275 MHz). Existing Gaussian geometry wavelength and FWM numeric detuning remain unchanged; both wavelengths are explicit metadata."
+      }
+    ]
+  },
   "_consolidation_program_status_2026_11_16": {"source": "Consolidation survey of 2026-10-29 (16 candidates), reviewed against the code on 2026-11-16.", "done": ["1 atomic data", "4 Doppler averages", "5 stationary solves", "6 linewidth crossing", "7 detection and Planck", "8 vapor cell", "9 beam power to Rabi", "10 CSV decoding", "11 FWM gain-calibration modules", "12 fwm package split", "3 code move (c7c86c3)", "2 dissipator, reset, g-factors, dipoles, Zeeman generator", "16 SABES shared UI", "3 weak-probe absorption on Faddeeva", "2 level builders and resets", "13 scanner chain and conventions"], "closed_in_main": {"14": "⟦AI⟧ Grand Challenge audit scripts live in GABES-archive; new scripts there use shared harnesses. Nothing left in main.", "15": "⟦AI⟧ pytest.ini replaces conftest path setup; no single_thread fixture copies remain; sys.path edits remain only in the direct-run scripts tests/capture_baseline.py and tests/verify_hanle_eit_eia.py."}, "remaining": {}, "status": "finished", "next_after": "User request 2026-11-16: finish consolidation first; then the Fast package (fwm-lab-gain-calibration-refit, fwm-fast-displayed-readout-error-certificate, skill gabes-fast-tier)."},
   "_physics_extension_policy_2026_11_13": {"decision": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.", "applies_to": ["od-sas-segmented-cell-propagation", "lambda-spectrum-validity", "fwm-finite-seed-angular-doppler-production", "collisional-coefficient-provenance-and-pressure-shift"], "coefficient_source_rule": "User decision 2026-11-13: take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning."},
   "_od_package_scope_2026_11_13": {
