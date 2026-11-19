@@ -80,15 +80,32 @@ def hyperfine_alpha_analytic(beam_GHz, T, ground_F=None, population_factors=None
 
 
 def species_complex_voigt(scan, manifold, density_m3, temperature_k,
-                          homogeneous_fwhm, *, offset=0.0):
+                          homogeneous_fwhm, *, offset=0.0,
+                          doppler_wavevector_per_m=None):
     """Absorption and dispersion with an untruncated Maxwell velocity distribution.
 
     The scan, isotope centroid offset, and homogeneous FWHM are in rad/s.
     Thermal populations are already included in the integrated line strengths.
     The returned absorption is per metre and the real susceptibility is dimensionless.
+    ``doppler_wavevector_per_m`` changes only the Maxwell Doppler width. It may
+    be a positive finite scalar or an array broadcastable to the scan shape.
+    None retains the isotope-centroid wavevector and its existing arithmetic.
+    Atomic line areas and susceptibility normalization retain manifold.k_vec;
+    convert alpha/manifold.k_vec back to Im(chi) before applying a different
+    propagation wavevector to the resulting susceptibility.
     """
     scan = np.asarray(scan, dtype=float)
-    sigma = manifold.k_vec * math.sqrt(constants.KB * temperature_k / manifold.iso.mass)
+    if doppler_wavevector_per_m is None:
+        sigma = manifold.k_vec * math.sqrt(constants.KB * temperature_k / manifold.iso.mass)
+    else:
+        wavevector = np.asarray(doppler_wavevector_per_m, dtype=float)
+        if not np.isfinite(wavevector).all() or np.any(wavevector <= 0):
+            raise ValueError("Doppler wavevector must be finite and positive")
+        try:
+            wavevector = np.broadcast_to(wavevector, scan.shape)
+        except ValueError as error:
+            raise ValueError("Doppler wavevector must broadcast to the scan shape") from error
+        sigma = wavevector * math.sqrt(constants.KB * temperature_k / manifold.iso.mass)
     scale = sigma * math.sqrt(2.0)
     normalization = sigma * math.sqrt(2.0 * math.pi)
     strengths = species.line_integrated_alpha(manifold.iso, manifold.line, density_m3)
