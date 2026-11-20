@@ -288,3 +288,102 @@ second();
 assert.deepEqual(seen, [['route', '?compare=0'], ['route', '']]);
 """, encoding="utf-8")
     subprocess.run([node, str(script)], check=True, capture_output=True)
+
+
+@pytest.mark.parametrize(("model_id", "power"), [
+    ("od_finite_rb_mf_rate_v1", 100.), ("od_weak_exact_voigt_transit_v1", 0.)])
+def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, monkeypatch, model_id, power):
+    import csv
+    import io
+    from streamlit.delta_generator import DeltaGenerator
+    from gabes import species
+    from gabes.od_measurement import prepare_measurement_upload
+    from gabes.od_model import ODConditions, evaluate_od_display
+    from gabes.schemes.sas import SASScheme
+    from gabes_ui.export import build_export_payload
+
+    app, exports, _, uploads = workspace
+    p = dict(SASScheme().defaults(), species=species.RB87.label, line="D2", temp_c=49.,
+             cell_mm=75., cell_propagation="Uniform", probe_power_uw=power,
+             od_model=model_id, line_strength=0.5, scan_points=401)
+    conditions = ODConditions.from_params(p)
+    x = np.linspace(-2, 2, 201)
+    signal = evaluate_od_display(conditions, x * (2*np.pi*1.e9)).transmission
+    body = ("detuning_GHz,transmission\n" + "\n".join(
+        f"{a:.17g},{b:.17g}" for a,b in zip(x,signal))).encode()
+    uploads[:] = [SimpleNamespace(name="model.csv", size=len(body), getvalue=lambda: body)]
+    for key in ("species", "line", "line_strength", "probe_power_uw", "od_model"):
+        app.session_state[f"sas__{key}"] = p[key]
+
+    for size in (401,1401):
+        app.session_state["sas__scan_points"] = size
+        app.run()
+        assert not app.exception and not app.error
+        output = exports[-1]
+        comparison = output["comparison_payload"]
+        raw = output["raw"]
+        expected = evaluate_od_display(conditions, raw["scan"])
+        assert len(expected.transmission) == size
+        assert comparison["model"]["model_id"] == raw["probe_model"] == model_id
+        assert comparison["model"]["frequency_reference"]["isotope"] == "Rb87"
+        assert comparison["model"]["conditions"]["line_strength"] == .5
+        np.testing.assert_array_equal(comparison["theory_trace"]["transmission"], expected.transmission)
+        np.testing.assert_array_equal(output["view"]["optical_readout"]["optical_depth"], expected.optical_depth)
+        np.testing.assert_array_equal(output["plot_payloads"][0]["traces"][0]["y_data"], expected.transmission)
+        snapshot = build_export_payload(**output, include_quantitative=True)
+        assert snapshot["raw"]["probe_model"] == snapshot["view"]["optical_readout"]["model_id"] == model_id
+        np.testing.assert_array_equal(snapshot["raw"]["offsets_hz"], expected.offsets_hz)
+    app.multiselect(key="sas_od_fit_free").set_value(["offset_mhz"])
+    app.checkbox(key="sas_od_fit_frequency_scale").check().run()
+    app.button(key="sas_run_od_fit").click().run()
+    assert not app.exception and not app.error
+    comparison = exports[-1]["comparison_payload"]
+    fit = comparison["physical_od_fit"]
+    assert fit["probe_model"] == comparison["model"]["model_id"] == comparison["model"]["fit_model_id"] == model_id
+    assert fit["points_used"] == len(x) and fit["probe_power_uw"] == power
+    assert abs(fit["parameters"][0]["value"]) < 1.e-8 and fit["fit_residuals"]["rms"] < 1.e-12
+    assert app.session_state["sas__pump_power_mw"] == 1.5
+
+    downloads = []
+    native_button = DeltaGenerator.download_button
+    def capture(panel, label, *args, **kwargs):
+        if label == "Download comparison CSV":
+            downloads.append(kwargs["data"])
+        return native_button(panel, label, *args, **kwargs)
+    monkeypatch.setattr(DeltaGenerator, "download_button", capture)
+    app.button(key="sas_prepare_measurement_csv").click().run()
+    assert not app.error and not app.exception and len(downloads) == 1
+    metadata = prepare_measurement_upload(downloads[0]).metadata
+    from gabes.od_model import MODELS
+    if MODELS[model_id].accuracy:
+        assert metadata["model_accuracy"] == MODELS[model_id].accuracy
+        assert metadata["model_accuracy"] == snapshot["view"]["optical_readout"]["model_accuracy"]
+        assert any(item.value == MODELS[model_id].accuracy for item in app.caption)
+    else:
+        assert "model_accuracy" not in metadata
+    assert metadata["fit_model_id"] == metadata["model_id"] == model_id
+    assert metadata["frequency_reference"]["isotope"] == "Rb87"
+    rows = csv.DictReader(io.StringIO(downloads[0].decode("utf-8-sig")))
+    np.testing.assert_array_equal([float(row["theory_transmission"]) for row in rows],
+                                  expected.transmission)
+
+
+@pytest.mark.parametrize("invalid", ["unknown_saved_model", "", "   ", 0, [], {}, ["od_finite_rb_mf_rate_v1"]])
+def test_invalid_explicit_model_cannot_fall_back_silently(workspace, invalid):
+    app, exports, _, _ = workspace
+    app.session_state["sas__od_model"] = invalid
+    app.run()
+    assert not app.exception and not exports
+    assert any("OD model ID" in error.value for error in app.error)
+
+
+def test_null_saved_model_uses_the_same_weak_spectrum_as_an_absent_setting(workspace):
+    app, exports, _, _ = workspace
+    app.run()
+    original = exports[-1]["comparison_payload"]
+    app.session_state["sas__od_model"] = None
+    app.run()
+    assert not app.exception and not app.error
+    replay = exports[-1]["comparison_payload"]
+    assert replay["model"]["model_id"] == original["model"]["model_id"]
+    assert replay["theory_trace"] == original["theory_trace"]

@@ -1,10 +1,94 @@
 """File selection and fit-result ownership for the pump-free OD workspace."""
 from dataclasses import asdict
 
+import numpy as np
 import streamlit as st
 
-from gabes.od_model import ODConditions, ODUnsupportedError, display_reference_offset_hz
+from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
+                            evaluate_od_display, od_fit_conditions, od_unavailable)
 from gabes_ui.controls import skey
+
+
+def workspace_params(params, state):
+    """Honor a reserved model from existing session state until the SAS schema exposes it."""
+    derived = od_fit_conditions(params)
+    if MODEL_KEY not in derived and state.get(skey("sas", MODEL_KEY)) is not None:
+        derived[MODEL_KEY] = state[skey("sas", MODEL_KEY)]
+    return derived
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def _spectrum(conditions, scan_rad_s):
+    from gabes.core import blas_single_thread
+    with blas_single_thread():
+        return evaluate_od_display(conditions, scan_rad_s)
+
+
+def evaluate_workspace(params, raw):
+    """Check explicit requests before allocating figures; permit the displayed scheme-only fallback."""
+    requested = params.get(MODEL_KEY)
+    if requested is not None and (not isinstance(requested, str) or not requested.strip()):
+        raise ODUnsupportedError("Invalid OD model ID. Expected a non-blank string.")
+    scheme_id = raw.get("probe_model")
+    try:
+        conditions = ODConditions.from_params(params)
+    except ODUnsupportedError:
+        if requested:
+            raise
+        return None
+    reason = od_unavailable(conditions)
+    if reason:
+        if requested and requested != scheme_id:
+            raise ODUnsupportedError(reason)
+        return None
+    return _spectrum(conditions, np.asarray(raw["scan"]))
+
+
+def measurement_model_view(view, raw, evaluation):
+    """Use the same sampled evaluator for the displayed curve, downloaded curves, and fit."""
+    from gabes_ui.plotcard import PLOT_LOCK
+    if evaluation is None:
+        return dict(view, experimental_workspace=True, od_model_id=raw.get("probe_model")), raw
+
+    conditions = evaluation.conditions
+    changed = evaluation.model_id != raw.get("probe_model")
+    old = view["optical_readout"]
+    readout = ({k: old[k] for k in ("schema", "x", "x_unit", "unit", "conventions",
+                                      "cell_length_m", "line_strength")} if changed else dict(old))
+    readout.update(transmission=evaluation.transmission, optical_depth=evaluation.optical_depth,
+                   decadic_absorbance=evaluation.optical_depth / np.log(10.), od0=evaluation.od0,
+                   effective=conditions.probe_power_uw > 0., model_id=evaluation.model_id)
+    accuracy = MODELS[evaluation.model_id].accuracy
+    if accuracy:
+        readout["model_accuracy"] = accuracy
+    pages = []
+    with PLOT_LOCK:
+        for page in view.get("figure_views", []):
+            axis = page["figure"].axes[0]
+            line = axis.lines[0]
+            quantity = ("transmission" if page["label"] == "Transmission" else
+                        getattr(line, "_gabes_export_metadata", {}).get("quantity"))
+            if quantity in ("transmission", "optical_depth", "decadic_absorbance"):
+                line.set_ydata(readout[quantity])
+                if changed:
+                    axis.relim()
+                    axis.autoscale_view(scalex=False)
+                pages.append(page)
+            elif not changed:
+                pages.append(page)
+            else:
+                # This evaluator returns attenuation only, with no dispersion spectrum.
+                import matplotlib.pyplot as plt
+                plt.close(page["figure"])
+    output_view = ({"figure": view["figure"], "comparison": view["comparison"]} if changed else dict(view))
+    output_view.update(experimental_workspace=True, od_model_id=evaluation.model_id,
+                       optical_readout=readout, figure_views=pages)
+    output_raw = ({"scan": raw["scan"], "markers": raw.get("markers", [])} if changed else dict(raw))
+    output_raw.update(probe_model=evaluation.model_id, transmission=evaluation.transmission,
+                      optical_depth=evaluation.optical_depth, od0=evaluation.od0,
+                      frequency_reference=asdict(evaluation.frequency_reference),
+                      offsets_hz=evaluation.offsets_hz, od_conditions=asdict(conditions))
+    return output_view, output_raw
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -97,6 +181,8 @@ def plot_metadata(params, actual_model):
                     conditions=asdict(conditions),
                     frequency_reference=asdict(reference),
                     display_reference_offset_hz=display_reference_offset_hz(conditions))
+    if accuracy := MODELS[metadata["model_id"]].accuracy:
+        metadata["model_accuracy"] = accuracy
     if conditions.species == species.RB87.label:
         metadata["frequency_reference"] = dict(asdict(reference), isotope=species.RB87.name)
     return metadata

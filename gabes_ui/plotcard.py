@@ -184,7 +184,7 @@ def _forget_retained_csv(scheme_name):
 def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, workspace=False,
                             pending_temperature=None):
     from gabes.od_model import ODConditions, ODUnsupportedError, od_unavailable
-    from gabes_ui.od_measurement import request_temperature, fit_conditions_key
+    from gabes_ui.od_measurement import request_temperature, fit_conditions_key, workspace_params
     from gabes_ui.controls import current_params
     from gabes.od_spectrum_fit import (
         PARAMETERS, fit_od_spectrum, od_fit_unavailable, prepare_od_fit,
@@ -196,7 +196,8 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, wor
         if notice:
             box.info(notice)
         try:
-            reason = od_unavailable(ODConditions.from_params(params))
+            conditions = ODConditions.from_params(params)
+            reason = od_unavailable(conditions)
         except ODUnsupportedError as exc:
             reason = str(exc)
     else:
@@ -243,7 +244,8 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, wor
     saved = st.session_state.get(key)
     if workspace and pending_temperature is not None:
         try:
-            current_key = fit_conditions_key(current_params("sas", schemes.get("sas")), free)
+            live = workspace_params(current_params("sas", schemes.get("sas")), st.session_state)
+            current_key = fit_conditions_key(live, free)
         except (ValueError, TypeError):
             current_key = None
         if (saved and saved[0] == pending_temperature == identity and current_key == model_key
@@ -263,7 +265,8 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, wor
             data = prepare_od_fit(trace, alignment, branch=branch)
             with box, st.spinner("Fitting the OD spectrum…"), blas_single_thread():
                 result = fit_od_spectrum(data, params, free=free, fit_range_mhz=fit_range,
-                                         heldout_range_mhz=holdout_range)
+                                         heldout_range_mhz=holdout_range,
+                                         model_id=conditions.model_id if workspace else None)
             saved = identity, result
             st.session_state[key] = saved
         except (ValueError, np.linalg.LinAlgError) as exc:

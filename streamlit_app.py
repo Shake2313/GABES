@@ -294,13 +294,14 @@ def render_spectra():
             render_update_status(scheme.name)
         visible_specs = specs
         if fit_od_view:
-            from gabes.od_model import od_fit_conditions, PUMP_GROUP
+            from gabes.od_model import PUMP_GROUP
+            from gabes_ui.od_measurement import workspace_params
             visible_specs = [sp for sp in specs if sp.group != PUMP_GROUP]
         params = render_conditions(scheme, visible_specs)
         if not comparing:
             params = render_power_inputs(scheme, visible_specs)
         if fit_od_view:
-            params = od_fit_conditions(params)
+            params = workspace_params(params, st.session_state)
     else:
         from gabes_ui.conditions import render_atom_conditions
         with st.container(key="gabes_conditions"):
@@ -325,6 +326,15 @@ def render_spectra():
     except (AxialInputError, CellTemperatureError) as error:
         st.error(str(error))
         return
+    if fit_od_view:
+        from gabes.od_model import ODUnsupportedError
+        from gabes_ui.od_measurement import evaluate_workspace, measurement_model_view
+        try:
+            evaluation = evaluate_workspace(params, raw)
+        except ODUnsupportedError as error:
+            st.error(str(error))
+            return
+
     param_items = tuple(sorted(params.items()))
     if comparing:
         view = retained[1] if retained is not None and retained[1] is not None else scheme.headless_observables(raw, params)
@@ -363,7 +373,10 @@ def render_spectra():
 
     spec_by_name = {sp.name: sp for sp in specs}
     if is_sas:
-        render_plot_section(dict(view, experimental_workspace=True, od_model_id=raw.get("probe_model")), scheme, spec_by_name, raw, params,
+        view, raw = measurement_model_view(view, raw, evaluation)
+        if accuracy := view.get("optical_readout", {}).get("model_accuracy"):
+            st.caption(accuracy)
+        render_plot_section(view, scheme, spec_by_name, raw, params,
                             cache_version, READOUT_CACHE_VERSION)
         return
 
