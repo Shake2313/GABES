@@ -11,14 +11,18 @@ centroid of the selected D line for every Rb medium, as in
 SAS scheme draws pure Rb87 against the Rb87 centroid; add
 ``display_reference_offset_hz`` to that axis to obtain contract offsets.
 
-M0 scope: the zero-probe-power models already in ``SASScheme`` (legacy velocity
-grid and Exact Maxwell Voigt) on a uniform cell. Positive probe power and the
-reserved model IDs raise ``ODUnsupportedError`` with the reason, until the shared
-magnetic-sublevel model lands. Units follow the SAS controls (°C, mm, µW, kHz).
+Implemented models (``MODELS``): the zero-probe SAS profiles (legacy velocity
+grid and Exact Maxwell Voigt), the Exact profile with the transit HWHM (user
+decision U1), and the magnetic-sublevel rate model for a linearly polarized Rb
+probe ported from AutoOD 0.2.2. ``from_params`` still selects today's SAS model
+when no ``od_model`` is saved; the defaults change in a separate value commit.
+The current two-level finite-probe SAS path is not evaluable on arbitrary
+offsets. Units follow the SAS controls (°C, mm, µW, kHz).
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields, replace
+from functools import lru_cache
 import math
 
 import numpy as np
@@ -42,9 +46,10 @@ TWO_PI = 2.0 * math.pi
 class ODModel:
     model_id: str
     description: str
-    status: str                       # implemented | scheme_only | reserved
+    status: str                       # implemented | scheme_only
     finite_power: bool
     weak_probe_profile: str | None = None
+    engine: str = "sas"               # sas | sas_transit | rate
 
 
 MODELS = {model.model_id: model for model in (
@@ -56,9 +61,11 @@ MODELS = {model.model_id: model for model in (
     ODModel("finite_power_2level_gaussian_propagation",
             "Current SAS finite-probe path; needs a uniform scan axis", "scheme_only", True),
     ODModel("od_weak_exact_voigt_transit_v1",
-            "Exact Maxwell Voigt with the transit HWHM (user decision U1)", "reserved", False),
+            "Exact Maxwell Voigt with the transit HWHM (user decision U1), zero probe power",
+            "implemented", False, EXACT_WEAK_PROBE, engine="sas_transit"),
     ODModel("od_finite_rb_mf_rate_v1",
-            "Magnetic-sublevel rate model for a linearly polarized Rb probe", "reserved", True),
+            "Magnetic-sublevel rate model for a linearly polarized Rb probe, any probe power",
+            "implemented", True, engine="rate"),
 )}
 
 
@@ -222,12 +229,17 @@ def display_reference_offset_hz(conditions):
 def od_unavailable(conditions):
     """Reason the evaluator cannot run these conditions, or None."""
     model = MODELS[conditions.model_id]
-    if model.status == "reserved":
-        return f"Model {model.model_id} is reserved and not implemented yet."
-    if model.finite_power or conditions.probe_power_uw > 0.0:
-        return ("Finite probe power needs the shared magnetic-sublevel model, which is not "
-                "implemented yet. Set the probe power to zero.")
-    if _scheme_model_id(conditions.to_params()) != model.model_id:
+    if model.status != "implemented":
+        return (f"{model.description}. Use the magnetic-sublevel rate model "
+                "(od_finite_rb_mf_rate_v1) for a finite probe on arbitrary frequencies.")
+    if model.engine == "rate":
+        return _rate_model_reason(conditions)
+    if conditions.probe_power_uw > 0.0:
+        return (f"{model.description}. Set the probe power to zero or choose the "
+                "magnetic-sublevel rate model.")
+    params = conditions.to_params()
+    expected = MODELS["weak_probe_exact_maxwell_voigt"] if model.engine == "sas_transit" else model
+    if _scheme_model_id(params) != expected.model_id:
         return f"{model.description} does not apply to these conditions."
     return None
 
@@ -243,21 +255,34 @@ def evaluate_od(conditions, offsets_hz):
     offsets = np.asarray(offsets_hz, dtype=float)
     if offsets.ndim != 1 or not offsets.size or not np.isfinite(offsets).all():
         raise ValueError("Offsets must be a nonempty, finite 1-D array in Hz.")
-    params = conditions.to_params()
+    model = MODELS[conditions.model_id]
     scan = (offsets - display_reference_offset_hz(conditions)) * TWO_PI
-    raw = SASScheme()._compute_species(
-        params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=conditions.extra_homogeneous_fwhm_hz)
-    if raw["probe_model"] != conditions.model_id:
-        raise ODUnsupportedError(
-            f"The SAS solve applied {raw['probe_model']}, not {conditions.model_id}.")
+    reference = frequency_reference(conditions)
+    if model.engine == "rate":
+        transmission, depth, od0 = _rate_model_evaluate(conditions, scan)
+        return ODEvaluation(
+            offsets_hz=readonly_float_array(offsets),
+            transmission=readonly_float_array(transmission),
+            optical_depth=readonly_float_array(depth), od0=readonly_float_array(od0),
+            model_id=model.model_id, frequency_reference=reference, conditions=conditions)
+    params = conditions.to_params()
+    extra = conditions.extra_homogeneous_fwhm_hz
+    expected = model.model_id
+    if model.engine == "sas_transit":
+        # The transit rate gamma_t adds gamma_t to the HWHM: 2 gamma_t/2pi in FWHM Hz.
+        extra = extra + 2.0 * conditions.transit_khz * 1e3
+        expected = "weak_probe_exact_maxwell_voigt"
+    raw = SASScheme()._compute_species(params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=extra)
+    if raw["probe_model"] != expected:
+        raise ODUnsupportedError(f"The SAS solve applied {raw['probe_model']}, not {expected}.")
     alpha = raw["alpha_unit"] * conditions.line_strength
     length = conditions.cell_mm * 1e-3
     depth = readonly_float_array(observables.optical_depth(alpha, length))
     return ODEvaluation(
         offsets_hz=readonly_float_array(offsets),
         transmission=readonly_float_array(observables.transmission(alpha, length)),
-        optical_depth=depth, od0=depth, model_id=conditions.model_id,
-        frequency_reference=frequency_reference(conditions), conditions=conditions,
+        optical_depth=depth, od0=depth, model_id=model.model_id,
+        frequency_reference=reference, conditions=conditions,
         weak_probe_profile=raw.get("weak_probe_profile"),
     )
 
@@ -326,17 +351,8 @@ def _rate_model_scan(conditions, points=2001):
     return np.linspace(centers.min() - margin, centers.max() + margin, int(points))
 
 
-def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02,
-                       frequency_stride=4):
-    """Weak absorption and, when driven, a local alpha(I, nu) table in m^-1.
-
-    Unit line strength. The optical HWHM is (Gamma + Gamma_self)/2 + gamma_t,
-    plus half of any extra homogeneous FWHM. Known Voigt wings are factored
-    out before spline interpolation; the propagation lattice stays on the
-    requested frequency samples.
-    """
-    from scipy.interpolate import CubicSpline
-
+def _rate_model_optics(conditions):
+    """Per-isotope (manifold, density, offset, Doppler sigma, optical HWHM), transit, peak I."""
     params = _rate_model_params(conditions)
     isotope_fractions, reference, *_ = _isotope_composition(params)
     line = params["line"]
@@ -345,9 +361,7 @@ def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02
     extra_hwhm = np.pi * conditions.extra_homogeneous_fwhm_hz
     peak = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
-    alpha0 = np.zeros_like(scan)
-    components = []
-    pumping_scale = 0.0
+    optics = []
     for isotope, fraction in isotope_fractions:
         density = fraction * species.number_density(isotope, temperature)
         manifold = species.build_manifold(isotope, line)
@@ -356,17 +370,30 @@ def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02
         gamma2 = 0.5 * (manifold.gamma + species.self_broadening(isotope, density)) + transit
         if extra_hwhm:
             gamma2 += extra_hwhm
+        optics.append((manifold, density, offset, sigma, gamma2))
+    return optics, temperature, transit, peak
+
+
+def _rate_model_alpha0(optics, temperature, scan):
+    """Weak absorption in m^-1 with the transit HWHM; pointwise in frequency."""
+    alpha0 = np.zeros_like(scan)
+    for manifold, density, offset, _sigma, gamma2 in optics:
         weak, _ = linear_hyperfine.species_complex_voigt(
             scan, manifold, density, temperature, 2 * gamma2, offset=offset)
         alpha0 += weak
-        if peak > 0:
-            probe = ProjectedProbe(manifold, gamma2, transit, resolution=MAGNETIC_PI)
-            components.append((probe, density, offset, sigma))
-            pumping_scale = max(pumping_scale, float(probe.peak_saturation(peak))
-                                * (manifold.gamma + transit) / transit)
-    if peak == 0:
-        return alpha0, None, None
+    return alpha0
 
+
+def _rate_model_ratio(optics, transit, peak, scan, alpha0, *, log_step=0.25,
+                      propagation_step=0.02, frequency_stride=4):
+    """log(alpha(I, nu)/alpha0) on every frequency_stride-th sample of ``scan``."""
+    components = []
+    pumping_scale = 0.0
+    for manifold, density, offset, sigma, gamma2 in optics:
+        probe = ProjectedProbe(manifold, gamma2, transit, resolution=MAGNETIC_PI)
+        components.append((probe, density, offset, sigma))
+        pumping_scale = max(pumping_scale, float(probe.peak_saturation(peak))
+                            * (manifold.gamma + transit) / transit)
     # The tail begins well below the optical-pumping / transit crossover.
     xmax = max(12.0, np.log1p(pumping_scale) + 14)
     log_intensity = np.linspace(0, xmax, 1 + math.ceil(xmax / log_step))
@@ -384,20 +411,43 @@ def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02
         raise ArithmeticError("The nonlinear propagation table did not reach its analytical weak tail.")
     # The final boundary matches the analytical continuation used by GABES.
     ratio[-1] = 0.0
-    ratio = CubicSpline(coarse_scan, ratio, axis=1)(scan)
-    alpha_table = alpha0 * np.exp(CubicSpline(log_intensity, ratio, axis=0)(propagation_grid))
-    return alpha0, propagation_grid, alpha_table
+    return log_intensity, propagation_grid, coarse_scan, ratio
 
 
-def _rate_model_on_axis(conditions, scan_rad_s):
-    """(T, OD_eff, OD0) of the rate model on an increasing uniform axis in rad/s.
+def _rate_model_table(log_intensity, propagation_grid, frequency_spline, scan, alpha0, inside):
+    """alpha(x, nu) on the propagation lattice; unsaturated outside the table span."""
+    from scipy.interpolate import CubicSpline
 
-    The axis is relative to the medium's SAS reference (the Rb85 centroid for
-    "Rb (natural)"). ``line_strength`` scales absorption at propagation.
+    ratio = frequency_spline(scan)
+    if not np.all(inside):
+        ratio[:, ~inside] = 0.0
+    return alpha0 * np.exp(CubicSpline(log_intensity, ratio, axis=0)(propagation_grid))
+
+
+def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02,
+                       frequency_stride=4):
+    """Weak absorption and, when driven, a local alpha(I, nu) table in m^-1.
+
+    Step-1 algorithm (AutoOD 0.2.2): the table is built on ``scan`` itself.
+    Unit line strength. The optical HWHM is (Gamma + Gamma_self)/2 + gamma_t,
+    plus half of any extra homogeneous FWHM.
     """
-    scan = np.asarray(scan_rad_s, dtype=float)
-    with core.blas_single_thread():
-        alpha0, grid, table = _rate_model_tables(conditions, scan)
+    from scipy.interpolate import CubicSpline
+
+    optics, temperature, transit, peak = _rate_model_optics(conditions)
+    alpha0 = _rate_model_alpha0(optics, temperature, scan)
+    if peak == 0:
+        return alpha0, None, None
+    log_intensity, propagation_grid, coarse_scan, ratio = _rate_model_ratio(
+        optics, transit, peak, scan, alpha0, log_step=log_step,
+        propagation_step=propagation_step, frequency_stride=frequency_stride)
+    spline = CubicSpline(coarse_scan, ratio, axis=1)
+    table = _rate_model_table(log_intensity, propagation_grid, spline, scan, alpha0,
+                              np.ones(scan.size, dtype=bool))
+    return alpha0, propagation_grid, table
+
+
+def _propagate(conditions, alpha0, grid, table):
     strength = conditions.line_strength
     if strength != 1.0:
         alpha0 = alpha0 * strength
@@ -410,3 +460,63 @@ def _rate_model_on_axis(conditions, scan_rad_s):
         transmission, effective_alpha = probe_saturation.propagate_gaussian_spectrum(
             grid, table, alpha0, length, radial_order=96)
     return transmission, effective_alpha * length, od0
+
+
+def _rate_model_on_axis(conditions, scan_rad_s):
+    """(T, OD_eff, OD0) of the step-1 rate model on an increasing uniform axis in rad/s.
+
+    The axis is relative to the medium's SAS reference (the Rb85 centroid for
+    "Rb (natural)"). ``line_strength`` scales absorption at propagation.
+    """
+    scan = np.asarray(scan_rad_s, dtype=float)
+    with core.blas_single_thread():
+        alpha0, grid, table = _rate_model_tables(conditions, scan)
+    return _propagate(conditions, alpha0, grid, table)
+
+
+def _table_key(conditions):
+    """Conditions that change the optical table; length and strength enter later."""
+    return replace(conditions, cell_mm=1.0, line_strength=1.0)
+
+
+@lru_cache(maxsize=8)
+def _rate_model_spline(key):
+    """Nonlinear ratio table on the model's own axis, fixed by the conditions.
+
+    The axis is AutoOD's (_rate_model_scan, 2,001 points), so evaluating the
+    model there repeats the step-1 computation exactly.
+    """
+    from scipy.interpolate import CubicSpline
+
+    optics, temperature, transit, peak = _rate_model_optics(key)
+    if peak == 0:
+        return None
+    grid_scan = _rate_model_scan(key)
+    with core.blas_single_thread():
+        alpha0 = _rate_model_alpha0(optics, temperature, grid_scan)
+        log_intensity, propagation_grid, coarse_scan, ratio = _rate_model_ratio(
+            optics, transit, peak, grid_scan, alpha0)
+    spline = CubicSpline(coarse_scan, ratio, axis=1)
+    return log_intensity, propagation_grid, spline, float(coarse_scan[0]), float(coarse_scan[-1])
+
+
+def _rate_model_evaluate(conditions, scan):
+    """Sample-invariant rate model at arbitrary scan values in rad/s.
+
+    The ratio table comes from the model's own axis; weak absorption and
+    propagation are evaluated at each requested frequency. Outside the
+    table span the probe is treated as unsaturated.
+    """
+    optics, temperature, _transit, _peak = _rate_model_optics(conditions)
+    with core.blas_single_thread():
+        alpha0 = _rate_model_alpha0(optics, temperature, scan)
+    cached = _rate_model_spline(_table_key(conditions))
+    if cached is None:
+        return _propagate(conditions, alpha0, None, None)
+    log_intensity, propagation_grid, spline, lo, hi = cached
+    # Offsets converted from Hz can round a few ulp past the table ends.
+    tolerance = 1e-9 * (hi - lo)
+    inside = (scan >= lo - tolerance) & (scan <= hi + tolerance)
+    with core.blas_single_thread():
+        table = _rate_model_table(log_intensity, propagation_grid, spline, scan, alpha0, inside)
+    return _propagate(conditions, alpha0, propagation_grid, table)
