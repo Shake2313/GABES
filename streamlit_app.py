@@ -318,12 +318,13 @@ def render_spectra():
     cancel_inactive_sweeps(st.session_state, scheme.name)
     retained = reusable_solution(st.session_state.get("spectral-workspace-"+scheme.name),
                                  scheme, params, READOUT_CACHE_VERSION) if comparing else None
+    from gabes.schemes.sas import ODModelSettingError
     from gabes.schemes.sas_axial import AxialInputError
     from gabes.vapor_cell import CellTemperatureError
     try:
         raw = retained[0] if retained is not None else _cached_compute(
             scheme.name, recompute_items, cache_version)
-    except (AxialInputError, CellTemperatureError) as error:
+    except (AxialInputError, CellTemperatureError, ODModelSettingError) as error:
         st.error(str(error))
         return
     if fit_od_view:

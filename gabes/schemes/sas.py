@@ -62,6 +62,24 @@ EXACT_WEAK_PROBE = "Exact Maxwell Voigt"
 PUMPED_MAXWELL = "Exact Voigt + SAS correction"
 _RB_MEDIA = ("Rb (natural)", species.RB85.label, species.RB87.label)
 PROJECTED_PROBE_VIEW = "Finite-probe pumping reference"
+# OD model selection (decision D20). A model set chooses per regime; an explicit
+# pump-free model ID fixes the pump-off solve and selects its set for the rest.
+OD_MODEL_KEY = "od_model"
+OD_MODELS_PRE_D20 = "pre_d20"
+OD_MODELS_D20 = "d20"
+LEGACY_MODEL = "weak_probe_legacy"
+EXACT_MODEL = "weak_probe_exact_maxwell_voigt"
+TRANSIT_WEAK_MODEL = "od_weak_exact_voigt_transit_v1"
+TWO_LEVEL_MODEL = "finite_power_2level_gaussian_propagation"
+RATE_MODEL = "od_finite_rb_mf_rate_v1"
+PUMPED_MODEL = "weak_probe_maxwell_pumped_correction"
+PUMPED_TRANSIT_MODEL = "sas_pumped_exact_voigt_transit_v1"
+_EXPLICIT_OD_MODELS = {
+    LEGACY_MODEL: OD_MODELS_PRE_D20, EXACT_MODEL: OD_MODELS_PRE_D20,
+    TWO_LEVEL_MODEL: OD_MODELS_PRE_D20,
+    TRANSIT_WEAK_MODEL: OD_MODELS_D20, RATE_MODEL: OD_MODELS_D20,
+}
+OD_MODEL_CHOICES = (OD_MODELS_PRE_D20, OD_MODELS_D20, *_EXPLICIT_OD_MODELS)
 # Atom / Isotope rows of the species knob (rendered as two selectors).
 ATOM_MENU = (
     ("Rb", "Natural", "Rb (natural)", {"rb_composition": RB_COMPOSITION_NATURAL}),
@@ -131,15 +149,7 @@ def _weak_probe_profile(params):
         return None
     if requested not in (AUTO_WEAK_PROBE, EXACT_WEAK_PROBE):
         raise ValueError("Choose Automatic, Legacy velocity grid or Exact Maxwell Voigt.")
-    eligible = (
-        params.get("species", "Rb (natural)") in _RB_MEDIA
-        and params["line"] in ("D1", "D2")
-        and _probe_power_mw(params) == 0.0
-        and params.get("cell_propagation", "Uniform") == "Uniform"
-        and not params.get("paraffin_coated", False)
-        and float(params.get("ne_pressure_torr", 0.0)) == 0.0
-        and not _measured_collision_mode(params)
-    )
+    eligible = _exact_voigt_eligible(params)
     power = float(params["pump_power_mw"])
     driven = _pump_is_driven(power)
     if eligible and power >= 0.0 and not driven:
@@ -159,6 +169,80 @@ def _weak_probe_profile(params):
         requested=requested, applied=LEGACY_WEAK_PROBE, status="inactive",
         scope="Select uniform uncoated Rb D1/D2 with pump, probe and buffer "
               "pressure at zero and Legacy broadening to use Exact Maxwell Voigt.")
+
+
+def _exact_voigt_eligible(params):
+    """Uniform, uncoated, buffer-free Rb D1/D2 at zero probe power."""
+    return (
+        params.get("species", "Rb (natural)") in _RB_MEDIA
+        and params["line"] in ("D1", "D2")
+        and _probe_power_mw(params) == 0.0
+        and params.get("cell_propagation", "Uniform") == "Uniform"
+        and not params.get("paraffin_coated", False)
+        and float(params.get("ne_pressure_torr", 0.0)) == 0.0
+        and not _measured_collision_mode(params)
+    )
+
+
+class ODModelSettingError(ValueError):
+    """An invalid ``od_model`` setting; shown to the user instead of a fallback."""
+
+
+def _od_model_setting(params):
+    """(model set, explicit pump-free model or None). A missing or None value is pre-D20."""
+    value = params.get(OD_MODEL_KEY)
+    if value is None:
+        return OD_MODELS_PRE_D20, None
+    if isinstance(value, str) and value in (OD_MODELS_PRE_D20, OD_MODELS_D20):
+        return value, None
+    if isinstance(value, str) and value in _EXPLICIT_OD_MODELS:
+        return _EXPLICIT_OD_MODELS[value], value
+    raise ODModelSettingError(
+        f"Invalid OD model ID {value!r}. Choose one of: {', '.join(OD_MODEL_CHOICES)}.")
+
+
+def _rate_scope_reason(params):
+    """Why the magnetic-sublevel rate model cannot describe these parameters, or None."""
+    if params.get("species") not in _RB_MEDIA or params.get("line") not in ("D1", "D2"):
+        return "The magnetic-sublevel rate model covers rubidium D1 and D2 only."
+    if not bool(params.get("constrain_doppler_temp", True)):
+        return "The magnetic-sublevel rate model needs the Doppler temperature tied to the cell."
+    if (float(params.get("ne_pressure_torr", 0.0)) != 0.0 or params.get("paraffin_coated", False)
+            or _measured_collision_mode(params)):
+        return "The magnetic-sublevel rate model covers uncoated cells without buffer gas."
+    if params.get("cell_propagation", "Uniform") != "Uniform":
+        return "The magnetic-sublevel rate model needs the Uniform cell."
+    return None
+
+
+def _pump_free_model_id(params):
+    """Model of the pump-off solve for these parameters (explicit ID or model set)."""
+    model_set, explicit = _od_model_setting(params)
+    if explicit is not None:
+        return explicit
+    if _probe_power_mw(params) > 0.0:
+        if model_set == OD_MODELS_D20 and _rate_scope_reason(params) is None:
+            return RATE_MODEL
+        return TWO_LEVEL_MODEL
+    model = _weak_probe_model_id(_weak_probe_profile(dict(params, pump_power_mw=0.0)))
+    if model_set == OD_MODELS_D20 and model == EXACT_MODEL:
+        return TRANSIT_WEAK_MODEL
+    return model
+
+
+def _pump_free_model_reason(params, model):
+    """Why ``model`` cannot run the pump-off solve of these parameters, or None."""
+    probe = _probe_power_mw(params)
+    if model in (LEGACY_MODEL, EXACT_MODEL, TRANSIT_WEAK_MODEL):
+        if probe > 0.0:
+            return "This weak-probe model needs zero probe power."
+        if model != LEGACY_MODEL and not _exact_voigt_eligible(params):
+            return ("The Exact Maxwell Voigt models need uniform, uncoated Rb D1/D2 "
+                    "without buffer gas and with Legacy broadening.")
+        return None
+    if model == RATE_MODEL:
+        return _rate_scope_reason(params)
+    return None
 
 
 def _weak_probe_model_id(profile):
@@ -481,6 +565,12 @@ class SASScheme(Scheme):
                            "Legacy velocity grid reproduces the historical spectrum."),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
+            ParamSpec(OD_MODEL_KEY, "OD model", "Numerics", OD_MODELS_PRE_D20,
+                      choices=OD_MODEL_CHOICES, advanced=True, hidden=True,
+                      help="pre_d20 keeps the models used before the OD-fit port. d20 adds "
+                           "the transit width to the Exact profiles (pumped too) and uses "
+                           "the magnetic-sublevel rate model for a finite Rb probe. An "
+                           "explicit model ID fixes the pump-off solve."),
         ]
 
     def recommended_defaults(self, params):
@@ -620,8 +710,9 @@ class SASScheme(Scheme):
         return render(data)
 
     def migrate_default_params(self, params):
-        # Saved snapshots without a profile predate the Exact Voigt default.
-        return {"weak_probe_profile": LEGACY_WEAK_PROBE, **params}
+        # Saved snapshots without a profile predate the Exact Voigt default;
+        # snapshots without an OD model predate the D20 model choices.
+        return {"weak_probe_profile": LEGACY_WEAK_PROBE, OD_MODEL_KEY: OD_MODELS_PRE_D20, **params}
 
     def solve_param_keys(self, params):
         keys = super().solve_param_keys(params)
@@ -630,6 +721,8 @@ class SASScheme(Scheme):
             keys = tuple(key for key in keys if key != "cs_self_broadening_reference")
         if "weak_probe_profile" not in params:
             keys = tuple(key for key in keys if key != "weak_probe_profile")
+        if OD_MODEL_KEY not in params:
+            keys = tuple(key for key in keys if key != OD_MODEL_KEY)
         if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
             return keys + ("cell_mm", "line_strength")
         return tuple(key for key in keys if not key.startswith("axial_"))
@@ -729,10 +822,23 @@ class SASScheme(Scheme):
         paraffin_memory = paraffin_coated and power > 0.0
         reference = _measured_collision_mode(params)
         cs_reference = iso_ref == species.CS133 and params.get("cs_self_broadening_reference", False)
+        model_set, explicit_model = _od_model_setting(params)
+        pump_free_model = None
+        if probe_supported and not _pump_is_driven(power):
+            pump_free_model = _pump_free_model_id(params)
+            if reason := _pump_free_model_reason(params, pump_free_model):
+                raise ValueError(reason)
+            if explicit_model in (LEGACY_MODEL, EXACT_MODEL, TRANSIT_WEAK_MODEL):
+                # An explicit weak-probe model fixes its velocity measure.
+                params = dict(params, weak_probe_profile=(
+                    LEGACY_WEAK_PROBE if explicit_model == LEGACY_MODEL else EXACT_WEAK_PROBE))
         weak_profile = _weak_probe_profile(params)
         applied_profile = weak_profile["applied"] if weak_profile is not None else None
         exact_weak_probe = applied_profile == EXACT_WEAK_PROBE
         pumped_maxwell = applied_profile == PUMPED_MAXWELL
+        use_rate = pump_free_model == RATE_MODEL
+        transit_weak = pump_free_model == TRANSIT_WEAK_MODEL
+        pumped_transit = pumped_maxwell and model_set == OD_MODELS_D20
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
         collision_reports = {}
@@ -782,6 +888,7 @@ class SASScheme(Scheme):
                               pump_atom=pump_atom, gamma_eff=gamma_eff, transit_rate=gt,
                               paraffin_memory=paraffin_memory,
                               pumped_maxwell=pumped_maxwell,
+                              probe_transit_hwhm=gt if pumped_transit else 0.0,
                               probe_saturation_max=probe_s0))
             omega_all.append(man.omega + offset)
         omega_all = np.concatenate(omega_all)
@@ -794,7 +901,7 @@ class SASScheme(Scheme):
             scan = np.asarray(scan_rad_s, dtype=float)
             if scan.ndim != 1 or not scan.size or not np.isfinite(scan).all():
                 raise ValueError("The frequency axis must be a nonempty, finite 1-D array.")
-            if probe_power > 0.0:
+            if probe_power > 0.0 and not use_rate:
                 steps = np.diff(scan)
                 if not steps.size or steps[0] <= 0.0 or not np.allclose(steps, steps[0], rtol=1e-9, atol=0.0):
                     raise ValueError("Finite-probe propagation requires an increasing, uniform frequency axis.")
@@ -806,15 +913,20 @@ class SASScheme(Scheme):
         ng_of = {id(b["man"]): len(b["man"].Fg) for b in built}
         for b in built:
             man, off = b["man"], b["offset"]
-            if exact_weak_probe:
+            if use_rate:
+                pass   # the rate model supplies alpha and the dispersion below
+            elif exact_weak_probe or transit_weak:
+                # U1: the transit rate adds gamma_t to the optical HWHM.
+                width = b["gamma_eff"] + 2.0 * gt if transit_weak else b["gamma_eff"]
                 component_alpha, component_chi_real = linear_hyperfine.species_complex_voigt(
-                    scan, man, b["N"], T_doppler, b["gamma_eff"], offset=off)
+                    scan, man, b["N"], T_doppler, width, offset=off)
             else:
                 component_alpha, component_chi_real, component_probe_profiles = (
                     self._component_response(b, scan, T_doppler))
                 probe_profiles.extend(component_probe_profiles)
-            alpha += component_alpha
-            chi_real += component_chi_real
+            if not use_rate:
+                alpha += component_alpha
+                chi_real += component_chi_real
             ng = ng_of[id(man)]
             for t in range(man.omega.size):
                 fg = man.Fg[man.g_idx[t]]
@@ -826,7 +938,13 @@ class SASScheme(Scheme):
         probe_alpha_table = None
         probe_saturation_max = max(
             (b["probe_saturation_max"] for b in built), default=0.0)
-        if probe_peak_intensity > 0.0:
+        if use_rate:
+            from ..od_model import ODConditions, rate_model_display_tables
+            conditions = ODConditions.from_params(
+                params, extra_homogeneous_fwhm_hz=extra_fwhm)
+            alpha, chi_real, probe_log_grid, probe_alpha_table = rate_model_display_tables(
+                conditions, scan)
+        if probe_peak_intensity > 0.0 and not use_rate:
             probe_log_grid = probe_saturation.saturation_log_grid(
                 probe_saturation_max)
             probe_background_table = np.zeros((probe_log_grid.size, scan.size))
@@ -907,9 +1025,13 @@ class SASScheme(Scheme):
                     density_temp_c=T_density - 273.15,
                     doppler_temp_c=T_doppler - 273.15,
                     doppler_temp_tied=tied,
-                    probe_model=("finite_power_2level_gaussian_propagation"
-                                 if probe_peak_intensity > 0.0
+                    probe_model=(RATE_MODEL if use_rate
+                                 else TWO_LEVEL_MODEL if probe_peak_intensity > 0.0
+                                 else TRANSIT_WEAK_MODEL if transit_weak
+                                 else PUMPED_TRANSIT_MODEL if pumped_transit
                                  else _weak_probe_model_id(weak_profile)),
+                    od_model_set=model_set,
+                    probe_radial_order=96 if use_rate else probe_saturation.RADIAL_QUADRATURE_ORDER,
                     probe_saturation_supported=probe_supported,
                     probe_validation_tier=probe_validation_tier,
                     probe_power_mw=probe_power,
@@ -1019,6 +1141,9 @@ class SASScheme(Scheme):
         # Lorentzian of FWHM Γ_eff, ∫L̂ dδ = 1. Evaluated analytically at the probe
         # detuning (exact, no truncation); its Doppler sum is the Voigt.
         hwhm = gamma_eff / 2.0
+        transit_hwhm = b.get("probe_transit_hwhm", 0.0)
+        if transit_hwhm:
+            hwhm = hwhm + transit_hwhm   # U3: probe Lorentzian of the pumped correction
 
         # Absolute per-line integrated absorption A_t (AutoOD normalisation, ls=1).
         Aline = species.line_integrated_alpha(iso, line=man.line, N=N)
@@ -1093,7 +1218,8 @@ class SASScheme(Scheme):
                 ))
         if pumped_maxwell:
             background_alpha, background_chi = linear_hyperfine.species_complex_voigt(
-                scan, man, N, T, gamma_eff, offset=offset)
+                scan, man, N, T, gamma_eff + 2.0 * transit_hwhm if transit_hwhm else gamma_eff,
+                offset=offset)
             alpha += background_alpha
             chi_real += background_chi
         return alpha, chi_real, probe_profiles
@@ -1208,8 +1334,7 @@ class SASScheme(Scheme):
 
     def _obs_species(self, raw, params, alpha, chi_real, L, include_figures=True):
         x = raw["scan"] / (2 * np.pi) / 1e9                  # GHz (relative)
-        finite_probe = raw.get("probe_model") == (
-            "finite_power_2level_gaussian_propagation")
+        finite_probe = raw.get("probe_model") in (TWO_LEVEL_MODEL, RATE_MODEL)
         optical_readout = _optical_readout(
             x, "GHz", alpha, L, params, effective=finite_probe)
         T_trans = optical_readout["transmission"]
@@ -1379,7 +1504,21 @@ class SASScheme(Scheme):
         if profile is not None:
             optical_readout["weak_probe_profile"] = profile
             metrics.append(_weak_probe_profile_metric(profile))
-        if finite_probe:
+        if raw.get("probe_model") == RATE_MODEL:
+            from ..od_model import RATE_MODEL_ACCURACY
+            tables.append({
+                "title": "Finite-probe model",
+                "markdown": (
+                    "Magnetic-sublevel rate model for a linearly polarized probe at zero "
+                    "field (`od_finite_rb_mf_rate_v1`): π links between (F, |m|) "
+                    "populations, spontaneous decay with all polarizations, transit "
+                    "reset, self-consistent longitudinal depletion and full Gaussian "
+                    f"power averaging. {RATE_MODEL_ACCURACY} The beam waist is held "
+                    "constant through the cell and the detector collects the full output "
+                    "beam. Dispersion is unavailable for the nonlinear response."
+                ),
+            })
+        elif finite_probe:
             _, _, qualifier = _probe_scope_text(raw, params)
             tables.append({
                 "title": "Finite-probe model",
@@ -1551,7 +1690,8 @@ def _collected_response(raw, params):
     if alpha_table is not None:
         # The nonlinear model gives collected power but no unique phase index.
         _transmission, alpha = probe_saturation.propagate_gaussian_spectrum(
-            raw["probe_intensity_log_grid"], alpha_table * params["line_strength"], alpha, L)
+            raw["probe_intensity_log_grid"], alpha_table * params["line_strength"], alpha, L,
+            radial_order=raw.get("probe_radial_order", probe_saturation.RADIAL_QUADRATURE_ORDER))
         chi_real = None
     return alpha, chi_real, L
 
@@ -1915,7 +2055,11 @@ def _dispersion_metrics(chi_real, k_vec, L):
 
 def _probe_saturation_metrics(raw, params, length_m):
     """Finite-power model provenance and its strongest local saturation scale."""
-    if raw.get("probe_model") != "finite_power_2level_gaussian_propagation":
+    if raw.get("probe_model") == RATE_MODEL:
+        from ..od_model import RATE_MODEL_ACCURACY
+        return [dict(label="Probe model", value="Magnetic-sublevel rate", kind="status",
+                     help=RATE_MODEL_ACCURACY)]
+    if raw.get("probe_model") != TWO_LEVEL_MODEL:
         return []
     saturation = float(raw["probe_saturation_max"])
     intensity = float(raw["probe_peak_intensity"])

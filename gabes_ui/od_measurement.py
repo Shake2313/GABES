@@ -26,19 +26,22 @@ def _spectrum(conditions, scan_rad_s):
 
 def evaluate_workspace(params, raw):
     """Check explicit requests before allocating figures; permit the displayed scheme-only fallback."""
+    from gabes.schemes.sas import OD_MODELS_D20, OD_MODELS_PRE_D20
     requested = params.get(MODEL_KEY)
     if requested is not None and (not isinstance(requested, str) or not requested.strip()):
         raise ODUnsupportedError("Invalid OD model ID. Expected a non-blank string.")
+    # A model set ("pre_d20", "d20") chooses per regime; only an explicit ID is a request.
+    explicit = None if requested in (None, OD_MODELS_PRE_D20, OD_MODELS_D20) else requested
     scheme_id = raw.get("probe_model")
     try:
         conditions = ODConditions.from_params(params)
     except ODUnsupportedError:
-        if requested:
+        if explicit:
             raise
         return None
     reason = od_unavailable(conditions)
     if reason:
-        if requested and requested != scheme_id:
+        if explicit and explicit != scheme_id:
             raise ODUnsupportedError(reason)
         return None
     return _spectrum(conditions, np.asarray(raw["scan"]))

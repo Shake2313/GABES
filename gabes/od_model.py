@@ -32,12 +32,13 @@ from ._arrays import readonly_float_array
 from .optical_frequency import reference_offset_hz
 from .optical_pumping import MAGNETIC_PI, ProjectedProbe
 from .schemes.sas import (
-    EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, RB_COMPOSITION_CUSTOM, RB_COMPOSITION_NATURAL,
-    SASScheme, _isotope_composition, _probe_power_mw, _weak_probe_model_id, _weak_probe_profile,
+    EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, OD_MODEL_KEY, RB_COMPOSITION_CUSTOM,
+    RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
+    _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
 )
 
 
-MODEL_KEY = "od_model"   # reserved parameter name for an explicit saved model ID
+MODEL_KEY = OD_MODEL_KEY   # SAS parameter: a model set or an explicit model ID
 PUMP_GROUP = "Pump"
 TWO_PI = 2.0 * math.pi
 # User decision U2, 2026-11-20: keep the rate model and document its accuracy.
@@ -58,7 +59,7 @@ class ODModel:
     status: str                       # implemented | scheme_only
     finite_power: bool
     weak_probe_profile: str | None = None
-    engine: str = "sas"               # sas | sas_transit | rate
+    engine: str = "sas"               # sas | rate
     accuracy: str = ""                # documented accuracy, for readouts and exports
 
 
@@ -72,7 +73,7 @@ MODELS = {model.model_id: model for model in (
             "Current SAS finite-probe path; needs a uniform scan axis", "scheme_only", True),
     ODModel("od_weak_exact_voigt_transit_v1",
             "Exact Maxwell Voigt with the transit HWHM (user decision U1), zero probe power",
-            "implemented", False, EXACT_WEAK_PROBE, engine="sas_transit"),
+            "implemented", False, EXACT_WEAK_PROBE),
     ODModel("od_finite_rb_mf_rate_v1",
             "Magnetic-sublevel rate model for a linearly polarized Rb probe, any probe power",
             "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY),
@@ -141,16 +142,19 @@ class ODConditions:
     def from_params(cls, params, *, extra_homogeneous_fwhm_hz=0.0):
         """Read SAS parameters; pump settings are ignored, as in the OD-fit view.
 
-        An explicit ``od_model`` entry wins. Without one, the model is the one the
-        SAS scheme applies to these parameters today, so older saved settings
-        replay unchanged.
+        ``od_model`` holds a model set ("pre_d20", "d20") or an explicit model
+        ID; the SAS scheme resolves it, so the evaluator and the plot agree.
+        Without the key the pre-D20 choice applies, so older settings replay.
         """
         params = {**SASScheme().defaults(), **od_fit_conditions(params)}
         if params.get("species") not in species.SPECIES_ORDER:
             raise ODUnsupportedError("Choose a resolved Rb or Cs medium.")
         if params.get("cell_propagation", "Uniform") != "Uniform":
             raise ODUnsupportedError("Choose the Uniform cell for OD fitting.")
-        model_id = params.get(MODEL_KEY) or _scheme_model_id(params)
+        try:
+            model_id = _pump_free_model_id(params)
+        except ValueError as error:
+            raise ODUnsupportedError(str(error)) from None
         tied = bool(params.get("constrain_doppler_temp", True))
         return cls(
             species=params["species"], line=params["line"], temp_c=float(params["temp_c"]),
@@ -217,12 +221,6 @@ def od_fit_conditions(params):
     return result
 
 
-def _scheme_model_id(params):
-    if _probe_power_mw(params) > 0.0:
-        return "finite_power_2level_gaussian_propagation"
-    return _weak_probe_model_id(_weak_probe_profile(params))
-
-
 def frequency_reference(conditions):
     if conditions.species == species.CS133.label:
         return FrequencyReference(species.CS133.name, conditions.line)
@@ -247,9 +245,7 @@ def od_unavailable(conditions):
     if conditions.probe_power_uw > 0.0:
         return (f"{model.description}. Set the probe power to zero or choose the "
                 "magnetic-sublevel rate model.")
-    params = conditions.to_params()
-    expected = MODELS["weak_probe_exact_maxwell_voigt"] if model.engine == "sas_transit" else model
-    if _scheme_model_id(params) != expected.model_id:
+    if _pump_free_model_reason(conditions.to_params(), model.model_id):
         return f"{model.description} does not apply to these conditions."
     return None
 
@@ -294,15 +290,10 @@ def _evaluate(conditions, offsets, scan):
             optical_depth=readonly_float_array(depth), od0=readonly_float_array(od0),
             model_id=model.model_id, frequency_reference=reference, conditions=conditions)
     params = conditions.to_params()
-    extra = conditions.extra_homogeneous_fwhm_hz
-    expected = model.model_id
-    if model.engine == "sas_transit":
-        # The transit rate gamma_t adds gamma_t to the HWHM: 2 gamma_t/2pi in FWHM Hz.
-        extra = extra + 2.0 * conditions.transit_khz * 1e3
-        expected = "weak_probe_exact_maxwell_voigt"
-    raw = SASScheme()._compute_species(params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=extra)
-    if raw["probe_model"] != expected:
-        raise ODUnsupportedError(f"The SAS solve applied {raw['probe_model']}, not {expected}.")
+    raw = SASScheme()._compute_species(
+        params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=conditions.extra_homogeneous_fwhm_hz)
+    if raw["probe_model"] != model.model_id:
+        raise ODUnsupportedError(f"The SAS solve applied {raw['probe_model']}, not {model.model_id}.")
     alpha = raw["alpha_unit"] * conditions.line_strength
     length = conditions.cell_mm * 1e-3
     depth = readonly_float_array(observables.optical_depth(alpha, length))
@@ -328,14 +319,7 @@ def with_extra_width(conditions, extra_homogeneous_fwhm_hz):
 # ---------------------------------------------------------------------------
 
 def _rate_model_reason(conditions):
-    if conditions.species not in ("Rb (natural)", species.RB85.label, species.RB87.label):
-        return "The magnetic-sublevel rate model covers rubidium only."
-    if conditions.doppler_temp_c is not None:
-        return "The magnetic-sublevel rate model needs the Doppler temperature tied to the cell."
-    if (conditions.ne_pressure_torr != 0.0 or conditions.paraffin_coated
-            or conditions.optical_collision_model not in (None, SASScheme().defaults()["optical_collision_model"])):
-        return "The magnetic-sublevel rate model covers uncoated cells without buffer gas."
-    return None
+    return _rate_scope_reason(conditions.to_params())
 
 
 def _rate_model_params(conditions):
@@ -537,6 +521,34 @@ def _rate_model_spline(key):
             optics, transit, peak, grid_scan, alpha0)
     spline = CubicSpline(coarse_scan, ratio, axis=1)
     return log_intensity, propagation_grid, spline, float(coarse_scan[0]), float(coarse_scan[-1])
+
+
+def rate_model_display_tables(conditions, scan):
+    """(alpha0, Re chi, x grid, alpha(x, nu)) at unit line strength on a display scan.
+
+    The SAS solve propagates these exactly as ``evaluate_od`` does (radial
+    order 96), so the theory plot and the evaluator agree point for point.
+    The dispersion is the weak-probe transit Voigt's.
+    """
+    if reason := _rate_model_reason(conditions):
+        raise ODUnsupportedError(reason)
+    scan = np.asarray(scan, dtype=float)
+    optics, temperature, _transit, _peak = _rate_model_optics(conditions)
+    chi_real = np.zeros_like(scan)
+    with core.blas_single_thread():
+        alpha0 = _rate_model_alpha0(optics, temperature, scan)
+        for manifold, density, offset, _sigma, gamma2 in optics:
+            chi_real += linear_hyperfine.species_complex_voigt(
+                scan, manifold, density, temperature, 2 * gamma2, offset=offset)[1]
+    cached = _rate_model_spline(_table_key(conditions))
+    if cached is None:
+        return alpha0, chi_real, None, None
+    log_intensity, propagation_grid, spline, lo, hi = cached
+    tolerance = 1e-9 * (hi - lo)
+    inside = (scan >= lo - tolerance) & (scan <= hi + tolerance)
+    with core.blas_single_thread():
+        table = _rate_model_table(log_intensity, propagation_grid, spline, scan, alpha0, inside)
+    return alpha0, chi_real, propagation_grid, table
 
 
 def _rate_model_evaluate(conditions, scan):
