@@ -9,8 +9,9 @@ Originally factored from ``fwm_obe.py`` and since generalized to arbitrary
 Hilbert-space dimension and finite Floquet order, with independent dense-block
 references for numerical validation.
 """
-from contextlib import nullcontext
+from contextlib import contextmanager
 from functools import lru_cache
+import threading
 
 import numpy as np
 
@@ -19,7 +20,12 @@ try:
 except Exception:                                       # pragma: no cover
     _threadpool_limits = None
 
+_blas_guard_lock = threading.Lock()
+_blas_guard_depth = 0
+_blas_guard_limiter = None
 
+
+@contextmanager
 def blas_single_thread():
     """Context manager limiting BLAS/LAPACK to one thread.
 
@@ -28,10 +34,29 @@ def blas_single_thread():
     parallelism, so a single thread is uniformly faster on the whole workload
     (measured ~25-30% across FWM / Λ / magneto). Scope it around the heavy solve
     so unrelated work is unaffected. No-op if threadpoolctl is unavailable.
+
+    The BLAS limit is process-wide, so the guard is reference-counted across
+    threads and nested uses: the first entry applies it and the last exit
+    restores the limits found then. Independently restoring overlapping
+    limiters (Streamlit sessions, AutoOD workers) would leave BLAS at one
+    thread for the rest of the process.
     """
+    global _blas_guard_depth, _blas_guard_limiter
     if _threadpool_limits is None:
-        return nullcontext()
-    return _threadpool_limits(limits=1, user_api="blas")
+        yield
+        return
+    with _blas_guard_lock:
+        if _blas_guard_depth == 0:
+            _blas_guard_limiter = _threadpool_limits(limits=1, user_api="blas")
+        _blas_guard_depth += 1
+    try:
+        yield
+    finally:
+        with _blas_guard_lock:
+            _blas_guard_depth -= 1
+            if _blas_guard_depth == 0:
+                limiter, _blas_guard_limiter = _blas_guard_limiter, None
+                limiter.restore_original_limits()
 
 
 @lru_cache(maxsize=None)
