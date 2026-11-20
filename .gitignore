@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.png
 *.npz
+!tests/fixtures/autood_baseline_0_2_2/spectra.npz
 *.log
 *.bbl
 *.blg

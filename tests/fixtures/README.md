@@ -23,3 +23,23 @@ not used by the tests.
 Magneto tests using these: `tests/test_magneto_fast_solver.py`, `tests/test_magneto_optical_assembly.py`,
 `tests/test_magneto_reference_isolation.py`. Import them as `fixtures.<name>`: pytest puts `tests/` on
 `sys.path` for the test modules in that folder.
+
+## AutoOD 0.2.2 spectra (OD-fit port, M0)
+
+⟦AI⟧ `autood_baseline_0_2_2/spectra.npz` freezes AutoOD output for the D20 port
+(`docs/ui_redesign/od_sas_experimental_csv_port.md`). It is generated, not copied:
+`python -m gabes_lab.tools.autood_baseline_fixture` runs the AutoOD source at tag
+`baseline-0.2.2-src` (commit `1bd66154c36a…` in the sibling `AutoOD` repository) on its pinned
+GABES snapshot `8846193ffcef…`, with Numba disabled as in the shipped executable. Theory adapter
+fingerprint `7063e3471c71…`. SHA-256 of the committed file `25393b1006c3e712…`; a rerun gives
+equal arrays but different zip bytes, so replace the hash in `tests/test_od_model.py` only on purpose.
+
+| Case | Settings | Probe powers |
+|---|---|---|
+| `natural_d2_25c_75mm` | natural Rb, D2, 25 °C, 75 mm, 2 mm 1/e² diameter | 0, 100 µW |
+| `rb87_d1_90c_12p5mm` | ⁸⁵Rb 0 %, D1, 90 °C, 12.5 mm, 2 mm | 0, 100 µW |
+| `rb85_d2_90c_12p5mm` | ⁸⁵Rb 100 %, D2, 90 °C, 12.5 mm, 2 mm | 0, 1 mW |
+
+Arrays per case: `scan_rad_s` (from the ⁸⁵Rb centroid), and per power `transmission`,
+`optical_depth`, `od0`. A JSON `metadata` string lists settings, model IDs and the transit rate.
+Used by `tests/test_od_model.py`; the finite-power spectra serve the later rate-model parity step.
