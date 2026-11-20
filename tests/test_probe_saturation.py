@@ -18,6 +18,7 @@ SAS = schemes.get("sas")
 def _params(**overrides):
     params = SAS.defaults()
     params.update(
+        od_model="pre_d20",   # ⟦AI⟧ these tests cover the two-level finite-probe model (D20 M2b)
         species="Rb (natural)",
         line="D2",
         pump_power_mw=0.0,

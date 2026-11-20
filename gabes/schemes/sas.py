@@ -67,6 +67,7 @@ PROJECTED_PROBE_VIEW = "Finite-probe pumping reference"
 OD_MODEL_KEY = "od_model"
 OD_MODELS_PRE_D20 = "pre_d20"
 OD_MODELS_D20 = "d20"
+OD_MODELS_DEFAULT = OD_MODELS_D20   # ParamSpec default; also an explicit None
 LEGACY_MODEL = "weak_probe_legacy"
 EXACT_MODEL = "weak_probe_exact_maxwell_voigt"
 TRANSIT_WEAK_MODEL = "od_weak_exact_voigt_transit_v1"
@@ -189,10 +190,17 @@ class ODModelSettingError(ValueError):
 
 
 def _od_model_setting(params):
-    """(model set, explicit pump-free model or None). A missing or None value is pre-D20."""
-    value = params.get(OD_MODEL_KEY)
-    if value is None:
+    """(model set, explicit pump-free model or None).
+
+    A missing key is pre-D20, so parameter dictionaries written before the
+    setting existed replay unchanged. ``None`` is an unset session value and
+    takes the current default, like a fresh session.
+    """
+    if OD_MODEL_KEY not in params:
         return OD_MODELS_PRE_D20, None
+    value = params[OD_MODEL_KEY]
+    if value is None:
+        return OD_MODELS_DEFAULT, None
     if isinstance(value, str) and value in (OD_MODELS_PRE_D20, OD_MODELS_D20):
         return value, None
     if isinstance(value, str) and value in _EXPLICIT_OD_MODELS:
@@ -379,7 +387,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "16"           # Continuous Maxwell background through pump-off and pumped SAS
+    cache_version = "17"           # D20 model set by default (transit width, sublevel rate model)
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -416,12 +424,12 @@ class SASScheme(Scheme):
                       0.0, 100.0, 0.1, "µW",
                       endpoints=("◀ weak probe", "saturated ▶"),
                       visible_if={"species": tuple(species.SPECIES_ORDER)},
-                      help="0 keeps the exact weak-probe OD/SAS result. At finite power, "
-                           "apply the AutoOD-style independent-transition two-level "
-                           "saturation and power-broadening estimate, then propagate "
-                           "the Gaussian beam self-consistently through the cell. "
-                           "Rb D2 is reference-scope; D1 and Cs are explicitly "
-                           "labelled generalized estimates."),
+                      help="0 keeps the exact weak-probe OD/SAS result. At finite power "
+                           "with the pump off, uniform uncoated Rb cells use the "
+                           "magnetic-sublevel rate model (optical pumping among m "
+                           "sublevels); other media and pumped SAS use the "
+                           "independent-transition two-level estimate. Both propagate "
+                           "the Gaussian beam self-consistently through the cell."),
             ParamSpec("species", "Atom", "Atomic", "Rb (natural)",
                       choices=tuple(species.SPECIES_ORDER), atom_menu=ATOM_MENU,
                       help="Natural: 72.17% ⁸⁵Rb and 27.83% ⁸⁷Rb by abundance. "
@@ -565,9 +573,11 @@ class SASScheme(Scheme):
                            "Legacy velocity grid reproduces the historical spectrum."),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
-            ParamSpec(OD_MODEL_KEY, "OD model", "Numerics", OD_MODELS_PRE_D20,
+            ParamSpec(OD_MODEL_KEY, "OD model", "Numerics", OD_MODELS_DEFAULT,
                       choices=OD_MODEL_CHOICES, advanced=True, hidden=True,
-                      help="pre_d20 keeps the models used before the OD-fit port. d20 adds "
+                      help="d20 (default) is the current model set; pre_d20 keeps the "
+                           "models used before the OD-fit port and replays older saved "
+                           "settings. d20 adds "
                            "the transit width to the Exact profiles (pumped too) and uses "
                            "the magnetic-sublevel rate model for a finite Rb probe. An "
                            "explicit model ID fixes the pump-off solve."),
@@ -600,10 +610,23 @@ class SASScheme(Scheme):
             "- **Pump on:** Doppler-free Lamb dips + crossovers; CG-branched decay "
             "pumps population into the other ground hyperfine state, enhancing / "
             "inverting the crossovers (the dominant feature of real alkali SAS).\n\n"
-            "**Finite probe power.** A nonzero probe uses independent-transition "
-            "power broadening, longitudinal depletion, and Gaussian beam averaging. "
-            "The Finite-probe model table reports the current reference scope, "
-            "pump-probe limitation, passivity correction, and beam-geometry limits.\n\n"
+            "**Transit width.** Atoms crossing the beam relax at the transit rate "
+            "γ_t, which also widens each optical line: the Exact Maxwell Voigt "
+            "profiles use an optical HWHM of (Γ + Γ_self + Γ_buffer)/2 + γ_t, with "
+            "and without the pump. The Legacy velocity grid keeps its historical "
+            "width without γ_t.\n\n"
+            "**Finite probe power.** With the pump off, a nonzero probe on a uniform, "
+            "uncoated, buffer-free Rb cell uses the magnetic-sublevel rate model: a "
+            "linearly polarized probe at zero field drives π links between (F, |m|) "
+            "populations, which relax by spontaneous decay and transit, followed by "
+            "longitudinal depletion and Gaussian beam averaging. The same model "
+            "draws the theory curve and fits measured OD. Rate equations drop "
+            "coherences between optical links; against the full optical Bloch model "
+            "the local absorption is higher by at most 0.59 % at 100 µW and 1.61 % "
+            "up to 2 mW (1 mm beam radius); after beam averaging and propagation "
+            "the transmission differs by at most 1.8×10⁻³. Other media, and a finite probe with "
+            "the pump on, use independent-transition two-level power broadening; "
+            "the Finite-probe model table reports its scope and limits.\n\n"
             "The **pump power** maps to the Rabi scale via I = 2P/(πw²) and "
             "Ω = Γ·√(I/2I_sat), using the Advanced pump waist and Steck's "
             "effective far-detuned π-polarized I_sat for the isotope and line "

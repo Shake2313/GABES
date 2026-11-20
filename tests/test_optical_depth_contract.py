@@ -80,7 +80,9 @@ def test_live_length_and_line_strength_update_both_logs_without_raw_mutation(
         if finite:
             expected_t, expected_alpha = probe_saturation.propagate_gaussian_spectrum(
                 raw["probe_intensity_log_grid"],
-                raw["probe_alpha_table_unit"] * strength, weak_alpha, length)
+                raw["probe_alpha_table_unit"] * strength, weak_alpha, length,
+                radial_order=raw.get("probe_radial_order",
+                                     probe_saturation.RADIAL_QUADRATURE_ORDER))
             # Collected nonlinear attenuation differs from the unsaturated one.
             peak = np.argmax(weak_alpha)
             assert expected_alpha[peak] < weak_alpha[peak]

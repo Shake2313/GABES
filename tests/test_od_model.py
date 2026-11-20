@@ -26,8 +26,9 @@ OFFSETS = np.linspace(-4.5e9, 5.5e9, 401)
 
 
 def sas_params(**changes):
+    """SAS parameters on the pre-D20 model set unless a test overrides od_model."""
     return {**SASScheme().defaults(), "species": "Rb (natural)", "line": "D2", "temp_c": 60.0,
-            "cell_mm": 75.0, "probe_power_uw": 0.0, **changes}
+            "cell_mm": 75.0, "probe_power_uw": 0.0, MODEL_KEY: "pre_d20", **changes}
 
 
 def direct_transmission(conditions, offsets):
@@ -58,6 +59,11 @@ def test_fit_conditions_reset_only_pump_controls_without_mutating_input():
     ({"ne_pressure_torr": 10.0}, "weak_probe_legacy"),
     ({"probe_power_uw": 100.0}, "finite_power_2level_gaussian_propagation"),
     ({MODEL_KEY: "weak_probe_legacy"}, "weak_probe_legacy"),
+    ({MODEL_KEY: "d20"}, "od_weak_exact_voigt_transit_v1"),
+    ({MODEL_KEY: "d20", "probe_power_uw": 100.0}, "od_finite_rb_mf_rate_v1"),
+    ({MODEL_KEY: "d20", "weak_probe_profile": LEGACY_WEAK_PROBE}, "weak_probe_legacy"),
+    ({MODEL_KEY: "d20", "probe_power_uw": 100.0, "ne_pressure_torr": 5.0},
+     "finite_power_2level_gaussian_propagation"),
 ])
 def test_model_id_is_explicit_and_replays_todays_scheme_choice(changes, model_id):
     conditions = ODConditions.from_params(sas_params(pump_power_mw=1.5, **changes))

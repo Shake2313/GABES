@@ -199,6 +199,7 @@ def _od_conditions(scheme, **overrides):
         scheme.defaults(), species=species.SPECIES_ORDER[2], line="D1",
         pump_power_mw=0.0, probe_power_uw=0.0, probe_waist_mm=1.0, temp_c=43.0,
         cell_mm=20.0, transit_khz=150.0, scan_points=101,
+        od_model="pre_d20",   # ⟦AI⟧ compares against the two-level SAS finite-probe path
     )
     return dict(params, **overrides)
 

@@ -13,7 +13,8 @@ SAS = schemes.get("sas")
 
 def _params(**overrides):
     params = SAS.defaults()
-    params.update(pump_power_mw=0.0, line="D2", temp_c=25.0, scan_points=401)
+    # ⟦AI⟧ pinned to the pre-D20 models whose labels and finite-probe scope these tests check
+    params.update(pump_power_mw=0.0, line="D2", temp_c=25.0, scan_points=401, od_model="pre_d20")
     params.update(overrides)
     return params
 

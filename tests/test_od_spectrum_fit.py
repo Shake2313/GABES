@@ -13,8 +13,10 @@ from gabes.schemes.sas import AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, LEGACY_WEAK_PRO
 
 @pytest.fixture
 def conditions():
+    # ⟦AI⟧ pre-D20 model set: these fits pin the Exact and Legacy backends (M2b).
     return dict(SASScheme().defaults(), species=species.SPECIES_ORDER[1],
-                pump_power_mw=0.0, probe_power_uw=0.0, temp_c=63.0, cell_mm=23.0)
+                pump_power_mw=0.0, probe_power_uw=0.0, temp_c=63.0, cell_mm=23.0,
+                od_model="pre_d20")
 
 
 def test_exact_spectrum_recovers_temperature_and_offset(conditions):
@@ -105,3 +107,13 @@ def test_rate_model_fit_uses_the_same_evaluator_at_finite_probe_power():
     assert fit["model"] == "resolved uniform pump-off OD, finite probe"
     assert fit["parameters"][0]["value"] == pytest.approx(-8.4, abs=1e-6)
     assert fit["fit_residuals"]["rms"] < 1e-9
+
+
+def test_default_d20_fit_reports_the_transit_voigt(conditions):
+    conditions = dict(conditions, od_model="d20")
+    x = np.linspace(-3100.0, 3100.0, 77)
+    y = od_transmission(x, conditions)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    fit = fit_od_spectrum(data, conditions, free=("temp_c",))
+    assert fit["probe_model"] == "od_weak_exact_voigt_transit_v1"
+    assert fit["fit_residuals"]["rms"] < 1e-10

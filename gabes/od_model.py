@@ -47,8 +47,10 @@ RATE_MODEL_ACCURACY = (
     "optical Bloch model (local absorption at the beam centre and line centre, "
     "25 °C, transit 2π·100 kHz, 1 mm 1/e² radius) the rate model is higher by "
     "at most 0.59 % at 100 µW and 1.61 % up to 2 mW (⁸⁵Rb F=2 lines); ⁸⁷Rb stays "
-    "within 0.87 % up to 2 mW. These are local absorption differences; the "
-    "transmitted-power comparison after beam averaging is not yet recorded."
+    "within 0.87 % up to 2 mW. After Gaussian-beam averaging and propagation "
+    "through 75 mm (pure isotopes, D2, line centres, OD0 1.1-1.8) the "
+    "transmission differs by at most 1.8e-3 and the effective optical depth by "
+    "at most 1.21 %; at 100 µW by at most 6.1e-4 and 0.19 %."
 )
 
 

@@ -686,7 +686,8 @@ def test_default_weak_probe_uses_exact_maxwell_voigt(line, medium, monkeypatch):
         raw = SAS.compute(settings)
         for key in ("scan", "alpha_unit", "chi_real_unit"):
             np.testing.assert_array_equal(raw[key], exact[key])
-        assert raw["probe_model"] == "weak_probe_exact_maxwell_voigt"
+        # D20 default (M2b): Automatic and Exact both apply the transit Voigt.
+        assert raw["probe_model"] == "od_weak_exact_voigt_transit_v1"
         profile = raw["weak_probe_profile"]
         assert profile["requested"] == AUTO_WEAK_PROBE
         assert profile["applied"] == EXACT_WEAK_PROBE
@@ -695,7 +696,13 @@ def test_default_weak_probe_uses_exact_maxwell_voigt(line, medium, monkeypatch):
         assert readout["weak_probe_profile"] == profile
 
 
-def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatch):
+@pytest.mark.parametrize(("model_set", "transit_fwhm", "model_id"), [
+    ("pre_d20", 0.0, "weak_probe_exact_maxwell_voigt"),
+    ("d20", 2.0, "od_weak_exact_voigt_transit_v1"),
+])
+def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(
+        monkeypatch, model_set, transit_fwhm, model_id):
+    """Closed-form check; d20 adds twice the transit rate to the FWHM (U1)."""
     from scipy.special import wofz
 
     def unexpected_grid(*args, **kwargs):
@@ -707,8 +714,9 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
         p = _params(species="Rb (natural)", line=line, pump_power_mw=0.0,
                     temp_c=90.0, constrain_doppler_temp=False, doppler_temp_c=125.0,
                     rb_composition="Custom", rb85_fraction=0.36,
-                    weak_probe_profile=EXACT_WEAK_PROBE)
+                    weak_probe_profile=EXACT_WEAK_PROBE, od_model=model_set)
         raw = SAS._compute_species(p, scan_rad_s=scan, extra_homogeneous_fwhm_hz=2.0e6)
+        transit = transit_fwhm * 2 * np.pi * p["transit_khz"] * 1e3
         expected_alpha = np.zeros_like(scan)
         expected_chi = np.zeros_like(scan)
         reference = species.RB85.line(line)[1]
@@ -716,7 +724,7 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
             m = species.build_manifold(isotope, line)
             density = (fraction * species.number_density(isotope, 363.15)
                        * (363.15 / 398.15))
-            gamma = m.gamma + species.self_broadening(isotope, density) + 2 * np.pi * 2.0e6
+            gamma = m.gamma + species.self_broadening(isotope, density) + 2 * np.pi * 2.0e6 + transit
             sigma = m.k_vec * np.sqrt(constants.KB * 398.15 / isotope.mass)
             shift = 2 * np.pi * (m.nu0 - reference)
             areas = species.line_integrated_alpha(isotope, line, density)
@@ -731,7 +739,7 @@ def test_exact_voigt_mode_preserves_species_axes_and_both_quadratures(monkeypatc
         np.testing.assert_allclose(raw["alpha_unit"], expected_alpha, rtol=4e-10)
         np.testing.assert_allclose(raw["chi_real_unit"], expected_chi, rtol=4e-10)
         assert raw["chi_real_unit"][0] < 0 < raw["chi_real_unit"][-1]
-        assert raw["probe_model"] == "weak_probe_exact_maxwell_voigt"
+        assert raw["probe_model"] == model_id
         view = SAS.headless_observables(raw, p)["optical_readout"]
         assert view["weak_probe_profile"]["applied"] == EXACT_WEAK_PROBE
         assert view["weak_probe_profile"]["status"] == "active"
@@ -870,8 +878,9 @@ def test_line_strength_scales_both_quadratures_and_phase_metric():
     assert abs(float(metric["value"].split()[0])
                - np.abs(phase).max() * 1e3) < 0.05
     full = SAS.observables(raw, p, include_figures=False)
+    # Both readouts are rounded to 0.1 mrad: |round(2x) - 2 round(x)| <= 0.15.
     assert abs(_metric_number(full, "Peak phase shift")
-               - 2.0 * _metric_number(view, "Peak phase shift")) < 0.1
+               - 2.0 * _metric_number(view, "Peak phase shift")) <= 0.15 + 1e-9
 
     # A thick, hot cell leaves the mrad scale; the unit switches with it.
     thick = _params(species=RB85_KEY, line="D1", pump_power_mw=0.0, temp_c=120.0,
@@ -1018,8 +1027,9 @@ def test_quantitative_export_requires_independent_sas_grid_convergence(pure_rb85
     errors = quantitative["comparison"]["flank_slope_relative_errors"]
     if pure_rb85:
         assert quantitative["status"] == "converged"
-        assert quantitative["linewidth_mhz"] == pytest.approx(14.707, rel=.01)
-        assert quantitative["lock_slope_per_mhz"] == pytest.approx(.05062, rel=.01)
+        # D20 default (M2b, U3): pre_d20 gave 14.702 MHz and 0.05065 /MHz.
+        assert quantitative["linewidth_mhz"] == pytest.approx(14.774, rel=.01)
+        assert quantitative["lock_slope_per_mhz"] == pytest.approx(.04993, rel=.01)
         assert max(errors) <= .05
     else:
         assert max(errors) > .05

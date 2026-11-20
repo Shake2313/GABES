@@ -102,6 +102,9 @@ def test_reject_stale_result_and_keep_finite_power_overlay(workspace):
     assert not app.exception
     assert app.session_state["sas__temp_c"] == 49.
     assert any("changed" in note.value for note in app.info)
+    # ⟦AI⟧ M2b: under the d20 default a finite Rb probe is fitted by the rate model;
+    # the pre-D20 set keeps the two-level overlay this test covers.
+    app.session_state["sas__od_model"] = "pre_d20"
     app.session_state["sas__probe_power_uw"] = 100.
     app.run()
     assert not app.exception

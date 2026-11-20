@@ -13,8 +13,10 @@ from gabes.schemes.sas import (
 
 
 def params(**changes):
+    """Pre-D20 baseline unless a test sets od_model."""
     return {**SASScheme().defaults(), "species": "Rb (natural)", "line": "D2", "temp_c": 50.0,
-            "cell_mm": 50.0, "pump_power_mw": 0.0, "probe_power_uw": 0.0, **changes}
+            "cell_mm": 50.0, "pump_power_mw": 0.0, "probe_power_uw": 0.0,
+            OD_MODEL_KEY: OD_MODELS_PRE_D20, **changes}
 
 
 def plotted(raw, p):
@@ -22,9 +24,9 @@ def plotted(raw, p):
     return observables.transmission(alpha, length)
 
 
-def test_defaults_and_migration_keep_the_pre_d20_models():
+def test_d20_is_the_default_and_old_settings_replay_pre_d20():
     scheme = SASScheme()
-    assert scheme.defaults()[OD_MODEL_KEY] == OD_MODELS_PRE_D20
+    assert scheme.defaults()[OD_MODEL_KEY] == OD_MODELS_D20
     assert scheme.migrate_default_params({})[OD_MODEL_KEY] == OD_MODELS_PRE_D20
     assert scheme.migrate_default_params({OD_MODEL_KEY: OD_MODELS_D20})[OD_MODEL_KEY] == OD_MODELS_D20
     bare = {k: v for k, v in params().items() if k != OD_MODEL_KEY}
@@ -33,7 +35,9 @@ def test_defaults_and_migration_keep_the_pre_d20_models():
     for p in (params(), params(pump_power_mw=0.6), params(probe_power_uw=40.0)):
         absent = {k: v for k, v in p.items() if k != OD_MODEL_KEY}
         np.testing.assert_array_equal(scheme.compute(p)["alpha_unit"], scheme.compute(absent)["alpha_unit"])
-        assert scheme.compute(dict(p, **{OD_MODEL_KEY: None}))["probe_model"] == scheme.compute(absent)["probe_model"]
+        # None is an unset session value: the current default, like a fresh session.
+        assert (scheme.compute(dict(p, **{OD_MODEL_KEY: None}))["probe_model"]
+                == scheme.compute(dict(p, **{OD_MODEL_KEY: OD_MODELS_D20}))["probe_model"])
 
 
 def test_d20_weak_probe_is_the_transit_voigt_on_both_views():
