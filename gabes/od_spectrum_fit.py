@@ -1,18 +1,21 @@
 """Bounded calibration of absolutely calibrated weak-probe OD spectra."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 from scipy.optimize import least_squares
 from scipy.stats import qmc
 
-from . import observables, species
+from . import species
 from ._arrays import readonly_float_array
 from .experimental_alignment import AxisAlignment
 from .experimental_csv import ExperimentalCSV, transform_x
-from .schemes.sas import SASScheme, _probe_power_mw, _weak_probe_model_id, _weak_probe_profile
+from .od_model import MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, od_unavailable
+from .schemes.sas import _probe_power_mw, _weak_probe_profile
 from .vapor_cell import CellTemperatureState
+
+RATE_MODEL = "od_finite_rb_mf_rate_v1"
 
 
 MAX_FIT_POINTS = 1200
@@ -199,14 +202,33 @@ class ODFitInput:
         default=None, repr=False, compare=False)
 
 
-def od_fit_unavailable(params):
+def od_fit_unavailable(params, *, model_id=None):
+    """Reason the pump-off OD fit cannot run, or None.
+
+    Without ``model_id`` the fit uses today's SAS weak-probe model and needs
+    zero probe power. ``model_id`` selects any implemented ``od_model`` model;
+    the magnetic-sublevel rate model accepts a finite probe.
+    """
     if params.get("species") not in species.SPECIES_ORDER:
         return "Choose a resolved Rb or Cs medium."
-    if float(params.get("pump_power_mw", 0.0)) != 0.0 or _probe_power_mw(params) != 0.0:
+    finite = model_id is not None and MODELS.get(model_id) is not None and MODELS[model_id].finite_power
+    if float(params.get("pump_power_mw", 0.0)) != 0.0 or (_probe_power_mw(params) != 0.0 and not finite):
         return "Set pump and probe power to zero for weak-probe OD fitting."
     if params.get("cell_propagation", "Uniform") != "Uniform":
         return "Choose the Uniform cell for OD fitting."
+    if model_id is not None:
+        try:
+            return od_unavailable(_fit_conditions(params, model_id))
+        except ODUnsupportedError as error:
+            return str(error)
     return None
+
+
+def _fit_conditions(params, model_id=None, extra_homogeneous_fwhm_hz=0.0):
+    conditions = ODConditions.from_params(params, extra_homogeneous_fwhm_hz=extra_homogeneous_fwhm_hz)
+    if model_id is not None:
+        conditions = replace(conditions, model_id=model_id)
+    return conditions
 
 
 def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = None, *,
@@ -291,22 +313,25 @@ def _require_calibrated_od_scope(params):
 
 def od_transmission(frequency_mhz, params, *, extra_width_mhz=0.0, offset_mhz=0.0,
                     optics: ODOpticalCalibration | None = None,
-                    cell: ODCellCalibration | None = None):
-    """Evaluate the resolved SAS pump-off model at the supplied detunings in MHz."""
-    reason = od_fit_unavailable(params)
+                    cell: ODCellCalibration | None = None, model_id=None):
+    """Evaluate the pump-off OD model at the supplied detunings in MHz.
+
+    The same ``od_model.evaluate_od`` call draws the theory curve, so a fit
+    residual and the plotted spectrum sample one function.
+    """
+    reason = od_fit_unavailable(params, model_id=model_id)
     if reason:
         raise ValueError(reason)
     if optics is not None or cell is not None:
         _require_calibrated_od_scope(params)
     if cell is not None:
         params = cell.apply(params)
+    conditions = _fit_conditions(params, model_id, extra_width_mhz * 1e6)
 
     def atomic_transmission(frequency):
+        # MHz on the SAS display axis (pure Rb87 from its own centroid).
         scan = (frequency - offset_mhz) * (2 * np.pi * 1e6)
-        raw = SASScheme()._compute_species(
-            params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=extra_width_mhz * 1e6)
-        alpha = raw["alpha_unit"] * float(params.get("line_strength", 1.0))
-        return observables.transmission(alpha, float(params["cell_mm"]) * 1e-3)
+        return np.array(evaluate_od_display(conditions, scan).transmission)
 
     frequency = np.asarray(frequency_mhz, dtype=float)
     if optics is None:
@@ -317,7 +342,7 @@ def od_transmission(frequency_mhz, params, *, extra_width_mhz=0.0, offset_mhz=0.
 def fit_od_spectrum(data: ODFitInput, params, *, free=None,
                     fit_range_mhz=None, heldout_range_mhz=None, bounds=None,
                     optics: ODOpticalCalibration | None = None,
-                    cell: ODCellCalibration | None = None):
+                    cell: ODCellCalibration | None = None, model_id=None):
     """Search bounded parameter space and refine weighted residuals on fit points.
 
     Ranges apply to the calibrated input axis before fitting the offset. The
@@ -326,7 +351,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     omitting either when fixed by the corresponding calibration. An explicit
     offset on a marker-anchored axis is interpreted as a residual offset.
     """
-    reason = od_fit_unavailable(params)
+    reason = od_fit_unavailable(params, model_id=model_id)
     if reason:
         raise ValueError(reason)
     markers = data.frequency_calibration
@@ -403,7 +428,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         values = dict(base, **dict(zip(free, lower + normalized * width)))
         return od_transmission(frequency, dict(params, temp_c=values["temp_c"], cell_mm=values["cell_mm"]),
                                extra_width_mhz=values["extra_width_mhz"],
-                               offset_mhz=values["offset_mhz"], optics=optics)
+                               offset_mhz=values["offset_mhz"], optics=optics, model_id=model_id)
 
     x_train, y_train, sigma_train = x[train], y[train], sigma[train]
     calls = 0
@@ -450,11 +475,15 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
                     mean=float(np.mean(r)), quantiles=np.quantile(r, [0.05, 0.5, 0.95]).tolist())
 
     profile = _weak_probe_profile(params)
+    applied_model = _fit_conditions(params, model_id).model_id
+    finite = MODELS[applied_model].finite_power
     result = dict(
         status="converged" if best.success else "optimizer_limit",
         uncertainty_scope="Conditional on the detector calibration and fixed model inputs",
         scope="fit_with_disjoint_holdout" if np.any(heldout) else "calibration_only",
-        model="resolved uniform weak-probe pump-off OD", probe_model=_weak_probe_model_id(profile),
+        model=("resolved uniform pump-off OD, finite probe" if finite
+               else "resolved uniform weak-probe pump-off OD"),
+        probe_model=applied_model, probe_power_uw=_probe_power_mw(params) * 1e3,
         source_points=data.source_points,
         medium=params["species"], line=params["line"],
         acquisition_sampling="evenly spaced record indices, no averaging" if data.source_points > x.size else "all branch points",

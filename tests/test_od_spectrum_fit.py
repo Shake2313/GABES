@@ -88,3 +88,20 @@ def test_standalone_fit_reports_actual_weak_probe_backend(
     assert fit["weak_probe_profile"]["status"] == status
     assert fit["weak_probe_profile"]["requested"] == profile
     assert fit["fit_residuals"]["rms"] < 1e-10
+
+
+def test_rate_model_fit_uses_the_same_evaluator_at_finite_probe_power():
+    """A finite probe needs an explicit model; offset fits reuse the cached table."""
+    rate = "od_finite_rb_mf_rate_v1"
+    params = dict(SASScheme().defaults(), species="Rb (natural)", line="D2", pump_power_mw=0.0,
+                  probe_power_uw=100.0, temp_c=45.0, cell_mm=75.0)
+    x = np.linspace(-3500.0, 5000.0, 160)
+    y = od_transmission(x, params, offset_mhz=-8.4, model_id=rate)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    with pytest.raises(ValueError, match="weak-probe"):
+        fit_od_spectrum(data, params, free=("offset_mhz",))
+    fit = fit_od_spectrum(data, params, free=("offset_mhz",), model_id=rate)
+    assert fit["probe_model"] == rate and fit["probe_power_uw"] == 100.0
+    assert fit["model"] == "resolved uniform pump-off OD, finite probe"
+    assert fit["parameters"][0]["value"] == pytest.approx(-8.4, abs=1e-6)
+    assert fit["fit_residuals"]["rms"] < 1e-9

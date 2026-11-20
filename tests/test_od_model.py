@@ -296,3 +296,20 @@ def test_rate_model_zero_power_limit_is_continuous_and_linear():
     assert slopes[0] > 0
     assert abs(slopes[1] - slopes[2]) < abs(slopes[0] - slopes[1]) + 1e-12 * slopes[0]
     assert abs(slopes[2] / slopes[1] - 1) < 1e-3
+
+
+def test_display_axis_matches_the_plot_and_the_fit_for_pure_rb87():
+    from gabes.od_model import evaluate_od_display
+
+    params = sas_params(species="⁸⁷Rb", pump_power_mw=0.0, line_strength=0.8)
+    raw = SASScheme().compute(params)
+    plotted = observables.transmission(raw["alpha_unit"] * 0.8, params["cell_mm"] * 1e-3)
+    conditions = ODConditions.from_params(params)
+    shown = evaluate_od_display(conditions, raw["scan"])
+    np.testing.assert_array_equal(shown.transmission, plotted)
+    shift = display_reference_offset_hz(conditions)
+    np.testing.assert_allclose(shown.offsets_hz, raw["scan"] / TWO_PI + shift, rtol=1e-15)
+    mhz = raw["scan"][::50] / (TWO_PI * 1e6)
+    fit_curve = od_transmission(mhz, params)
+    np.testing.assert_allclose(fit_curve, evaluate_od(conditions, mhz * 1e6 + shift).transmission,
+                               rtol=1e-12, atol=1e-15)

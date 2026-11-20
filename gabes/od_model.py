@@ -245,18 +245,36 @@ def od_unavailable(conditions):
 
 
 def evaluate_od(conditions, offsets_hz):
-    """Transmission and optical depth at exactly the requested offsets.
+    """Transmission and optical depth at exactly the requested offsets in Hz.
 
-    Any order, repeated values and gaps are accepted; each value depends only
-    on its own frequency. The result arrays are read-only.
+    Offsets are from the contract reference (``frequency_reference``). Any
+    order, repeated values and gaps are accepted; each value depends only on
+    its own frequency. The result arrays are read-only.
     """
-    if reason := od_unavailable(conditions):
-        raise ODUnsupportedError(reason)
     offsets = np.asarray(offsets_hz, dtype=float)
     if offsets.ndim != 1 or not offsets.size or not np.isfinite(offsets).all():
         raise ValueError("Offsets must be a nonempty, finite 1-D array in Hz.")
+    shift = display_reference_offset_hz(conditions)
+    return _evaluate(conditions, offsets, (offsets - shift) * TWO_PI)
+
+
+def evaluate_od_display(conditions, scan_rad_s):
+    """The same evaluation on the SAS display axis, angular frequency in rad/s.
+
+    This is the axis of the scheme's ``raw["scan"]`` and of the OD fit's MHz
+    input: pure Rb87 is measured from the Rb87 centroid. ``offsets_hz`` in the
+    result is converted to the contract reference.
+    """
+    scan = np.asarray(scan_rad_s, dtype=float)
+    if scan.ndim != 1 or not scan.size or not np.isfinite(scan).all():
+        raise ValueError("The scan must be a nonempty, finite 1-D array in rad/s.")
+    return _evaluate(conditions, scan / TWO_PI + display_reference_offset_hz(conditions), scan)
+
+
+def _evaluate(conditions, offsets, scan):
+    if reason := od_unavailable(conditions):
+        raise ODUnsupportedError(reason)
     model = MODELS[conditions.model_id]
-    scan = (offsets - display_reference_offset_hz(conditions)) * TWO_PI
     reference = frequency_reference(conditions)
     if model.engine == "rate":
         transmission, depth, od0 = _rate_model_evaluate(conditions, scan)
