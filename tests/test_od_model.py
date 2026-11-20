@@ -319,4 +319,19 @@ def test_rate_model_documents_its_accuracy_against_the_full_obe():
     from gabes.od_model import MODELS, RATE_MODEL_ACCURACY
 
     assert MODELS[RATE].accuracy == RATE_MODEL_ACCURACY
-    assert "0.59 %" in RATE_MODEL_ACCURACY and "1.6 %" in RATE_MODEL_ACCURACY
+    assert "0.59 %" in RATE_MODEL_ACCURACY and "1.61 %" in RATE_MODEL_ACCURACY
+
+
+def test_public_native_axis_reproduces_autood_through_the_display_entry():
+    from gabes.od_model import evaluate_od_display, rate_model_axis
+
+    data = np.load(FIXTURE)
+    meta = json.loads(str(data["metadata"]))
+    for name, case in meta["cases"].items():
+        for entry in case["spectra"]:
+            conditions = autood_conditions(case["settings"], entry, RATE)
+            axis = rate_model_axis(conditions)
+            np.testing.assert_array_equal(axis, data[f"{name}__scan_rad_s"])
+            result = evaluate_od_display(conditions, axis)
+            np.testing.assert_allclose(result.transmission, data[f"{entry['key']}__transmission"],
+                                       rtol=0, atol=1e-12)

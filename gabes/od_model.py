@@ -45,8 +45,9 @@ RATE_MODEL_ACCURACY = (
     "Rate equations drop coherences between optical links. Against the full "
     "optical Bloch model (local absorption at the beam centre and line centre, "
     "25 °C, transit 2π·100 kHz, 1 mm 1/e² radius) the rate model is higher by "
-    "at most 0.59 % at 100 µW and 1.6 % up to 2 mW (⁸⁵Rb F=2 lines); ⁸⁷Rb stays "
-    "within 0.87 % up to 2 mW. The transmitted-power difference is smaller."
+    "at most 0.59 % at 100 µW and 1.61 % up to 2 mW (⁸⁵Rb F=2 lines); ⁸⁷Rb stays "
+    "within 0.87 % up to 2 mW. These are local absorption differences; the "
+    "transmitted-power comparison after beam averaging is not yet recorded."
 )
 
 
@@ -341,6 +342,17 @@ def _rate_model_params(conditions):
     if reason := _rate_model_reason(conditions):
         raise ODUnsupportedError(reason)
     return conditions.to_params()
+
+
+def rate_model_axis(conditions, points=2001):
+    """AutoOD's native axis for these conditions, angular frequency in rad/s.
+
+    Measured on the SAS display axis (the Rb85 centroid for "Rb (natural)")
+    and spanning both Rb manifolds even at pure-isotope endpoints. Evaluating
+    ``od_finite_rb_mf_rate_v1`` here with ``evaluate_od_display`` repeats
+    AutoOD 0.2.2's calculation, so its own table nodes are sampled exactly.
+    """
+    return _rate_model_scan(conditions, points)
 
 
 def _rate_model_scan(conditions, points=2001):
