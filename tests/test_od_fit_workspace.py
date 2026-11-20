@@ -259,3 +259,32 @@ def test_quantitative_fit_converts_declared_native_centroid_once(workspace):
     result = exports[-1]["comparison_payload"]["physical_od_fit"]
     np.testing.assert_allclose(result["frequency_mhz"], (canonical - .078095)*1.e3, atol=1.e-10, rtol=0)
     assert result["fit_residuals"]["rms"] < 1.e-12
+
+
+def test_history_bridge_refreshes_each_traversal_once_and_detaches(tmp_path):
+    import shutil
+    import subprocess
+    from gabes_ui.paths import asset_text
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js is needed to exercise browser history events")
+    script = tmp_path / "history.mjs"
+    script.write_text(asset_text("ui/sas_history.js") + """
+import assert from 'node:assert/strict';
+globalThis.window = new EventTarget();
+window.location = {search: '?compare=0'};
+const seen = [];
+const component = {setTriggerValue: (key, search) => seen.push([key, search])};
+const first = bindSasHistory(component);
+assert.deepEqual(seen, []);  // Mounting must not create a frontend rerun.
+window.dispatchEvent(new Event('popstate'));
+first();
+window.location.search = '';
+window.dispatchEvent(new Event('popstate')); // No handler on the unmounted component.
+const second = bindSasHistory(component);
+window.dispatchEvent(new Event('popstate'));
+second();
+assert.deepEqual(seen, [['route', '?compare=0'], ['route', '']]);
+""", encoding="utf-8")
+    subprocess.run([node, str(script)], check=True, capture_output=True)

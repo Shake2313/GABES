@@ -44,6 +44,7 @@ from gabes_ui.readout import (
 from gabes_ui.shell import (
     brand_html,
     apply_scheme_link,
+    bind_sas_history,
     render_preset_selector,
     render_regime_selector,
 )
@@ -383,4 +384,6 @@ def render_spectra():
 
 
 with workspace:
+    if is_sas:
+        bind_sas_history()
     render_spectra()

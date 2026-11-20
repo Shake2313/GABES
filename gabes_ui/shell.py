@@ -15,6 +15,17 @@ from gabes_ui.controls import (
     skey,
 )
 from gabes_ui.readout import clean_choice_label
+from gabes_ui.paths import asset_text
+
+
+_SAS_HISTORY = st.components.v2.component(
+    "gabes_sas_history", html="", js=asset_text("ui/sas_history.js"))
+
+
+def bind_sas_history():
+    """Notify Streamlit of browser back/forward while preserving this upload session."""
+    _SAS_HISTORY(key="sas-route-history", default={"route": None}, height=0,
+                 on_route_change=lambda: None)
 
 
 def apply_scheme_link(state, query, available_schemes):
