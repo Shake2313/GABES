@@ -313,3 +313,10 @@ def test_display_axis_matches_the_plot_and_the_fit_for_pure_rb87():
     fit_curve = od_transmission(mhz, params)
     np.testing.assert_allclose(fit_curve, evaluate_od(conditions, mhz * 1e6 + shift).transmission,
                                rtol=1e-12, atol=1e-15)
+
+
+def test_rate_model_documents_its_accuracy_against_the_full_obe():
+    from gabes.od_model import MODELS, RATE_MODEL_ACCURACY
+
+    assert MODELS[RATE].accuracy == RATE_MODEL_ACCURACY
+    assert "0.59 %" in RATE_MODEL_ACCURACY and "1.6 %" in RATE_MODEL_ACCURACY

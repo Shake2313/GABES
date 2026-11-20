@@ -40,6 +40,14 @@ from .schemes.sas import (
 MODEL_KEY = "od_model"   # reserved parameter name for an explicit saved model ID
 PUMP_GROUP = "Pump"
 TWO_PI = 2.0 * math.pi
+# User decision U2, 2026-11-20: keep the rate model and document its accuracy.
+RATE_MODEL_ACCURACY = (
+    "Rate equations drop coherences between optical links. Against the full "
+    "optical Bloch model (local absorption at the beam centre and line centre, "
+    "25 °C, transit 2π·100 kHz, 1 mm 1/e² radius) the rate model is higher by "
+    "at most 0.59 % at 100 µW and 1.6 % up to 2 mW (⁸⁵Rb F=2 lines); ⁸⁷Rb stays "
+    "within 0.87 % up to 2 mW. The transmitted-power difference is smaller."
+)
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,7 @@ class ODModel:
     finite_power: bool
     weak_probe_profile: str | None = None
     engine: str = "sas"               # sas | sas_transit | rate
+    accuracy: str = ""                # documented accuracy, for readouts and exports
 
 
 MODELS = {model.model_id: model for model in (
@@ -65,7 +74,7 @@ MODELS = {model.model_id: model for model in (
             "implemented", False, EXACT_WEAK_PROBE, engine="sas_transit"),
     ODModel("od_finite_rb_mf_rate_v1",
             "Magnetic-sublevel rate model for a linearly polarized Rb probe, any probe power",
-            "implemented", True, engine="rate"),
+            "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY),
 )}
 
 
