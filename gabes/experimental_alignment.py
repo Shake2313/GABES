@@ -129,6 +129,16 @@ def estimate_axis_scale_correction(x, xlim, *, manual_min=0.1, manual_max=3.0):
         return AxisScaleCorrection(reason=str(exc))
 
 
+def fit_signal_affine(source, target):
+    """Fit positive display gain and offset for paired samples; return None for no fit."""
+    source, target = np.asarray(source, dtype=float), np.asarray(target, dtype=float)
+    if source.ndim != 1 or target.shape != source.shape or source.size < 2:
+        raise ValueError("Display alignment requires at least two paired samples.")
+    if not np.all(np.isfinite(source)) or not np.all(np.isfinite(target)):
+        raise ValueError("Display alignment samples must be finite.")
+    return _robust_affine(source, target)
+
+
 def _robust_affine(source, target):
     """Positive affine signal fit with iteratively reweighted outlier rejection."""
     weight = np.ones(source.size)
@@ -384,4 +394,4 @@ def fit_trace_alignment(trace: ExperimentalCSV, theory_x, theory_transmission, *
 
 
 __all__ = ["AxisAlignment", "AxisScaleCorrection", "AlignmentFitResult",
-           "frame_alignment", "estimate_axis_scale_correction", "fit_trace_alignment"]
+           "frame_alignment", "estimate_axis_scale_correction", "fit_trace_alignment", "fit_signal_affine"]

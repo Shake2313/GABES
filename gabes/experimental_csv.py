@@ -239,20 +239,30 @@ def load_experimental_csv(
     detector ``signal = offset + gain * transmission`` calibration.
     """
 
+    return _load_measured_pairs(
+        data, denoise=denoise, calibration_mode=calibration_mode,
+        dark_signal=dark_signal, reference_signal=reference_signal, gain=gain, offset=offset,
+        min_unique_points=MIN_UNIQUE_POINTS,
+    )
+
+
+def _load_measured_pairs(data, *, denoise, calibration_mode, dark_signal, reference_signal,
+                         gain, offset, min_unique_points):
     raw_bytes = _coerce_bytes(data)
     text, encoding = decode_csv_text(raw_bytes, ExperimentalCSVError)
     source_x, source_y, counts = _parse_first_two_columns(text)
     branch_slices, direction_labels, reversal_count = sweep_structure(source_x)
     detuning, raw_signal = _sort_and_merge(source_x, source_y)
-    if detuning.size < MIN_UNIQUE_POINTS:
+    if detuning.size < min_unique_points:
         raise ExperimentalCSVError(
-            f"CSV must contain at least {MIN_UNIQUE_POINTS} unique finite "
+            f"CSV must contain at least {min_unique_points} unique finite "
             f"detuning values; found {detuning.size}."
         )
 
     segments, typical_spacing, largest_gap, gap_threshold = _find_segments(
         detuning
     )
+    denoise = denoise and detuning.size >= MIN_UNIQUE_POINTS
     denoised_signal, noise_sigma, replacements, windows = _denoise_signal(
         detuning, raw_signal, segments, enabled=bool(denoise)
     )
