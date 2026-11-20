@@ -142,6 +142,48 @@ def test_autood_fixture_bytes_are_frozen():
     assert meta["adapter_sha256"] == "7063e3471c71bcaeaffc33d6f5e6d960f65ef9728f93f83ecbf0db89cfd84f13"
 
 
+def autood_conditions(settings, entry, model_id):
+    percent = settings.get("rb85_percent", 72.17)
+    return ODConditions(
+        species="Rb (natural)", line=settings["line"], temp_c=settings["temperature_c"],
+        cell_mm=settings["cell_mm"], model_id=model_id,
+        rb_composition=RB_COMPOSITION_NATURAL if percent == 72.17 else RB_COMPOSITION_CUSTOM,
+        rb85_fraction=percent / 100.0 if percent != 72.17 else species.RB85.abundance,
+        probe_power_uw=entry["probe_mw"] * 1000.0, probe_waist_mm=settings["diameter_mm"] / 2.0,
+        transit_khz=entry["transit_khz"],
+    )
+
+
+def test_ported_rate_model_reproduces_every_autood_spectrum():
+    """Step 1: AutoOD's algorithm in GABES. Bit-identical with Numba off;
+    GABES's Numba kernels move transmission by <1e-13 here."""
+    from gabes.od_model import _rate_model_on_axis, _rate_model_scan
+
+    data = np.load(FIXTURE)
+    meta = json.loads(str(data["metadata"]))
+    for name, case in meta["cases"].items():
+        for entry in case["spectra"]:
+            conditions = autood_conditions(case["settings"], entry, "od_finite_rb_mf_rate_v1")
+            scan = _rate_model_scan(conditions)
+            np.testing.assert_array_equal(scan, data[f"{name}__scan_rad_s"])
+            transmission, depth, od0 = _rate_model_on_axis(conditions, scan)
+            key = entry["key"]
+            np.testing.assert_allclose(transmission, data[f"{key}__transmission"], rtol=0, atol=1e-12,
+                                       err_msg=key)
+            np.testing.assert_allclose(depth, data[f"{key}__optical_depth"], rtol=1e-12, atol=1e-14,
+                                       err_msg=key)
+            np.testing.assert_array_equal(od0, data[f"{key}__od0"])
+
+
+def test_rate_model_rejects_conditions_outside_its_scope():
+    from gabes.od_model import _rate_model_scan
+
+    base = ODConditions.from_params(sas_params(probe_power_uw=100.0))
+    for changes in ({"doppler_temp_c": 80.0}, {"ne_pressure_torr": 5.0}, {"species": "¹³³Cs"}):
+        with pytest.raises(ODUnsupportedError):
+            _rate_model_scan(replace(base, **changes))
+
+
 def test_autood_weak_probe_equals_exact_voigt_plus_twice_the_transit_rate():
     """AutoOD adds the transit rate to the optical HWHM; GABES Exact adds none (U1)."""
     data = np.load(FIXTURE)

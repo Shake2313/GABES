@@ -23,12 +23,13 @@ import math
 
 import numpy as np
 
-from . import observables, species
+from . import constants, core, linear_hyperfine, observables, probe_saturation, species
 from ._arrays import readonly_float_array
 from .optical_frequency import reference_offset_hz
+from .optical_pumping import MAGNETIC_PI, ProjectedProbe
 from .schemes.sas import (
     EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, RB_COMPOSITION_CUSTOM, RB_COMPOSITION_NATURAL,
-    SASScheme, _probe_power_mw, _weak_probe_model_id, _weak_probe_profile,
+    SASScheme, _isotope_composition, _probe_power_mw, _weak_probe_model_id, _weak_probe_profile,
 )
 
 
@@ -263,3 +264,149 @@ def evaluate_od(conditions, offsets_hz):
 
 def with_extra_width(conditions, extra_homogeneous_fwhm_hz):
     return replace(conditions, extra_homogeneous_fwhm_hz=float(extra_homogeneous_fwhm_hz))
+
+
+# ---------------------------------------------------------------------------
+# Magnetic-sublevel rate model, ported from AutoOD 0.2.2 (tag baseline-0.2.2-src,
+# autood/engine.py: _full_rb_scan, _population_response, calculate).
+# Step 1 keeps AutoOD's algorithm: the nonlinear table is built on the
+# requested uniform axis, so a value depends slightly on the axis sampling.
+# It is the parity anchor for the sample-invariant evaluator.
+# ---------------------------------------------------------------------------
+
+def _rate_model_reason(conditions):
+    if conditions.species not in ("Rb (natural)", species.RB85.label, species.RB87.label):
+        return "The magnetic-sublevel rate model covers rubidium only."
+    if conditions.doppler_temp_c is not None:
+        return "The magnetic-sublevel rate model needs the Doppler temperature tied to the cell."
+    if (conditions.ne_pressure_torr != 0.0 or conditions.paraffin_coated
+            or conditions.optical_collision_model not in (None, SASScheme().defaults()["optical_collision_model"])):
+        return "The magnetic-sublevel rate model covers uncoated cells without buffer gas."
+    return None
+
+
+def _rate_model_params(conditions):
+    if reason := _rate_model_reason(conditions):
+        raise ODUnsupportedError(reason)
+    return conditions.to_params()
+
+
+def _rate_model_scan(conditions, points=2001):
+    """AutoOD's axis in rad/s: both Rb manifolds stay visible at pure endpoints."""
+    params = _rate_model_params(conditions)
+    components, reference, *_ = _isotope_composition(params)
+    fractions = {isotope.name: fraction for isotope, fraction in components}
+    line = params["line"]
+    temperature_k = params["temp_c"] + 273.15
+    reference_hz = reference.line(line)[1]
+    transit_rate = 2 * np.pi * params["transit_khz"] * 1e3
+    peak_intensity = probe_saturation.gaussian_peak_intensity(
+        params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
+    centers = []
+    doppler_fwhm_max = 0.0
+    broadened_fwhm_max = 0.0
+    for isotope in (species.RB85, species.RB87):
+        manifold = species.build_manifold(isotope, line, transit_rate=transit_rate)
+        offset = 2 * np.pi * (manifold.nu0 - reference_hz)
+        centers.append(manifold.omega + offset)
+        sigma_v = np.sqrt(constants.KB * temperature_k / isotope.mass)
+        doppler_fwhm_max = max(
+            doppler_fwhm_max, np.sqrt(8 * np.log(2)) * manifold.k_vec * sigma_v)
+        density = (species.number_density(isotope, temperature_k)
+                   * fractions.get(isotope.name, 0.0))
+        gamma_effective = manifold.gamma + species.self_broadening(isotope, density)
+        saturation_intensity = probe_saturation.closed_two_level_saturation_intensity(
+            manifold.nu0, manifold.gamma)
+        saturation = probe_saturation.peak_saturation_parameter(
+            peak_intensity, saturation_intensity, manifold.gamma, gamma_effective)
+        broadened_fwhm_max = max(
+            broadened_fwhm_max, gamma_effective * np.sqrt(1.0 + saturation))
+    centers = np.concatenate(centers)
+    margin = max(3.5 * doppler_fwhm_max, 6.0 * broadened_fwhm_max)
+    return np.linspace(centers.min() - margin, centers.max() + margin, int(points))
+
+
+def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02,
+                       frequency_stride=4):
+    """Weak absorption and, when driven, a local alpha(I, nu) table in m^-1.
+
+    Unit line strength. The optical HWHM is (Gamma + Gamma_self)/2 + gamma_t,
+    plus half of any extra homogeneous FWHM. Known Voigt wings are factored
+    out before spline interpolation; the propagation lattice stays on the
+    requested frequency samples.
+    """
+    from scipy.interpolate import CubicSpline
+
+    params = _rate_model_params(conditions)
+    isotope_fractions, reference, *_ = _isotope_composition(params)
+    line = params["line"]
+    temperature = params["temp_c"] + 273.15
+    transit = 2 * np.pi * params["transit_khz"] * 1e3
+    extra_hwhm = np.pi * conditions.extra_homogeneous_fwhm_hz
+    peak = probe_saturation.gaussian_peak_intensity(
+        params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
+    alpha0 = np.zeros_like(scan)
+    components = []
+    pumping_scale = 0.0
+    for isotope, fraction in isotope_fractions:
+        density = fraction * species.number_density(isotope, temperature)
+        manifold = species.build_manifold(isotope, line)
+        offset = 2 * np.pi * (manifold.nu0 - reference.line(line)[1])
+        sigma = manifold.k_vec * np.sqrt(constants.KB * temperature / isotope.mass)
+        gamma2 = 0.5 * (manifold.gamma + species.self_broadening(isotope, density)) + transit
+        if extra_hwhm:
+            gamma2 += extra_hwhm
+        weak, _ = linear_hyperfine.species_complex_voigt(
+            scan, manifold, density, temperature, 2 * gamma2, offset=offset)
+        alpha0 += weak
+        if peak > 0:
+            probe = ProjectedProbe(manifold, gamma2, transit, resolution=MAGNETIC_PI)
+            components.append((probe, density, offset, sigma))
+            pumping_scale = max(pumping_scale, float(probe.peak_saturation(peak))
+                                * (manifold.gamma + transit) / transit)
+    if peak == 0:
+        return alpha0, None, None
+
+    # The tail begins well below the optical-pumping / transit crossover.
+    xmax = max(12.0, np.log1p(pumping_scale) + 14)
+    log_intensity = np.linspace(0, xmax, 1 + math.ceil(xmax / log_step))
+    propagation_grid = np.linspace(0, xmax, 1 + math.ceil(xmax / propagation_step))
+    indices = np.unique(np.r_[np.arange(0, scan.size, frequency_stride), scan.size - 1])
+    coarse_scan = scan[indices]
+    intensities = peak * np.exp(-log_intensity)
+    coarse_alpha = np.zeros((intensities.size, indices.size))
+    for probe, density, offset, sigma in components:
+        coarse_alpha += density * probe.absorption_cross_section(intensities, coarse_scan - offset, sigma)
+    if not np.all(np.isfinite(coarse_alpha)) or np.any(coarse_alpha <= 0):
+        raise ArithmeticError("Nonpositive or nonfinite absorption in the probe population solve.")
+    ratio = np.log(coarse_alpha / alpha0[indices])
+    if np.max(np.abs(ratio[-1])) > 3e-5:
+        raise ArithmeticError("The nonlinear propagation table did not reach its analytical weak tail.")
+    # The final boundary matches the analytical continuation used by GABES.
+    ratio[-1] = 0.0
+    ratio = CubicSpline(coarse_scan, ratio, axis=1)(scan)
+    alpha_table = alpha0 * np.exp(CubicSpline(log_intensity, ratio, axis=0)(propagation_grid))
+    return alpha0, propagation_grid, alpha_table
+
+
+def _rate_model_on_axis(conditions, scan_rad_s):
+    """(T, OD_eff, OD0) of the rate model on an increasing uniform axis in rad/s.
+
+    The axis is relative to the medium's SAS reference (the Rb85 centroid for
+    "Rb (natural)"). ``line_strength`` scales absorption at propagation.
+    """
+    scan = np.asarray(scan_rad_s, dtype=float)
+    with core.blas_single_thread():
+        alpha0, grid, table = _rate_model_tables(conditions, scan)
+    strength = conditions.line_strength
+    if strength != 1.0:
+        alpha0 = alpha0 * strength
+        table = None if table is None else table * strength
+    length = conditions.cell_mm * 1e-3
+    od0 = alpha0 * length
+    if grid is None:
+        return np.exp(-od0), od0, od0
+    with core.blas_single_thread():
+        transmission, effective_alpha = probe_saturation.propagate_gaussian_spectrum(
+            grid, table, alpha0, length, radial_order=96)
+    return transmission, effective_alpha * length, od0
