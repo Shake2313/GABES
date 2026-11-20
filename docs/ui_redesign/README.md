@@ -6,6 +6,7 @@
 SABES에도 같은 시각 규약 적용. 광학 테이블의 glyph·광로·라벨·모델 표시·화면 검수 기준은 [SABES 디자인 규칙](../SABES/design_rules.md), 사용자 결정은 D13 참조.
 
 ## 현재 상태
+- ⟦AI⟧ [OD/SAS 이론 계산과 실험 OD 피팅 이식안](od_sas_experimental_csv_port.md)에 펌프 설정 보존과 단일 빔 Rb 공용 모델 채택 범위를 반영. GABES 전체 카드·그라데이션 개편은 CSV 통합 후속으로 [체크리스트](../checklist.json)에서 관리.
 - ⟦AI⟧ 2026-11-05 세 뷰 개선안의 **새 1단계 공용 지도·선택 체계 완료**: Map/Curves, 조건·단면·입력·판독 연동, 네이티브 행 스캔과 캐시·중단/재개. [단계 계획](plan.md), [검증 기록](audit/common_map_stage1_2026_11_05.md). 아래의 기존 G05–G08 완료 이력과 구별한다.
 - ⟦AI⟧ 같은 계획의 **2단계 Λ 뷰 완료**: EIT/AT 지도·T/OD·분산, AT 네이티브 피크, CPT 대비/폭/대비÷폭, Δp×Δc 이조 지도와 추가 비교 축. [검증 기록](audit/lambda_stage2_2026_11_05.md).
 - ⟦AI⟧ **3단계 리드버그 뷰 완료**: EIT 출력 지도·잔류 폭 비교, AT RF 지도·피크/장 환산, 출력·온도 분석, Spectra/Sensitivity와 네이티브 유한 IF 크기·위상·PSN/총 ASD 연결. [검증 기록](audit/rydberg_stage3_2026_11_05.md). 새 4–5단계는 대기한다.

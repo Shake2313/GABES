@@ -527,6 +527,71 @@
   ],
   "items": [
     {
+      "id": "od-sas-autood-csv-web-workspace",
+      "area": "OD/SAS 이론 보기 · 실험 OD 피팅 · 공용 GABES 계산",
+      "title": "AutoOD 실험 OD 피팅과 단일 빔 Rb 모델을 GABES에 통합",
+      "origin": "human_request",
+      "source_documents": [
+        "docs/ui_redesign/od_sas_experimental_csv_port.md"
+      ],
+      "user_request": "2026-11-20 사용자 요청. AutoOD의 CSV 비교 기능·디자인 규약을 GABES에 이식하는 기조를 설계. CSV 보기는 OD만 계산하고 펌프 변수는 숨기며 이론 보기로 돌아가면 원래 값을 복원. 두 보기의 목적을 이름에 드러내고, 더 세밀한 AutoOD 모델은 적용 조건에서 GABES 공용 경로로 통합.",
+      "user_decision_2026_11_20": "사용자 결정 2026-11-20(U1): Exact 약한 프로브 기본 선폭에 통과 완화 γₜ를 광학 HWHM으로 더해, 0 µW와 유한 프로브가 같은 선폭 규칙을 쓴다. ⟦AI⟧ 규칙은 HWHM = ½(Γ + Γ_self + Γ_buffer) + γₜ + π·FWHM_extra, 점유율 재설정률 γₜ. 값 변경이므로 자체 커밋으로 착지하고 새 모델 ID를 쓴다(통과 폭을 포함한 프로파일에 weak_probe_exact_maxwell_voigt 재사용 금지). 모델 키가 없는 이전 저장 설정은 현행 Exact(통과 폭 없음)로 재생. Legacy 속도 격자는 with_reset으로 이미 γₜ를 포함하므로 중복 가산 금지. 예상 변화: 자연 Rb D₂·25 °C·75 mm·+1.6503615363 GHz 표본에서 투과율 39.2663 → 39.2789 %(+0.0126 %p), 같은 데이터의 추가 선폭 피팅값 −2γₜ/2π(기본 γₜ에서 −0.2 MHz). 영향 받는 OD/SAS 스냅샷을 재캡처하고 변화량을 커밋에 기록. 범위는 펌프 꺼짐 Exact 프로파일. 수치 근거는 이식안의 '공통 OD 모델 채택 기준' 대조표. 사용자 결정 2026-11-20(U3): 펌프 켬 'Exact Voigt + SAS correction'의 배경 Voigt에도 같은 γₜ HWHM을 더한다. ⟦AI⟧ 현재 배경(_component_response의 species_complex_voigt(..., gamma_eff))은 γₜ가 없고 그 위의 펌프 보정 OBE는 γₜ 재설정을 포함한다. 펌프 0 극한에서 U1 곡선과 연속이어야 하므로 U1과 같은 규칙·같은 값 변경 커밋(또는 바로 다음 커밋)으로 착지하고, 펌프 켬 SAS 스냅샷·판독 변화량을 따로 기록한다. D20의 펌프 SAS 모델 범위(펌프 보정 방식)는 그대로 둔다.",
+      "status": "ready",
+      "priority": "P2",
+      "effort": "large",
+      "depends_on": [],
+      "adoption_status": "⟦AI⟧ 설계 단계. 펌프 없는 OD와 이론·피팅의 공용 모델 방향은 사용자 결정. 영문 표기 Simulate spectra / Fit OD data와 단계·인수 기준은 구현 제안.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 왼쪽 Simulate spectra를 기본 진입으로, 오른쪽 Fit OD data를 OD 전용으로 설계. ?compare=0 및 이전 보기 링크 유지. 파일명·CSV 형식 대신 각 버튼에 이론 계산·실험 OD 피팅 동작을 표시.",
+        "⟦AI⟧ 오른쪽에서는 펌프 입력·파생 판독·스캔을 숨기고, 이론·정렬·피팅·캐시·내보내기에는 펌프가 꺼진 동일한 유효 조건을 사용. 프로브 파워와 빔 크기는 유지. 왼쪽의 펌프 파워·빔 설정·기타 펌프 전용 값은 별도 보존해 반복 전환·취소 후 그대로 복원.",
+        "⟦AI⟧ 일반·Origin CSV를 내보내고 다시 열 때 원본 취득 순서·단위·스캔 방향·공백·검출기 보정 보존. 오실로스코프의 트리거·SAS 채널은 구간·채널 식별에 쓸 수 있고 정렬·피팅 대상은 OD 측정 신호.",
+        "⟦AI⟧ 펌프 없는 Rb D₁/D₂ 단일 빔·선형 편광·영자장·유한 프로브의 지원 범위에서 AutoOD의 자기 부분준위 점유율 모델을 GABES 공용 코드로 수용. GABES 이론 곡선·OD 피팅은 동일 모델을 평가하고, AutoOD도 후속 검증 후 해당 GABES 핀을 사용.",
+        "⟦AI⟧ 공용화는 AutoOD 기존 호출의 수치·판독을 보존하는 단계와 GABES의 현행 유한 프로브 기본값을 바꾸는 단계로 나눈다. 기존 설정 재현, D₁/D₂·약한 프로브 한계·유한 파워 수렴·비용을 검증하고 구 모델 대비 변화량과 기준선 갱신을 따로 기록. 펌프가 켜진 SAS 및 Cs 모델 적용 범위는 유지. 새 기본 모델의 통과 완화 선폭을 0 µW와 유한 파워에서 일관되게 적용하고, 추가 선폭 피팅 시 중복 계산을 검사. 같은 조건을 사용한 2,001점 대조 수치는 이식안에 기록.",
+        "⟦AI⟧ 보정된 약한 프로브 OD의 방향별 피팅·검증 구간·불확도를 보존. 보기 전환, D₁/D₂ 변경, 늦은 피팅 결과와 원래 7개 회귀 사례를 검사. 커서·확대·표시 변경의 이론 재계산 0회, 키보드 조작·두 단계 그라데이션 검수."
+      ]
+    },
+    {
+      "id": "od-sas-autood-finite-probe-fit-extension",
+      "area": "OD/SAS Experimental CSV · 유한 프로브 물리 피팅",
+      "title": "⟦AI⟧ 통합한 유한 프로브 Rb OD 모델의 추정 변수별 검증·공개",
+      "origin": "ai_execution_of_human_request",
+      "source_documents": [
+        "docs/ui_redesign/od_sas_experimental_csv_port.md"
+      ],
+      "status": "parked",
+      "priority": "P2",
+      "effort": "large",
+      "depends_on": [
+        "od-sas-autood-csv-web-workspace"
+      ],
+      "activation_trigger": "⟦AI⟧ 공용 단일 빔 Rb 모델을 웹 비교와 피팅 계산에 연결한 뒤 유한 프로브 추가 추정 변수의 회수·식별 가능성 검증을 진행할 때.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 공용 모델의 적용 조건과 주파수 영점·빔 직경/반경·파워 단위를 일치시킨다. 양의 프로브 파워에서 동일한 GABES 모델을 화면과 잔차에 사용.",
+        "⟦AI⟧ 파워·1/e² 빔 크기·동위원소 분율 등 변수별 회수 오차, 불확도·상관, 경계 도달을 합성 데이터로 확인해 검증된 변수만 공개. 보정되지 않은 상대 신호의 표시값과 절대 투과율 추정을 구분."
+      ]
+    },
+    {
+      "id": "gabes-ui-cards-gradients-after-csv",
+      "area": "GABES 공통 화면 · gabes_ui 디자인",
+      "title": "실험 CSV 통합 후 GABES 전반에 카드와 옅은 그라데이션 도입",
+      "origin": "human_request",
+      "source_documents": [
+        "docs/ui_redesign/od_sas_experimental_csv_port.md"
+      ],
+      "user_request": "2026-11-20 사용자 결정. AutoOD의 약한 그라데이션·카드 기조를 GABES 색상으로 통일하고 전체 화면 개편은 CSV 통합이 잘 들어간 이후에 진행.",
+      "status": "parked",
+      "priority": "P3",
+      "effort": "large",
+      "depends_on": [
+        "od-sas-autood-csv-web-workspace"
+      ],
+      "activation_trigger": "⟦AI⟧ OD 전용 CSV 작업공간과 공용 모델 연결의 통합·회귀 검증이 완료되면 별도 디자인 작업으로 시작. 추가 추정 변수 검증 및 적용 범위 밖 모델 연구와 독립.",
+      "acceptance_criteria": [
+        "⟦AI⟧ CSV 화면에서 검수한 값으로 결과 카드와 섹션 제목의 강도를 공용 테마에 정의. 단색 페이지·플롯, GABES 색상, 입력 컨트롤과 포커스의 일관성 유지.",
+        "⟦AI⟧ 대표 화면을 먼저 데스크톱·좁은 화면에서 비교하고 다른 스킴에 순차 적용. 수치·그래프·기존 입력 흐름 보존."
+      ]
+    },
+    {
       "id": "magneto-doppler-fallback-policy",
       "area": "gabes/schemes/magneto.py",
       "title": "⟦AI⟧ Apply the shared rejected-row refinement to the single-pair Magneto reference",
@@ -6605,10 +6670,11 @@
       "depends_on": [
         "od-sas-finite-probe-hyperfine-pumping"
       ],
-      "activation_trigger": "⟦AI⟧ The user expands the OD/SAS scope to resolve m_F populations or distributed transit and selects the target operating conditions.",
+      "activation_trigger": "⟦AI⟧ 분포형 통과시간 또는 통합한 Rb 모델의 적용 범위를 벗어나는 자기 부분준위 모델을 별도로 요청하고 목표 조건이 정해질 때.",
       "acceptance_criteria": [
         "⟦AI⟧ Quantify the effect against the projected reference under the target conditions and document grid convergence, runtime and the applicable polarization and geometry."
-      ]
+      ],
+      "scope_update_2026_11_20": "⟦AI⟧ 단일 선형 편광·영자장·펌프 없는 Rb OD의 자기 부분준위 점유율은 od-sas-autood-csv-web-workspace에서 통합하도록 지정됐다. 여기에는 분포형 통과시간과 그 밖의 적용 범위 확장만 남긴다. 기존 유한 프로브 참조 보기의 검증 기록은 od-sas-finite-probe-hyperfine-pumping에 있다."
     },
     {
       "id": "od-sas-finite-pump-finite-probe-joint-model",
