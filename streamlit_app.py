@@ -202,6 +202,7 @@ else:
 # Reserve the main instrument above saved settings, but mount the defaults
 # store before any editable parameter widgets so preset callbacks stay atomic.
 is_sas = scheme.name == "sas"
+fit_od_view = is_sas and st.query_params.get("compare") == "0"
 has_spectra = scheme.model_comparison_parameter is not None
 if has_spectra:
     workspace = st.container(key="gabes_sas_workspace")
@@ -236,7 +237,7 @@ with topbar:
                        help="What this scheme models, and its references.")
     if regime_spec is not None:
         render_regime_selector(scheme.name, regime_spec, scheme)
-    elif isinstance(_rec_sets, dict) and _rec_sets and not _mode_driven_defaults:
+    elif isinstance(_rec_sets, dict) and _rec_sets and not _mode_driven_defaults and not fit_od_view:
         render_preset_selector(scheme.name, scheme, _rec_sets)
     with st.container(horizontal=True, horizontal_alignment="right",
                       vertical_alignment="center", gap="small", key="gabes_topbar_end"):
@@ -263,8 +264,13 @@ def render_spectra():
         from gabes_ui.conditions import render_conditions, render_power_inputs
 
         view_key = skey(scheme.name, "_spectra_view")
-        model_label = "Model spectra"
-        csv_label = "Experimental CSV (legacy)" if is_sas else "Single-condition details"
+        model_label = "Simulate spectra" if is_sas else "Model spectra"
+        csv_label = "Fit OD data" if is_sas else "Single-condition details"
+        if is_sas:
+            previous = st.session_state.get("_sas_simulating", comparing)
+            if previous != comparing:
+                plotcard.remember_overlay_for_comparison(scheme.name, entering=comparing)
+            st.session_state["_sas_simulating"] = comparing
         st.session_state[view_key] = model_label if comparing else csv_label
 
         def change_view():
@@ -272,8 +278,6 @@ def render_spectra():
             if picked is None:
                 return
             entering = picked == model_label
-            if is_sas:
-                plotcard.remember_overlay_for_comparison(scheme.name, entering=entering)
             if entering:
                 st.query_params.pop("compare", None)
             else:
@@ -287,9 +291,15 @@ def render_spectra():
                 guide_button(GUIDE_URL, key="sas_first_spectrum", label="First spectrum",
                              anchor="first-spectrum")
             render_update_status(scheme.name)
-        params = render_conditions(scheme, specs)
+        visible_specs = specs
+        if fit_od_view:
+            from gabes.od_model import od_fit_conditions, PUMP_GROUP
+            visible_specs = [sp for sp in specs if sp.group != PUMP_GROUP]
+        params = render_conditions(scheme, visible_specs)
         if not comparing:
-            params = render_power_inputs(scheme, specs)
+            params = render_power_inputs(scheme, visible_specs)
+        if fit_od_view:
+            params = od_fit_conditions(params)
     else:
         from gabes_ui.conditions import render_atom_conditions
         with st.container(key="gabes_conditions"):
@@ -352,9 +362,8 @@ def render_spectra():
 
     spec_by_name = {sp.name: sp for sp in specs}
     if is_sas:
-        render_plot_section(dict(view, experimental_workspace=True), scheme, spec_by_name, raw, params,
+        render_plot_section(dict(view, experimental_workspace=True, od_model_id=raw.get("probe_model")), scheme, spec_by_name, raw, params,
                             cache_version, READOUT_CACHE_VERSION)
-        render_on_demand(scheme, params, cache_version, READOUT_CACHE_VERSION)
         return
 
     metrics = present_metrics(view.get("metrics", []), scheme_name=scheme.name, raw=raw)

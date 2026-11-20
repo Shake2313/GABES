@@ -42,7 +42,8 @@ def test_condition_comparison_roundtrip_preserves_alignment_and_clearable_sessio
 
     data = b"0,1\n1,0"
     upload = SimpleNamespace(name="trace.csv", size=len(data), getvalue=lambda: data)
-    state = {"sas___csv_upload": upload, "sas___overlay": True,
+    state = {"sas___csv_upload": upload, "sas___csv_retained_file": (upload.name, data),
+             "sas___overlay": True,
              "sas___csv_reverse": True, "sas___csv_x_shift": -0.75,
              "sas___csv_apply": True}
     monkeypatch.setattr(plotcard.st, "session_state", state)

@@ -238,44 +238,34 @@ under `archive/` for historical reference only.
 
 ### Experimental CSV comparison (OD / SAS)
 
-Enable **Overlay data** on the OD/SAS plot and upload a CSV.
-Column A is always detuning and column B is always the detector signal; later
-columns and non-numeric oscilloscope metadata rows are ignored. Raw A/B values
-are treated as arbitrary units. GABES merges repeated detuning samples, removes
-isolated spikes, and smooths according to the measured noise. Extrema scaling
-maps the robust signal floor/ceiling to **relative normalized transmission**
-0/1; it is not an absolute transmission calibration. Absolute transmission
-requires measured dark/reference levels or an explicit detector gain and
-offset. Sweep reversals are counted before sorting, and the original forward
-and reverse branches are retained; the compatibility overlay still merges
-equal detunings and warns that this loses hysteresis information.
+Choose **Fit OD data** to compare a measurement with pump-off transmission.
+**Simulate spectra** keeps the theory pump power, waist and depletion settings.
+Upload a measured CSV or a standard or Origin comparison export. A named
+transmission column takes precedence over reference intensity. For a multichannel
+scope recording, check the selected OD channel. General files can be up to
+10 MiB and self-describing comparison exports up to 16 MiB.
 
-Uploads are automatically framed into the theoretical X range, including
-seconds-axis scope data with very different numeric spans. **Base X scale**
-holds the coarse correction, while **X fine scale ×** keeps a stable 0.1–3 range.
-The plot keeps its full width; upload, calibration and fitting live in the
-collapsible **Overlay settings** below it. Drag the experimental curve or the
-controls directly below the plot to preview alignment locally in the browser;
-release to synchronize the committed alignment and exports once. Relative data
-also offer live Y scale/offset controls. **Precise alignment** holds the base
-scale, sweep direction and inversion; click **Apply alignment** for those edits.
-**Bring into view** restores automatic framing; **Use raw axis** restores the
-original axis. Framing alone does not establish a frequency calibration.
+Declared frequency axes keep their native scale. An experimental frequency
+origin must come from calibration or file metadata. **Bring into view** and
+**Fit alignment** help place relative traces. **Precise alignment** controls
+the display transform. Confirm the frequency scale and absolute transmission
+calibration before fitting physical parameters. Select one acquisition branch in
+**Fit physical OD parameters**. **Apply fitted temperature** transfers a
+converged, identifiable temperature to the cell conditions.
 
-**Fit alignment** matches the imported transmission to the current theoretical
-curve with bounded X scale/shift and, for relative data, positive detector
-gain/offset. It preserves the chosen sweep direction and reports overlap and
-RMSE. Absolute dark/reference or gain/offset calibration is preserved; visual
-Y transforms and inversion are disabled in that mode. Temperature, cell length,
-and isotope composition remain fixed: this is affine spectrum alignment, not
-physical parameter estimation. Inspect the match before interpreting it.
+Select a frequency in the spectrum to compare the theory sample with the nearest
+measured point. The detail view shows measured optical depth for absolute
+transmission. Gaps stay empty, including in the export. **Prepare comparison CSV**
+and **Download comparison CSV** save the original acquisition rows alongside
+the aligned display values, theory grid and calibration metadata. The projected
+measurement survives a round trip to the theory view.
 
 Choose **Rb isotope composition → Custom** to set the ⁸⁵Rb fraction from 0 to 1;
 the ⁸⁷Rb fraction is complementary. Natural composition stays at 72.17/27.83%.
 Mixtures use a fixed ⁸⁵Rb frequency centroid even when the dominant isotope
 changes. The existing pure-isotope menu retains its own isotope centroid.
 
-The OD/SAS graph currently shows **Transmission** only. **Decadic absorbance A10**,
+The OD/SAS theory plot selector currently shows **Transmission** only. **Decadic absorbance A10**,
 **Optical depth tau**, and weak-probe **Dispersion** are temporarily hidden from
 the plot selector; their calculated curves remain available in exports. The dimensionless quantities
 are `A10 = -log10(T)` and `tau = -ln(T) = ln(10)*A10`. The compatibility API

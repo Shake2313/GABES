@@ -7,7 +7,7 @@ from .paths import asset_text
 def spectrum_component_js(asset_name):
     """Bundle common pointer handling with a Streamlit v2 inline ES module."""
     names = ["spectrum_gestures.js"]
-    if asset_name in {"model_compare.js", "spectral_compare.js"}:
+    if asset_name in {"model_compare.js", "spectral_compare.js", "od_measurement_plot.js"}:
         names.append("spectrum_plot.js")
     if asset_name == "spectral_compare.js":
         names.append("spectrum_map.js")

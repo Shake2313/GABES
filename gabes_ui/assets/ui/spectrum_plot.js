@@ -54,10 +54,13 @@ function valueRange(curves, key, first, last, initialMax) {
 }
 
 function curveSample(curve, grid, frequency) {
-  const x = curve.x || grid;
-  if (!x.length || frequency < x[0] || frequency > x[x.length-1]) return {x:null,y:null};
+  // Measurement views can draw a reduced path while inspecting the original samples.
+  const x = curve.sampleX || curve.x || grid;
+  if (!x.length || frequency < x[0] || frequency > x[x.length-1]
+      || (curve.coverage && !curve.coverage.some(([lo,hi]) => lo <= frequency && frequency <= hi)))
+    return {x:null,y:null};
   const index = nearestSample(x, frequency);
-  return {x:x[index],y:curve.y[index]};
+  return {x:x[index],y:(curve.sampleY || curve.y)[index]};
 }
 
 export function sampleScope(curve, grid, x) {
@@ -156,7 +159,7 @@ function sampleInspector(fig, svg, spec, geometry) {
       spec.series.forEach((curve,k)=>{
         const point=curveSample(curve,spec.grid,x), y=point.y,shown=displaySample(curve,point);
         const scope=sampleScope(curve,spec.grid,point.x);
-        values[k].textContent=point.x==null ? 'outside scan' : format(y,6)+(Number.isFinite(y) && spec.yUnit && spec.yUnit!=='1' ? ' '+spec.yUnit : '')+(curve.x ? ' @ '+format(point.x,7)+' '+spec.unit : '')+(scope.status && scope.status!=='available'?' · '+scope.status:'');
+        values[k].textContent=point.x==null ? (curve.coverage ? 'no measured point' : 'outside scan') : format(y,6)+(Number.isFinite(y) && spec.yUnit && spec.yUnit!=='1' ? ' '+spec.yUnit : '')+(curve.x ? ' @ '+format(point.x,7)+' '+spec.unit : '')+(scope.status && scope.status!=='available'?' · '+scope.status:'');
         values[k].parentElement.title=scope.reasons.join('; ');
         const inside=sampleInsidePlot(shown,geometry);
         dots[k].setAttribute('visibility',inside?'inherit':'hidden');

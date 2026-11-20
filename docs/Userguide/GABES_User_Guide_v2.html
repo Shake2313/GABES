@@ -484,7 +484,7 @@ streamlit run streamlit_app.py</pre>
     <ol class="body">
       <li>상단 <b>Scheme</b>에서 <b>Absorption spectroscopy</b>를 고릅니다. <b>OD</b>를 눌러
         펌프가 0 mW일 때의 넓은 흡수 골을 보고, <b>SAS</b>를 눌러 0.5 mW일 때 골 안의 좁은 투과 피크를 찾습니다.</li>
-      <li>기본 화면 <b>Model spectra</b>에서 <b>Doppler group</b> 옆의 <b>Pump power</b>에 <b>0.5 mW</b>,
+      <li>기본 화면 <b>Simulate spectra</b>에서 <b>Doppler group</b> 옆의 <b>Pump power</b>에 <b>0.5 mW</b>,
         <b>Probe power</b>에 <b>0 µW</b>를 입력합니다. Enter를 누르거나 다른 입력란으로 이동하면 반영됩니다.
         <b>Doppler group → ⁸⁷Rb F=2</b>를 선택하면
         녹색 구간이 이 전이군으로 이동합니다. 아래 두 그래프는 같은 구간의 투과율 T와 광학 깊이 OD를 보여 줍니다.</li>
@@ -527,7 +527,7 @@ streamlit run streamlit_app.py</pre>
   <p>OD/SAS의 <b>Custom</b> 동위원소 구성에서는 <b>⁸⁵Rb fraction (Natural 0.7217)</b>이 나타납니다.
     Doppler 온도를 분리하거나 Rydberg의 온도 모형을 바꾸면 그 조건에 맞는 온도 입력이 Atom 안에 나타납니다.
     <b>Doppler group</b> 옆에서 펌프와 프로브 출력을 입력하고, <b>Advanced</b>에서 계산 표본 수 등을 조정합니다.
-    <b>Experimental CSV (legacy)</b>에서는 오실로스코프 CSV와 모델 투과율을 정렬하여 비교합니다.
+    <b>Fit OD data</b>에서는 펌프를 끈 OD 이론선과 측정 CSV를 비교합니다. 이론 화면으로 돌아가면 기존 펌프 설정으로 계산합니다.
     FWM도 공통 원자·온도·셀 조건은 메인의 Atom에서 조정하며, 나머지 기존 컨트롤은 사이드바에서 사용합니다.</p>
 
   <div class="pipe">
@@ -645,12 +645,12 @@ streamlit run streamlit_app.py</pre>
   </p>
 
   <p><b>실험 CSV와 OD 피팅</b>　Atom의 Isotope에서 <b>Custom</b>을 선택하면 ⁸⁵Rb 분율을 입력할 수 있습니다.
-    <b>Experimental CSV (legacy)</b>에서 <b>Overlay data</b>를 열면 절대 투과율 교정, 획득 방향과
-    중복 주파수, 주파수 축 정렬을 확인할 수 있습니다. <b>Fit alignment</b>는 표시 좌표를 맞추는 기능입니다.
-    절대 투과율과 주파수 눈금이 교정된 균일 셀에서는 펌프·유한 프로브를 끄고
-    <b>Fit physical OD parameters</b>를 엽니다. 획득 가지 하나를 선택하고 피팅할 변수를 고릅니다.
-    선세기는 고정됩니다. 피팅 범위와 독립 확인 범위를 따로 지정하면 각 범위의 잔차를 볼 수 있습니다.
-    피팅값, 불확도와 파라미터 식별 가능 여부는 JSON에 보존되며 현재 입력은 그대로 유지됩니다.</p>
+    <b>Fit OD data</b>에서 일반 측정 CSV(최대 10 MiB)나 일반·Origin 형식의 비교 파일(최대 16 MiB)을 올립니다.
+    선택한 OD 채널, 주파수 단위와 신호 보정을 확인합니다. <b>Fit alignment</b>로 표시 좌표를 맞출 수 있습니다.
+    스펙트럼에서 주파수를 선택하면 이론값과 가장 가까운 측정점을 읽을 수 있습니다. 측정 공백은 빈 구간으로 표시합니다.
+    균일 셀에서 절대 투과율과 주파수 눈금을 교정한 뒤 <b>Fit physical OD parameters</b>에서 취득 방향과 피팅 변수를 고릅니다.
+    약한 프로브 피팅에는 프로브 출력 0 µW를 사용합니다. <b>Apply fitted temperature</b>로 수렴하고 식별 가능한 온도를 셀 조건에 적용합니다.
+    비교 파일은 <b>Prepare comparison CSV</b>를 누른 뒤 <b>Download comparison CSV</b>로 저장합니다. 이 파일에는 원래 취득 순서와 보정 정보가 담깁니다.</p>
   <p><b>축 방향 분할 셀</b>　Advanced의 <b>Cell propagation → Segmented reference</b>에서
     <b>Axial segments</b>(기본 4), 온도 변화와 종방향 자기장을 지정합니다. 온도·자기장 변화는
     프로브 출구에서 입구를 뺀 값입니다. 온도 구배를 넣을 때는 Doppler 온도 연결을 풀고 경로 중심

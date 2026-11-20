@@ -98,7 +98,8 @@ def preview_data(fig, scheme_name, comparison=None, *, canonical_noise=False):
                     original=dict(shift=shift, multiplier=alignment["manual_multiplier"],
                                   signal_scale=alignment["signal_scale"],
                                   signal_offset=alignment["signal_offset"]),
-                    pivot=(min(traces[-1]["x"]) + max(traces[-1]["x"])) / 2 - shift,
+                    pivot=(min(v for v in traces[-1]["x"] if v is not None)
+                           + max(v for v in traces[-1]["x"] if v is not None)) / 2 - shift,
                     axis_indices=[fig.axes.index(axis)])
     elif scheme_name == "fwm" and len(fig.axes) == 2:
         # Seeded FWM's two fixed curves each carry one selected-point marker.
@@ -205,6 +206,9 @@ def _preview_context(data, comparison, interaction_context=None):
 def render_live_plot(fig, scheme_name, comparison=None, *, canonical_noise=False, gain_digits=6,
                      interaction_context=None, description="Spectrum"):
     global _MOUNTABLE
+    if scheme_name == "sas" and comparison and comparison.get("measurement_workspace"):
+        from .od_measurement_plot import render_measurement_plot
+        return render_measurement_plot(comparison)
     if not _MOUNTABLE:
         return False
     data, moving = preview_data(fig, scheme_name, comparison, canonical_noise=canonical_noise)
