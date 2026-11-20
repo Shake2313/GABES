@@ -898,7 +898,7 @@ class LambdaScheme(Scheme):
                                params.get("coupling_rabi", 0.0) * GAMMA_MHZ)
             if not resolved:
                 return [
-                    dict(label="AT status", kind="status", tier="hero",
+                    dict(label="AT status", kind="status", tier="hero", tone="warn",
                          value=("velocity integration not converged" if integration_issue
                                 else "doublet unresolved"),
                          help=(integration_issue or "No pair of absorption maxima with "
@@ -948,12 +948,12 @@ class LambdaScheme(Scheme):
                  numeric_value=ng, help="Group index at two-photon resonance."),
             dict(label="Group delay", value=f"{delay * 1e9:.3g} ns" if delay is not None else "—",
                  numeric_value=delay, unit="s", help="Excess transit time relative to vacuum."),
-            dict(label="Experimental visibility", value="Not assessed", kind="status",
+            dict(label="Experimental visibility", value="Not assessed", kind="status", tone="warn",
                  help="A calibrated detector-noise threshold was not supplied."),
         ]
         if not width_valid:
             metrics.append(dict(
-                label="Window status", value=window["status"].replace("_", " "), kind="status",
+                label="Window status", value=window["status"].replace("_", " "), kind="status", tone="warn",
                 help=(integration_issue or "The current opacity/coupling settings do not produce a "
                       "measurable transparency-window FWHM in this scan."),
                 tier="hero"))

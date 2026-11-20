@@ -218,8 +218,7 @@ button[data-testid="stBaseButton-tertiary"]:hover {
   margin-bottom: -0.35rem;
 }
 
-/* Labels for the widgets that cannot carry their own help (select, segmented):
-   same size and colour as a ScrubField label, help on hover. */
+/* Select and segmented-control help opens from the label itself. */
 /* Streamlit's own markdown container carries margin-bottom: -1rem, which
    cancels the rail's 16 px element gap; 0.25rem puts the gap back to 4 px so
    the label reads as part of the widget below it, not as a line of its own. */
@@ -230,14 +229,30 @@ button[data-testid="stBaseButton-tertiary"]:hover {
   line-height: 1.3;
 }
 
-.gabes-knob-label[title] {
-  cursor: help;
-  text-decoration: underline dotted transparent;
-  text-underline-offset: 3px;
+.gabes-knob-label summary {
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
 }
 
-.gabes-knob-label[title]:hover {
-  text-decoration-color: var(--g-line-strong);
+.g-derived-help summary { cursor: pointer; }
+.g-derived-help .g-derived-label::before { content: "▸"; margin-right: .25em; }
+.g-derived-help[open] .g-derived-label::before { content: "▾"; }
+
+.gabes-knob-label summary:focus-visible,
+.g-derived-help summary:focus-visible {
+  outline: 2px solid var(--g-accent-ink);
+  outline-offset: 2px;
+}
+
+.gabes-control-help {
+  color: var(--g-muted);
+  padding-block: .25rem;
+  overflow-wrap: anywhere;
+}
+
+@media (pointer: coarse) {
+  .gabes-knob-label summary, .g-derived-help summary { min-height: 24px; }
 }
 
 /* Selects in the rail: one line high, matching the ScrubField rhythm. */
@@ -478,6 +493,9 @@ button[data-testid="stBaseButton-tertiary"]:hover {
   color: var(--g-warn-ink);
 }
 
+.g-chip--ok { color: var(--g-ok-ink); border-color: currentColor; }
+.g-chip--danger { color: var(--g-danger-ink); border-color: currentColor; }
+
 .g-chip--neutral {
   background: var(--g-fill-soft);
   border-color: var(--g-line);
@@ -514,6 +532,7 @@ button[data-testid="stBaseButton-tertiary"]:hover {
   font-size: 0.65rem;
   line-height: 1;
 }
+.g-model-status--danger summary { color: var(--g-danger-ink); border-color: currentColor; }
 .g-model-status--warn summary { color: var(--g-warn-ink); border-color: var(--g-warn-line); }
 .g-model-status-chevron { transition: transform 120ms ease; }
 .g-model-status[open] .g-model-status-chevron { transform: rotate(180deg); }

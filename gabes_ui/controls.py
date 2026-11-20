@@ -80,18 +80,15 @@ def apply_default_set(scheme_name, scheme_obj, label):
         st.session_state[skey(scheme_name, k)] = v
 
 
-def _hover_label(container, label, help_):
-    """A knob label that carries its help on hover, like a ScrubField's.
-
-    Streamlit's own `help=` draws a "?" next to every label; across a rail of
-    forty knobs those become the loudest thing on screen (docs/ui_redesign
-    decisions.md D4). Widgets that cannot host their own label get this
-    instead, and pass `label_visibility="collapsed"`.
-    """
-    title = f" title='{escape(help_, quote=True)}'" if help_ else ""
-    container.markdown(
-        f"<div class='gabes-knob-label'{title}>{escape(label)}</div>",
-        unsafe_allow_html=True)
+def _control_label(container, label, help_):
+    """Make optional help part of the label, without adding a separate icon."""
+    if help_:
+        markup = (f"<details class='gabes-knob-label'><summary "
+                  f"aria-label='{escape('Help for ' + label, quote=True)}'>{escape(label)}</summary>"
+                  f"<div class='gabes-control-help'>{escape(help_)}</div></details>")
+    else:
+        markup = f"<div class='gabes-knob-label'>{escape(label)}</div>"
+    container.markdown(markup, unsafe_allow_html=True)
 
 
 def _is_integer_knob(sp):
@@ -133,7 +130,7 @@ def _render_atom_menu(container, scheme_name, sp, scheme_obj=None):
     atoms = tuple(dict.fromkeys(row[0] for row in rows))
     atom_key = skey(scheme_name, f"_{sp.name}_atom")
     st.session_state[atom_key] = current[0]
-    _hover_label(container, "Atom", "Element; its isotopes, if more than one, follow.")
+    _control_label(container, "Atom", "Element; its isotopes, if more than one, follow.")
     container.selectbox(
         "Atom", atoms, key=atom_key, label_visibility="collapsed",
         disabled=len(atoms) == 1,
@@ -144,7 +141,7 @@ def _render_atom_menu(container, scheme_name, sp, scheme_obj=None):
     if len(isotopes) > 1:
         isotope_key = skey(scheme_name, f"_{sp.name}_isotope")
         st.session_state[isotope_key] = current[1]
-        _hover_label(container, "Isotope", sp.help or None)
+        _control_label(container, "Isotope", sp.help or None)
         container.selectbox(
             "Isotope", [row[1] for row in isotopes], key=isotope_key,
             label_visibility="collapsed",
@@ -194,7 +191,7 @@ def render_param(container, scheme_name, sp, scheme_obj=None):
                     original_on_change()
 
             on_change = keep_selection
-        _hover_label(container, label, help_)
+        _control_label(container, label, help_)
         choice_kwargs["label_visibility"] = "collapsed"
         if hasattr(container, "segmented_control"):
             try:
@@ -211,7 +208,7 @@ def render_param(container, scheme_name, sp, scheme_obj=None):
                                on_change=on_change, **choice_kwargs)
     if sp.choices is not None:
         options = list(sp.choices)
-        _hover_label(container, label, help_)
+        _control_label(container, label, help_)
         choice_kwargs["label_visibility"] = "collapsed"
         if has_state:
             return container.selectbox(label, options, key=key,
@@ -335,14 +332,17 @@ def render_derived_params(derived_slots, readouts):
             value = float("nan")
         available = math.isfinite(value)
         label = caption_html(sp.label)
-        note = " ".join(dict.fromkeys(text for text in (sp.help, status) if text))
+        note = " ".join(dict.fromkeys(text for text in (sp.help, status if available else "") if text))
         number = (sp.format or "%.6g") % value if available else "Unavailable"
         unit = f"<span class='g-derived-unit'>{escape(sp.unit)}</span>" if available and sp.unit else ""
         with slot.container():
-            st.markdown(
-                f"<div class='g-derived' role='group' aria-label='{escape(sp.label, quote=True)}' "
-                f"title='{escape(note, quote=True)}'><span class='g-derived-label'>{label}</span>"
-                f"<span class='g-derived-value'>{escape(number)}{unit}</span></div>",
-                unsafe_allow_html=True)
+            values = (f"<span class='g-derived-label'>{label}</span>"
+                      f"<span class='g-derived-value'>{escape(number)}{unit}</span>")
+            if note:
+                markup = (f"<details class='g-derived-help'><summary class='g-derived'>{values}</summary>"
+                          f"<div class='gabes-control-help'>{escape(note)}</div></details>")
+            else:
+                markup = f"<div class='g-derived' role='group' aria-label='{escape(sp.label, quote=True)}'>{values}</div>"
+            st.markdown(markup, unsafe_allow_html=True)
             if not available and status:
                 st.caption(status)

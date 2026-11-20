@@ -527,6 +527,20 @@
   ],
   "items": [
     {
+      "id": "sas-default-startup-snapshot",
+      "area": "GABES 기본 OD/SAS 이론 화면과 모델 비교",
+      "title": "⟦AI⟧ 기본 스펙트럼의 검증된 시작 스냅샷 평가",
+      "origin": "ai_review_of_external_feedback",
+      "status": "parked",
+      "priority": "P3",
+      "effort": "medium",
+      "activation_trigger": "⟦AI⟧ OD 모델·프리셋 변경이 착지한 뒤 실제 배포 환경의 첫 그래프 측정에서 기본 계산이 주요 지연으로 남을 때 진행한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 기본 모델·데이터·격자·코드·의존성·판독 버전을 키로 사용하고 누락·손상·불일치 시 실시간으로 재계산한다.",
+        "⟦AI⟧ 원시 배열·표시·내보내기 일치와 첫 그래프 시간을 검사한다. 실험 파일과 사용자 입력은 영속 캐시에 넣지 않는다."
+      ]
+    },
+    {
       "id": "pole-doppler-pool-initialization",
       "area": "gabes/pole_doppler.py",
       "title": "⟦AI⟧ 동시 첫 호출에서 계산용 스레드 풀 하나만 생성",
@@ -648,7 +662,8 @@
       "title": "실험 CSV 통합 후 GABES 전반에 카드와 옅은 그라데이션 도입",
       "origin": "human_request",
       "source_documents": [
-        "docs/ui_redesign/od_sas_experimental_csv_port.md"
+        "docs/ui_redesign/od_sas_experimental_csv_port.md",
+        "docs/ui_redesign/decisions.md#d21"
       ],
       "user_request": "2026-11-20 사용자 결정. AutoOD의 약한 그라데이션·카드 기조를 GABES 색상으로 통일하고 전체 화면 개편은 CSV 통합이 잘 들어간 이후에 진행.",
       "status": "parked",
@@ -657,11 +672,13 @@
       "depends_on": [
         "od-sas-autood-csv-web-workspace"
       ],
-      "activation_trigger": "⟦AI⟧ OD 전용 CSV 작업공간과 공용 모델 연결의 통합·회귀 검증이 완료되면 별도 디자인 작업으로 시작. 추가 추정 변수 검증 및 적용 범위 밖 모델 연구와 독립.",
+      "activation_trigger": "⟦AI⟧ OD 통합 검증 후 사용자가 D21의 세부 규약과 전역 적용 재개를 결정할 때 시작한다. 부트 속도·접근성 개선은 독립적으로 진행한다.",
       "acceptance_criteria": [
-        "⟦AI⟧ CSV 화면에서 검수한 값으로 결과 카드와 섹션 제목의 강도를 공용 테마에 정의. 단색 페이지·플롯, GABES 색상, 입력 컨트롤과 포커스의 일관성 유지.",
+        "⟦AI⟧ 승인된 팔레트와 명도 단계로 헤더·카드·포커스·플롯 토큰을 정리한다. 단색 캔버스에서 키보드 포커스, 이론·측정 곡선, 경고 상태를 구별할 수 있어야 한다.",
         "⟦AI⟧ 대표 화면을 먼저 데스크톱·좁은 화면에서 비교하고 다른 스킴에 순차 적용. 수치·그래프·기존 입력 흐름 보존."
-      ]
+      ],
+      "user_direction_2026_11_20": "사용자 결정. 장기적으로 GABES에 AutoOD 계열 색상, 톤온톤 타이포그래피, 제한된 기초 색상의 유사색 안에서 미세한 그라데이션, 단색의 깔끔한 캔버스를 적용한다. 전역 디자인 P0는 보류하고 세부 규약은 나중에 사용자가 정한다.",
+      "decision_required": "기초·강조색의 정확한 값, 타이포그래피 명도 단계, 그라데이션의 표면·강도와 전역 적용 범위."
     },
     {
       "id": "magneto-doppler-fallback-policy",
@@ -6883,6 +6900,14 @@
     "source": "docs/grand_challenge/rydberg_opacity_2026_10_23/README.md",
     "validation": "docs/grand_challenge/rydberg_opacity_2026_10_23/full_pytest_receipt.json",
     "official_grand_challenges_unchanged": true
+  },
+  "_frontend_startup_review_2026_11_20": {
+    "source": "사용자가 전달한 gabes_autood_frontend_startup_handoff.md, 2026-11-20",
+    "user_scope": "사용자 요청. GABES 웹과 AutoOD 차트·접근성·패키징을 개선한다. 디자인 P0의 세부 규약은 사용자 결정 대기.",
+    "visual_policy_item": "gabes-ui-cards-gradients-after-csv",
+    "navigation": "⟦AI⟧ 6개 스킴은 메인 Atom 진입점을 공유한다. D17·D18에 따라 남은 레일·고급 조건은 해당 스킴의 다음 화면 개편에서 통합한다.",
+    "compatibility": "⟦AI⟧ Streamlit 변경 시 기존 streamlit-compatibility-guards-on-upgrade와 함께 메인·사이드바·팝오버의 선택, 포커스, 좁은 화면, 그래프를 실제 브라우저에서 확인한다.",
+    "architecture": "⟦AI⟧ FastAPI와 정적 웹, WASM, Rust 네이티브 앱, AutoOD 상시 Tk Canvas 렌더러와 Rust/C 약한 프로브 엔진은 선택지다. 배포 환경의 병목과 유지 비용을 확인한 뒤 사용자가 결정한다. 첨부의 예상 시간·비율은 목표나 측정값으로 채택하지 않았다."
   },
   "_gemini_maintenance_review_2026_11_20": {
     "source": "2026-11-20 사용자가 전달한 Gemini 독립 코드 리뷰",

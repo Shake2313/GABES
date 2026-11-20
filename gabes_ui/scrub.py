@@ -1,6 +1,6 @@
 """ScrubField — the precise numeric knob (docs/ui_redesign/decisions.md D3).
 
-One row per knob: the label carries its help on hover, the value is a
+One row per knob: the label expands its help on demand, the value is a
 spinbutton you can drag, type into or step with the keyboard, and a 3 px track
 underneath gives the coarse sweep a slider used to give.
 
@@ -35,7 +35,8 @@ def state_key(key):
 
 _HTML = """<div class="sf">
   <div class="sf-head">
-    <span class="sf-label"></span>
+    <span class="sf-plain-label sf-label-text" hidden></span>
+    <button type="button" class="sf-label sf-label-text" aria-controls="sf-help"></button>
     <button class="sf-reset" type="button" hidden></button>
     <span class="sf-value" role="spinbutton" tabindex="0"><span
       class="sf-num"></span><span class="sf-unit"></span></span>
@@ -55,11 +56,13 @@ _CSS = """
 .sf{font:400 .8rem/1.3 var(--g-font-sans,sans-serif);color:var(--g-ink-2,#1F2D3D);
   padding:.18rem 0 .1rem;}
 .sf-head{display:flex;align-items:baseline;gap:.35rem;}
-.sf-label{flex:1 1 auto;min-width:0;color:var(--g-ink-3,#3B4A5E);
+.sf-label-text{flex:1 1 auto;min-width:0;color:var(--g-ink-3,#3B4A5E);font:inherit;
+  text-align:left;border:0;background:none;padding:0;opacity:1;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.sf-label[title]{cursor:help;text-decoration:underline dotted transparent;
-  text-underline-offset:3px;}
-.sf-label[title]:hover{text-decoration-color:var(--g-line-strong,#CBD5E1);}
+.sf-label{cursor:pointer;}
+.sf-label::before{content:"▸";margin-right:.25em;}
+.sf-label[aria-expanded="true"]::before{content:"▾";}
+.sf-label:focus-visible{outline:2px solid var(--g-accent-ink,#0369A1);outline-offset:1px;}
 .sf-value{flex:0 0 auto;display:inline-flex;align-items:baseline;gap:.15rem;
   font:500 .82rem/1.3 var(--g-font-mono,monospace);color:var(--g-ink,#0E1726);
   padding:0 .2rem;border-radius:4px;cursor:ew-resize;touch-action:none;
@@ -94,9 +97,9 @@ _CSS = """
 .sf.no-range .sf-rail{display:none;}
 .sf-note{font-size:.7rem;line-height:1.3;color:var(--g-warn-ink,#92400E);
   padding-top:.1rem;}
-.sf-help{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
-  white-space:nowrap;}
+.sf-help{display:block;padding-top:.25rem;color:var(--g-muted,#5B6B80);overflow-wrap:anywhere;}
 @media (pointer:coarse){
+  .sf-label{min-height:24px;}
   .sf-value{padding:.25rem .35rem;}
   .sf-rail{height:22px;}
   .sf-knob{width:14px;height:14px;}
@@ -122,7 +125,7 @@ export default function (component) {
   if (!root) return;
   const q = (c) => root.querySelector(c);
   const el = {
-    label: q(".sf-label"), value: q(".sf-value"), num: q(".sf-num"),
+    label: q(".sf-label"), plainLabel: q(".sf-plain-label"), value: q(".sf-value"), num: q(".sf-num"),
     unit: q(".sf-unit"), input: q(".sf-input"), reset: q(".sf-reset"),
     track: q(".sf-track"), fill: q(".sf-fill"), knob: q(".sf-knob"),
     endL: q(".sf-end-l"), endR: q(".sf-end-r"), note: q(".sf-note"),
@@ -206,18 +209,31 @@ export default function (component) {
   }
 
   el.label.textContent = data.label || "";
+  el.label.hidden = !data.help;
+  el.plainLabel.hidden = !!data.help;
+  el.plainLabel.textContent = data.label || "";
+  el.help.textContent = data.help || "";
+  el.help.hidden = !data.help || !S.helpOpen;
   if (data.help) {
     el.label.title = data.help;
-    el.help.textContent = data.help;
-    el.help.hidden = false;
+    el.label.setAttribute("aria-label", "Help for " + data.label);
+    el.label.setAttribute("aria-expanded", String(!el.help.hidden));
+    el.label.onclick = () => {
+      S.helpOpen = el.help.hidden;
+      el.help.hidden = !S.helpOpen;
+      el.label.setAttribute("aria-expanded", String(S.helpOpen));
+    };
     el.value.setAttribute("aria-describedby", "sf-help");
     el.input.setAttribute("aria-describedby", "sf-help");
   } else {
+    el.label.removeAttribute("aria-label");
+    el.label.removeAttribute("aria-expanded");
+    el.label.onclick = null;
+    S.helpOpen = false;
     // A label too long for the rail is clipped; hovering must still reveal it.
-    const clipped = el.label.scrollWidth > el.label.clientWidth + 1;
-    if (clipped) el.label.title = data.label || "";
-    else el.label.removeAttribute("title");
-    el.help.hidden = true;
+    const clipped = el.plainLabel.scrollWidth > el.plainLabel.clientWidth + 1;
+    if (clipped) el.plainLabel.title = data.label || "";
+    else el.plainLabel.removeAttribute("title");
     el.value.removeAttribute("aria-describedby");
     el.input.removeAttribute("aria-describedby");
   }

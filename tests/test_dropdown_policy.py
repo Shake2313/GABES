@@ -18,14 +18,22 @@ def test_native_dropdown_policy_keeps_navigation_and_numeric_text_edits():
     script = f"""
 import mount from {json.dumps(url)};
 const listeners=new Map(), attrs={{}};
+let scans=0, observeChanges;
 const dropdown={{readOnly:false,setAttribute:(k,v)=>attrs[k]=v,matches:()=>true}};
 const numeric={{matches:()=>false}};
 const marker={{}};
-globalThis.document={{body:{{}},querySelectorAll:()=>[dropdown],
+globalThis.document={{body:{{}},querySelectorAll:()=>{{scans++; return [dropdown];}},
   addEventListener:(name,fn)=>listeners.set(name,fn),
   removeEventListener:name=>listeners.delete(name)}};
-globalThis.MutationObserver=class {{observe(){{}}disconnect(){{}}}};
+globalThis.MutationObserver=class {{
+  constructor(callback){{observeChanges=callback;}} observe(){{}} disconnect(){{}}
+}};
 const cleanup=mount({{parentElement:{{querySelector:()=>marker}}}});
+const inserted={{...dropdown,nodeType:1,readOnly:false}};
+const inPortal={{...dropdown,readOnly:false}};
+const portal={{nodeType:1,matches:()=>false,firstElementChild:inPortal,querySelectorAll:()=>[inPortal]}};
+const text={{nodeType:3}};
+observeChanges([{{addedNodes:[inserted,text]}},{{addedNodes:[portal]}}]);
 const press=(key,target=dropdown,ctrlKey=false)=>{{
   const event={{key,target,ctrlKey,preventDefault(){{this.blocked=true}},stopPropagation(){{}}}};
   listeners.get('keydown')(event);return !!event.blocked;
@@ -35,11 +43,12 @@ const navigation=['ArrowDown','ArrowUp','Home','End','Enter','Escape','Tab',' ']
 const numericEdit=press('4',numeric);
 const paste=press('v',dropdown,true);
 cleanup();
-console.log(JSON.stringify({{readonly:dropdown.readOnly,attrs,edited,navigation,numericEdit,paste,remaining:listeners.size}}));
+console.log(JSON.stringify({{readonly:dropdown.readOnly,inserted:inserted.readOnly,portal:inPortal.readOnly,scans,attrs,edited,navigation,numericEdit,paste,remaining:listeners.size}}));
 """
     result = subprocess.run([node, "--input-type=module"], input=script, text=True,
                             encoding="utf-8", capture_output=True, check=True, timeout=15)
     state = json.loads(result.stdout)
+    assert state["inserted"] and state["portal"] and state["scans"] == 1
     assert state["readonly"] and state["attrs"]["inputmode"] == "none"
     assert state["attrs"]["aria-autocomplete"] == "none"
     assert all(state["edited"]) and not any(state["navigation"])

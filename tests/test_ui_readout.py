@@ -119,6 +119,24 @@ def test_text_values_are_not_monospaced_and_status_becomes_a_chip():
     assert "g-chip g-chip--warn" in html and ">resolution-limited<" in html
 
 
+@pytest.mark.parametrize("tone,value", [("ok", "not required"), ("warn", "70%"), ("danger", "E03")])
+def test_status_chips_use_declared_tone_including_nested_status(tone, value):
+    status = dict(label="Quality", value=value, tone=tone)
+    root = ElementTree.fromstring(strip_html([dict(label="Gain", value="2", status=status)], [], [status]))
+    chips = root.findall(".//span[@class='g-chip g-chip--" + tone + "']")
+    assert len(chips) == 2 and all(chip.text == value for chip in chips)
+    assert status_tone("unresolved", "unrecognized") == "warn"
+
+
+def test_compact_status_uses_declared_severity_and_preserves_details():
+    statuses = [dict(label="Quality", value="C1", tone="warn"),
+                dict(label="Solution", value="E03", tone="danger")]
+    html = ElementTree.fromstring(strip_html([], [], statuses, compact_statuses=True))
+    assert "E03" in "".join(html.find(".//summary").itertext())
+    assert "g-model-status--danger" in html.find(".//details").get("class")
+    assert len(html.findall(".//dd")) == 2
+
+
 def test_status_tone_reads_caveats():
     assert status_tone("resolution-limited") == "warn"
     assert status_tone("external validation required") == "warn"

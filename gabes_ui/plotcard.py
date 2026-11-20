@@ -17,7 +17,6 @@ import inspect
 from html import escape
 from threading import RLock
 
-import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 
@@ -110,6 +109,7 @@ def _cached_experimental_csv(
 
 
 def _close_fig(fig):
+    from matplotlib import pyplot as plt
     with PLOT_LOCK:
         plt.close(fig)
 

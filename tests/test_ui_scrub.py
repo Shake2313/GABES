@@ -142,6 +142,18 @@ function pointer(type,clientX) {
   const e = new Event(type);Object.assign(e,{pointerId:7,clientX});window.dispatchEvent(e);
 }
 const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
+// Opening help never commits a setting; a rerender keeps the disclosure open.
+let help=mount('help',{help:'Power at the entrance.'});
+assert.equal(help.children.get('.sf-label').attributes['aria-expanded'],'false');
+help.children.get('.sf-label').onclick();
+assert.equal(help.children.get('.sf-help').hidden,false);
+assert.equal(help.children.get('.sf-value').attributes['aria-describedby'],'sf-help');
+help.dispose();help.root.isConnected=false;
+help=mount('help',{help:'Power at the entrance.'});
+assert.equal(help.children.get('.sf-label').attributes['aria-expanded'],'true');
+help.children.get('.sf-label').onclick();
+assert.equal(help.children.get('.sf-help').hidden,true);
+assert.equal(sent.length,0);
 // An uncommitted unit-bearing draft and caret survive a different input's reply.
 let first=mount('draft');
 first.children.get('.sf-value').onkeydown(event({key:'Enter'}));

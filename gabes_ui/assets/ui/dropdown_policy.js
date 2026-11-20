@@ -7,12 +7,10 @@ export default function mountDropdownPolicy({parentElement}) {
   if (!marker) return;
   marker._cleanup?.();
 
-  function prepare() {
-    for (const input of document.querySelectorAll(dropdownInput)) {
-      input.readOnly = true;
-      input.setAttribute('inputmode', 'none');
-      input.setAttribute('aria-autocomplete', 'none');
-    }
+  function prepare(input) {
+    input.readOnly = true;
+    input.setAttribute('inputmode', 'none');
+    input.setAttribute('aria-autocomplete', 'none');
   }
   function target(event) {
     return event.target?.matches?.(dropdownInput);
@@ -32,13 +30,23 @@ export default function mountDropdownPolicy({parentElement}) {
       stopText(event);
     }
   }
-  const observer = new MutationObserver(prepare);
+  // Streamlit mounts widgets in panels and portals. Inspect only newly added
+  // elements after the first scan, including a combobox inserted on its own.
+  const observer = new MutationObserver(records => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== 1) continue;
+        if (node.matches(dropdownInput)) prepare(node);
+        if (node.firstElementChild) node.querySelectorAll(dropdownInput).forEach(prepare);
+      }
+    }
+  });
   observer.observe(document.body, {childList:true, subtree:true});
   document.addEventListener('keydown', keydown, true);
   for (const type of ['beforeinput', 'paste', 'drop']) {
     document.addEventListener(type, stopText, true);
   }
-  prepare();
+  document.querySelectorAll(dropdownInput).forEach(prepare);
   const cleanup = () => {
     observer.disconnect();
     document.removeEventListener('keydown', keydown, true);

@@ -376,7 +376,7 @@ def test_lambda_unresolved_features_use_status_heroes():
     eit_heroes = [m for m in eit_view["metrics"] if m.get("tier") == "hero"]
     assert [m["label"] for m in eit_heroes] == [
         "Transmission at resonance", "Window status"]
-    assert eit_heroes[1].get("kind") == "status"
+    assert eit_heroes[1].get("kind") == "status" and eit_heroes[1]["tone"] == "warn"
     assert all("nan" not in str(m["value"]).lower() for m in eit_heroes)
 
     at = sc.recommended_defaults(sc.defaults())["AT"]
@@ -386,7 +386,7 @@ def test_lambda_unresolved_features_use_status_heroes():
     at_heroes = [m for m in at_view["metrics"] if m.get("tier") == "hero"]
     assert [m["label"] for m in at_heroes] == [
         "AT status", "Transmission at center"]
-    assert at_heroes[0].get("kind") == "status"
+    assert at_heroes[0].get("kind") == "status" and at_heroes[0]["tone"] == "warn"
     split = next(m for m in at_view["metrics"] if m["label"] == "AT splitting")
     assert split["value"] == "—"
 

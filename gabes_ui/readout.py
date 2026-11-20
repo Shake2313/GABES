@@ -36,7 +36,7 @@ def present_metrics(metrics, *, scheme_name, raw=None):
                          "NF unavailable" if "passive completion unavailable" in note else
                          "Legacy diagnostic")
                 metric["status"] = dict(label="Noise interpretation",
-                                        value=f"{scope} · physical squeezing unavailable", help=note)
+                                        value=f"{scope} · physical squeezing unavailable", help=note, tone="warn")
             else:
                 metric["delta"] = note
         atomic_gain = metric.get("label") in {
@@ -82,8 +82,8 @@ def _present_noise(metric):
     reading = f"{reading} {reference}"
     metric["delta"] = f"{reading} · {scope}" if scope else reading
 
-# Status values that read as a caveat get the warning tone. P4 lets a scheme
-# state the tone explicitly; until then the wording decides.
+# Older scheme records carry only text. New records may declare a semantic tone.
+_STATUS_TONES = ("neutral", "ok", "warn", "danger")
 _CAVEAT = re.compile(r"limited|required|unavailable|unresolved|invalid|fail|warn|not ", re.I)
 _LEADING_SYMBOLS = re.compile(r"^[^\w(]+", re.U)
 
@@ -133,7 +133,9 @@ def _cell_html(metric, role, *, preserve_text=False):
             f"<div class='g-cell-label'>{label}</div>{value_html}{sub}</div>")
 
 
-def status_tone(value):
+def status_tone(value, tone=None):
+    if tone in _STATUS_TONES:
+        return tone
     return "warn" if _CAVEAT.search(str(value)) else "neutral"
 
 
@@ -141,13 +143,19 @@ def _chip_html(metric):
     label = str(metric.get("label", ""))
     value = str(metric.get("value", ""))
     tip = f"{label} — {metric.get('help')}" if metric.get("help") else label
-    return (f"<span class='g-chip g-chip--{status_tone(value)}' title='{escape(tip, quote=True)}' "
+    return (f"<span class='g-chip g-chip--{status_tone(value, metric.get('tone'))}' title='{escape(tip, quote=True)}' "
             f"aria-label='{escape(f'{label}: {value}', quote=True)}'>{escape(value)}</span>")
 
 
 def magneto_status_summary(statuses):
     """One quiet model qualifier; actionable numerical/input problems stand out."""
-    by_label = {str(m.get("label", "")): str(m.get("value", "")) for m in statuses}
+    # Explicit problems take priority even if their wording is new or localized.
+    for tone in ("danger", "warn"):
+        for metric in statuses:
+            if metric.get("tone") == tone:
+                return str(metric.get("value") or metric["label"]), tone
+    by_label = {str(m.get("label", "")): str(m.get("value", "")) for m in statuses
+                if m.get("tone") not in _STATUS_TONES}
     if "invalid" in by_label.get("Status", "").lower():
         return "Check transition", "warn"
     if "failed" in by_label.get("Atomic solver", "").lower():
@@ -185,7 +193,7 @@ def _compact_magneto_status_html(statuses):
         help_text = str(metric.get("help") or "")
         note = f"<p>{escape(help_text)}</p>" if help_text else ""
         rows.append(f"<div><dt>{heading}</dt><dd>{value}{note}</dd></div>")
-    symbol = "!" if tone == "warn" else "i"
+    symbol = "!" if tone in ("warn", "danger") else "i"
     return (
         f"<div class='g-cell g-cell--model'><details class='g-model-status g-model-status--{tone}'>"
         f"<summary title='Open numerical checks, experimental validation and model assumptions'>"

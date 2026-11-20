@@ -13,11 +13,11 @@ FWM two-photon detuning) update the readout instantly without re-solving.
 Run with:
     streamlit run streamlit_app.py
 """
-import matplotlib
-matplotlib.use("Agg")          # headless server backend (no GUI / Tk)
-import streamlit as st
 from contextlib import nullcontext
 from pathlib import Path
+
+# Streamlit selects Agg for its server. The default SVG workspace imports no Matplotlib.
+import streamlit as st
 
 from gabes import schemes
 from gabes.core import blas_single_thread
@@ -154,9 +154,9 @@ if st.query_params.get("app") == SABES_QUERY_VALUE:
 # ----------------------------------------------------------------------
 # The rail's brand band and the top bar share one 52 px line; the top-bar copy
 # of the brand shows only while the sidebar is collapsed (phone, or folded).
-all_schemes = schemes.all_schemes()
-titles = [s.title for s in all_schemes]
-apply_scheme_link(st.session_state, st.query_params, all_schemes)
+menu_schemes = schemes.choices()
+titles = [s.title for s in menu_schemes]
+apply_scheme_link(st.session_state, st.query_params, menu_schemes)
 _scheme_title_migrations = {
     "Four-wave mixing (Gain diagnostic / Biphoton)":
         "Four-wave mixing (Squeezing / Biphoton)",
@@ -172,7 +172,7 @@ topbar = st.container(horizontal=True, vertical_alignment="center", gap="small",
 with topbar:
     st.markdown(brand_html(ICON_SVG, "gabes-brand--top"), unsafe_allow_html=True, width="content")
     def _scheme_changed():
-        selected = all_schemes[titles.index(st.session_state["_scheme_choice"])]
+        selected = menu_schemes[titles.index(st.session_state["_scheme_choice"])]
         st.query_params["scheme"] = selected.name
         st.query_params.pop("compare", None)
         st.session_state["_scheme_link_applied"] = selected.name
@@ -180,7 +180,7 @@ with topbar:
     choice = st.selectbox("Scheme", titles, key="_scheme_choice", format_func=scheme_label,
                           on_change=_scheme_changed,
                           label_visibility="collapsed", width=240)
-scheme = all_schemes[titles.index(choice)]
+scheme = schemes.get(menu_schemes[titles.index(choice)].name)
 
 specs = scheme.param_schema()
 defaults_version = getattr(scheme, "defaults_version", "1")
@@ -318,13 +318,16 @@ def render_spectra():
     cancel_inactive_sweeps(st.session_state, scheme.name)
     retained = reusable_solution(st.session_state.get("spectral-workspace-"+scheme.name),
                                  scheme, params, READOUT_CACHE_VERSION) if comparing else None
-    from gabes.schemes.sas import ODModelSettingError
-    from gabes.schemes.sas_axial import AxialInputError
     from gabes.vapor_cell import CellTemperatureError
+    input_errors = (CellTemperatureError,)
+    if is_sas:
+        from gabes.schemes.sas import ODModelSettingError
+        from gabes.schemes.sas_axial import AxialInputError
+        input_errors += (AxialInputError, ODModelSettingError)
     try:
         raw = retained[0] if retained is not None else _cached_compute(
             scheme.name, recompute_items, cache_version)
-    except (AxialInputError, CellTemperatureError, ODModelSettingError) as error:
+    except input_errors as error:
         st.error(str(error))
         return
     if fit_od_view:

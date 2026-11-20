@@ -6,7 +6,7 @@ text/html Blob in a new tab (the 851 KB guide is fetched only on click).
 """
 import streamlit as st
 
-_HTML = """<button type="button" class="gbtn" aria-label="User's Guide" title="사용자 안내서를 새 창에서 엽니다">
+_HTML = """<button type="button" class="gbtn" aria-label="User's Guide" title="Open the User's Guide in a new tab">
 <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M8 4.5C6.8 3.6 5 3.2 2.5 3.3v8.4c2.5-.1 4.3.3 5.5 1.2 1.2-.9 3-1.3 5.5-1.2V3.3C11 3.2 9.2 3.6 8 4.5z"/><path d="M8 4.5v8.4"/></svg>
 <span class="lbl">Guide</span></button>"""
 
@@ -31,7 +31,7 @@ export default function(component) {
   btn.querySelector(".lbl").textContent = label;
   if (data.anchor) {
     btn.setAttribute("aria-label", label);
-    btn.title = "첫 OD/SAS 스펙트럼 실습을 새 창에서 엽니다";
+    btn.title = `Open ${label} in a new tab`;
     btn.querySelector(".lbl").style.cssText = "position:static;width:auto;height:auto;clip-path:none;";
   }
   const url = (data && data.url) || "app/static/GABES_User_Guide.html";
