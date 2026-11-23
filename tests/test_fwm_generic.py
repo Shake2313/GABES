@@ -678,7 +678,7 @@ def test_fwm_info_keeps_zeeman_diagnostic_scope_explicit():
     assert "Linear noise figure NF" in info
     assert "Squeezing [dB]" in info
     assert "calculated shot RIN" in info
-    assert "not a physical squeezing spectrum" in info
+    assert "omits microscopic atomic Langevin noise" in info
     assert "Reduced model" in info
     assert "pair-rate scale is anchored" in info
     assert "first principles" not in info
@@ -840,7 +840,7 @@ def test_beam_geometry_knobs_default_to_the_legacy_constants():
         pump_probe_angle_deg=params["seeded_angle_deg"],
         model_fidelity=fwm.normalize_fidelity(params["resolution"]),
         response_method=fwm.RESPONSE_POLE,
-        velocity_measure=params["velocity_measure"], branch=-1)
+        velocity_measure="exact", branch=-1)
     for key in ("probe_axis_GHz", "G_s", "G_c", "S_dB"):
         assert np.array_equal(np.asarray(raw[key]), np.asarray(fixed_geometry[key])), \
             f"{key} drifted when the geometry became a knob"
@@ -893,46 +893,57 @@ def test_detection_efficiency_routes_to_readout_without_changing_either_atomic_p
     assert full.call_args.kwargs["detection_efficiency"] == 1.0
     # For an ideal G=4 photon-flux amplifier, source NF=1/(2G−1).
     # Both controls act only in the downstream thinning relation.
-    amplifier = np.array([[2.0, np.sqrt(3.0)], [np.sqrt(3.0), 2.0]], complex)
-    center = fwm.branch_center_GHz(params["opd"], -1)
-    raw = {"D_GHz": params["opd"], "probe_axis_GHz": center+np.array([-0.001, 0.001]),
-           "T_canonical_small_signal": np.tile(amplifier, (2, 1, 1)), "eta": 1.0,
+    raw = {"G_s": np.array([4., 4.]), "G_c": np.array([3., 3.]),
            "input_seed_power_W": params["probe_uw"]*1e-6}
-    readout = fwm._seeded_passive_l1_readout(raw, params)
+    readout = fwm.experimental_jasperse_readout(raw, params)
     expected_eta = 0.5*0.8
     assert readout["eta_after_cell_QE"] == pytest.approx(expected_eta)
     np.testing.assert_allclose(readout["NF"], 1.0-expected_eta+expected_eta/7.0,
                                rtol=1e-12, atol=1e-12)
 
 
-def test_full_scan_plot_uses_display_solver_detail():
-    axis = np.array([-2.2, -2.1])
-    spectrum = {
-        "probe_axis_GHz": axis,
-        "G_s": np.array([1.0, 1.1]),
-        "gain_referred_noise_dB": np.array([0.0, -0.1]),
-        "model_fidelity": fwm.FIDELITY_FAST,
-        "propagation_convention": "internal propagation token",
-    }
-    full = {"D_GHz": 0.9, "minus": spectrum, "plus": dict(spectrum)}
-    fig = fwm.FWMScheme().extra_views()[0].render(full)
-    assert fig.axes[0].get_title().startswith("Solver detail: Fast")
-    assert "seed RIN a = 0 /Hz" in fig.axes[0].get_title()
-    noise_axis = fig.axes[1]
-    assert noise_axis.get_ylabel() == "Gain-referred noise diagnostic [dB]"
-    assert "0 dB (diagnostic reference)" in {label.get_text() for label in noise_axis.texts}
-    assert "internal propagation token" not in fig.axes[0].get_title()
-
+@pytest.mark.parametrize("calibrated", [False, True])
+@pytest.mark.parametrize("conjugate", [None, [0.3, np.nan, 0.3], [0.3, 0.4]])
+def test_full_scan_preserves_probe_gain_for_incomplete_saved_pairs(calibrated, conjugate):
     import matplotlib.pyplot as plt
-    plt.close(fig)
+
+    probe = np.array([1.0, 1.1, 1.3])
+    axis = np.array([-2.2, -2.1, -2.0])
+    spectrum = {
+        "probe_axis_GHz": axis, "G_s": probe,
+        "gain_referred_noise_dB": np.array([0.0, -0.1, -0.2]),
+        "model_fidelity": fwm.FIDELITY_FAST,
+    }
+    if conjugate is not None:
+        spectrum["G_c"] = np.asarray(conjugate)
+    # The other branch has both gains and can still be calibrated.
+    plus = dict(spectrum, branch=1, D_GHz=0.9, raman_center_plus_GHz=4.,
+                probe_axis_GHz=np.array([3.9, 4., 4.1]), G_c=np.array([0.2, 0.4, 0.3]))
+    full = {"D_GHz": 0.9, "minus": spectrum, "plus": plus}
+    fig = fwm.FWMScheme().extra_views()[0].render(
+        full, {"experimental_gain_calibration": calibrated})
+    try:
+        gain_axis, noise_axis = fig.axes
+        assert gain_axis.get_title().startswith("Solver detail: Fast")
+        assert "seed RIN a = 0 /Hz" in gain_axis.get_title()
+        np.testing.assert_array_equal(gain_axis.lines[0].get_ydata(), probe)
+        assert ("uncalibrated" in gain_axis.lines[0].get_label()) == calibrated
+        assert np.all(np.isnan(noise_axis.lines[0].get_ydata()))
+        assert "incomplete gains" in noise_axis.lines[0].get_label()
+        assert np.isfinite(noise_axis.lines[1].get_ydata()).all()
+        assert set(fig._gabes_experimental_jasperse_readout) == {"plus"}
+        assert set(fig._gabes_experimental_gain_calibration) == ({"plus"} if calibrated else set())
+        assert noise_axis.get_ylabel() == "Intensity-difference noise [dB]"
+        assert "0 dB (shot noise)" in {label.get_text() for label in noise_axis.texts}
+    finally:
+        plt.close(fig)
 
 
 def test_qe_knob_sets_current_nf_and_its_conditional_symmetric_loss_floor():
-    """Passive static NF uses external η exactly once; raw source stays neutral."""
+    """Distributed Jasperse NF uses external η exactly once; raw source stays neutral."""
     scheme = fwm.FWMScheme()
     params = scheme.defaults()
-    params.update(noise_model=fwm.NOISE_PASSIVE_L1,
-                  qe_pct=90.45, after_cell_eff_pct=94.5, resolution=fwm.FIDELITY_FAST)
+    params.update(qe_pct=90.45, after_cell_eff_pct=94.5, resolution=fwm.FIDELITY_FAST)
     raw = scheme.compute(params)
     eta = 0.9045 * (1.0 - 0.055)
     assert raw["qe"] == 1.0
@@ -940,19 +951,16 @@ def test_qe_knob_sets_current_nf_and_its_conditional_symmetric_loss_floor():
     view = scheme.headless_observables(raw, params)
     current = view["jasperse_readout"]
     assert current["eta_after_cell_QE"] == pytest.approx(eta)
-    # Independent canonical photon statistics, coherent seed and vacuum
-    # conjugate. Capped display gains do not enter this source variance.
-    matrix = raw["T_canonical_small_signal"]
-    gs = np.abs(matrix[:, 0, 0])**2
-    gc = np.abs(matrix[:, 1, 0])**2
-    q = matrix[:, 0, 0].conj()*matrix[:, 0, 1] - matrix[:, 1, 0].conj()*matrix[:, 1, 1]
-    source_nf = (gs-gc+2*np.abs(q)**2)/(gs+gc)
+    # Symmetric external detection loss adds independent vacuum to the
+    # effective distributed-medium source in both arms.
+    source = fwm.experimental_jasperse_readout(raw, dict(params, qe_pct=100., after_cell_eff_pct=100.))
+    source_nf = source["NF"]
     expected_nf = 1.0-eta+eta*source_nf
     valid = np.isfinite(current["NF"])
     assert np.any(valid)
     np.testing.assert_allclose(current["NF"][valid], expected_nf[valid],
                                rtol=1e-12, atol=1e-12)
-    np.testing.assert_allclose(current["NF_dB"][valid], 10*np.log10(expected_nf[valid]),
+    np.testing.assert_allclose(current["NF_dB"][valid], 10*np.log10(current["NF"][valid]),
                                rtol=1e-12, atol=1e-12)
     floor_dB = 10.0 * np.log10(1.0 - eta)
     assert np.nanmin(np.asarray(current["NF_dB"])) >= floor_dB - 1e-9

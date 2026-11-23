@@ -75,8 +75,9 @@ held-out predictions are 0.890 / 0.972 / 0.699 versus 5.6 / 3.8 / 1.9.
 Grouped prediction error is 5.74 versus the constant baseline's 2.20, so this
 mode is not a validated improvement over the previous Stark model.
 [Zeeman diagnosis, preserved failures and validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_zeeman_calibration_20261030/README.md).
-**Experimental Jasperse** includes both distributed vacuum-loss reservoirs with
-an explicit common-loss assumption. **Passive L1** remains selectable.
+The seeded spectrum uses the untruncated **Exact Maxwell** velocity average.
+**Experimental Jasperse** computes noise with distributed vacuum loss in both arms
+and an explicit common cell-loss assumption. Older saved settings load with these models.
 These practical approximations are separate from Grand Challenge acceptance.
 [Implementation, calibration and validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/fwm_experiment_2026_10_22/README.md).
 
@@ -89,7 +90,7 @@ These practical approximations are separate from Grand Challenge acceptance.
 | A | **Rydberg-EIT electrometry** | 85Rb cascade EIT / microwave AT spectrum for the 5S-5P-40D ladder and 37 GHz 40D-39F RF leg; first-order finite-IF weak-SIG response, AT→field calibration, balanced-detector PSN/RIN/electronics budget, temperature/cold-spot sweep, and conditional absolute sensitivity |
 | C — Magneto-optics | **Hanle / EIA / NMOR** | two distinct effects vs B: the **Hanle** effect (zero-field transmission dip/peak, EIA variant) from ground-state coherence, and **magneto-optical rotation** (MOR/NMOR, polarization-plane rotation) — both over the Zeeman manifold |
 | C | **Polarization squeezing (PSR)** | Rb85/Rb87 D1/D2 atomic self-rotation slope with conditional Gaussian polarization noise; phase and optical-detuning scans, distributed absorption, detector loss and explicit assumed atomic excess noise. [Model and applicability](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/psr/README.md) |
-| D — Wave mixing | **FWM** | seeded 85Rb D1 double-Λ gains, optional 10/13 experimental peak/width/gain calibration, effective Jasperse two-arm noise, and a selectable passive L1 diagnostic; generic SFWM biphoton source estimates (`g²_SI(τ)`, CAR, rates, phase matching, velocity-class waveform) |
+| D — Wave mixing | **FWM** | seeded 85Rb D1 double-Λ gains, optional 10/13 experimental peak/width/gain calibration, and effective Jasperse two-arm noise; generic SFWM biphoton source estimates (`g²_SI(τ)`, CAR, rates, phase matching, velocity-class waveform) |
 
 Optional reference calculations are documented in the [User's Guide](docs/Userguide/GABES_User_Guide_v2.html).
 OD/SAS has a segmented weak-probe cell model for graded conditions and pump
@@ -293,10 +294,12 @@ CSV comparison is on Transmission. Comparison and
 export controls rerun only their plot section, reuse the cached theory, and
 export the same aligned data shown on the graph with correction provenance.
 
-In seeded FWM, dragging **Two-photon Detuning** previews the cursor and selected
+In seeded FWM, edit **Temperature (°C)** beside **Atom** under **Conditions**.
+Changing the temperature recalculates the vapor density, Doppler width and spectrum.
+Dragging **Two-photon Detuning** previews the cursor and selected
 gain/noise locally on the cached curves. Clicking or dragging directly on the
 plot also selects δ. Release commits the operating point and updates the result
-strip and exports; the preview interpolates canonical NF before taking its dB log.
+strip and exports. The preview interpolates the linear Jasperse NF before taking its dB log.
 
 **Squeezing view → Quadrature phase scan** holds the selected two-photon detuning
 fixed and rotates both homodyne local-oscillator phases together from 0 to 180°.
@@ -311,9 +314,8 @@ reservoirs, the current amplitude RIN, and **shot-noise seed phase** with no inp
 amplitude–phase correlation. Phase zero is the real-coupling model reference,
 not a measured apparatus phase. It is a static approximation, not a microscopic
 or finite-RF noise prediction. Gain calibration remains active under its existing
-scope and does not calibrate phase noise. Returning to **Intensity difference**
-restores its selected noise model. JSON exports retain the covariance, phase
-convention, operating-point gains and assumptions; plotted CSVs use degrees.
+scope and does not calibrate phase noise. JSON exports retain the covariance, phase
+convention, operating-point gains and assumptions. Plotted CSVs use degrees.
 
 ### Hanle / EIA / NMOR readouts
 
@@ -624,9 +626,8 @@ still uses the finite-seed Floquet response. The inherited (+) branch fails the
   1.380 MHz Raman rms width and passes the documented grid/cutoff gates. Production
   remains one-dimensional, and neither reference supplies microscopic Langevin
   diffusion.
-Ultra solver detail adds the slow propagation refinements, but the full
-24-level Zeeman Floquet scan is still reported as a diagnostic rather than used
-as the default full-scan solver.
+All three seeded tiers use segmented propagation. The full 24-level Zeeman
+Floquet scan remains a separate diagnostic.
 
 1. **FWM gain is exponentially sensitive at high density.** At paper optimum
    T=121 °C linear Maxwell-Bloch still over-amplifies. The `0.74` reference
@@ -754,9 +755,8 @@ as the default full-scan solver.
   only through `−Δ_eff·S_v`, so eliminating the shift-free coordinates makes each
   response an exact partial fraction in Δ_eff; the Maxwell sum is a cheap pole sum
   (`gabes/pole_doppler.py`), and the continuous Gaussian is a closed-form Faddeeva
-  function. Balanced solves all 401 probe detunings; Fast refines them adaptively
-  (`gabes/adaptive_scan.py`) and splines the averaged responses. Every solved row
-  is guarded against the compiled kernel. The two-branch full probe-scan view
+  function. Fast and Balanced solve at every displayed probe detuning and check
+  each row against the compiled kernel. The two-branch full probe-scan view
   solves every displayed detuning with poles in both tiers. See
   `analysis/fwm_lite/DEVLOG.md`.
 - The `gabes_lab/pipelines/squeezing` scanners use the same pole engine on their own velocity
@@ -770,7 +770,7 @@ as the default full-scan solver.
 
 ## FWM future physics work
 
-The seeded view defaults to **Experimental Jasperse**, a uniform effective
+The seeded view uses **Experimental Jasperse**, a uniform effective
 distributed mixing/loss model including vacuum injection into both arms.
 It matches the displayed gain pair with a declared common cell-loss assumption
 (Advanced: **Jasperse common cell loss**). Calibrated detector-reference gains
@@ -778,34 +778,23 @@ can be adopted as effective source gains; this is an experimental approximation.
 When numerical limits prevent an exact gain match, the selected readout and table
 identify the approximation and its residual. The original atomic solve is unchanged.
 
-The selectable **Passive L1** evaluates a conditional NF diagnostic from
-`T_canonical_small_signal`, including vacuum completion and seed Fano factor
-`1+a/b` (coherent seed = 1). Noise above SQL is retained; infeasible passive
-completions appear as unavailable. The diagnostic uses photon-flux gains before
-the pump-energy cap. Historical `gain_referred_noise_dB` and `S_dB` retain their
-legacy algebraic meaning for compatibility.
-
-This static bright-seed diagnostic assumes conjugate vacuum and equal downstream
-efficiencies in the current UI; the reference also supports unequal external
-efficiencies. Loss represented by M must be excluded from that downstream
-efficiency. Passive endpoint feasibility does not establish distributed
-probe-only loss. A lower-bound interpretation requires phase-insensitive
-reservoirs; correlated phase-sensitive noise and finite-RF phase conversion
-require the microscopic covariance and sideband model. Experimentally validated
-microscopic squeezing remains open. The separate QRT absorption/emission readout uses the
+The retired **Passive L1** diagnostic used the endpoint canonical transfer and a
+passive vacuum completion. Its low-level output remains available for comparisons.
+The Jasperse readout assumes a bright seed with Fano factor `1+a/b`, conjugate
+vacuum and equal downstream efficiencies. Experimentally validated microscopic
+squeezing remains open. The separate QRT absorption/emission readout uses the
 reduced, locally uniform four-level state and a truncated one-dimensional
 Maxwell average; it does not yet propagate the full microscopic covariance.
 [Jasperse verification and scope](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/jasperse_2026_10_16/README.md).
 
-- Every non-legacy seeded tier uses Option-A bare frequency-specific wavevectors
-  and vacuum/geometric mismatch. Ultra adds 64-segment propagation, Gaussian
-  overlap, and approximate segment-wise pump-budget depletion.
+- Every seeded tier uses Option-A bare frequency-specific wavevectors,
+  vacuum/geometric mismatch, 64-segment propagation, Gaussian overlap and
+  approximate segment-wise pump-budget depletion.
 - The separate pump-only reference includes a converged two-dimensional
   non-collinear Maxwell average. Promotion into the finite-seed production scan,
   beam-divergence averaging, and segmentwise pump-state recomputation remain future
   work.
-- The diagonal Maxwell drift carries mean-field attenuation. The passive L1
-  completion supplies a conditional endpoint vacuum diagnostic; microscopic
+- The diagonal Maxwell drift carries mean-field attenuation. Microscopic
   distributed atomic covariance remains unavailable.
   Pump scatter is an optional phenomenological diagnostic. EOM configuration
   belongs to SABES, which passes seed, residual-carrier, and other-sideband powers
@@ -838,9 +827,8 @@ No tier predicts validated physical squeezing.
 
 **Detection reference.** The 86.94 % value in this experimental table combines
 the historical 92 % QE with 5.5 % post-cell loss. Current GABES exposes separate
-after-cell optical efficiency and detector QE controls. These enter the
-conditional L1 readout; cell absorption already represented by the atomic
-transfer is not applied again. The result remains a conditional diagnostic.
+after-cell optical efficiency and detector QE controls. Jasperse applies their
+product to both arms after propagation through the cell.
 
 ## Deploy
 

@@ -8,6 +8,9 @@ completion defect establishes endpoint feasibility, not a microscopic model.
 import numpy as np
 
 
+NOISE_PASSIVE_L1 = "Passive L1"
+
+
 def passive_l1_readout(transfer_canonical, *, seed_fano=1.0, eta=1.0,
                        eta_probe=None, eta_conjugate=None):
     """Return the bright intensity-difference diagnostic in linear SQL units.
@@ -108,6 +111,7 @@ def passive_l1_readout(transfer_canonical, *, seed_fano=1.0, eta=1.0,
         "NF_formal": detected,
         "NF_source": np.where(readable, source, np.nan),
         "NF_definition": "Var(N_probe-N_conjugate)/mean(N_probe+N_conjugate)",
+        "NF_model": NOISE_PASSIVE_L1,
         "passive_l1_G_s": gs,
         "passive_l1_G_c": gc,
         "passive_l1_D": difference,

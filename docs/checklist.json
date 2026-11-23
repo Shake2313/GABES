@@ -2854,6 +2854,7 @@
         "docs/daily_report/2026-10-09_scheme-5_fwm.md",
         "docs/daily_report/2026-10-14_scheme-5_fwm.md"
       ],
+      "user_decision_2026_11_23": "사용자 요청 2026-11-23: FWM 스퀴징에서 Historical 4σ 퇴역, Maxwell 속도 분포 선택 제거.",
       "implementation_2026_11_13": "⟦AI⟧ ead9cb5 sets all seeded FWM tiers to the exact Maxwell pole mean and retains a Historical 4-sigma control, including the old Ultra grid. Both 12-case historical tier gates passed twice. Fast max tube 0.017135 dB; Balanced bit-identical to exact Ultra. Exact versus historical max tube 0.212583 dB at 150 C / 0.9 GHz, max p95 0.093053 dB at frontier, max selected-point dB 0.004058. Default Fast raw max gain shifts 2.289/1.963 and NF 0.05648 dB, selected NF +0.000624 dB. FWM legacy baseline recapture byte-identical. 134 focused passed."
     },
     {
@@ -6164,6 +6165,8 @@
     },
     {
       "id": "fwm-practical-jasperse-and-gain-calibration",
+      "user_decision_2026_11_23": "사용자 요청 2026-11-23: FWM 스퀴징 온도 입력 노출. Passive L1이 레거시 진단이면 퇴역시키고 Jasperse로 고정.",
+      "implementation_2026_11_23": "⟦AI⟧ Passive L1은 정준 전달행렬의 입·출구에서 수동 진공 채널을 가정한다. 스퀴징 화면과 전체 스캔은 두 빔의 분포 손실을 포함하는 Experimental Jasperse를 사용한다. 이전 브라우저·파일 설정의 모델 선택값은 가져올 때 제거한다.",
       "title": "Practical Jasperse noise and source-linked empirical gain calibration",
       "area": "gabes/fwm_experiment_gain.py + gabes/fwm_experiment_noise.py + gabes/schemes/fwm.py + FWM UI/export",
       "origin": "human_request_with_ai_implementation_review",

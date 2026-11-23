@@ -16,7 +16,6 @@ from gabes.schemes import fwm
 def reference_params():
     scheme = fwm.FWMScheme()
     params = dict(scheme.defaults(), **scheme.presets()[0].values)
-    params["noise_model"] = fwm.NOISE_PASSIVE_L1
     params["experimental_gain_calibration"] = False
     params["measured_gain_calibration"] = True
     return params
@@ -124,7 +123,7 @@ def test_focused_headless_both_arms_use_exact_selected_rf_and_keep_atomic_nf():
         assert headless["metrics"] == view["metrics"]
         np.testing.assert_array_equal(baseline["jasperse_readout"]["NF"],
                                       view["jasperse_readout"]["NF"])
-        assert view["passive_l1_operating_point"]["NF"] == baseline["passive_l1_operating_point"]["NF"]
+        assert view["noise_operating_point"]["NF"] == baseline["noise_operating_point"]["NF"]
         labels = [item["label"] for item in view["metrics"]]
         assert "Probe gain, pump-off reference" in labels
         assert "Conjugate gain, pump-off reference" in labels
@@ -330,7 +329,8 @@ def test_actual_streamlit_preset_calibration_and_hidden_reference():
     assert not app.exception
     assert app.session_state["view"]["experimental_gain_calibration"]["applied"]
     app.checkbox(key="fwm__experimental_gain_calibration").uncheck().run()
-    app.selectbox(key="fwm__noise_model").select(fwm.NOISE_PASSIVE_L1).run()
+    assert "fwm__noise_model" not in [item.key for item in app.selectbox]
+    assert app.session_state["view"]["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
     assert not app.exception
     assert "fwm__measured_gain_calibration" not in [item.key for item in app.checkbox]
     assert not app.session_state["view"]["measured_gain_reference"]["requested"]

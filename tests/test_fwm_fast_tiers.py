@@ -130,9 +130,6 @@ def test_app_tiers_use_the_pole_response_on_the_ultra_display_axis():
     ultra_axis = fwm.probe_scan_axis_GHz(
         params["opd"], 401, 0, None, center - fwm.WINDOW_GHZ, center + fwm.WINDOW_GHZ,
         branches=(-1,))
-    assert scheme._seeded_compute_inputs(dict(
-        params, resolution=fwm.FIDELITY_FAST, velocity_measure="truncated")
-    )["response_method"] == fwm.RESPONSE_POLE_ADAPTIVE
     for raw in (fast, balanced):
         assert raw["response_estimator"]["method"] == fwm.RESPONSE_POLE
         assert raw["response_estimator"]["solved_probe_points"] == 401
@@ -163,34 +160,24 @@ def test_tier_table_shares_exact_maxwell_and_maps_earlier_labels():
         assert "full_scan" not in settings      # the full-scan view shares these settings
 
 
-@pytest.mark.parametrize("tier, method", (
-    (fwm.FIDELITY_FAST, fwm.RESPONSE_POLE),          # dense windows: every point solved
-    (fwm.FIDELITY_BALANCED, fwm.RESPONSE_POLE),
-    (fwm.FIDELITY_ULTRA, fwm.RESPONSE_POLE)))
-def test_full_scan_view_uses_the_tier_response_and_model(monkeypatch, tier, method):
-    captured = {}
-    monkeypatch.setattr(fwm, "full_spectrum",
-                        lambda *args, **kwargs: captured.update(kwargs) or {"ok": True})
-    scheme = fwm.FWMScheme()
-    assert scheme.extra_views()[0].compute(dict(scheme.defaults(), resolution=tier)) == {"ok": True}
-    settings = fwm.FWM_FIDELITY[tier]
-    assert captured["response_method"] == method
-    assert captured["velocity_measure"] == "exact"
-    assert captured["phase_detail"] == fwm.PHASE_ULTRA
-    assert captured["model_fidelity"] == tier
-    assert (captured["velocity_step"], captured["velocity_cutoff"]) == (
-        settings["velocity_step"], settings["velocity_cutoff"])
-
-
-def test_historical_ultra_full_scan_uses_the_original_grid(monkeypatch):
+@pytest.mark.parametrize("tier", fwm.FWM_FIDELITY)
+def test_focused_and_full_scans_use_exact_maxwell_even_for_historical_inputs(monkeypatch, tier):
     captured = {}
     monkeypatch.setattr(fwm, "full_spectrum", lambda *args, **kwargs: captured.update(kwargs))
     scheme = fwm.FWMScheme()
-    scheme.extra_views()[0].compute(dict(
-        scheme.defaults(), resolution=fwm.FIDELITY_ULTRA, velocity_measure="truncated"))
-    assert captured["response_method"] == fwm.RESPONSE_GRID
-    assert captured["velocity_measure"] == "truncated"
-    assert (captured["velocity_step"], captured["velocity_cutoff"]) == (1.0, 4.0)
+    assert "velocity_measure" not in scheme.defaults()
+    params = dict(scheme.defaults(), resolution=tier, velocity_measure="truncated")
+    focused = scheme._seeded_compute_inputs(params)
+    scheme.extra_views()[0].compute(params)
+    for inputs in (focused, captured):
+        assert inputs["velocity_measure"] == "exact"
+        assert inputs["response_method"] == fwm.RESPONSE_POLE
+        assert inputs["phase_detail"] == fwm.PHASE_ULTRA
+        assert inputs["model_fidelity"] == tier
+        settings = fwm.FWM_FIDELITY[tier]
+        assert (inputs["velocity_step"], inputs["velocity_cutoff"]) == (
+            settings["velocity_step"], settings["velocity_cutoff"])
+
 
 def test_full_spectrum_pole_branches_match_the_grid():
     common = dict(L=fwm.L_CELL, phase_detail=fwm.PHASE_BALANCED,

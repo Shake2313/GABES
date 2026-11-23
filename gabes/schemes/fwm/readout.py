@@ -7,17 +7,15 @@ from ...fwm_gain_calibration import (
 from .common import (
     FIDELITY_BALANCED, FIDELITY_FAST, NOISE_CONSTANT, NOISE_GAIN_PROPORTIONAL,
     PUMP_OVERLAP_EXCLUSION_MHZ, QE_DETECTOR,
-    RESPONSE_GRID, RESPONSE_POLE, SEEDED_DETECTION_EFFICIENCY_PCT, SEEDED_POST_CELL_LOSS_PCT,
+    RESPONSE_GRID, RESPONSE_POLE, SEEDED_POST_CELL_LOSS_PCT,
 )
 from .seeded import branch_center_GHz
 from ... import constants, fwm_experiment_gain, fwm_measured_gain, observables
 import functools
 import json
 import numpy as np
-from ...passive_readout import passive_l1_from_spectrum
-from ...jasperse import seed_noise_components
-from .phase_matching import seeded_option_a_wavenumbers
 from ...dressed_cell_absorption import selected_dressed_cell_absorption
+from ...passive_readout import NOISE_PASSIVE_L1  # legacy settings label
 
 
 def _measured_gain_context(raw, seed_input_assumption=""):
@@ -135,33 +133,8 @@ def _seeded_noise_caption(params):
     return f"seed RIN a = {float(params.get('seed_classical_rin_scaled', 0.0))*1e-14:.3g} /Hz"
 
 
-def _seeded_passive_l1_readout(raw, params):
-    """Evaluate readout-only inputs without mutating the cached atomic solve."""
-    power = raw.get("input_seed_power_W", float(params.get("probe_uw", 8.0))*1e-6)
-    omega = raw.get("omega_probe_rad_s")
-    if omega is None:
-        _, k, _ = seeded_option_a_wavenumbers(
-            raw.get("D_GHz", params.get("opd", 0.9)), raw["probe_axis_GHz"])
-        omega = constants.C_LIGHT * k
-    seed = seed_noise_components(
-        power, omega,
-        classical_rin_per_Hz=float(params.get("seed_classical_rin_scaled", 0.0))*1e-14)
-    eta = (_detection_efficiency_from_params(params)
-           if any(key in params for key in ("after_cell_eff_pct", "qe_pct", "loss_pct", "detection_eff_pct"))
-           else float(raw.get("eta", SEEDED_DETECTION_EFFICIENCY_PCT / 100.0)))
-    result = passive_l1_from_spectrum(
-        dict(raw, eta=eta), seed_fano=seed["seed_fano"])
-    result["seed_noise"] = seed
-    result["eta_after_cell_QE"] = eta
-    # Compatibility alias only; the retired constant/gain-linear laws are not
-    # applied. All current classical seed noise enters through Var(N0).
-    result["passive_l1_with_excess_noise_dB"] = result["NF_dB"]
-    return result
-
-
-def _seeded_sidebar_readouts(raw, params, readout, probe_GHz, absorption=None):
+def _seeded_sidebar_readouts(axis, readout, probe_GHz, absorption):
     """Display calculated quantities without adding them to solver inputs."""
-    axis = np.asarray(raw["probe_axis_GHz"])
     shot = float(np.interp(probe_GHz, axis, readout["seed_noise"]["shot_rin_per_Hz"]))
     entries = {"seed_shot_noise_b": {
         "value": shot * 1e14,
@@ -200,47 +173,13 @@ def _seeded_absorption_readout(raw, probe_GHz):
         return {"status": "UNAVAILABLE_ABSORPTION_VALIDATION", "reason": str(error)}
 
 
-def _passive_l1_selected(readout, raw, probe_GHz):
-    """Read a point only within a contiguous valid part of the sampled curve."""
-    x = np.asarray(raw["probe_axis_GHz"], dtype=float)
-    idx = int(np.searchsorted(x, probe_GHz))
-    if idx >= x.size:
-        brackets = (x.size - 1,)
-    elif idx == 0 or np.isclose(x[idx], probe_GHz, rtol=0.0, atol=1e-12):
-        brackets = (idx,)
-    else:
-        brackets = (idx - 1, idx)
-    valid = np.asarray(readout["passive_completion_valid"], dtype=bool)
-    noise = np.asarray(readout["passive_l1_noise_dB"], dtype=float)
-    completion_valid = bool(np.all(valid[list(brackets)]))
-    in_scan = bool(x[0] - 1e-12 <= probe_GHz <= x[-1] + 1e-12)
-    available = bool(completion_valid and in_scan
-                     and np.all(np.isfinite(noise[list(brackets)])))
-    statuses = np.asarray(readout["passive_l1_status"])
-    status = (str(statuses[brackets[0]]) if len(brackets) == 1 or available
-              else "L1_UNAVAILABLE_BETWEEN_INVALID_POINTS")
-    if not in_scan:
-        status = "L1_OUTSIDE_SAMPLED_SCAN"
-    point = {"passive_completion_valid": completion_valid,
-             "passive_l1_available": available,
-             "passive_l1_status": status}
-    point["NF"] = (float(np.interp(probe_GHz, x, readout["NF"]))
-                   if available else float("nan"))
-    point["NF_dB"] = (float(10 * np.log10(point["NF"]))
-                      if available and point["NF"] > 0 else float("nan"))
-    for key in ("passive_l1_noise_dB", "passive_l1_with_excess_noise_dB"):
-        point[key] = point["NF_dB"]
-    for key in ("passive_l1_G_s", "passive_l1_G_c", "passive_l1_D", "passive_l1_T"):
-        point[key] = float(np.interp(probe_GHz, x, readout[key]))
-    point["passive_completion_min_eig"] = float(np.min(
-        np.asarray(readout["passive_completion_min_eig"])[list(brackets)]))
-    return point
-
-
-NOISE_PASSIVE_L1 = "Passive L1"
 NOISE_EXPERIMENTAL_JASPERSE = "Experimental Jasperse"
 SQUEEZING_INTENSITY_DIFFERENCE = "Intensity difference"
 SQUEEZING_QUADRATURE_PHASE = "Quadrature phase scan"
+_JASPERSE_POINT_FIELDS = (
+    "G_s", "G_c", "input_G_s", "input_G_c", "effective_squeeze",
+    "probe_transmission", "conjugate_transmission",
+)
 
 
 def _power_gain_metric(label, gain, **context):
@@ -266,7 +205,7 @@ def _experimental_noise_selected(readout, raw, delta_mhz):
              "available": available, "model": NOISE_EXPERIMENTAL_JASPERSE,
              "inference_approximate": bool(np.any(readout["inference_approximate"][order][brackets])),
              "fit_relative_residual": float(np.max(readout["fit_relative_residual"][order][brackets]))}
-    for key in ("G_s", "G_c", "input_G_s", "input_G_c"):
+    for key in _JASPERSE_POINT_FIELDS:
         point[key] = float(np.interp(delta_mhz, x, np.asarray(readout[key])[order]))
     return point
 
@@ -405,7 +344,7 @@ def _seeded_readout_rows(result, rows, source_size):
     return projected
 
 
-def seeded_operating_readout(raw, params, *, include_passive=False):
+def seeded_operating_readout(raw, params):
     """Resolve FWM gain and NF selections without figures or absorption solves."""
     tpd = params["tpd"]
     phase_view = params.get("squeezing_view") == SQUEEZING_QUADRATURE_PHASE
@@ -454,43 +393,28 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
     displayed_gc = displayed_gain["G_c"] if gain_active else raw["G_c"]
     displayed_point = experimental_gain["selected_point"] if gain_active else op
 
-    noise_model = (NOISE_EXPERIMENTAL_JASPERSE if phase_view else
-                   params.get("noise_model", NOISE_PASSIVE_L1))
     if source is not raw and not gain_active:
         displayed_gs, displayed_gc = (source[key][native_indices] for key in ("G_s", "G_c"))
         noise_raw = dict(raw, G_s=displayed_gs, G_c=displayed_gc)
-    passive_readout = None
-    passive_op = None
-    experimental_noise = None
-    if ("T_canonical_small_signal" in raw
-            and (include_passive or noise_model == NOISE_PASSIVE_L1)):
-        point_readout = _seeded_passive_l1_readout(source, params)
-        passive_op = _passive_l1_selected(point_readout, source, op["probe_GHz"])
-        passive_readout = point_readout
-        if source is not raw:
-            passive_readout = _seeded_readout_rows(point_readout, native_indices,
-                                                  source["probe_axis_GHz"].size)
-    noise_point = passive_op
-    if noise_model == NOISE_EXPERIMENTAL_JASPERSE:
-        experimental_noise = fwm.experimental_jasperse_readout(
-            noise_raw, params, gains=displayed_gain if gain_active else None)
-        experimental_noise["internal_delta_mhz"] = gain_axis
-        noise_point = _experimental_noise_selected(experimental_noise, raw, tpd)
-        if not gain_active and source is not raw:
-            selected_idx = np.searchsorted(source["probe_axis_GHz"], op["probe_GHz"])
-            if (selected_idx < source["probe_axis_GHz"].size
-                    and source["probe_axis_GHz"][selected_idx] == op["probe_GHz"]):
-                point_source = dict(source, omega_probe_rad_s=source["omega_probe_rad_s"][selected_idx])
-                point_gain = {key: source[key][selected_idx] for key in ("G_s", "G_c")}
-                point_noise = fwm.experimental_jasperse_readout(point_source, params, gains=point_gain)
-                noise_point = {
-                    "NF": float(point_noise["NF"]), "NF_dB": float(point_noise["NF_dB"]),
-                    "available": bool(np.isfinite(point_noise["NF"])),
-                    "model": NOISE_EXPERIMENTAL_JASPERSE,
-                    "inference_approximate": bool(point_noise["inference_approximate"]),
-                    "fit_relative_residual": float(point_noise["fit_relative_residual"]),
-                    **{key: float(point_noise[key]) for key in ("G_s", "G_c", "input_G_s", "input_G_c")},
-                }
+    experimental_noise = fwm.experimental_jasperse_readout(
+        noise_raw, params, gains=displayed_gain if gain_active else None)
+    experimental_noise["internal_delta_mhz"] = gain_axis
+    noise_point = _experimental_noise_selected(experimental_noise, raw, tpd)
+    if not gain_active and source is not raw:
+        selected_idx = np.searchsorted(source["probe_axis_GHz"], op["probe_GHz"])
+        if (selected_idx < source["probe_axis_GHz"].size
+                and source["probe_axis_GHz"][selected_idx] == op["probe_GHz"]):
+            point_source = dict(source, omega_probe_rad_s=source["omega_probe_rad_s"][selected_idx])
+            point_gain = {key: source[key][selected_idx] for key in ("G_s", "G_c")}
+            point_noise = fwm.experimental_jasperse_readout(point_source, params, gains=point_gain)
+            noise_point = {
+                "NF": float(point_noise["NF"]), "NF_dB": float(point_noise["NF_dB"]),
+                "available": bool(np.isfinite(point_noise["NF"])),
+                "model": NOISE_EXPERIMENTAL_JASPERSE,
+                "inference_approximate": bool(point_noise["inference_approximate"]),
+                "fit_relative_residual": float(point_noise["fit_relative_residual"]),
+                **{key: float(point_noise[key]) for key in _JASPERSE_POINT_FIELDS},
+            }
 
     gain_point = {
         "G_s": float(displayed_point["G_s"]),
@@ -511,7 +435,7 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
             "internal_delta_mhz": gain_axis, "G_s": displayed_gs, "G_c": displayed_gc,
         },
         "experimental_gain_calibration": experimental_gain,
-        "noise_model": noise_model,
+        "noise_model": NOISE_EXPERIMENTAL_JASPERSE,
         "readout_coordinate_status": coordinate_status,
         **({"readout_source_provenance": source.get(
                 "readout_source_provenance", {"native": dict(source["response_estimator"])})}
@@ -523,10 +447,8 @@ def seeded_operating_readout(raw, params, *, include_passive=False):
             and not phase_view and (not gain_active or lab_calibration)
             else "UNCERTIFIED_CALIBRATION_OR_SOURCE"),
         "noise_operating_point": noise_point,
-        "jasperse_readout": experimental_noise if experimental_noise is not None else passive_readout,
+        "jasperse_readout": experimental_noise,
         "experimental_jasperse_readout": experimental_noise,
-        "passive_l1_readout": passive_readout,
-        "passive_l1_operating_point": passive_op,
     }
 
 
@@ -539,8 +461,6 @@ def _plot_reference(axis, value, label):
                   bbox=dict(facecolor="white", edgecolor="none", alpha=.85, pad=.7))
 
 
-def _label_noise_axis(axis, modeled):
-    reference = "shot noise" if modeled else "diagnostic reference"
-    _plot_reference(axis, 0.0, f"0 dB ({reference})")
-    axis.set_ylabel("Intensity-difference noise [dB]" if modeled
-                    else "Gain-referred noise diagnostic [dB]")
+def _label_noise_axis(axis):
+    _plot_reference(axis, 0.0, "0 dB (shot noise)")
+    axis.set_ylabel("Intensity-difference noise [dB]")

@@ -28,8 +28,7 @@ SCHEME_CASES = [
 
 def _app(scheme_name, updates=None, *, rail=False):
     render = (
-        """with st.sidebar:
-    grouped = render_atom_conditions(scheme, specs)
+        """grouped = render_atom_conditions(scheme, specs)
 params = render_rail(st.sidebar, scheme, specs,
                      skip=[sp for sp in specs if sp.name in grouped])"""
         if rail else "params = render_conditions(scheme, specs)"
@@ -49,6 +48,7 @@ if not st.session_state.get('_initialized'):
     st.session_state['_initialized'] = True
 {render}
 render_comparison_controls(scheme, specs)
+st.session_state['_params'] = params
 descriptor = atom_condition_descriptor(scheme, specs, params)
 st.session_state['_grouped'] = sorted(descriptor['names'])
 st.session_state['_visible_grouped'] = [sp.name for sp in descriptor['fields']]
@@ -86,7 +86,9 @@ def test_atom_group_contains_supported_controls_once(scheme_name, updates):
         matches = [widget for widget in all_widgets
                    if widget.key == key or widget.key.startswith(key+'-refresh-')]
         assert len(matches) == 1, name
-        assert matches[0].key in popup_keys, name
+        inline_temperature = (scheme_name == 'fwm' and updates.get('mode') != 'Biphoton'
+                              and name == 'temp_c')
+        assert (matches[0].key in popup_keys) == (not inline_temperature), name
     # Canonical grouping replaces the old separate Atom and Isotope triggers.
     assert not any(p.proto.popover.label.startswith('Isotope') for p in app.get('popover'))
     labels = Counter(widget.label for widget in all_widgets)
@@ -134,11 +136,28 @@ def test_atom_helper_excludes_grouped_fields_from_legacy_fwm_rail(updates):
     app = _app('fwm', updates, rail=True)
     assert not app.exception
     popup = _atom_popup(app)
-    for label in ('Temperature (\u00b0C)', 'Cell length (mm)'):
-        assert sum(widget.label == label for widget in popup.text_input) == 1
+    temperature_key = 'conditions-fwm-' + ('biphoton_temp_c' if updates else 'temp_c')
+    temperatures = [widget for widget in app.main.text_input if widget.label == 'Temperature (\u00b0C)']
+    assert [widget.key for widget in temperatures] == [temperature_key]
+    assert (temperature_key in {widget.key for widget in popup.text_input}) == bool(updates)
+    assert sum(widget.label == 'Cell length (mm)' for widget in popup.text_input) == 1
     grouped = set(app.session_state['_grouped'])
     assert not any(widget.key.startswith('fwm__') and widget.key[5:] in grouped
                    for widget in _widgets(app))
+
+
+def test_seeded_fwm_temperature_edit_reaches_the_solver():
+    from gabes import schemes
+
+    app = _app('fwm')
+    temperature = app.main.text_input(key='conditions-fwm-temp_c')
+    assert temperature.value == '121'
+    temperature.set_value('113.5').run()
+    assert not app.exception and not app.error
+    params = app.session_state['_params']
+    scheme = schemes.get('fwm')
+    assert 'temp_c' in scheme.solve_param_keys(params)
+    assert scheme._seeded_compute_inputs(params)['T'] == pytest.approx(386.65)
 
 
 def test_sas_cell_type_dropdown_keeps_native_coating_parameter():

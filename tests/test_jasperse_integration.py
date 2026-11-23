@@ -27,8 +27,7 @@ def test_unequal_external_efficiencies_match_jasperse_eq5_and_seed_variance(sque
 @pytest.fixture(scope="module")
 def physical_view():
     scheme = fwm.FWMScheme()
-    params = dict(scheme.defaults(), noise_model=fwm.NOISE_PASSIVE_L1,
-                  resolution=fwm.FIDELITY_BALANCED,
+    params = dict(scheme.defaults(), resolution=fwm.FIDELITY_BALANCED,
                   after_cell_eff_pct=50.0, qe_pct=60.0)
     raw = scheme.compute(params)
     view = scheme.headless_observables(raw, params)
@@ -61,7 +60,7 @@ def test_classical_seed_and_external_efficiencies_do_not_change_absorption_or_ca
     for arm in ("probe", "conjugate"):
         assert changed["sidebar_readouts"][f"eta_{arm}_pct"]["value"] == pytest.approx(
             first["sidebar_readouts"][f"eta_{arm}_pct"]["value"]*.56/.3)
-    assert changed["passive_l1_operating_point"]["NF"] != first["passive_l1_operating_point"]["NF"]
+    assert changed["noise_operating_point"]["NF"] != first["noise_operating_point"]["NF"]
 
 
 def test_strict_json_preserves_absorption_emission_and_current_noise_units(physical_view):
@@ -84,7 +83,7 @@ def test_zero_detected_power_has_no_normalized_noise_factor(physical_view, zero_
     view = scheme.headless_observables(raw, dict(params, **{zero_control: 0.}))
     readout = view["jasperse_readout"]
     assert np.all(np.isnan(readout["NF"]))
-    assert np.all(readout["passive_l1_status"] == "L1_NO_DETECTED_BRIGHT_OUTPUT")
-    assert not view["passive_l1_operating_point"]["passive_l1_available"]
+    assert np.all(readout["status"] == "NO_DETECTED_BRIGHT_OUTPUT")
+    assert not view["noise_operating_point"]["available"]
     for arm in ("probe", "conjugate"):
         assert view["sidebar_readouts"][f"eta_{arm}_pct"]["value"] == 0.

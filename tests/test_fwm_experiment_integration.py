@@ -31,12 +31,12 @@ def experimental_case():
 def test_practical_defaults_and_controls_only_change_readout():
     scheme = fwm.FWMScheme()
     specs = {spec.name: spec for spec in scheme.param_schema()}
-    assert scheme.defaults()["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
+    assert "noise_model" not in specs
+    assert "noise_model" not in scheme.defaults()
     assert scheme.defaults()["experimental_gain_calibration"] is False
-    for name in ("noise_model", "experimental_gain_calibration"):
+    for name in ("jasperse_loss_pct", "experimental_gain_calibration"):
         assert specs[name].recompute is False
         assert name not in scheme.recompute_keys()
-    assert fwm.NOISE_PASSIVE_L1 in specs["noise_model"].choices
 
 
 def test_experimental_nf_fills_the_screenshot_gap_and_preserves_cached_model(experimental_case):
@@ -52,7 +52,7 @@ def test_experimental_nf_fills_the_screenshot_gap_and_preserves_cached_model(exp
     assert np.isfinite(point["NF"]) and point["NF"] > 0.0
     assert point["NF_dB"] == pytest.approx(10*np.log10(point["NF"]), abs=1e-12)
     assert view["metrics"][0]["value"] == f"{point['NF_dB']:.2f} dB"
-    assert not view["passive_l1_operating_point"]["passive_l1_available"]
+    assert "passive_l1_operating_point" not in view
     for key in ("G_s", "G_c", "T_canonical_small_signal", "gain_referred_noise_dB"):
         np.testing.assert_array_equal(raw[key], original[key])
     assert raw["claim_gate"] == original["claim_gate"]
@@ -191,7 +191,27 @@ def test_full_view_routes_both_practical_models_and_branch_coordinates(experimen
         plt.close(figure)
 
 
-def test_focused_exact_readout_uses_solved_native_passive_eligibility():
+def test_off_grid_operating_table_uses_the_selected_jasperse_fit():
+    scheme = fwm.FWMScheme()
+    params = dict(scheme.defaults(), tpd=85.5)
+    raw = scheme.compute(params)
+    view = scheme.headless_observables(raw, params)
+    assert view["readout_coordinate_status"] == "DENSE_POLE_READOUT_COORDINATES"
+    gain = view["gain_operating_point"]
+    direct = fwm.experimental_jasperse_readout(
+        {"G_s": gain["G_s"], "G_c": gain["G_c"]}, params)
+    noise = view["noise_operating_point"]
+    for key in ("effective_squeeze", "probe_transmission", "conjugate_transmission",
+                "fit_relative_residual"):
+        assert noise[key] == direct[key]
+    table = view["tables"][0]["markdown"]
+    assert f"| Effective squeeze parameter | {direct['effective_squeeze']:.6g} |" in table
+    assert (f"| Effective probe / conjugate transmission | {direct['probe_transmission']:.6g} / "
+            f"{direct['conjugate_transmission']:.6g} |") in table
+    assert f"| Effective gain fit relative residual | {direct['fit_relative_residual']:.3g} |" in table
+
+
+def test_focused_exact_readout_uses_solved_native_jasperse_gains():
     scheme = fwm.FWMScheme()
     gold = next(p.values for p in scheme.presets() if p.name == "Sim Gold Reference")
     params = dict(gold, tpd=393.25, noise_model=fwm.NOISE_PASSIVE_L1)
@@ -200,15 +220,15 @@ def test_focused_exact_readout_uses_solved_native_passive_eligibility():
     assert exact["readout_certification_scope"] == "FOCUSED_EXACT_MAXWELL_TESTED_CASES"
     assert exact["readout_coordinate_status"] in {
         "NATIVE_SOURCE_GRID", "DENSE_POLE_READOUT_COORDINATES"}
-    assert exact["noise_operating_point"]["passive_l1_available"]
+    assert exact["noise_operating_point"]["available"]
     assert raw["response_estimator"]["solved_probe_points"] == len(raw["probe_axis_GHz"])
     ultra = scheme.compute(dict(params, resolution=fwm.FIDELITY_ULTRA))
     expected = fwm.seeded_operating_readout(ultra, params)
     assert expected["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
     for key in ("G_s", "G_c"):
         np.testing.assert_array_equal(exact["gain_curve"][key], expected["gain_curve"][key])
-    np.testing.assert_array_equal(exact["passive_l1_readout"]["NF_dB"],
-                                  expected["passive_l1_readout"]["NF_dB"])
+    np.testing.assert_array_equal(exact["jasperse_readout"]["NF_dB"],
+                                  expected["jasperse_readout"]["NF_dB"])
     phase = fwm.seeded_operating_readout(raw, dict(
         params, exact_readout_coordinates=True, squeezing_view=fwm.SQUEEZING_QUADRATURE_PHASE))
     assert phase["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"

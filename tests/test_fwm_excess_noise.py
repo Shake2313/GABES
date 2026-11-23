@@ -29,7 +29,8 @@ def seeded_spectrum():
         "raman_center_plus_GHz": fwm.branch_center_GHz(0.9, 1),
         "T_canonical_small_signal": matrices,
         "input_seed_power_W": 8e-6,
-        "G_s": np.array([0.8, 3.0, 8.0]),
+        "omega_probe_rad_s": fwm.constants.OMEGA_D1,
+        "G_s": gain.copy(),
         "G_c": np.array([0.0, 2.0, 7.0]),
         "gain_referred_noise_dB": np.array([-0.4, -4.7, -6.0]),
         "S_dB": np.array([-0.4, -4.7, -6.0]),
@@ -46,9 +47,7 @@ def seeded_spectrum():
 
 
 def _ideal_expected(raw, params):
-    _, k_seed, _ = fwm.seeded_option_a_wavenumbers(
-        raw["D_GHz"], raw["probe_axis_GHz"])
-    b = 2*fwm.constants.HBAR*fwm.constants.C_LIGHT*k_seed/raw["input_seed_power_W"]
+    b = 2*fwm.constants.HBAR*raw["omega_probe_rad_s"]/raw["input_seed_power_W"]
     a = params.get("seed_classical_rin_scaled", 0.0)*1e-14
     eta = params["after_cell_eff_pct"]*params["qe_pct"]/1e4
     gain = np.abs(raw["T_canonical_small_signal"][:, 0, 0])**2
@@ -123,7 +122,7 @@ def test_focused_and_full_heavy_solves_ignore_current_and_retired_noise_controls
 def test_current_a_b_nf_follow_ideal_photon_statistics_without_mutating_cache(seeded_spectrum):
     import matplotlib.pyplot as plt
     scheme = fwm.FWMScheme()
-    params = dict(scheme.defaults(), noise_model=fwm.NOISE_PASSIVE_L1, tpd=0.0, seed_classical_rin_scaled=2.0,
+    params = dict(scheme.defaults(), tpd=0.0, seed_classical_rin_scaled=2.0,
                   after_cell_eff_pct=80.0, qe_pct=90.0)
     original = deepcopy(seeded_spectrum)
     b, nf = _ideal_expected(seeded_spectrum, params)
@@ -143,7 +142,7 @@ def test_current_a_b_nf_follow_ideal_photon_statistics_without_mutating_cache(se
         headless = scheme.headless_observables(seeded_spectrum, params)
         assert headless["metrics"] == view["metrics"]
         b_slider = view["sidebar_readouts"]["seed_shot_noise_b"]["value"]
-        assert b_slider == pytest.approx(b[1]/1e-14)
+        assert b_slider == pytest.approx(b/1e-14)
     finally:
         plt.close(view["figure"])
     for name in ("G_s", "G_c", "S_dB", "gain_referred_noise_dB", "T_canonical_small_signal"):
@@ -169,7 +168,7 @@ def test_off_grid_marker_uses_log_of_interpolated_nf_and_lies_on_curve(seeded_sp
     expected_nf = 0.5*(nf[1]+nf[2])
     view = fwm.FWMScheme().observables(seeded_spectrum, params)
     try:
-        point = view["passive_l1_operating_point"]
+        point = view["noise_operating_point"]
         assert point["NF"] == pytest.approx(expected_nf)
         assert point["NF_dB"] == pytest.approx(10*np.log10(expected_nf))
         axis = view["figure"].axes[1]
@@ -182,7 +181,7 @@ def test_off_grid_marker_uses_log_of_interpolated_nf_and_lies_on_curve(seeded_sp
 
 def test_full_scan_current_seed_noise_uses_each_branch_input_power(seeded_spectrum):
     import matplotlib.pyplot as plt
-    params = dict(fwm.FWMScheme().defaults(), noise_model=fwm.NOISE_PASSIVE_L1, seed_classical_rin_scaled=1.0,
+    params = dict(fwm.FWMScheme().defaults(), seed_classical_rin_scaled=1.0,
                   after_cell_eff_pct=75.0, qe_pct=80.0)
     full = {"D_GHz": 0.9, "minus": seeded_spectrum,
             "plus": dict(seeded_spectrum, input_seed_power_W=4e-6)}

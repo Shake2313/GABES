@@ -5,11 +5,10 @@ from .common import (
     CS_CHANNEL_LABELS, DEFAULT_BRANCH, FIDELITY_BALANCED, FIDELITY_FAST, FIDELITY_LABELS,
     FWM_FIDELITY, L_CELL,
     MODE_BIPHOTON, MODE_LABELS, MODE_SEEDED, PHASE_LEGACY, PHASE_ULTRA, PRED_V_FWHM_TOL,
-    PROBE_WAVELENGTH_NM, QE_DETECTOR, RESPONSE_POLE, SCAN_START_STRIDE, SCAN_TOLERANCE_DB,
-    SCAN_TOLERANCE_LOG10_GAIN, SEEDED_FLOQUET_ORDER, SEEDED_PHASE_ANGLE_DEG,
+    PROBE_WAVELENGTH_NM, QE_DETECTOR, SEEDED_FLOQUET_ORDER, SEEDED_PHASE_ANGLE_DEG,
     SEEDED_POST_CELL_LOSS_PCT, SEEDED_REFERENCE_RESIDUAL, SIDE_CHOICES, SIDE_PLUS, TOPOLOGY_CS_BTW,
     TOPOLOGY_DIAMOND, TOPOLOGY_LABELS, TOPOLOGY_RB87_TELECOM, TPD_LIMIT_MHZ, WINDOW_GHZ, W_PROBE,
-    W_PUMP, _tier_response_method, normalize_fidelity,
+    W_PUMP, normalize_fidelity,
 )
 from ..base import ExtraView, ParamSpec, Preset, Scheme
 from ...fwm_gain_calibration import (
@@ -17,10 +16,10 @@ from ...fwm_gain_calibration import (
     MODEL_ZEEMAN, calibrate_spectrum as calibrate_experimental_gain,
 )
 from .readout import (
-    NOISE_EXPERIMENTAL_JASPERSE, NOISE_PASSIVE_L1, SQUEEZING_INTENSITY_DIFFERENCE,
+    SQUEEZING_INTENSITY_DIFFERENCE,
     SQUEEZING_QUADRATURE_PHASE, _detection_efficiency_from_params, _label_noise_axis,
     _measured_gain_context, _plot_reference, _power_gain_metric, _seeded_noise_caption,
-    _seeded_passive_l1_readout, _seeded_sidebar_readouts,
+    _seeded_sidebar_readouts,
 )
 from .biphoton import (
     _biphoton_source_items, _cached_biphoton_source, _default_biphoton_geometry,
@@ -40,7 +39,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v31-focused-exact"
+    cache_version = "fwm-experimental-jasperse-gain-v32-fixed-models"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -60,11 +59,14 @@ class FWMScheme(Scheme):
             fixed = {"Atom": atom, "Isotope": topology.isotope_name[len(atom):]}
             if topology.name != TOPOLOGY_DIAMOND:
                 fixed["Transition line"] = "D2"
-        return dict(fields=("temp_c", "cell_mm", "biphoton_temp_c", "biphoton_cell_mm"), fixed=fixed)
+        return dict(fields=("temp_c", "cell_mm", "biphoton_temp_c", "biphoton_cell_mm"),
+                    inline_fields=("temp_c",), fixed=fixed)
+
+    retired_squeezing_controls = frozenset(("velocity_measure", "noise_model"))
 
     def migrate_default_params(self, params):
         replay_flags = ("gain_closure_enabled", "legacy_gain_calibration_fixture")
-        migrated = dict(params)
+        migrated = {k: v for k, v in params.items() if k not in self.retired_squeezing_controls}
         # Saved settings without a model selector used the original lab fit.
         migrated.setdefault("gain_calibration_model", MODEL_LAB)
         for name in replay_flags:
@@ -167,9 +169,9 @@ class FWMScheme(Scheme):
                            "outside its data range and after changing operating conditions."),
             ParamSpec("exact_readout_coordinates", "Exact source coordinates", "Numerics", False,
                       control="checkbox", recompute=False, advanced=True, visible_if=seeded,
-                      help="Use exact source coordinates for compatible readouts. Fast and Balanced "
-                           "already use them for focused intensity-difference readouts with Exact Maxwell "
-                           "and either 10/13 gain calibration or uncalibrated gains."),
+                      help="Evaluate the atomic response at the requested detunings. Fast and Balanced "
+                           "do this automatically for focused intensity-difference readouts with "
+                           "uncalibrated gains or either 10/13 gain calibration."),
             ParamSpec("gain_calibration_model", "Gain calibration model",
                       "Detection & scaling", MODEL_LAB_REFIT,
                       choices=GAIN_CALIBRATION_MODELS, recompute=False,
@@ -181,11 +183,6 @@ class FWMScheme(Scheme):
                            "conditional on zero field and orthogonal linear polarizations. "
                            "These options report grouped gain "
                            "validation separately from noise."),
-            ParamSpec("noise_model", "Noise model", "Detection & scaling", NOISE_EXPERIMENTAL_JASPERSE,
-                      choices=(NOISE_EXPERIMENTAL_JASPERSE, NOISE_PASSIVE_L1), recompute=False,
-                      visible_if=dict(seeded, squeezing_view=SQUEEZING_INTENSITY_DIFFERENCE),
-                      help="Experimental Jasperse includes both distributed loss reservoirs using effective parameters. "
-                           "Passive L1 retains the restricted canonical-transfer diagnostic."),
             ParamSpec("jasperse_loss_pct", "Jasperse common cell loss", "Detection & scaling",
                       0.0, 0.0, 95.0, 1.0, "%", recompute=False, visible_if=seeded,
                       advanced=True,
@@ -356,11 +353,9 @@ class FWMScheme(Scheme):
             ParamSpec("resolution", "Solver detail", "Numerics", FIDELITY_FAST,
                       choices=tuple(FWM_FIDELITY.keys()), advanced=True,
                       choice_labels=FIDELITY_LABELS, visible_if=seeded,
-                      help="Controls the scan grid and propagation refinements."),
-            ParamSpec("velocity_measure", "Maxwell velocity measure", "Numerics", "exact",
-                      choices=("exact", "truncated"), advanced=True, visible_if=seeded,
-                      choice_labels={"exact": "Exact Maxwell", "truncated": "Historical 4σ"},
-                      help="Use the untruncated pole mean or replay the previous 4-sigma grid."),
+                      help="All tiers use the untruncated Maxwell average at every displayed probe "
+                           "detuning. Fast and Balanced accelerate the focused scan. Ultra uses "
+                           "the dense reference solver."),
             ParamSpec("floquet_order", "Floquet order", "Numerics",
                       SEEDED_FLOQUET_ORDER, choices=(3, 4, 5), advanced=True,
                       visible_if=seeded, hidden=True,
@@ -397,7 +392,7 @@ class FWMScheme(Scheme):
         )
         practical = dict(values, experimental_gain_calibration=True,
                          gain_calibration_model=MODEL_LAB_REFIT,
-                         noise_model=NOISE_EXPERIMENTAL_JASPERSE, jasperse_loss_pct=0.0)
+                         jasperse_loss_pct=0.0)
         return [
             Preset("2026-10-13 experiment", practical,
                    help="113 °C, nominal blue OPD ≈1 GHz, pump 294.804 mW. "
@@ -423,7 +418,7 @@ class FWMScheme(Scheme):
                     measured_gain_calibration=False, seed_input_assumption="",
                     experimental_gain_calibration=False,
                     gain_calibration_model=MODEL_LAB_REFIT,
-                    noise_model=NOISE_EXPERIMENTAL_JASPERSE, jasperse_loss_pct=0.0,
+                    jasperse_loss_pct=0.0,
                     loss_pct=SEEDED_POST_CELL_LOSS_PCT,
                     transit_rate_khz=100.0,
                     eom_residual_carrier_uw=0.0,
@@ -519,15 +514,8 @@ class FWMScheme(Scheme):
             "common-loss assumption to match the displayed gain pair. "
             "Linear noise figure NF is "
             "Var(N_probe−N_conjugate)/mean(N_probe+N_conjugate); "
-            "Squeezing [dB] is 10 log₁₀(NF). The alternative Passive L1 readout uses the canonical "
-            "transfer before the pump-energy cap. It assumes a static annihilation-only "
-            "vacuum completion and a bright seed. Points without this completion are "
-            "unavailable. Without atomic Langevin covariance it is not a physical "
-            "squeezing spectrum or a general lower bound for correlated atomic noise. "
-            "Balanced directly samples the scan; Fast's L1 interpolation error "
-            "has not been independently certified. "
-            "Historical caches without a transfer map retain their legacy algebraic "
-            "gain approximation. A pump-energy cap prevents unbounded "
+            "Squeezing [dB] is 10 log₁₀(NF). This effective model omits microscopic atomic Langevin noise. "
+            "A pump-energy cap prevents unbounded "
             "small-signal gain but is not a depleted three-field solve. Numerical "
             "checks and solver provenance are listed under Model diagnostics. "
             "**Seed noise.** a is one-sided classical RIN [Hz⁻¹]; b=2ℏω_seed/P_seed "
@@ -570,14 +558,13 @@ class FWMScheme(Scheme):
         detuning = inputs.pop("D_GHz")
         raw = fwm.compute_spectrum(detuning, **inputs)
         if "stark_recompute_context" in raw:
-            raw["focused_readout_reference"] = inputs["velocity_measure"] == "exact"
+            raw["focused_readout_reference"] = True
         return raw
 
     def _seeded_compute_inputs(self, params):
         center = branch_center_GHz(params["opd"], -1)
         fidelity = normalize_fidelity(params["resolution"])
         res = FWM_FIDELITY[fidelity]
-        velocity_measure = params.get("velocity_measure", "exact")
         wanted_seed_uw = params["probe_uw"]
         alias_seed_uw = params.get("seed_wanted_sideband_uw", wanted_seed_uw)
         if not np.isclose(alias_seed_uw, wanted_seed_uw, rtol=0.0, atol=1e-12):
@@ -607,7 +594,7 @@ class FWMScheme(Scheme):
             scan_min=center - WINDOW_GHZ, scan_max=center + WINDOW_GHZ,
             velocity_step=res["velocity_step"],
             velocity_cutoff=res["velocity_cutoff"],
-            velocity_measure=velocity_measure,
+            velocity_measure="exact",
             phase_detail=res["phase_detail"],
             pump_probe_angle_deg=params.get("seeded_angle_deg", SEEDED_PHASE_ANGLE_DEG),
             model_fidelity=fidelity,
@@ -616,13 +603,8 @@ class FWMScheme(Scheme):
             legacy_mean_field_fixture=params.get("legacy_mean_field_fixture", False),
             floquet_order=params.get("floquet_order", SEEDED_FLOQUET_ORDER),
             enforce_floquet_convergence=True,
-            response_method=_tier_response_method(fidelity, velocity_measure),
-            **({"_sparse_pole_schur": True} if velocity_measure == "exact"
-               and fidelity in (FIDELITY_FAST, FIDELITY_BALANCED) else {}),
-            scan_tolerance_dB=res.get("scan_tolerance_dB", SCAN_TOLERANCE_DB),
-            scan_tolerance_log10_gain=res.get(
-                "scan_tolerance_log10_gain", SCAN_TOLERANCE_LOG10_GAIN),
-            scan_start_stride=res.get("scan_start_stride", SCAN_START_STRIDE),
+            response_method=res["response_method"],
+            _sparse_pole_schur=fidelity in (FIDELITY_FAST, FIDELITY_BALANCED),
             transit_rate=(2.0 * np.pi
                           * (params.get("transit_rate_khz", 100.0) * 1e3)),
             eom_residual_carrier_power=(
@@ -643,14 +625,16 @@ class FWMScheme(Scheme):
             params = self._biphoton_runtime_params(params)
             return self._biphoton_observables(
                 raw, params, include_figures=include_figures)
-        return self._seeded_observables(
-            raw, params, include_figures=include_figures)
+        view = self._seeded_observables(raw, params, include_figures=include_figures)
+        if self.retired_squeezing_controls.intersection(params):
+            view["export_params"] = {k: v for k, v in params.items()
+                                     if k not in self.retired_squeezing_controls}
+        return view
 
     def _seeded_observables(self, raw, params, include_figures=True):
         tpd = params["tpd"]
         squeezing_view = params.get("squeezing_view", SQUEEZING_INTENSITY_DIFFERENCE)
         phase_view = squeezing_view == SQUEEZING_QUADRATURE_PHASE
-        noise_db = np.asarray(raw["gain_referred_noise_dB"])
         measured_reference = fwm._measured_gain_reference_readout(
             raw, enabled=params.get("measured_gain_calibration", False),
             seed_input_assumption=params.get("seed_input_assumption", ""),
@@ -660,7 +644,7 @@ class FWMScheme(Scheme):
         chi_gain = gain_model in (MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
         stark_gain = gain_model == MODEL_STARK
         zeeman_gain = gain_model == MODEL_ZEEMAN
-        selected = fwm.seeded_operating_readout(raw, params, include_passive=True)
+        selected = fwm.seeded_operating_readout(raw, params)
         op = selected["atomic_operating_point"]
         gain_point = selected["gain_operating_point"]
         experimental_gain = selected["experimental_gain_calibration"]
@@ -672,50 +656,23 @@ class FWMScheme(Scheme):
         displayed_point = experimental_gain["selected_point"] if gain_active else op
         noise_model = selected["noise_model"]
         experimental_noise = selected["experimental_jasperse_readout"]
-        passive_readout = selected["passive_l1_readout"]
-        passive_op = selected["passive_l1_operating_point"]
         noise_point = selected["noise_operating_point"]
-        selected_noise_db = op["gain_referred_noise_dB"]
-        noise_label = "Squeezing [dB]"
+        noise_db = experimental_noise["NF_dB"]
+        selected_noise_db = noise_point["NF_dB"]
         noise_help = (
-            "10 log10(NF), where NF=Var(N_probe-N_conjugate)/mean(N_probe+N_conjugate). "
-            "Legacy data without a canonical map retain only their gain approximation.")
-        noise_delta = "legacy data; physical squeezing unavailable"
-        sidebar_readouts = {}
-        cell_absorption = None
-        if passive_readout is not None:
-            noise_db = passive_readout["NF_dB"]
-            selected_noise_db = passive_op["NF_dB"]
-            noise_help = (
-                "10 log10(NF), with seed classical RIN a and calculated shot RIN b. "
-                "The input Fano factor is 1+a/b. Cell propagation is already included; "
-                "only after-cell optical transmission and detector QE act downstream. "
-                "Conditional annihilation-only vacuum completion, not microscopic RF noise.")
-            noise_delta = (
-                "conditional passive completion; physical squeezing unavailable"
-                if passive_op["passive_l1_available"] else
-                "passive completion unavailable; physical squeezing unavailable")
-            cell_absorption = fwm._seeded_absorption_readout(raw, op["probe_GHz"])
-            sidebar_readouts = _seeded_sidebar_readouts(
-                raw, params, passive_readout, op["probe_GHz"], cell_absorption)
-        if experimental_noise is not None:
-            noise_db = experimental_noise["NF_dB"]
-            selected_noise_db = noise_point["NF_dB"]
-            noise_help = (
-                "10 log10(NF) from an effective Jasperse distributed gain/loss model with both vacuum reservoirs. "
-                "The two gains and assumed common cell loss set the effective parameters. "
-                "This experimental approximation is separate from microscopic atomic-noise theory.")
-            noise_delta = "effective Jasperse model"
-            if gain_active:
-                noise_delta += "; calibrated-gain approximation"
-                if literature_gain:
-                    noise_delta += "; gain validation does not validate noise"
-            if noise_point["inference_approximate"]:
-                noise_delta += "; approximate gain match"
-            if not sidebar_readouts:
-                sidebar_readouts = _seeded_sidebar_readouts(
-                    raw, params, experimental_noise, op["probe_GHz"], cell_absorption)
-        d_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
+            "10 log10(NF) from an effective Jasperse distributed gain/loss model with both vacuum reservoirs. "
+            "The two gains and assumed common cell loss set the effective parameters. "
+            "This experimental approximation is separate from microscopic atomic-noise theory.")
+        noise_delta = "effective Jasperse model"
+        if gain_active:
+            noise_delta += "; calibrated-gain approximation"
+            if literature_gain:
+                noise_delta += "; gain validation does not validate noise"
+        if noise_point["inference_approximate"]:
+            noise_delta += "; approximate gain match"
+        cell_absorption = fwm._seeded_absorption_readout(raw, op["probe_GHz"])
+        sidebar_readouts = _seeded_sidebar_readouts(
+            gain_curve["probe_axis_GHz"], experimental_noise, op["probe_GHz"], cell_absorption)
         claim_gate = raw.get("claim_gate", {})
         floquet_convergence = raw.get("floquet_convergence", {})
         if measured_reference["requested"]:
@@ -774,18 +731,17 @@ class FWMScheme(Scheme):
                            "Gain")
             if max(np.nanmax(displayed_gs), np.nanmax(displayed_gc)) > 50:
                 axG.set_yscale("log")
-            noise_axis = gain_axis if experimental_noise is not None else d_axis
+            noise_axis = gain_axis
             plot_noise = noise_db
-            if passive_readout is not None or experimental_noise is not None:
-                # Include the exact selected point so marker, curve and metric
-                # share log10 of the selected linearly interpolated NF.
-                idx = int(np.searchsorted(noise_axis, tpd))
-                if idx == noise_axis.size or not np.isclose(noise_axis[idx], tpd, rtol=0.0, atol=1e-9):
-                    noise_axis = np.insert(noise_axis, idx, tpd)
-                    plot_noise = np.insert(noise_db, idx, selected_noise_db)
+            # Include the exact selected point so marker, curve and metric
+            # share log10 of the selected linearly interpolated NF.
+            idx = int(np.searchsorted(noise_axis, tpd))
+            if idx == noise_axis.size or not np.isclose(noise_axis[idx], tpd, rtol=0.0, atol=1e-9):
+                noise_axis = np.insert(noise_axis, idx, tpd)
+                plot_noise = np.insert(noise_db, idx, selected_noise_db)
             axS.plot(noise_axis, plot_noise, color="#2ca02c", lw=1.8)
             axS.axvline(tpd, color="crimson", ls="--", lw=1.2)
-            _label_noise_axis(axS, noise_point is not None)
+            _label_noise_axis(axS)
             axS.scatter([tpd], [selected_noise_db],
                         color="crimson", zorder=5)
             axS.set_xlabel("Two-photon Detuning [MHz]")
@@ -793,7 +749,7 @@ class FWMScheme(Scheme):
             fig.tight_layout()
 
         metrics = [
-            dict(label=noise_label,
+            dict(label="Squeezing [dB]",
                  value=(f"{selected_noise_db:.2f} dB" if np.isfinite(selected_noise_db)
                         else "unavailable"),
                  numeric_value=float(selected_noise_db) if np.isfinite(selected_noise_db) else None,
@@ -1052,57 +1008,50 @@ class FWMScheme(Scheme):
             "temperature or raise the seed power to return to the linear regime.\n"
             if depletion_limited else ""
         )
-        noise_rows = ""
-        active_noise = experimental_noise if experimental_noise is not None else passive_readout
-        if active_noise is not None:
-            seed = active_noise["seed_noise"]
-            axis = gain_curve["probe_axis_GHz"] if experimental_noise is not None else raw["probe_axis_GHz"]
-            at_point = lambda value: float(np.interp(op["probe_GHz"], axis, value))
+        seed = experimental_noise["seed_noise"]
+        axis = gain_curve["probe_axis_GHz"]
+        at_point = lambda value: float(np.interp(op["probe_GHz"], axis, value))
+        noise_rows = (
+            f"| Noise model | {noise_model} |\n"
+            f"| NF | {noise_point['NF']:.6g} |\n"
+            f"| {'Intensity-difference squeezing' if phase_view else 'Squeezing'} [dB] = 10 log10(NF) | {selected_noise_db:.6g} |\n"
+            f"| Seed classical RIN a | {at_point(seed['classical_rin_per_Hz']):.6g} Hz⁻¹ |\n"
+            f"| Seed shot RIN b = 2ℏω/P | {at_point(seed['shot_rin_per_Hz']):.6g} Hz⁻¹ |\n"
+            f"| Input seed Fano factor = 1+a/b | {at_point(seed['seed_fano']):.6g} |\n"
+            "| Noise convention | One-sided PSD per Hz; integrated variance requires effective bandwidth |\n"
+            "| Transfer gain basis | Effective Jasperse fit to displayed gains; assumed common cell loss |\n"
+            "| Cell losses in NF | Already in propagation; total efficiencies are not applied a second time |\n"
+        )
+        cell = raw.get("dressed_cell_transmission", {})
+        for arm in ("probe", "conjugate"):
+            transmission = cell.get(f"in_cell_{arm}_transmission")
+            if transmission is not None:
+                value = float(np.interp(op["probe_GHz"], raw["probe_axis_GHz"], transmission))
+                noise_rows += f"| Pumped-cell {arm} net transmission (mixing off) | {value:.6g} |\n"
+            if cell_absorption and arm in cell_absorption:
+                rates = cell_absorption[arm]
+                noise_rows += (
+                    f"| Cell {arm} absorption coefficient | {rates['alpha_abs_per_m']:.6g} m⁻¹ |\n"
+                    f"| Cell {arm} stimulated-emission coefficient | {rates['alpha_em_per_m']:.6g} m⁻¹ |\n"
+                    f"| Cell {arm} absorption transmission η_in cell | {rates['in_cell_absorption_transmission']:.6g} |\n"
+                    f"| Total {arm} efficiency | {sidebar_readouts[f'eta_{arm}_pct']['value']/100:.6g} |\n")
+        if cell_absorption and cell_absorption.get("reason"):
+            noise_rows += f"| Cell absorption status | {cell_absorption['reason']} |\n"
+        elif cell_absorption and "probe" in cell_absorption:
             noise_rows += (
-                f"| Noise model | {noise_model} |\n"
-                f"| NF | {noise_point['NF']:.6g} |\n"
-                f"| {'Intensity-difference squeezing' if phase_view else 'Squeezing'} [dB] = 10 log10(NF) | {selected_noise_db:.6g} |\n"
-                f"| Seed classical RIN a | {at_point(seed['classical_rin_per_Hz']):.6g} Hz⁻¹ |\n"
-                f"| Seed shot RIN b = 2ℏω/P | {at_point(seed['shot_rin_per_Hz']):.6g} Hz⁻¹ |\n"
-                f"| Input seed Fano factor = 1+a/b | {at_point(seed['seed_fano']):.6g} |\n"
-                "| Noise convention | One-sided PSD per Hz; integrated variance requires effective bandwidth |\n"
-                + ("| Transfer gain basis | Effective Jasperse fit to displayed gains; assumed common cell loss |\n"
-                   if experimental_noise is not None else
-                   "| Transfer gain basis | Canonical photon flux before pump cap; no current empirical correction |\n")
-                +
-                "| Cell losses in NF | Already in propagation; total efficiencies are not applied a second time |\n"
-            )
-            cell = raw.get("dressed_cell_transmission", {})
-            for arm in ("probe", "conjugate"):
-                transmission = cell.get(f"in_cell_{arm}_transmission")
-                if transmission is not None:
-                    value = float(np.interp(op["probe_GHz"], raw["probe_axis_GHz"], transmission))
-                    noise_rows += f"| Pumped-cell {arm} net transmission (mixing off) | {value:.6g} |\n"
-                if cell_absorption and arm in cell_absorption:
-                    rates = cell_absorption[arm]
-                    noise_rows += (
-                        f"| Cell {arm} absorption coefficient | {rates['alpha_abs_per_m']:.6g} m⁻¹ |\n"
-                        f"| Cell {arm} stimulated-emission coefficient | {rates['alpha_em_per_m']:.6g} m⁻¹ |\n"
-                        f"| Cell {arm} absorption transmission η_in cell | {rates['in_cell_absorption_transmission']:.6g} |\n"
-                        f"| Total {arm} efficiency | {sidebar_readouts[f'eta_{arm}_pct']['value']/100:.6g} |\n")
-            if cell_absorption and cell_absorption.get("reason"):
-                noise_rows += f"| Cell absorption status | {cell_absorption['reason']} |\n"
-            elif cell_absorption and "probe" in cell_absorption:
-                noise_rows += (
-                    "| Efficiency scope | Uniform pump/input-seed state; absorption only; generated/depleted fields not fed back |\n"
-                    "| Absorption vs net response | Emission/gain is separate; these total efficiencies do not replace the NF channel |\n")
-            if experimental_noise is not None:
-                noise_rows += (
-                    f"| Assumed Jasperse common loss | {params.get('jasperse_loss_pct', 0.0):.6g}% |\n"
-                    f"| Effective squeeze parameter | {at_point(experimental_noise['effective_squeeze']):.6g} |\n"
-                    f"| Effective probe / conjugate transmission | "
-                    f"{at_point(experimental_noise['probe_transmission']):.6g} / "
-                    f"{at_point(experimental_noise['conjugate_transmission']):.6g} |\n"
-                    f"| Effective gain fit relative residual | {at_point(experimental_noise['fit_relative_residual']):.3g} |\n"
-                    f"| Effective gain match | {'Approximate; assumed loss cannot reproduce this pair exactly' if noise_point['inference_approximate'] else 'Matched'} |\n"
-                    f"| Effective model probe / conjugate gain | {noise_point['G_s']:.6g} / {noise_point['G_c']:.6g} |\n"
-                    "| Experimental noise scope | Effective uniform distributed mixing and two-arm vacuum loss; "
-                    "not a microscopic RF atomic-noise calculation |\n")
+                "| Efficiency scope | Uniform pump/input-seed state; absorption only; generated/depleted fields not fed back |\n"
+                "| Absorption vs net response | Emission/gain is separate; these total efficiencies do not replace the NF channel |\n")
+        noise_rows += (
+            f"| Assumed Jasperse common loss | {params.get('jasperse_loss_pct', 0.0):.6g}% |\n"
+            f"| Effective squeeze parameter | {noise_point['effective_squeeze']:.6g} |\n"
+            f"| Effective probe / conjugate transmission | "
+            f"{noise_point['probe_transmission']:.6g} / "
+            f"{noise_point['conjugate_transmission']:.6g} |\n"
+            f"| Effective gain fit relative residual | {noise_point['fit_relative_residual']:.3g} |\n"
+            f"| Effective gain match | {'Approximate; assumed loss cannot reproduce this pair exactly' if noise_point['inference_approximate'] else 'Matched'} |\n"
+            f"| Effective model probe / conjugate gain | {noise_point['G_s']:.6g} / {noise_point['G_c']:.6g} |\n"
+            "| Experimental noise scope | Effective uniform distributed mixing and two-arm vacuum loss; "
+            "not a microscopic RF atomic-noise calculation |\n")
         if phase_view:
             noise_rows += (
                 f"| Squeezing view | {squeezing_view} |\n"
@@ -1161,8 +1110,7 @@ class FWMScheme(Scheme):
         certification = selected["readout_certification_scope"]
         if certification == "FOCUSED_EXACT_MAXWELL_TESTED_CASES":
             certification = (
-                "Exact Maxwell at sampled coordinates. Gate scope: named cases outside "
-                "the Passive L1 roundoff band.")
+                "Exact Maxwell at sampled coordinates in the tested operating cases.")
         readout_audit = "".join(
             f"| {label} | {entry['solved_probe_points']} solved, "
             f"{entry.get('pole_guard_fallback_rows', 0)} guard fallbacks |\n"
@@ -1171,7 +1119,7 @@ class FWMScheme(Scheme):
             if (entry := source_provenance.get(key)) is not None)
         diagnostics_table = (
             f"| Check | Value |\n|---|---|\n"
-            f"| Model scope | Gain-only diagnostic (physical squeezing unavailable) |\n"
+            f"| Model scope | Mean-field atomic gains and effective Jasperse noise |\n"
             f"| Validation level | {claim_gate.get('level', 'unavailable')} |\n"
             f"| Claim-gate reasons | {claim_reasons} |\n"
             f"| Quantitative gain claim | "
@@ -1214,8 +1162,7 @@ class FWMScheme(Scheme):
             f"| Atomic readout source coordinates | {selected['readout_coordinate_status']} |\n"
             f"| Displayed readout scope | {certification} |\n"
             + readout_audit
-            + f"| Noise-trace status | {raw.get('squeezing_status', 'unavailable')} |\n"
-            f"| Transit reset γ_t / 2π | "
+            + f"| Transit reset γ_t / 2π | "
             f"{raw.get('transit_reset_rate_rad_s', np.nan)/(2*np.pi*1e3):.3f} kHz |\n"
             f"| Combined residual coupling | "
             f"{raw.get('combined_line_strength_residual', raw.get('line_strength_residual', float('nan'))):.4f}× |\n"
@@ -1224,27 +1171,13 @@ class FWMScheme(Scheme):
             f"| Small-signal peak G_s (pre-saturation) | {small_signal:.3e} |\n"
             + closure_rows + phase_rows
         )
-        if passive_readout is not None:
-            valid = np.asarray(passive_readout["passive_completion_valid"], dtype=bool)
-            diagnostics_table += (
-                f"| Passive L1 selected status | {passive_op['passive_l1_status']} |\n"
-                f"| L1 sampling scope | {passive_readout['passive_l1_sampling_status']} |\n"
-                f"| Passive completion feasible samples | {np.count_nonzero(valid)} / {valid.size} |\n"
-                f"| L1 source photon-flux G_s / G_c | {passive_op['passive_l1_G_s']:.6g} / {passive_op['passive_l1_G_c']:.6g} |\n"
-                f"| L1 source D / T | {passive_op['passive_l1_D']:.6g} / {passive_op['passive_l1_T']:.6g} |\n"
-                f"| Passive completion minimum eigenvalue | {passive_op['passive_completion_min_eig']:.3e} |\n"
-                "| L1 scope | Static annihilation-only vacuum completion; no RF spectrum or bound for correlated phase-sensitive atomic noise |\n"
-                "| Legacy gain diagnostic | Retained raw gain_referred_noise_dB / S_dB; not used for current L1 curve |\n"
-            )
         return {
             "metrics": metrics,
             "figure": fig,
             "squeezing_view": squeezing_view,
             "quadrature_phase_scan": phase_scan,
             "gain_operating_point": gain_point,
-            "passive_l1_readout": passive_readout,
-            "passive_l1_operating_point": passive_op,
-            "jasperse_readout": active_noise,
+            "jasperse_readout": experimental_noise,
             "experimental_jasperse_readout": experimental_noise,
             "experimental_gain_calibration": experimental_gain,
             "noise_operating_point": noise_point,
@@ -1707,8 +1640,7 @@ class FWMScheme(Scheme):
     def _finite_seed_angular_view(self):
         def compute(params):
             physical = self._seeded_compute_inputs(params)
-            physical.update(coarse_points=81, fine_points=0, response_method=RESPONSE_POLE,
-                            velocity_measure="exact")
+            physical.update(coarse_points=81, fine_points=0)
             center = branch_center_GHz(physical["D_GHz"], -1)
             physical.update(scan_min=center - .05, scan_max=center + .05)
             baseline = fwm.compute_spectrum(**physical)
@@ -1762,7 +1694,6 @@ class FWMScheme(Scheme):
         def _compute_full(params):
             fidelity = normalize_fidelity(params.get("resolution", FIDELITY_FAST))
             fidelity_settings = FWM_FIDELITY[fidelity]
-            velocity_measure = params.get("velocity_measure", "exact")
             return fwm.full_spectrum(
                 params["opd"], params["temp_c"] + 273.15,
                 params["pump_mw"], params["probe_uw"], params["line_strength"],
@@ -1788,15 +1719,8 @@ class FWMScheme(Scheme):
                     "legacy_mean_field_fixture", False),
                 velocity_step=fidelity_settings["velocity_step"],
                 velocity_cutoff=fidelity_settings["velocity_cutoff"],
-                velocity_measure=velocity_measure,
-                # The 0.4 MHz resonance windows need a solve at every display point.
-                response_method=_tier_response_method(fidelity, velocity_measure, full_scan=True),
-                scan_tolerance_dB=fidelity_settings.get(
-                    "scan_tolerance_dB", SCAN_TOLERANCE_DB),
-                scan_tolerance_log10_gain=fidelity_settings.get(
-                    "scan_tolerance_log10_gain", SCAN_TOLERANCE_LOG10_GAIN),
-                scan_start_stride=fidelity_settings.get(
-                    "scan_start_stride", SCAN_START_STRIDE),
+                velocity_measure="exact",
+                response_method=fidelity_settings["response_method"],
                 transit_rate=(2.0 * np.pi
                               * params.get("transit_rate_khz", 100.0) * 1e3),
                 eom_residual_carrier_power=(
@@ -1825,32 +1749,41 @@ class FWMScheme(Scheme):
                 "minus": dict(color="#1f77b4", label="minus Raman branch"),
                 "plus": dict(color="#ff7f0e", label="plus Raman branch"),
             }
-            has_passive_readout = any(
-                "T_canonical_small_signal" in full[key] for key in styles)
             measured_readouts = {}
             experimental_gains, experimental_noises = {}, {}
+            calibration_requested = params.get("experimental_gain_calibration", False)
+            use_log_gain = False
             for key, style in styles.items():
                 spec = full[key]
                 if params.get("measured_gain_calibration", False):
                     measured_readouts[key] = fwm._measured_gain_reference_readout(
                         spec, enabled=True,
                         seed_input_assumption=params.get("seed_input_assumption", ""))
+                axis = np.asarray(spec["probe_axis_GHz"])
+                probe = np.asarray(spec.get("G_s"), dtype=float)
+                conjugate = np.asarray(spec.get("G_c"), dtype=float)
+                if probe.shape != axis.shape:
+                    probe = np.full(axis.shape, np.nan)
+                probe = np.where(np.isfinite(probe) & (probe >= 0), probe, np.nan)
+                use_log_gain |= bool(np.any(probe > 50))
+                if (conjugate.shape != axis.shape or not np.all(np.isfinite(probe))
+                        or not np.all(np.isfinite(conjugate) & (conjugate >= 0))):
+                    # Stored scans can lack an arm or individual gain samples.
+                    branch_label = style["label"]
+                    gain_label = branch_label + (" (uncalibrated)" if calibration_requested else "")
+                    aG.plot(axis, probe, lw=1.4, color=style["color"], label=gain_label)
+                    aS.plot(axis, np.full(axis.shape, np.nan), lw=1.4, color=style["color"],
+                            label=f"{branch_label} (unavailable with incomplete gains)")
+                    continue
                 calibration = None
-                if params.get("experimental_gain_calibration", False):
-                    calibration = calibrate_experimental_gain(
-                        spec, enabled=True, model=gain_model)
+                if calibration_requested:
+                    calibration = calibrate_experimental_gain(spec, enabled=True, model=gain_model)
                     experimental_gains[key] = calibration
-                displayed = calibration["G_s"] if calibration is not None else spec["G_s"]
-                aG.plot(spec["probe_axis_GHz"], displayed, lw=1.4, **style)
-                if params.get("noise_model", NOISE_PASSIVE_L1) == NOISE_EXPERIMENTAL_JASPERSE:
-                    experimental_noises[key] = fwm.experimental_jasperse_readout(spec, params, gains=calibration)
-                    noise_db = experimental_noises[key]["NF_dB"]
-                elif "T_canonical_small_signal" in spec:
-                    noise_db = _seeded_passive_l1_readout(spec, params)[
-                        "passive_l1_with_excess_noise_dB"]
-                else:
-                    noise_db = spec["gain_referred_noise_dB"]
-                aS.plot(spec["probe_axis_GHz"], noise_db, lw=1.4, **style)
+                displayed = calibration["G_s"] if calibration is not None else probe
+                aG.plot(axis, displayed, lw=1.4, **style)
+                noise = fwm.experimental_jasperse_readout(spec, params, gains=calibration)
+                experimental_noises[key] = noise
+                aS.plot(axis, noise["NF_dB"], lw=1.4, **style)
             _plot_reference(aG, 1.0, "G = 1 (unity gain)")
             aG.set_ylabel("Zeeman pump + chi propagation gain" if experimental_gains and zeeman_gain else
                            "Stark + chi propagation gain" if experimental_gains and stark_gain else
@@ -1862,16 +1795,16 @@ class FWMScheme(Scheme):
             title = f"Solver detail: {FIDELITY_LABELS.get(stored_detail, stored_detail)}"
             title += f",  {_seeded_noise_caption(params)}"
             if experimental_gains and literature_gain:
-                literature_metadata = experimental_gains["minus"]
+                literature_metadata = next(iter(experimental_gains.values()))
                 title += (",  experimental Zeeman pump + chi propagation\n" if zeeman_gain else
                           ",  experimental Stark + chi propagation\n" if stark_gain else
                           ",  experimental chi propagation\n" if chi_gain else
                           ",  experimental literature gain\n") + literature_metadata.get(
                     "validation_label", "Experimental · grouped prediction not established")
             aG.set_title(title)
-            if max(np.nanmax(full[key]["G_s"]) for key in styles) > 50:
+            if use_log_gain:
                 aG.set_yscale("log")
-            _label_noise_axis(aS, bool(experimental_noises) or has_passive_readout)
+            _label_noise_axis(aS)
             if experimental_gains and literature_gain and experimental_noises:
                 aS.set_title("Gain validation does not validate noise; effective Jasperse model", fontsize=8)
             aS.set_xlabel("Probe detuning from F=2 -> F'=3 [GHz]")

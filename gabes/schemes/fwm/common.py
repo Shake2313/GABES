@@ -217,9 +217,8 @@ PHASE_ULTRA = "ultra"
 SEEDED_PHASE_ANGLE_DEG = 0.32
 ULTRA_PHASE_ITERATIONS = 0   # Option A keeps dispersion in diagonal χ, not in Δk
 ULTRA_PROPAGATION_SEGMENTS = 64
-# Maxwell-averaged response estimators behind the Solver detail tiers.  All
-# three evaluate the same finite-Floquet steady state on the same truncated
-# Maxwell measure; they differ only in how that sum is carried out.
+# Response estimators for the finite-Floquet solve. Pole methods support
+# the continuous Maxwell mean and discrete grids used in reference calculations.
 RESPONSE_GRID = "maxwell_grid"                    # one Floquet solve per velocity class
 RESPONSE_POLE = "pole_residue"                    # exact pole sum, every probe point
 RESPONSE_POLE_ADAPTIVE = "pole_residue_adaptive"  # exact pole sum, adaptive probe points
@@ -840,21 +839,9 @@ def collisional_atom(T, density=None, *, transit_rate=None):
 # =========================================================
 WINDOW_GHZ = 0.55          # half-width of the focused probe window around (−) Raman
 TPD_LIMIT_MHZ = 500.0
-# Three tiers share the atomic solve. Ultra is the brute-force reference: one compiled
-# finite-Floquet solve per (probe detuning, Maxwell class) on a 1 m/s, 4σ grid.
-# Fast and Balanced evaluate the same steady state, the same Maxwell measure and
-# the same atomic response exactly through poles and residues (one eigenproblem
-# per probe detuning instead of ~1,600 solves). Focused Exact Maxwell solves
-# all 401 probe detunings at both accelerated tiers, so displayed Passive L1
-# eligibility is evaluated from solved values. Historical 4-sigma keeps Fast
-# adaptive sampling. The two-branch full probe-scan view uses the same
-# model and measure but solves every displayed probe detuning for both pole
-# tiers: its 0.4 MHz resonance windows are finer than the display resolution the
-# adaptive refinement was validated at. Retired cross-coupling and local gain
-# calibrations are available only through the explicit historical fixture;
-# current tiers use neither calibration. Historical lab fixtures include up to
-# ten additional 1-MHz gain nodes. See
-# analysis/fwm_lite/DEVLOG.md and analysis/fwm_gain_hotfix/DEVLOG.md.
+# All seeded tiers integrate the untruncated Maxwell distribution and solve
+# each detuning in both the focused and full scans. Fast and Balanced use
+# sparse Schur products for the focused scan. Ultra uses the dense reference.
 # Labels estimate the reference (deployment) environment the earlier labels used.
 FIDELITY_FAST = "Fast  (~1 s)"
 FIDELITY_BALANCED = "Balanced  (~2 s)"
@@ -867,10 +854,7 @@ FIDELITY_LABELS = {
 FWM_FIDELITY = {
     FIDELITY_FAST:     dict(coarse_points=401, velocity_step=1.0,
                             velocity_cutoff=4.0, phase_detail=PHASE_ULTRA,
-                            response_method=RESPONSE_POLE_ADAPTIVE,
-                            scan_tolerance_dB=SCAN_TOLERANCE_DB,
-                            scan_tolerance_log10_gain=SCAN_TOLERANCE_LOG10_GAIN,
-                            scan_start_stride=SCAN_START_STRIDE),
+                            response_method=RESPONSE_POLE),
     FIDELITY_BALANCED: dict(coarse_points=401, velocity_step=1.0,
                             velocity_cutoff=4.0, phase_detail=PHASE_ULTRA,
                             response_method=RESPONSE_POLE),
@@ -880,14 +864,6 @@ FWM_FIDELITY = {
 }
 RESOLUTION = FWM_FIDELITY
 
-
-def _tier_response_method(fidelity, velocity_measure, *, full_scan=False):
-    if fidelity == FIDELITY_ULTRA and velocity_measure == "truncated":
-        return RESPONSE_GRID
-    if fidelity == FIDELITY_FAST and velocity_measure == "exact":
-        return RESPONSE_POLE
-    method = FWM_FIDELITY[fidelity]["response_method"]
-    return RESPONSE_POLE if full_scan else method
 
 # Old saved fidelity labels → current labels. Settings-preserving where a tier
 # survived (old Balanced/High kept their solver settings under the new names);

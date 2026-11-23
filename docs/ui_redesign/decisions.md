@@ -248,6 +248,8 @@ GABES 공용 드롭다운은 짧은 선택지에서 고르는 용도로 사용�
 
 직접 사용자 결정. 모든 스킴의 원자·셀 조건을 메인의 Atom 팝오버 하나로 모은다.
 
+2026-11-23 후속 요청으로 FWM 스퀴징의 온도 입력을 항상 표시한다. ⟦AI⟧ 메인 Conditions의 Atom 버튼 옆에서 편집한다.
+
 - Atom, Isotope, Transition line, Temperature, Cell length, Cell type 중 해당 스킴이 지원하는 입력만 표시한다. Temperature·Cell length는 숫자 직접 입력을 유지한다. 기존 Advanced의 같은 조건은 이곳으로 옮긴다.
 - 바깥 표기는 `Atom · 85 Rb D1`, `Atom · Custom Rb D2 Buffer`처럼 짧게 한다. Custom 분율, Buffer gas 세부값, 온도·셀 길이는 팝오버 안에서 확인한다.
 - Magneto의 Signal 선택은 제거하고, Magnetic field 스캔은 회전, Optical detuning 스캔은 투과율을 우선 표시한다. Show shot noise, 두 스캔 표본 수와 Vapor density는 Advanced로 옮긴다.

@@ -163,7 +163,8 @@ def atom_condition_descriptor(scheme, specs, params=None):
     ``atom_conditions(params)`` declares ordered ``fields`` (including fields
     currently hidden by their ParamSpec), optional read-only ``fixed`` identity
     entries, the ``line`` parameter used in the summary, a compact ``cell``
-    label, and optional per-field ``labels``. All widget choices, validation,
+    label, and optional per-field ``labels``. Visible ``inline_fields`` appear
+    beside the Atom button. All widget choices, validation,
     visibility and compute state continue to come from the existing schema.
     """
     params = current_params(scheme.name, scheme) if params is None else params
@@ -191,19 +192,24 @@ def atom_condition_descriptor(scheme, specs, params=None):
                                      line, metadata.get("cell", "")) if value]
     return dict(names=frozenset(names), fields=visible, fixed=fixed,
                 labels=metadata.get("labels", {}),
+                inline_fields={sp.name for sp in visible if sp.name in metadata.get("inline_fields", ())},
                 title="Atom" + (" · " + " ".join(parts) if parts else ""))
 
 
 def render_atom_conditions(scheme, specs, params=None):
-    """Render one Atom popover and return every grouped name for caller exclusion."""
+    """Render each grouped field once, in the Atom popover or alongside it."""
     params = current_params(scheme.name, scheme) if params is None else params
     descriptor = atom_condition_descriptor(scheme, specs, params)
     if not descriptor["fields"] and not descriptor["fixed"]:
         return descriptor["names"]
-    with st.popover(descriptor["title"]):
-        for label, value in descriptor["fixed"].items():
-            st.caption(f"{label} · {value}")
-        for sp in descriptor["fields"]:
+    inline = descriptor["inline_fields"]
+    row = st.container(horizontal=True, vertical_alignment="bottom", gap="small") if inline else st
+    popup = row.popover(descriptor["title"])
+    for label, value in descriptor["fixed"].items():
+        popup.caption(f"{label} · {value}")
+    for sp in descriptor["fields"]:
+        editor = row.container(width=160) if sp.name in inline else popup
+        with editor:
             if sp.atom_menu:
                 _atom_editors(scheme, sp, params)
             else:
