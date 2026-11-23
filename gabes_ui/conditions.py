@@ -38,7 +38,15 @@ def _commit_draft(key, committed):
     st.session_state[key + "-draft"] = dict(saved, source=committed)
 
 
+def _active_draft_key(key):
+    revision = st.session_state.get(key + "-draft", {}).get("revision", 0)
+    return f"{key}-refresh-{revision}" if revision else key
+
+
 def _apply_fields(scheme_name, fields, error_key):
+    # A late browser event from before a preset import must not overwrite it.
+    if any(widget_key != _active_draft_key(key) for _, widget_key, key in fields):
+        return
     try:
         changes = {sp.name: _field_value(sp, st.session_state[widget_key])
                    for sp, widget_key, key in fields}
@@ -62,8 +70,7 @@ def _draft(key, committed, display):
         saved = dict(source=committed, revision=saved["revision"] + 1)
         st.session_state.pop(key + "-error", None)
     st.session_state[state_key] = saved
-    revision = saved["revision"]
-    widget_key = f"{key}-refresh-{revision}" if revision else key
+    widget_key = _active_draft_key(key)
     return widget_key, st.session_state.get(widget_key, display)
 
 
@@ -102,6 +109,8 @@ def _field_popover(scheme, title, fields, params):
 
 
 def _apply_atom(scheme_name, rows, current, atom_key, field="species", draft_key=None):
+    if draft_key and atom_key != _active_draft_key(draft_key):
+        return
     if current and current[0] == st.session_state[atom_key]:
         return
     row = next(r for r in rows if r[0] == st.session_state[atom_key])
@@ -111,6 +120,8 @@ def _apply_atom(scheme_name, rows, current, atom_key, field="species", draft_key
 
 
 def _apply_isotope(scheme_name, rows, iso_key, field="species", draft_key=None):
+    if draft_key and iso_key != _active_draft_key(draft_key):
+        return
     row = next(r for r in rows if r[1] == st.session_state[iso_key])
     changes = {field: row[2], **row[3]}
     _write(scheme_name, changes)

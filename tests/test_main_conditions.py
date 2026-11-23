@@ -28,6 +28,23 @@ render_power_inputs(scheme,scheme.param_schema())
     assert app.session_state[scheme_name+'__'+canonical] == expected
 
 
+def test_late_selectbox_callback_keeps_the_line_of_an_imported_preset(monkeypatch):
+    from types import SimpleNamespace
+    from gabes_ui import conditions
+
+    line = next(sp for sp in SASScheme().param_schema() if sp.name == "line")
+    key = "conditions-sas-line"
+    state = {"sas__line": "D2", key: "D1", key + "-draft": {"source": "D2", "revision": 1}}
+    monkeypatch.setattr(conditions, "st", SimpleNamespace(session_state=state))
+    conditions._apply_fields("sas", [(line, key, key)], key + "-error")
+    assert state["sas__line"] == "D2"
+
+    active = key + "-refresh-1"
+    state[active] = "D1"
+    conditions._apply_fields("sas", [(line, active, key)], key + "-error")
+    assert state["sas__line"] == "D1"
+
+
 def test_typed_power_keeps_precision_converts_units_and_enforces_domain():
     spec = next(sp for sp in SASScheme().param_schema() if sp.name == "pump_power_mw")
     assert _field_value(spec, "507.89 µW") == pytest.approx(.50789)
