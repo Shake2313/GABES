@@ -9,8 +9,8 @@ from gabes.experimental_alignment import AxisAlignment
 from gabes.experimental_csv import CALIBRATION_ABSOLUTE_GAIN_OFFSET, load_experimental_csv
 from gabes import od_spectrum_fit
 from gabes.od_spectrum_fit import (
-    CANDIDATE_PARAMETERS, PARAMETERS, ODFitInput, fit_od_spectrum, od_transmission,
-    prepare_od_fit, probe_peak_intensity_mw_cm2,
+    CANDIDATE_PARAMETERS, PARAMETERS, VALIDATED_SCOPE, ODFitInput, fit_od_spectrum,
+    od_transmission, offered_fit_parameters, prepare_od_fit, probe_peak_intensity_mw_cm2,
 )
 from gabes.schemes.sas import AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, SASScheme
 
@@ -213,6 +213,7 @@ def test_probe_power_is_recovered_and_reported_as_peak_intensity(monkeypatch):
     fit = fit_od_spectrum(data, start, free=("probe_power_uw",), model_id=RATE)
     assert fit["parameters"][0]["value"] == pytest.approx(50.0, rel=1e-5)
     assert fit["candidate_parameters"]["keys"] == ["probe_power_uw"]
+    assert fit["candidate_parameters"]["scope"]["probe_power_uw"] == VALIDATED_SCOPE["probe_power_uw"]
     intensity = fit["probe_peak_intensity"]
     assert intensity["value_mw_cm2"] == pytest.approx(probe_peak_intensity_mw_cm2(50.0, 1.0), rel=1e-5)
     json.dumps(fit, allow_nan=False)
@@ -230,3 +231,20 @@ def test_custom_isotope_fraction_is_recovered_with_the_weak_probe_model():
     assert fit["identifiable"]
     assert [q["value"] for q in fit["parameters"]] == pytest.approx([45.0, 6.0, 0.6], abs=1e-5)
     assert "probe_peak_intensity" not in fit
+
+
+def test_app_offers_the_fraction_and_d2_power_only():
+    """User decision 2026-11-23: expose the isotope fraction and D2 probe power."""
+    base = dict(SASScheme().defaults(), species="Rb (natural)", pump_power_mw=0.0)
+    assert offered_fit_parameters(dict(base, probe_power_uw=0.0)) == PARAMETERS
+    custom = offered_fit_parameters(dict(base, rb_composition="Custom", probe_power_uw=0.0))
+    assert list(custom) == [*PARAMETERS, "rb85_fraction"]
+    d2 = offered_fit_parameters(dict(base, line="D2", probe_power_uw=50.0))
+    assert list(d2) == [*PARAMETERS, "probe_power_uw"]
+    assert d2["probe_power_uw"] == CANDIDATE_PARAMETERS["probe_power_uw"]
+    assert "probe_power_uw" not in offered_fit_parameters(dict(base, line="D1", probe_power_uw=50.0))
+    assert "probe_power_uw" not in offered_fit_parameters(dict(base, line="D2", probe_power_uw=0.0))
+    assert offered_fit_parameters(dict(base, line="D2", probe_power_uw=50.0, od_model="pre_d20")) == PARAMETERS
+    cs = dict(base, species=species.CS133.label, line="D2", probe_power_uw=50.0)
+    assert offered_fit_parameters(cs) == PARAMETERS
+    assert all("probe_waist_mm" not in offered for offered in (custom, d2))

@@ -28,10 +28,9 @@ PARAMETERS = {
     "extra_width_mhz": ("Extra homogeneous FWHM", "MHz", 0.0, 100.0),
     "offset_mhz": ("Frequency offset", "MHz", -150.0, 150.0),
 }
-# Finite-probe estimates still under validation (checklist item
-# od-sas-autood-finite-probe-fit-extension). fit_od_spectrum accepts them, but
-# they stay out of PARAMETERS, the list the app offers, until a synthetic
-# recovery study shows which ones can be estimated and over what range.
+# Finite-probe estimates (checklist item od-sas-autood-finite-probe-fit-extension).
+# fit_od_spectrum accepts all of them; the app offers only what
+# offered_fit_parameters returns for the current conditions.
 CANDIDATE_PARAMETERS = {
     "probe_power_uw": ("Probe power", "µW", 0.0, 100.0),
     "probe_waist_mm": ("Probe beam radius (1/e²)", "mm", 0.1, 5.0),
@@ -39,6 +38,50 @@ CANDIDATE_PARAMETERS = {
 }
 _FIT_PARAMETERS = {**PARAMETERS, **CANDIDATE_PARAMETERS}
 _PROBE_PARAMETERS = ("probe_power_uw", "probe_waist_mm")
+# User decision 2026-11-23 ("분율+D2 파워") after the 192-fit synthetic study
+# (runs/od/finite_probe_identifiability/20261123-4d92bdb): the app offers the
+# ⁸⁵Rb fraction for a custom Rb composition and, on D2 under the rate model,
+# the probe power at a fixed beam radius. The radius and D1 power stay script-only.
+VALIDATED_SCOPE = {
+    "rb85_fraction": (
+        "Recovered in 64 of 64 synthetic fits (D1 and D2, 30–50 °C, 0 and 25 µW). "
+        "With the finite-probe rate model the reported uncertainty was about 20 % too small."),
+    "probe_power_uw": (
+        "D2 only. Recovered at 5–25 µW with a fixed beam radius (30–50 °C). The fit "
+        "constrains the peak intensity 2P/(πw²), so an error in the radius biases the "
+        "power. The temperature uncertainty grows 1.7–2.4×."),
+}
+
+
+def _candidate_scope(key, params):
+    if key == "probe_power_uw" and params.get("line") != "D2":
+        return ("Not validated: on D1 the probe power and temperature were "
+                "indistinguishable (|ρ| 0.987–0.9996). Scripts only.")
+    if key == "probe_waist_mm":
+        return ("Not offered: equivalent to the power through 2P/(πw²). Scripts only.")
+    return VALIDATED_SCOPE[key]
+
+
+def offered_fit_parameters(params, *, model_id=None):
+    """Fit variables the app offers for these conditions.
+
+    Returns entries shaped like ``PARAMETERS`` (name, unit, lower, upper):
+    ``PARAMETERS`` itself, plus ``rb85_fraction`` for a custom Rb composition
+    and ``probe_power_uw`` on D2 when the finite-probe rate model applies.
+    ``VALIDATED_SCOPE`` holds the evidence for each added entry.
+    """
+    offered = dict(PARAMETERS)
+    if (params.get("species") == "Rb (natural)"
+            and params.get("rb_composition") == RB_COMPOSITION_CUSTOM):
+        offered["rb85_fraction"] = CANDIDATE_PARAMETERS["rb85_fraction"]
+    if params.get("line") == "D2":
+        try:
+            rate = _fit_conditions(params, model_id).model_id == RATE_MODEL
+        except (ODUnsupportedError, ValueError, KeyError):
+            rate = False
+        if rate:
+            offered["probe_power_uw"] = CANDIDATE_PARAMETERS["probe_power_uw"]
+    return offered
 
 
 def probe_peak_intensity_mw_cm2(power_uw, waist_mm):
@@ -593,8 +636,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     if candidate_keys:
         result["candidate_parameters"] = dict(
             keys=list(candidate_keys),
-            status="under validation (od-sas-autood-finite-probe-fit-extension); "
-                   "not offered in the app")
+            scope={key: _candidate_scope(key, params) for key in candidate_keys})
     probe_free = [i for i, key in enumerate(free) if key in _PROBE_PARAMETERS]
     if probe_free:
         i = probe_free[0]
