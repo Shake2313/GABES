@@ -117,3 +117,42 @@ def test_default_d20_fit_reports_the_transit_voigt(conditions):
     fit = fit_od_spectrum(data, conditions, free=("temp_c",))
     assert fit["probe_model"] == "od_weak_exact_voigt_transit_v1"
     assert fit["fit_residuals"]["rms"] < 1e-10
+
+
+def test_progress_callback_reports_every_evaluation_and_leaves_the_fit_unchanged(conditions):
+    x = np.linspace(-3100.0, 3100.0, 121)
+    y = od_transmission(x, dict(conditions, temp_c=66.0), offset_mhz=12.0)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    plain = fit_od_spectrum(data, conditions)
+    seen = []
+    tracked = fit_od_spectrum(data, conditions, progress=seen.append)
+    for key in ("parameters", "residual", "global_evaluations", "local_evaluations", "status"):
+        assert tracked[key] == plain[key]
+    total = plain["global_evaluations"] + plain["local_evaluations"]
+    assert [state.evaluations for state in seen] == list(range(1, total + 1))
+    stages = [state.stage for state in seen]
+    assert stages == ["global"] * plain["global_evaluations"] + ["local"] * plain["local_evaluations"]
+    costs = [state.best_cost for state in seen]
+    assert all(later <= earlier for earlier, later in zip(costs, costs[1:]))
+    residual = np.asarray(plain["residual"]) / np.asarray(plain["sigma"])
+    assert costs[-1] <= 0.5 * float(np.dot(residual, residual)) * (1 + 1e-12)
+
+
+@pytest.mark.parametrize(("stop_at", "stage"), [(10, "global"), (70, "local")])
+def test_progress_callback_can_cancel_between_evaluations(conditions, stop_at, stage):
+    from gabes.od_spectrum_fit import ODFitCancelled
+
+    x = np.linspace(-3100.0, 3100.0, 121)
+    y = od_transmission(x, conditions, offset_mhz=5.0)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    calls = []
+
+    def stop(state):
+        calls.append(state.evaluations)
+        return state.evaluations < stop_at
+
+    with pytest.raises(ODFitCancelled) as cancelled:
+        fit_od_spectrum(data, conditions, progress=stop)
+    assert calls[-1] == stop_at == cancelled.value.progress.evaluations
+    assert cancelled.value.progress.stage == stage
+    assert not isinstance(cancelled.value, ValueError)

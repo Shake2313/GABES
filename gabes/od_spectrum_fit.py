@@ -45,6 +45,31 @@ def _interpolate_calibration(x, nodes, values, name):
     return np.interp(x, nodes, values)
 
 
+class ODFitCancelled(Exception):
+    """Raised by ``fit_od_spectrum`` when its progress callback asks to stop."""
+
+    def __init__(self, progress):
+        super().__init__(f"OD fit cancelled after {progress.evaluations} evaluations "
+                         f"in the {progress.stage} stage.")
+        self.progress = progress
+
+
+@dataclass(frozen=True)
+class ODFitProgress:
+    """State after one objective evaluation of ``fit_od_spectrum``.
+
+    ``stage`` is "global" for the deterministic broad search and "local" for
+    the bounded least-squares refinements, whose finite-difference Jacobian
+    calls are counted too. ``evaluations`` is the cumulative number of
+    objective evaluations. ``best_cost`` is the smallest 0.5 * sum(r**2) over
+    the weighted training residuals so far, the cost least_squares minimizes.
+    """
+
+    stage: str
+    evaluations: int
+    best_cost: float
+
+
 @dataclass(frozen=True)
 class ODFrequencyCalibration:
     """Fixed piecewise-linear marker map from the raw CSV x coordinate to MHz.
@@ -342,8 +367,14 @@ def od_transmission(frequency_mhz, params, *, extra_width_mhz=0.0, offset_mhz=0.
 def fit_od_spectrum(data: ODFitInput, params, *, free=None,
                     fit_range_mhz=None, heldout_range_mhz=None, bounds=None,
                     optics: ODOpticalCalibration | None = None,
-                    cell: ODCellCalibration | None = None, model_id=None):
+                    cell: ODCellCalibration | None = None, model_id=None, progress=None):
     """Search bounded parameter space and refine weighted residuals on fit points.
+
+    ``progress``, if given, is called with an ``ODFitProgress`` after every
+    objective evaluation. Returning ``False`` cancels the fit between
+    evaluations and raises ``ODFitCancelled`` (which carries the last
+    progress); any other return value continues. Omitting it leaves the
+    arithmetic and the result unchanged.
 
     Ranges apply to the calibrated input axis before fitting the offset. The
     covariance is local, conditional on fixed model and calibration inputs.
@@ -432,11 +463,19 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
 
     x_train, y_train, sigma_train = x[train], y[train], sigma[train]
     calls = 0
+    stage = "global"
+    best_cost = np.inf
 
     def residual(normalized):
-        nonlocal calls
+        nonlocal calls, best_cost
         calls += 1
-        return (model(x_train, normalized) - y_train) / sigma_train
+        weighted = (model(x_train, normalized) - y_train) / sigma_train
+        if progress is not None:
+            best_cost = min(best_cost, 0.5 * float(np.dot(weighted, weighted)))
+            state = ODFitProgress(stage, calls, best_cost)
+            if progress(state) is False:
+                raise ODFitCancelled(state)
+        return weighted
 
     initial = np.clip((np.array([base[k] for k in free]) - lower) / width, 0.0, 1.0)
     # Deterministic broad search followed by independently bounded refinements.
@@ -444,6 +483,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         GLOBAL_LOG2_SAMPLES)])
     costs = [np.linalg.norm(residual(p)) for p in candidates]
     global_calls = calls
+    stage = "local"
     local = [least_squares(residual, candidates[i], bounds=(0, 1), max_nfev=LOCAL_MAX_NFEV)
              for i in np.argsort(costs, kind="stable")[:LOCAL_STARTS]]
     best = min(local, key=lambda item: item.cost)
