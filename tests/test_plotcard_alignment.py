@@ -102,6 +102,9 @@ plt.close(fig)
     next(box for box in app.checkbox if box.key == "sas_od_fit_frequency_scale").check().run(timeout=25)
     assert "physical_od_fit" not in app.session_state["comparison"]
     next(button for button in app.button if button.key == "sas_run_od_fit").click().run(timeout=25)
+    if "sas_od_fit_job" in app.session_state:
+        app.session_state["sas_od_fit_job"].future.result(timeout=25)
+        app.run(timeout=25)
     assert not app.exception
     fit = app.session_state["comparison"]["physical_od_fit"]
     assert fit["scope"] == "calibration_only" and fit["fit_residuals"]["rms"] < .001

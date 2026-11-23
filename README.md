@@ -250,7 +250,9 @@ origin must come from calibration or file metadata. **Bring into view** and
 **Fit alignment** help place relative traces. **Precise alignment** controls
 the display transform. Confirm the frequency scale and absolute transmission
 calibration before fitting physical parameters. Select one acquisition branch in
-**Fit physical OD parameters**. **Apply fitted temperature** transfers a
+**Fit physical OD parameters**. While the fit runs, the panel shows the search
+stage, evaluation count and lowest weighted cost so far. **Cancel fit** stops
+the calculation between evaluations. **Apply fitted temperature** transfers a
 converged, identifiable temperature to the cell conditions.
 
 Select a frequency in the spectrum to compare the theory sample with the nearest

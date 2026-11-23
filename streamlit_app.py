@@ -153,6 +153,7 @@ def _open_sabes():
 
 
 if st.query_params.get("app") == SABES_QUERY_VALUE:
+    plotcard.cancel_od_fit()
     from gabes_ui.sabes import page as sabes_page
     sabes_page.render(host=_sabes_host())
     st.stop()
@@ -416,7 +417,7 @@ def render_spectra():
     render_more(view, scheme, params, cache_version, READOUT_CACHE_VERSION)
 
 
-with workspace:
+with workspace, plotcard.cancel_hidden_od_fit():
     if is_sas:
         bind_sas_history()
     render_spectra()

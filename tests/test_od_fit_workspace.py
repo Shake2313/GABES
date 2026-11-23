@@ -6,6 +6,15 @@ import numpy as np
 import pytest
 
 
+def _run_fit_to_completion(app):
+    app.button(key="sas_run_od_fit").click().run()
+    # AppTest has no browser timer. Advance the final rerun after the real worker.
+    if "sas_od_fit_job" in app.session_state:
+        app.session_state["sas_od_fit_job"].future.result(timeout=60)
+        app.run()
+    assert not app.exception and not app.error
+
+
 def _upload(content, name="comparison.csv"):
     return SimpleNamespace(name=name, size=len(content), getvalue=lambda: content)
 
@@ -111,7 +120,7 @@ def test_pump_free_fit_apply_and_preset_round_trip(workspace):
     assert (preset["pump_power_mw"], preset["waist_mm"], preset["axial_pump_depletion"]) == (1.5, 1.4, True)
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
-    app.button(key="sas_run_od_fit").click().run()
+    _run_fit_to_completion(app)
     fit = exports[-1]["comparison_payload"]["physical_od_fit"]
     assert fit["points_used"] == 501 and fit["fit_residuals"]["rms"] < 1.e-12
     app.button(key="sas_od_apply_temperature").click().run()
@@ -130,12 +139,87 @@ def test_pump_free_fit_apply_and_preset_round_trip(workspace):
     assert app.session_state["sas__temp_c"] == pytest.approx(50.)
 
 
+@pytest.mark.parametrize("action", ["cancel", "change_scale", "leave_workspace"])
+def test_running_fit_is_cancelled_without_publishing_a_partial_result(workspace, monkeypatch, action):
+    from threading import Event
+    from streamlit.runtime.scriptrunner import get_script_run_ctx
+    from gabes import od_spectrum_fit as od
+
+    started, resume = Event(), Event()
+
+    def controlled_fit(data, params, *, progress, **options):
+        assert get_script_run_ctx(suppress_warning=True) is None
+        assert progress(od.ODFitProgress("global", 1, 32.))
+        started.set()
+        assert resume.wait(15)
+        update = od.ODFitProgress("local", 2, 28.)
+        if not progress(update):
+            raise od.ODFitCancelled(update)
+        pytest.fail("The detached fit still has a live session")
+
+    monkeypatch.setattr(od, "fit_od_spectrum", controlled_fit)
+    app, exports, _, _ = workspace
+    app.run()
+    app.checkbox(key="sas_od_fit_frequency_scale").check().run()
+    try:
+        app.button(key="sas_run_od_fit").click().run()
+        assert started.wait(5)
+        job = app.session_state["sas_od_fit_job"]
+        app.run()
+        assert any("Global search · 1 evaluation · Best weighted cost 32" in c.value for c in app.caption)
+        assert not any(b.key == "sas_run_od_fit" for b in app.button)
+        if action == "cancel":
+            app.button(key="sas_cancel_od_fit").click().run()
+            assert any(i.value == "Fit cancelled." for i in app.info)
+        elif action == "change_scale":
+            app.checkbox(key="sas_od_fit_frequency_scale").uncheck().run()
+            assert any("fit inputs changed" in i.value for i in app.info)
+        else:
+            route = next(w for w in app.get("button_group") if w.key == "sas___spectra_view")
+            route.set_value(["Simulate spectra"]).run()
+        assert not app.exception
+        assert "sas_od_fit_job" not in app.session_state
+        assert "sas_od_physical_fit" not in app.session_state
+        assert not any(b.key == "sas_od_apply_temperature" for b in app.button)
+        assert not any("physical_od_fit" in (e.get("comparison_payload") or {}) for e in exports)
+    finally:
+        resume.set()
+    with pytest.raises(od.ODFitCancelled):
+        job.future.result(timeout=5)
+
+
+def test_fit_worker_queues_sessions_and_keeps_its_model_snapshot(monkeypatch):
+    from threading import Event
+    from gabes import od_spectrum_fit
+    from gabes_ui.od_fit_job import ODFitJob
+
+    entered, resume = Event(), Event()
+    def controlled_fit(data, params, *, progress, **options):
+        entered.set()
+        assert resume.wait(10)
+        return params["startup"]
+
+    monkeypatch.setattr(od_spectrum_fit, "fit_od_spectrum", controlled_fit)
+    params = {"startup": [49.]}
+    first = ODFitJob(("first",), None, params)
+    try:
+        assert entered.wait(5)
+        params["startup"][0] = 55.
+        second = ODFitJob(("second",), None, params)
+        assert not second.future.running()
+        second.cancel()
+        assert second.future.cancelled()
+    finally:
+        resume.set()
+    assert first.future.result(timeout=5) == [49.]
+
+
 def test_reject_stale_result_and_keep_finite_power_overlay(workspace):
     app, exports, _, _ = workspace
     app.run()
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
-    app.button(key="sas_run_od_fit").click().run()
+    _run_fit_to_completion(app)
     # A result button already in the browser must also re-check live canonical settings.
     app.session_state["sas__line"] = "D1"
     app.button(key="sas_od_apply_temperature").click().run()
@@ -184,7 +268,7 @@ def test_apply_compares_new_measurement_widgets_in_the_same_rerun(workspace, cha
     app.run()
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
-    app.button(key="sas_run_od_fit").click().run()
+    _run_fit_to_completion(app)
     assert exports[-1]["comparison_payload"]["physical_od_fit"]["identifiable"]
     if change == "branch":
         app.selectbox(key="sas_od_fit_branch").select(1)
@@ -301,7 +385,7 @@ def test_legacy_replay_fits_recorded_model_and_converts_native_centroid_once(wor
 
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
-    app.button(key="sas_run_od_fit").click().run()
+    _run_fit_to_completion(app)
     result = exports[-1]["comparison_payload"]["physical_od_fit"]
     assert result["probe_model"] == model_id and result["identifiable"]
     np.testing.assert_allclose(result["frequency_mhz"], (canonical - .078095)*1.e3, atol=1.e-10, rtol=0)
@@ -452,7 +536,7 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
         np.testing.assert_array_equal(snapshot["raw"]["offsets_hz"], expected.offsets_hz)
     app.multiselect(key="sas_od_fit_free").set_value(["offset_mhz"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
-    app.button(key="sas_run_od_fit").click().run()
+    _run_fit_to_completion(app)
     assert not app.exception and not app.error
     comparison = exports[-1]["comparison_payload"]
     fit = comparison["physical_od_fit"]

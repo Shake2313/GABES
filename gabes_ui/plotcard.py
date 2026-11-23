@@ -11,6 +11,8 @@ artist access, copy, drawing and cleanup; the SABES page also uses it for
 instrument traces. Cached solvers run separately.
 """
 import copy
+from concurrent.futures import CancelledError
+from contextlib import contextmanager
 import hashlib
 import importlib
 import inspect
@@ -28,6 +30,7 @@ from gabes.experimental_alignment import AxisAlignment, frame_alignment, fit_tra
 from gabes.plot_style import PALETTE, apply_gabes_plot_style
 from gabes_ui import export as ui_export
 from gabes_ui.controls import render_param, skey
+from gabes_ui.od_fit_job import ODFitJob, SESSION_KEY as OD_FIT_JOB
 from gabes_ui.plot_focus import focused_axes, focus_signature, resonance_window
 from gabes_ui.readout import caption_html
 
@@ -154,11 +157,54 @@ def _save_overlay_preferences(scheme_name):
         {key: state[key] for key in keys if key in state})
 
 
+def cancel_od_fit():
+    job = st.session_state.pop(OD_FIT_JOB, None)
+    if job is not None:
+        job.cancel()
+
+
+@contextmanager
+def cancel_hidden_od_fit():
+    """A fit belongs to the visible controls that launched it."""
+    job = st.session_state.get(OD_FIT_JOB)
+    if job is not None:
+        job.visible = False
+    try:
+        yield
+    finally:
+        if job is not None and not job.visible and st.session_state.get(OD_FIT_JOB) is job:
+            cancel_od_fit()
+
+
+def _cancel_requested_fit(job):
+    if st.session_state.get(OD_FIT_JOB) is job:
+        cancel_od_fit()
+        st.session_state["sas_od_fit_cancelled"] = True
+
+
+@st.fragment(run_every=0.75)
+def _render_fit_progress(job):
+    # Poll only this row; a terminal result needs the complete fit identity
+    # (file, widgets and model) revalidated by its owner before it can publish.
+    if st.session_state.get(OD_FIT_JOB) is not job or job.future.done():
+        st.rerun(scope="app")
+    progress = job.observe()
+    if progress is not None:
+        stage = "Global search" if progress.stage == "global" else "Local refinement"
+        count = f"{progress.evaluations} evaluation" + ("" if progress.evaluations == 1 else "s")
+        st.caption(f"{stage} · {count} · "
+                   f"Best weighted cost {progress.best_cost:.4g}")
+    else:
+        st.caption("Evaluating the OD model…" if job.future.running() else "Fit queued.")
+    st.button("Cancel fit", key="sas_cancel_od_fit", on_click=_cancel_requested_fit, args=(job,))
+
+
 def remember_overlay_for_comparison(scheme_name, *, entering):
     """Streamlit drops hidden widgets; keep a session-only copy across model comparison."""
     state = st.session_state
     saved_key = skey(scheme_name, "_model_return_overlay")
     if entering:
+        cancel_od_fit()
         state.pop("sas_od_pending_temperature", None)
         _save_overlay_preferences(scheme_name)
     else:
@@ -175,6 +221,8 @@ def remember_overlay_for_comparison(scheme_name, *, entering):
 
 def _forget_retained_csv(scheme_name):
     if scheme_name == "sas":
+        cancel_od_fit()
+        st.session_state.pop("sas_od_fit_cancelled", None)
         st.session_state.pop("sas_csv_source", None)
     st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
     st.session_state.pop(skey(scheme_name, "_csv_fingerprint"), None)
@@ -227,7 +275,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
     from gabes_ui.od_measurement import request_temperature, fit_conditions_key, workspace_params
     from gabes_ui.controls import current_params
     from gabes.od_spectrum_fit import (
-        PARAMETERS, fit_od_spectrum, od_fit_unavailable, prepare_od_fit,
+        PARAMETERS, ODFitCancelled, od_fit_unavailable, prepare_od_fit,
     )
 
     workspace = upload is not None
@@ -301,19 +349,46 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
             box.info("The file, calibration or model changed. Run the fit again before applying it.")
         st.session_state.pop(key)
         saved = None
-    if box.button("Run physical OD fit", key="sas_run_od_fit", disabled=not free or not calibrated_axis):
+    # A finished result can survive applying its fitted temperature. An in-flight
+    # result additionally belongs to its original starting values.
+    job_identity = (identity, tuple(params.get(name) for name in free))
+    job = st.session_state.get(OD_FIT_JOB)
+    if job is not None and job.identity != job_identity:
+        box.info("The fit inputs changed. Run the fit again with the current settings.")
+        cancel_od_fit()
+        job = None
+    if job is not None and job.future.done():
+        st.session_state.pop(OD_FIT_JOB)
+        try:
+            saved = identity, job.future.result()
+            st.session_state[key] = saved
+        except (CancelledError, ODFitCancelled):
+            box.info("Fit cancelled.")
+        except Exception as exc:
+            box.error(f"OD fit failed: {exc}")
+        job = None
+    if st.session_state.pop("sas_od_fit_cancelled", False):
+        box.info("Fit cancelled.")
+    run = box.empty()
+    if job is None and run.button("Run physical OD fit", key="sas_run_od_fit",
+                                  disabled=not free or not calibrated_axis):
+        st.session_state.pop(key, None)
+        saved = None
         try:
             data = prepare_od_fit(trace, alignment, branch=branch)
-            with box, st.spinner("Fitting the OD spectrum…"), blas_single_thread():
-                result = fit_od_spectrum(data, params, free=free, fit_range_mhz=fit_range,
-                                         heldout_range_mhz=holdout_range,
-                                         model_id=conditions.model_id if workspace else None)
-            saved = identity, result
-            st.session_state[key] = saved
+            job = ODFitJob(job_identity, data, params, free=tuple(free),
+                           fit_range_mhz=fit_range, heldout_range_mhz=holdout_range,
+                           model_id=conditions.model_id if workspace else None)
         except (ValueError, np.linalg.LinAlgError) as exc:
-            st.session_state.pop(key, None)
-            saved = None
             box.error(str(exc))
+        else:
+            st.session_state[OD_FIT_JOB] = job
+            run.empty()
+    if job is not None:
+        job.visible = True
+        with box:
+            _render_fit_progress(job)
+        return None
     if saved is None:
         return None
     result = saved[1]
@@ -1122,7 +1197,7 @@ def _render_comparison_fragment(view, scheme, spec_by_name, raw, params,
                                  cache_version, readout_cache_version):
     # Fragment reruns reuse their input objects. Clone only the plot figures so
     # every rerun starts with clean theory, without accumulated CSV lines/titles.
-    with PLOT_LOCK:
+    with cancel_hidden_od_fit(), PLOT_LOCK:
         local_view = dict(view)
         local_view.update(copy.deepcopy({
             "figure": view.get("figure"),

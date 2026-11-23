@@ -605,6 +605,7 @@
     },
     {
       "id": "od-sas-autood-csv-web-workspace",
+      "m2_verification_2026_11_23": "⟦AI⟧ 11월 20일 기록의 빔 평균 미측정·국소 상한 1.61%는 d3bda39의 D₂ 검증으로 갱신했다. 순수 ⁸⁵Rb·⁸⁷Rb의 선중심 4곳 × 0.1·0.5·2 mW, 25 °C·75 mm·빔 반지름 1 mm에서 전파 후 |ΔT| ≤ 0.00185, 유효 OD 상대차 ≤ 1.21%, 입사 중심 국소 흡수 상대차 ≤ 1.62%. 100 µW 한정 각각 ≤ 0.00061·0.20%·0.59%. AutoOD가 d3bda39의 공용 축과 평가기를 호출하며 기존 기준 스펙트럼 24개·판독점 48,024개에서 계산 배열과 판독값이 비트 동일하다.",
       "gemini_api_review_2026_11_20": {
         "source": "사용자가 전달한 Gemini 독립 리뷰, 2026-11-20",
         "m2": "⟦AI⟧ 공용 OD 경로는 gabes.od_model이다. 30911de가 공개 rate_model_axis(conditions, points=2001)와 U2 국소 흡수 상한 1.61% 문구를 제공한다. 빔 평균 후 투과율 차이는 미측정이다. 검토 시 AutoOD 0026235의 release.json 핀은 8846193이다. M2에서 physics.py의 자기 부준위 계산을 공개 축·evaluate_od_display로 연결하고 기존 probe_populations.py 호환 import와 과거 모델 ID를 검증한다.",
@@ -628,7 +629,7 @@
       "priority": "P2",
       "effort": "large",
       "depends_on": [],
-      "adoption_status": "⟦AI⟧ 두 보기와 측정 CSV 이식 적용. 유한 프로브 기본 모델 전환, AutoOD 엔진 핀 갱신과 공용 측정 API 전환은 후속 단계다.",
+      "adoption_status": "⟦AI⟧ 두 보기·CSV 비교, 유한 프로브 Rb 기본 모델, AutoOD 공용 OD 평가기 적용 완료. 공용 측정 API 전환(M3)은 다음 단계다.",
       "acceptance_criteria": [
         "⟦AI⟧ 왼쪽 Simulate spectra를 기본 진입으로, 오른쪽 Fit OD data를 OD 전용으로 설계. ?compare=0 및 이전 보기 링크 유지. 파일명·CSV 형식 대신 각 버튼에 이론 계산·실험 OD 피팅 동작을 표시.",
         "⟦AI⟧ 오른쪽에서는 펌프 입력·파생 판독·스캔을 숨기고, 이론·정렬·피팅·캐시·내보내기에는 펌프가 꺼진 동일한 유효 조건을 사용. 프로브 파워와 빔 크기는 유지. 왼쪽의 펌프 파워·빔 설정·기타 펌프 전용 값은 별도 보존해 반복 전환·취소 후 그대로 복원.",
