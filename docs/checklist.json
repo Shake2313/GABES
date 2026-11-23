@@ -739,6 +739,39 @@
       "decision_required": "기초·강조색의 정확한 값, 타이포그래피 명도 단계, 그라데이션의 표면·강도와 전역 적용 범위."
     },
     {
+      "id": "ui-anti-ai-slop-information-hierarchy",
+      "area": "GABES 공통 화면 · gabes_ui 정보 계층",
+      "title": "⟦AI⟧ 상시 설명문·중복 표시·역전된 강조를 줄이는 정보 계층 규약(R1–R6)과 전 스킴 화면 감사",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-23 사용자 요청. Gemini 독립 디자인 검수 결과를 인계하며, 확인하고 진행 중인 작업과 겹치지 않도록 체크리스트에 추가하라고 지시.",
+      "source_documents": [
+        "docs/ui_redesign/anti_ai_slop_review_2026_11_23.md",
+        "docs/ui_redesign/decisions.md#d4",
+        "docs/ui_redesign/decisions.md#d7",
+        "gabes_ui/DESIGN.md"
+      ],
+      "status": "ready",
+      "priority": "P2",
+      "effort": "large",
+      "depends_on": [],
+      "proposal_summary": "⟦AI⟧ Gemini 제안(미채택): R1 정상 상태의 상시 설명문 제거(조건부 경고만), R2 이미 선택한 값의 열·축 제목 반복 금지, R3 굵게는 섹션 제목과 핵심 수치만, R4 화면 표시 유효숫자 3–4자리와 -0 정규화, R5 핵심 조작·관측량과 참고값·셀 상수 분리, R6 같은 물리량의 세로 중복 뷰 금지. Rydberg-EIT Model spectra 화면 개선 목록과 4단계 절차는 원문 참조.",
+      "activation_trigger": "⟦AI⟧ 1단계(전 스킴 캡처, R1–R6 위반 표, 정량 기록)는 읽기 전용이라 바로 시작할 수 있다. 2–4단계(규약 개정, 공통 컴포넌트, 스킴 적용)는 OD/SAS AutoOD 통합 마감 뒤 시작하고, 고칠 파일마다 허브에서 담당을 정한다. Rydberg 시범 적용은 rydberg-readout-validity-guardrails와 조율한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 1단계: ui_audit --tag pre_anti_slop와 전 스킴 캡처(Rydberg EIT·AT의 Model spectra·Single-condition details, OD와 실험 CSV 비교, SAS, FWM, 그 밖의 활성 스킴; SABES는 충돌 여부만)로 스킴별 R1–R6 위반 표를 만든다. 상시 문장 수, 첫 그래프 시작 Y, 중복 열·라벨 수, 굵은 요소 목록을 기록한다.",
+        "⟦AI⟧ 2단계: 채택하는 규칙만 decisions.md의 새 항목(다음 번호, 현재 D22; 원문의 D18은 이미 사용 중)으로 남기고 DESIGN.md 규칙과 log.md에 반영한다. D4·D7을 확장하며 번복하지 않는다.",
+        "⟦AI⟧ 3단계: 공통 컴포넌트를 먼저 고쳐 스킴별 복제 없이 적용한다. ui_audit DOM 계약이 바뀌면 같은 커밋에서 도구도 고치고, 화면 라벨이 바뀌면 안내서(D12)도 갱신한다.",
+        "⟦AI⟧ 4단계: tests/test_ui_*.py·tests/test_sabes_*.py와 바뀐 컴포넌트 테스트를 통과하고, ui_audit 전후 비교와 전 스킴 전후 캡처를 육안으로 검수한다. 물리 정보 손실이 없고 첫 그래프가 더 위에서 보여야 한다."
+      ],
+      "overlap_guards": [
+        "⟦AI⟧ R1: 조건이 생길 때만 뜨는 경고는 본 화면에 남긴다. 판독 유효성·관측 불가 사유(rydberg-readout-validity-guardrails), FWM 실용 보정의 외삽·보정 조건 변경 표시(AGENTS.md), 미지원·결측 사유가 여기에 해당한다. 툴팁·Guide로 옮기는 것은 상시 정의문뿐이다.",
+        "⟦AI⟧ R3: 굵기와 크기 계층만 기존 theme 토큰(--g-muted 등)으로 정한다. 제목·본문·보조 문구의 명도 차와 색 값은 D21(gabes-ui-cards-gradients-after-csv)의 사용자 결정 사항이다.",
+        "⟦AI⟧ R4: 화면 표시 자릿수만 줄인다. JSON·CSV 내보내기와 복사는 전체 정밀도를 유지한다(app-result-export-and-provenance).",
+        "⟦AI⟧ R2·R5: 옮긴 정보는 툴팁·Advanced·Guide에서 한 번의 조작으로 닿아야 한다(D4). 계산 경로는 바꾸지 않는다(DESIGN.md 규칙).",
+        "⟦AI⟧ 공용 UI 파일(conditions.py, plotcard.py, readout.py 등)은 다른 세션의 미커밋 변경이 착지한 뒤에 고친다. Codex의 OD 작업공간 파일(plotcard.py, od_measurement.py, od_profile_fit.py)은 통합 마감 전까지 Codex와 조율한다."
+      ],
+      "last_reviewed_at": "2026-11-23"
+    },
+    {
       "id": "magneto-doppler-fallback-policy",
       "area": "gabes/schemes/magneto.py",
       "title": "⟦AI⟧ Apply the shared rejected-row refinement to the single-pair Magneto reference",
