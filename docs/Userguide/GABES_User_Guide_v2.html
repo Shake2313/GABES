@@ -658,7 +658,11 @@ streamlit run streamlit_app.py</pre>
     선택한 OD 채널, 주파수 단위와 신호 보정을 확인합니다. <b>Fit alignment</b>로 표시 좌표를 맞출 수 있습니다.
     스펙트럼에서 주파수를 선택하면 이론값과 가장 가까운 측정점을 읽을 수 있습니다. 측정 공백은 빈 구간으로 표시합니다.
     균일 셀에서 절대 투과율과 주파수 눈금을 교정한 뒤 <b>Fit physical OD parameters</b>에서 취득 방향과 피팅 변수를 고릅니다.
-    약한 프로브 피팅에는 프로브 출력 0 µW를 사용합니다. <b>Apply fitted temperature</b>로 수렴하고 식별 가능한 온도를 셀 조건에 적용합니다.
+    약한 프로브 피팅에는 프로브 출력 0 µW를 사용합니다. Rb 조성을 <b>Custom</b>으로 설정하면 D₁·D₂에서 ⁸⁵Rb 분율을 추정할 수 있습니다.
+    D₂의 유한 프로브 율방정식 모델에서는 빔 반경 <i>w</i>(세기가 중심의 1/e²인 반경)을 고정하고 프로브 출력(0–100 µW)을 추정합니다.
+    결과의 <b>Probe peak intensity</b>는 중심 세기 <i>I</i>₀ = 2<i>P</i>/(π<i>w</i>²)와 그 반경에서의 표준오차입니다.
+    수렴하고 식별 가능한 결과를 확인한 뒤 <b>Apply fitted conditions</b>를 누르면 추정한 출력·분율·온도가 조건에 반영됩니다.
+    이 중 온도만 추정한 경우에는 <b>Apply fitted temperature</b>를 사용합니다. 추정값이 경계에 걸리면 적용 버튼이 비활성화됩니다.
     비교 파일은 <b>Prepare comparison CSV</b>를 누른 뒤 <b>Download comparison CSV</b>로 저장합니다. 이 파일에는 원래 취득 순서와 보정 정보가 담깁니다.
     GABES 비교 파일을 다시 열면 현재 셀·프로브 조건에 파일에 기록된 펌프 없는 이론 모델을 적용합니다.
     파일을 제거하면 원래 선택한 모델로 돌아갑니다. 구형 파일의 <code>frequency_reference</code>는 이론 표시축의 영점입니다.

@@ -673,7 +673,8 @@
       "source_documents": [
         "docs/ui_redesign/od_sas_experimental_csv_port.md"
       ],
-      "status": "in_progress",
+      "status": "done",
+      "web_verification_2026_11_23": "⟦AI⟧ 화면이 실제 피팅에 사용하는 펌프 없는 모델로 선택지를 계산한다. ⁸⁵Rb 분율은 사용자 지정 혼합물, 출력은 D₂ 율방정식 모델에서 공개한다. 고정 반경과 I₀·표준오차를 표시하고 식별된 결과만 명시적으로 적용한다. Chrome의 잡음을 포함한 160점 D₂ 합성 CSV(참값 25 µW, 분율 0.56, 반경 1 mm)에서 24.9991 µW와 0.559979를 회수했다. Apply 뒤 실제 입력값이 바뀌고 D₁으로 옮기면 분율 선택만 남았다. AppTest에서 100 µW 상한 도달 시 적용이 비활성화됐다.",
       "priority": "P2",
       "effort": "large",
       "depends_on": [

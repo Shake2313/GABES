@@ -239,11 +239,30 @@ def native_reference_shift(upload, params):
         return 0.0, "The recorded measurement origin differs from this plot. Calibrate the frequency axis before fitting."
 
 
-def fit_conditions_key(params, free):
+def fit_conditions_key(params, free=()):
     conditions = asdict(ODConditions.from_params(params))
     return tuple((key, value) for key, value in conditions.items() if key not in free)
 
 
-def request_temperature(identity):
-    """Validate and apply after the current file and all form fields have been read."""
-    st.session_state["sas_od_pending_temperature"] = identity
+APPLICABLE_FIT_CONDITIONS = ("temp_c", "probe_power_uw", "rb85_fraction")
+
+
+def request_fitted_conditions(identity, displayed_conditions):
+    """Defer the click until the current file, model and fit controls have been read."""
+    st.session_state["sas_od_pending_fit_conditions"] = identity, displayed_conditions
+
+
+def apply_fitted_conditions(saved, identity, pending, live_conditions):
+    """Only apply the converged estimates from the fit the user just inspected."""
+    if not saved or saved[0] != identity or pending != (identity, live_conditions):
+        return False
+    result = saved[1]
+    if not result["identifiable"] or result["status"] != "converged":
+        return False
+    fields = [row for row in result["parameters"] if row["key"] in APPLICABLE_FIT_CONDITIONS]
+    if not fields:
+        return False
+    st.session_state.update({skey("sas", row["key"]): row["value"] for row in fields})
+    values = ", ".join(f"{row['name']} {row['value']:.4g} {row['unit']}".strip() for row in fields)
+    st.session_state["sas_od_apply_notice"] = f"Applied fitted conditions · {values}."
+    return True

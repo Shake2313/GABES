@@ -139,7 +139,137 @@ def test_pump_free_fit_apply_and_preset_round_trip(workspace):
     assert app.session_state["sas__temp_c"] == pytest.approx(50.)
 
 
-@pytest.mark.parametrize("action", ["cancel", "change_scale", "leave_workspace"])
+def test_fit_picker_filters_unavailable_estimates_as_conditions_change(workspace):
+    from gabes.od_spectrum_fit import PARAMETERS, CANDIDATE_PARAMETERS
+
+    app, _, _, _ = workspace
+    app.session_state["sas__species"] = "Rb (natural)"
+    app.session_state["sas__rb_composition"] = "Custom"
+    app.session_state["sas__probe_power_uw"] = 15.
+    app.run()
+
+    def picker():
+        assert not app.exception and not app.error
+        return app.multiselect(key="sas_od_fit_free")
+
+    base = [spec[0] for spec in PARAMETERS.values()]
+    fraction = CANDIDATE_PARAMETERS["rb85_fraction"][0]
+    power = CANDIDATE_PARAMETERS["probe_power_uw"][0]
+    assert picker().options == [*base, fraction, power]
+    picker().set_value(["offset_mhz", "rb85_fraction", "probe_power_uw"]).run()
+    app.selectbox(key="conditions-sas-line").select("D1").run()
+    assert picker().options == [*base, fraction]
+    assert picker().value == ["offset_mhz", "rb85_fraction"]
+    app.selectbox(key="conditions-sas-isotope-value").select("Natural").run()
+    assert picker().options == base and picker().value == ["offset_mhz"]
+
+
+@pytest.mark.parametrize("at_bound", [False, True], ids=["joint-fit", "power-upper-bound"])
+def test_probe_intensity_and_custom_mixture_apply_only_after_identifiable_fit(workspace, monkeypatch, at_bound):
+    from gabes import od_spectrum_fit as od
+    from gabes.schemes.sas import SASScheme, RATE_MODEL
+    from gabes_ui.export import build_export_payload
+
+    # Keep both cases on the actual worker and bounded least-squares path.
+    monkeypatch.setattr(od, "GLOBAL_LOG2_SAMPLES", 2)
+    monkeypatch.setattr(od, "LOCAL_STARTS", 1)
+    app, exports, _, uploads = workspace
+    truth_power = 125. if at_bound else 25.
+    truth_fraction = .62
+    initial_fraction = truth_fraction if at_bound else .55
+    truth = dict(SASScheme().defaults(), species="Rb (natural)", line="D2", rb_composition="Custom",
+                 rb85_fraction=truth_fraction, probe_power_uw=truth_power, probe_waist_mm=.8,
+                 temp_c=49., pump_power_mw=0., cell_mm=75.)
+    x = np.linspace(-3.5, 5., 160)
+    transmission = od.od_transmission(1000*x, truth, model_id=RATE_MODEL)
+    content = ("detuning_GHz,transmission\n" + "\n".join(
+        f"{v:.17g},{y:.17g}" for v, y in zip(x, transmission))).encode()
+    uploads[:] = [_upload(content)]
+    for key in ("species", "rb_composition", "probe_waist_mm"):
+        app.session_state["sas__"+key] = truth[key]
+    app.session_state["sas__probe_power_uw"] = 15.
+    app.session_state["sas__rb85_fraction"] = initial_fraction
+    app.run()
+    keys = ["probe_power_uw"] if at_bound else ["probe_power_uw", "rb85_fraction"]
+    app.multiselect(key="sas_od_fit_free").set_value(keys)
+    app.checkbox(key="sas_od_fit_frequency_scale").check().run()
+    _run_fit_to_completion(app)
+
+    output = exports[-1]
+    fit = output["comparison_payload"]["physical_od_fit"]
+    assert fit["probe_model"] == RATE_MODEL
+    assert fit["candidate_parameters"]["scope"] == {k: od.VALIDATED_SCOPE[k] for k in keys}
+    captions = " ".join(item.value for item in app.caption)
+    for key in keys:
+        assert od.VALIDATED_SCOPE[key] in captions
+    fitted = {row["key"]: row for row in fit["parameters"]}
+    intensity = fit["probe_peak_intensity"]
+    assert intensity["value_mw_cm2"] == pytest.approx(
+        od.probe_peak_intensity_mw_cm2(fitted["probe_power_uw"]["value"], .8))
+    metric = next(item for item in app.metric if item.label == "Probe peak intensity")
+    assert float(metric.value.split()[0]) == pytest.approx(intensity["value_mw_cm2"], rel=.0005)
+    assert "mW/cm²" in metric.value and "beam radius 0.8 mm" in captions
+    snapshot = build_export_payload(**output)
+    exported = snapshot["view"]["comparison"]["physical_od_fit"]
+    assert exported["candidate_parameters"] == fit["candidate_parameters"]
+    assert exported["probe_peak_intensity"] == intensity
+    assert exported["probe_power_role"] == "fit_starting_value" and exported["probe_power_uw"] == 15.
+    assert snapshot["params"]["probe_power_uw"] == 15.
+    assert snapshot["params"]["rb85_fraction"] == initial_fraction
+    assert app.session_state["sas__probe_power_uw"] == 15.
+    assert app.session_state["sas__rb85_fraction"] == initial_fraction
+    apply = app.button(key="sas_od_apply_conditions")
+    if at_bound:
+        assert fitted["probe_power_uw"]["value"] == pytest.approx(100.)
+        assert fitted["probe_power_uw"]["on_bound"] and not fit["identifiable"]
+        assert intensity["standard_error_mw_cm2"] is None and apply.disabled
+        assert "1σ unavailable" in captions
+        assert any("100 µW" in item.value for item in app.warning)
+        return
+
+    assert fit["identifiable"] and not apply.disabled
+    assert fitted["probe_power_uw"]["value"] == pytest.approx(truth_power, rel=1e-5)
+    assert fitted["rb85_fraction"]["value"] == pytest.approx(truth_fraction, abs=1e-5)
+    sigma = intensity["standard_error_mw_cm2"]
+    assert sigma > 0. and f"±{sigma:.3g} mW/cm²" in captions
+    # A click from an older render must not overwrite a new draft or partially
+    # apply the isotope fraction if the displayed power changed in that rerun.
+    app.text_input(key="power-input-sas-probe_power_uw").set_value("17")
+    apply.click().run()
+    assert not app.exception and app.session_state["sas__probe_power_uw"] == 17.
+    assert app.session_state["sas__rb85_fraction"] == initial_fraction
+    assert any("changed" in item.value for item in app.info)
+    app.button(key="sas_od_apply_conditions").click().run()
+    assert not app.exception and not app.error
+    for key, widget_key in (("probe_power_uw", "power-input-sas-probe_power_uw"),
+                            ("rb85_fraction", "conditions-sas-rb85_fraction")):
+        value = fitted[key]["value"]
+        assert app.session_state["sas__"+key] == pytest.approx(value)
+        widget = next(w for w in app.text_input if w.key.startswith(widget_key))
+        assert float(widget.value) == pytest.approx(value)
+    app.button(key="sas___save_browser").click().run()
+    record = app.session_state["sas___defaults_command"]["record"]
+    saved = record["params"]
+    assert (saved["probe_power_uw"], saved["rb85_fraction"]) == pytest.approx((truth_power, truth_fraction))
+    assert saved["pump_power_mw"] == 1.5 and saved["probe_waist_mm"] == .8
+
+    # AppTest cannot attach a file. Replay the browser record after portable
+    # JSON validation and load it with the same native Defaults selector.
+    from gabes_ui.defaults_store import dump_default, parse_default
+    restored = parse_default(SASScheme(), dump_default(record).encode("utf-8"))
+    app.session_state["sas___saved_defaults"] = {restored["name"]: restored}
+    app.session_state["sas__probe_power_uw"] = 7.
+    app.session_state["sas__rb85_fraction"] = .51
+    app.run()
+    selector = next(w for w in app.selectbox if w.label == "Defaults")
+    selector.select("saved:" + restored["name"]).run()
+    assert not app.exception and not app.error
+    assert app.session_state["sas__probe_power_uw"] == pytest.approx(truth_power)
+    assert app.session_state["sas__rb85_fraction"] == pytest.approx(truth_fraction)
+    assert app.session_state["sas__pump_power_mw"] == 1.5
+
+
+@pytest.mark.parametrize("action", ["cancel", "change_scale", "change_line", "leave_workspace"])
 def test_running_fit_is_cancelled_without_publishing_a_partial_result(workspace, monkeypatch, action):
     from threading import Event
     from streamlit.runtime.scriptrunner import get_script_run_ctx
@@ -159,7 +289,9 @@ def test_running_fit_is_cancelled_without_publishing_a_partial_result(workspace,
 
     monkeypatch.setattr(od, "fit_od_spectrum", controlled_fit)
     app, exports, _, _ = workspace
+    app.session_state["sas__probe_power_uw"] = 15.
     app.run()
+    app.multiselect(key="sas_od_fit_free").set_value(["probe_power_uw"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     try:
         app.button(key="sas_run_od_fit").click().run()
@@ -174,13 +306,17 @@ def test_running_fit_is_cancelled_without_publishing_a_partial_result(workspace,
         elif action == "change_scale":
             app.checkbox(key="sas_od_fit_frequency_scale").uncheck().run()
             assert any("fit inputs changed" in i.value for i in app.info)
+        elif action == "change_line":
+            app.selectbox(key="conditions-sas-line").select("D1").run()
+            assert "probe_power_uw" not in app.multiselect(key="sas_od_fit_free").value
         else:
             route = next(w for w in app.get("button_group") if w.key == "sas___spectra_view")
             route.set_value(["Simulate spectra"]).run()
         assert not app.exception
         assert "sas_od_fit_job" not in app.session_state
         assert "sas_od_physical_fit" not in app.session_state
-        assert not any(b.key == "sas_od_apply_temperature" for b in app.button)
+        assert not any(b.key in ("sas_od_apply_temperature", "sas_od_apply_conditions") for b in app.button)
+        assert app.session_state["sas__probe_power_uw"] == 15.
         assert not any("physical_od_fit" in (e.get("comparison_payload") or {}) for e in exports)
     finally:
         resume.set()
@@ -584,6 +720,8 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
     assert not app.error and not app.exception
     replay = exports[-1]["comparison_payload"]
     assert exports[-1]["raw"]["probe_model"] == replay["model"]["model_id"] == model_id
+    offered = app.multiselect(key="sas_od_fit_free").options
+    assert ("Probe power" in offered) == (power > 0.)
     np.testing.assert_array_equal(replay["theory_trace"]["transmission"], expected.transmission)
     assert "physical_od_fit" not in replay and "fit_model_id" not in replay["model"]
     app.button(key="sas___save_browser").click().run()

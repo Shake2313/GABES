@@ -205,7 +205,7 @@ def remember_overlay_for_comparison(scheme_name, *, entering):
     saved_key = skey(scheme_name, "_model_return_overlay")
     if entering:
         cancel_od_fit()
-        state.pop("sas_od_pending_temperature", None)
+        state.pop("sas_od_pending_fit_conditions", None)
         _save_overlay_preferences(scheme_name)
     else:
         for key, value in state.pop(saved_key, {}).items():
@@ -227,7 +227,7 @@ def _forget_retained_csv(scheme_name):
     st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
     st.session_state.pop(skey(scheme_name, "_csv_fingerprint"), None)
     st.session_state.pop("sas_od_physical_fit", None)
-    st.session_state.pop("sas_od_pending_temperature", None)
+    st.session_state.pop("sas_od_pending_fit_conditions", None)
     st.session_state.pop(skey(scheme_name, "_model_return_overlay"), None)
 
 
@@ -270,12 +270,15 @@ def select_workspace_measurement(panel, scheme_name):
 
 
 def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upload=None,
-                            pending_temperature=None):
+                            pending_conditions=None):
     from gabes.od_model import ODConditions, ODUnsupportedError, od_unavailable
-    from gabes_ui.od_measurement import request_temperature, fit_conditions_key, workspace_params
+    from gabes_ui.od_measurement import (
+        APPLICABLE_FIT_CONDITIONS, apply_fitted_conditions, fit_conditions_key,
+        request_fitted_conditions, workspace_params,
+    )
     from gabes_ui.controls import current_params
     from gabes.od_spectrum_fit import (
-        PARAMETERS, ODFitCancelled, od_fit_unavailable, prepare_od_fit,
+        VALIDATED_SCOPE, ODFitCancelled, od_fit_unavailable, offered_fit_parameters, prepare_od_fit,
     )
 
     workspace = upload is not None
@@ -292,7 +295,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
     else:
         reason = od_fit_unavailable(params)
     if reason:
-        if pending_temperature is not None:
+        if pending_conditions is not None:
             box.info("The model changed. Run a new fit before applying a result.")
         box.caption(reason)
         return None
@@ -308,8 +311,17 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
         "Acquisition branch", range(len(trace.branches)), key="sas_od_fit_branch",
         format_func=lambda i: f"{i + 1} · {trace.branches[i].direction} · {trace.branches[i].sample_count} points",
     )
-    free = box.multiselect("Free parameters", tuple(PARAMETERS), default=("temp_c", "offset_mhz"),
-                           key="sas_od_fit_free", format_func=lambda key: PARAMETERS[key][0])
+    model_id = conditions.model_id if workspace else None
+    offered = offered_fit_parameters(params, model_id=model_id)
+    picker_key = "sas_od_fit_free"
+    previous = st.session_state.get(picker_key)
+    if previous is not None and any(key not in offered for key in previous):
+        st.session_state[picker_key] = [key for key in previous if key in offered]
+    scope_help = "\n\n".join(f"**{offered[key][0]}** · {scope}"
+                              for key, scope in VALIDATED_SCOPE.items() if key in offered)
+    free = box.multiselect("Free parameters", tuple(offered),
+                           default=("temp_c", "offset_mhz") if previous is None else None,
+                           key=picker_key, format_func=lambda key: offered[key][0], help=scope_help or None)
     calibrated_axis = box.checkbox("The frequency scale above is calibrated", key="sas_od_fit_frequency_scale")
     use_holdout = box.checkbox("Declare separate fit and held-out ranges", key="sas_od_fit_holdout")
     fit_range = holdout_range = None
@@ -331,17 +343,13 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
     identity = (fit_context, model_key, alignment.scale, alignment.shift,
                 alignment.reverse, branch, tuple(free), calibrated_axis, fit_range, holdout_range)
     saved = st.session_state.get(key)
-    if workspace and pending_temperature is not None:
+    if workspace and pending_conditions is not None:
         try:
             live = workspace_params(current_params("sas", schemes.get("sas")), st.session_state, upload)
-            current_key = fit_conditions_key(live, free)
+            live_conditions = fit_conditions_key(live)
         except (ValueError, TypeError):
-            current_key = None
-        if (saved and saved[0] == pending_temperature == identity and current_key == model_key
-                and saved[1]["identifiable"] and saved[1]["status"] == "converged"):
-            value = next(row["value"] for row in saved[1]["parameters"] if row["key"] == "temp_c")
-            st.session_state[skey("sas", "temp_c")] = value
-            st.session_state["sas_od_apply_notice"] = f"Applied fitted cell temperature {value:.4g} °C."
+            live_conditions = None
+        if apply_fitted_conditions(saved, identity, pending_conditions, live_conditions):
             st.rerun()
         box.info("The file, calibration or model changed. Run the fit again before applying it.")
     if saved is not None and saved[0] != identity:
@@ -349,7 +357,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
             box.info("The file, calibration or model changed. Run the fit again before applying it.")
         st.session_state.pop(key)
         saved = None
-    # A finished result can survive applying its fitted temperature. An in-flight
+    # A finished result can survive applying its fitted conditions. An in-flight
     # result additionally belongs to its original starting values.
     job_identity = (identity, tuple(params.get(name) for name in free))
     job = st.session_state.get(OD_FIT_JOB)
@@ -378,7 +386,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
             data = prepare_od_fit(trace, alignment, branch=branch)
             job = ODFitJob(job_identity, data, params, free=tuple(free),
                            fit_range_mhz=fit_range, heldout_range_mhz=holdout_range,
-                           model_id=conditions.model_id if workspace else None)
+                           model_id=model_id)
         except (ValueError, np.linalg.LinAlgError) as exc:
             box.error(str(exc))
         else:
@@ -393,17 +401,37 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
         return None
     result = saved[1]
     if not result["identifiable"]:
-        box.warning("The selected parameters are poorly constrained or at a bound. "
-                    "Fix a parameter such as cell length and fit again.")
-    box.dataframe(result["parameters"], hide_index=True)
+        bounds = [f"{row['name']} ({row['value']:.4g}{' ' + row['unit'] if row['unit'] else ''})"
+                  for row in result["parameters"] if row.get("on_bound")]
+        if bounds:
+            box.warning("Fit reached a bound · " + ", ".join(bounds) + ".")
+        else:
+            box.warning("The selected parameters are poorly constrained. Fix a parameter and fit again.")
+    box.dataframe(
+        result["parameters"], hide_index=True,
+        column_order=("name", "value", "standard_error", "unit", "bounds"),
+        column_config={"name": "Parameter", "value": "Estimate", "standard_error": "1σ",
+                       "unit": "Unit", "bounds": "Fit range"},
+    )
+    if intensity := result.get("probe_peak_intensity"):
+        box.metric("Probe peak intensity", f"{intensity['value_mw_cm2']:.4g} mW/cm²")
+        error = intensity["standard_error_mw_cm2"]
+        uncertainty = "1σ unavailable" if error is None else f"1σ ±{error:.3g} mW/cm²"
+        box.caption(f"{uncertainty} · Fixed 1/e² beam radius {params['probe_waist_mm']:.4g} mm.")
+    for scope in result.get("candidate_parameters", {}).get("scope", {}).values():
+        box.caption(scope)
     box.caption(f"Fit RMS {result['fit_residuals']['rms']:.4g} transmission · "
                 f"{result['status'].replace('_', ' ')} · {result['scope'].replace('_', ' ')}")
     if result["heldout_residuals"] is not None:
         box.caption(f"Held-out RMS {result['heldout_residuals']['rms']:.4g} transmission")
-    if workspace and "temp_c" in free:
-        box.button("Apply fitted temperature", key="sas_od_apply_temperature",
+    applicable = [key for key in free if key in APPLICABLE_FIT_CONDITIONS]
+    if workspace and applicable:
+        only_temperature = applicable == ["temp_c"]
+        box.button("Apply fitted temperature" if only_temperature else "Apply fitted conditions",
+                   key="sas_od_apply_temperature" if only_temperature else "sas_od_apply_conditions",
+                   help="Set " + ", ".join(offered[key][0] for key in applicable) + " in Conditions.",
                    disabled=not result["identifiable"] or result["status"] != "converged",
-                   on_click=request_temperature, args=(identity,))
+                   on_click=request_fitted_conditions, args=(identity, fit_conditions_key(params)))
     return result
 
 
@@ -433,7 +461,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
     raw_y_unit = descriptor.get("raw_y_unit", "Arb. unit")
 
     workspace = bool(view.get("experimental_workspace")) and x_unit == "GHz"
-    pending_temperature = st.session_state.pop("sas_od_pending_temperature", None) if workspace else None
+    pending_conditions = st.session_state.pop("sas_od_pending_fit_conditions", None) if workspace else None
     if workspace:
         from gabes import od_measurement as measurement
         from gabes_ui import od_measurement as workspace_ui
@@ -781,7 +809,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             # Exclude the displayed curve from the physical fit's file/calibration identity.
             physical_fit = _render_physical_od_fit(panel, trace, alignment, params,
                 fit_context[:-1] if workspace else fit_context, upload=projection,
-                pending_temperature=pending_temperature)
+                pending_conditions=pending_conditions)
 
         import_diag = trace.import_diagnostics
         correction_diag = trace.correction_diagnostics
