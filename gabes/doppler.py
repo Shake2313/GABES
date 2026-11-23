@@ -36,13 +36,23 @@ def faddeeva_upper(z):
     Weideman's 32-term expansion in ``Z = (L+iz)/(L-iz)``, evaluated by Horner's
     rule. No SciPy dependency; relative accuracy ~1e-13 in the closed upper
     half-plane (checked against ``scipy.special.wofz`` in the tests).
+    For arrays the Horner steps update one array in place: the same ufunc
+    operations as ``p = p*Z + coef`` without a temporary per term, several
+    times faster for large inputs. Inputs with at most one element keep
+    ``p = p*Z + coef``: NumPy computes those out-of-place products on a
+    scalar path that rounds differently from the in-place array loop.
     """
     z = np.asarray(z, dtype=np.complex128)
     den = _WEIDEMAN_L - 1j * z
     Z = (_WEIDEMAN_L + 1j * z) / den
     p = np.zeros_like(Z)
-    for coef in _WEIDEMAN_A:
-        p = p * Z + coef
+    if p.size <= 1:
+        for coef in _WEIDEMAN_A:
+            p = p * Z + coef
+    else:
+        for coef in _WEIDEMAN_A:
+            p *= Z
+            p += coef
     return 2.0 * p / den**2 + (1.0 / _SQRT_PI) / den
 
 

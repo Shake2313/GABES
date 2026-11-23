@@ -22,6 +22,35 @@ def test_faddeeva_matches_scipy_in_the_upper_half_plane():
     assert np.max(relative) < 1e-11
 
 
+
+def test_faddeeva_in_place_horner_repeats_the_textbook_arithmetic():
+    """The in-place Horner update is a speedup only: bit-identical to ``p = p*Z + coef``."""
+    def textbook(z):
+        z = np.asarray(z, dtype=np.complex128)
+        den = doppler._WEIDEMAN_L - 1j * z
+        Z = (doppler._WEIDEMAN_L + 1j * z) / den
+        p = np.zeros_like(Z)
+        for coef in doppler._WEIDEMAN_A:
+            p = p * Z + coef
+        return 2.0 * p / den**2 + (1.0 / doppler._SQRT_PI) / den
+
+    rng = np.random.default_rng(11)
+    z = np.concatenate([rng.normal(0, s, 20000) + 1j * np.abs(rng.normal(0, t, 20000))
+                        for s, t in ((1, 1), (10, 0.01), (1e3, 1e2), (1e-3, 1e-6))]
+                       + [np.array([0, 1e-300j, 1e300 + 0j, 1e8 + 1e8j, 5 + 0j, -5 + 0j])])
+    with np.errstate(all="ignore"):
+        # One-element arrays take NumPy's scalar path; sample many of them.
+        small = ([z[:n] for n in range(1, 9)] + [z[i:i + 1] for i in range(0, 80000, 997)]
+                 + [z[:1].reshape(1, 1), z[:2].reshape(2, 1)])
+        for value in [z, z[:80004].reshape(-1, 6)[:, ::2], z[:7].reshape(7, 1), *small]:
+            got, want = doppler.faddeeva_upper(value), textbook(value)
+            assert got.shape == want.shape
+            assert np.ascontiguousarray(got).tobytes() == np.ascontiguousarray(want).tobytes()
+        for scalar in (0.3 + 0.2j, np.complex128(2 + 1j), np.array(1.5 + 0.5j)):
+            got, want = doppler.faddeeva_upper(scalar), textbook(scalar)
+            assert type(got) is type(want) and got == want
+
+
 def test_maxwell_resolvent_mean_matches_quadrature_in_both_half_planes():
     lam = np.array([0.4 + 0.02j, -1.7 - 0.03j, 6.0 + 0.001j, 0.1 - 0.5j])
     x = np.linspace(-14.0, 14.0, 1_400_001)
