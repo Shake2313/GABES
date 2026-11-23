@@ -7,7 +7,11 @@ import pytest
 from gabes import species
 from gabes.experimental_alignment import AxisAlignment
 from gabes.experimental_csv import CALIBRATION_ABSOLUTE_GAIN_OFFSET, load_experimental_csv
-from gabes.od_spectrum_fit import ODFitInput, fit_od_spectrum, od_transmission, prepare_od_fit
+from gabes import od_spectrum_fit
+from gabes.od_spectrum_fit import (
+    CANDIDATE_PARAMETERS, PARAMETERS, ODFitInput, fit_od_spectrum, od_transmission,
+    prepare_od_fit, probe_peak_intensity_mw_cm2,
+)
 from gabes.schemes.sas import AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, SASScheme
 
 
@@ -156,3 +160,73 @@ def test_progress_callback_can_cancel_between_evaluations(conditions, stop_at, s
     assert calls[-1] == stop_at == cancelled.value.progress.evaluations
     assert cancelled.value.progress.stage == stage
     assert not isinstance(cancelled.value, ValueError)
+
+
+RATE = "od_finite_rb_mf_rate_v1"
+
+
+def _rate_params(**changes):
+    base = dict(SASScheme().defaults(), species="Rb (natural)", line="D2", pump_power_mw=0.0,
+                probe_power_uw=50.0, probe_waist_mm=1.0, temp_c=40.0, cell_mm=75.0)
+    return {**base, **changes}
+
+
+def test_candidate_variables_stay_out_of_the_app_list():
+    assert set(CANDIDATE_PARAMETERS) == {"probe_power_uw", "probe_waist_mm", "rb85_fraction"}
+    assert not set(CANDIDATE_PARAMETERS) & set(PARAMETERS)
+
+
+def test_rate_model_sees_the_probe_only_through_peak_intensity():
+    x = np.linspace(-3500.0, 5000.0, 120)
+    same = od_transmission(x, _rate_params(), model_id=RATE)
+    np.testing.assert_array_equal(
+        same, od_transmission(x, _rate_params(probe_power_uw=12.5, probe_waist_mm=0.5), model_id=RATE))
+    other = od_transmission(x, _rate_params(probe_waist_mm=1.2), model_id=RATE)
+    assert np.max(np.abs(other - same)) > 1e-2
+    assert probe_peak_intensity_mw_cm2(50.0, 1.0) == pytest.approx(0.2 * 50.0 / np.pi, rel=1e-15)
+
+
+def test_candidate_variables_have_an_explicit_scope(conditions):
+    x = np.linspace(-3100.0, 3100.0, 120)
+    y = od_transmission(x, conditions)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    with pytest.raises(ValueError, match="rate model"):
+        fit_od_spectrum(data, conditions, free=("temp_c", "probe_power_uw"))
+    with pytest.raises(ValueError, match="custom Rb composition"):
+        fit_od_spectrum(data, dict(conditions, species="Rb (natural)"), free=("rb85_fraction",))
+    rate = _rate_params()
+    y = od_transmission(x, rate, model_id=RATE)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    with pytest.raises(ValueError, match="peak intensity"):
+        fit_od_spectrum(data, rate, free=("probe_power_uw", "probe_waist_mm"), model_id=RATE)
+
+
+def test_probe_power_is_recovered_and_reported_as_peak_intensity(monkeypatch):
+    # A shorter deterministic search keeps the rate-model test quick.
+    monkeypatch.setattr(od_spectrum_fit, "GLOBAL_LOG2_SAMPLES", 2)
+    monkeypatch.setattr(od_spectrum_fit, "LOCAL_STARTS", 1)
+    x = np.linspace(-3500.0, 5000.0, 160)
+    y = od_transmission(x, _rate_params(), model_id=RATE)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    start = _rate_params(probe_power_uw=30.0)
+    start["probe_power_mw"] = 0.03          # the legacy key must not pin the free power
+    fit = fit_od_spectrum(data, start, free=("probe_power_uw",), model_id=RATE)
+    assert fit["parameters"][0]["value"] == pytest.approx(50.0, rel=1e-5)
+    assert fit["candidate_parameters"]["keys"] == ["probe_power_uw"]
+    intensity = fit["probe_peak_intensity"]
+    assert intensity["value_mw_cm2"] == pytest.approx(probe_peak_intensity_mw_cm2(50.0, 1.0), rel=1e-5)
+    json.dumps(fit, allow_nan=False)
+
+
+def test_custom_isotope_fraction_is_recovered_with_the_weak_probe_model():
+    p = dict(SASScheme().defaults(), species="Rb (natural)", rb_composition="Custom",
+             rb85_fraction=0.6, line="D2", pump_power_mw=0.0, probe_power_uw=0.0,
+             temp_c=45.0, cell_mm=75.0)
+    x = np.linspace(-3500.0, 5000.0, 301)
+    y = od_transmission(x, p, offset_mhz=6.0)
+    data = ODFitInput(x, y, np.full_like(x, 0.001), 0, x.size, "known test uncertainty")
+    fit = fit_od_spectrum(data, dict(p, rb85_fraction=0.72, temp_c=43.0),
+                          free=("temp_c", "offset_mhz", "rb85_fraction"))
+    assert fit["identifiable"]
+    assert [q["value"] for q in fit["parameters"]] == pytest.approx([45.0, 6.0, 0.6], abs=1e-5)
+    assert "probe_peak_intensity" not in fit

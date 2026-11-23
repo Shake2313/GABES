@@ -12,7 +12,7 @@ from ._arrays import readonly_float_array
 from .experimental_alignment import AxisAlignment
 from .experimental_csv import ExperimentalCSV, transform_x
 from .od_model import MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, od_unavailable
-from .schemes.sas import _probe_power_mw, _weak_probe_profile
+from .schemes.sas import RB_COMPOSITION_CUSTOM, _probe_power_mw, _weak_probe_profile
 from .vapor_cell import CellTemperatureState
 
 RATE_MODEL = "od_finite_rb_mf_rate_v1"
@@ -28,6 +28,26 @@ PARAMETERS = {
     "extra_width_mhz": ("Extra homogeneous FWHM", "MHz", 0.0, 100.0),
     "offset_mhz": ("Frequency offset", "MHz", -150.0, 150.0),
 }
+# Finite-probe estimates still under validation (checklist item
+# od-sas-autood-finite-probe-fit-extension). fit_od_spectrum accepts them, but
+# they stay out of PARAMETERS, the list the app offers, until a synthetic
+# recovery study shows which ones can be estimated and over what range.
+CANDIDATE_PARAMETERS = {
+    "probe_power_uw": ("Probe power", "µW", 0.0, 100.0),
+    "probe_waist_mm": ("Probe beam radius (1/e²)", "mm", 0.1, 5.0),
+    "rb85_fraction": ("⁸⁵Rb fraction", "", 0.0, 1.0),
+}
+_FIT_PARAMETERS = {**PARAMETERS, **CANDIDATE_PARAMETERS}
+_PROBE_PARAMETERS = ("probe_power_uw", "probe_waist_mm")
+
+
+def probe_peak_intensity_mw_cm2(power_uw, waist_mm):
+    """Gaussian peak intensity I₀ = 2P/(πw²) in mW/cm² (w is the 1/e² radius).
+
+    With the transit rate fixed, the rate model's beam-averaged transmission
+    depends on the probe only through I₀: equal I₀ gives identical spectra.
+    """
+    return 2.0 * (power_uw * 1e-3) / (np.pi * (waist_mm * 0.1) ** 2)
 
 
 def _calibration_vector(values, name, *, minimum_size=1):
@@ -403,8 +423,20 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     free = tuple(free)
     if fixed.intersection(free):
         raise ValueError("A fixed cell constraint cannot also be a free fit parameter.")
-    if not free or len(free) != len(set(free)) or any(key not in PARAMETERS for key in free):
+    if not free or len(free) != len(set(free)) or any(key not in _FIT_PARAMETERS for key in free):
         raise ValueError("Choose distinct physical fit parameters from the supported list.")
+    candidate_keys = tuple(key for key in free if key in CANDIDATE_PARAMETERS)
+    if (set(candidate_keys) & set(_PROBE_PARAMETERS)
+            and _fit_conditions(params, model_id).model_id != RATE_MODEL):
+        raise ValueError("Probe power and beam radius can be fitted only with the "
+                         "finite-probe magnetic-sublevel rate model.")
+    if set(_PROBE_PARAMETERS) <= set(candidate_keys):
+        raise ValueError("The probe enters this model only through its peak intensity "
+                         "2P/(πw²). Fit the power or the beam radius, with the other fixed.")
+    if "rb85_fraction" in candidate_keys and (
+            params.get("species") != "Rb (natural)"
+            or params.get("rb_composition") != RB_COMPOSITION_CUSTOM):
+        raise ValueError("Fit the ⁸⁵Rb fraction with the custom Rb composition.")
     x, y = (np.asarray(values, dtype=float) for values in (data.frequency_mhz, data.transmission))
     sigma = None if data.sigma is None else np.asarray(data.sigma, dtype=float)
     invalid_sigma = sigma is not None and (sigma.shape != x.shape or not np.isfinite(sigma).all()
@@ -447,8 +479,12 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         raise ValueError("Fit bounds apply only to selected physical parameters.")
     base = {"temp_c": float(params["temp_c"]), "cell_mm": float(params["cell_mm"]),
             "extra_width_mhz": 0.0, "offset_mhz": 0.0}
-    limits = np.array([domains.get(k, PARAMETERS[k][2:]) for k in free], dtype=float)
-    registered = np.array([PARAMETERS[k][2:] for k in free])
+    current = {"probe_power_uw": _probe_power_mw(params) * 1e3,
+               "probe_waist_mm": float(params.get("probe_waist_mm", 1.0)),
+               "rb85_fraction": float(params.get("rb85_fraction", species.RB85.abundance))}
+    base.update({key: current[key] for key in candidate_keys})
+    limits = np.array([domains.get(k, _FIT_PARAMETERS[k][2:]) for k in free], dtype=float)
+    registered = np.array([_FIT_PARAMETERS[k][2:] for k in free])
     if (limits.shape != (len(free), 2) or not np.isfinite(limits).all() or
             np.any(limits[:, 0] >= limits[:, 1]) or
             np.any(limits[:, 0] < registered[:, 0]) or np.any(limits[:, 1] > registered[:, 1])):
@@ -457,7 +493,12 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     width = upper - lower
     def model(frequency, normalized):
         values = dict(base, **dict(zip(free, lower + normalized * width)))
-        return od_transmission(frequency, dict(params, temp_c=values["temp_c"], cell_mm=values["cell_mm"]),
+        point = dict(params, temp_c=values["temp_c"], cell_mm=values["cell_mm"])
+        if candidate_keys:
+            point.update({key: values[key] for key in candidate_keys})
+            if "probe_power_uw" in candidate_keys:
+                point.pop("probe_power_mw", None)   # the legacy mW key would win
+        return od_transmission(frequency, point,
                                extra_width_mhz=values["extra_width_mhz"],
                                offset_mhz=values["offset_mhz"], optics=optics, model_id=model_id)
 
@@ -533,7 +574,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         measured_transmission=y.tolist(), model_transmission=predicted.tolist(),
         residual=residuals.tolist(), sigma=sigma.tolist(), train_mask=train.tolist(), heldout_mask=heldout.tolist(),
         fit_range_mhz=fit_range_mhz, heldout_range_mhz=heldout_range_mhz,
-        parameters=[dict(key=key, name=PARAMETERS[key][0], unit=PARAMETERS[key][1],
+        parameters=[dict(key=key, name=_FIT_PARAMETERS[key][0], unit=_FIT_PARAMETERS[key][1],
                          value=float(values[i]), bounds=limits[i].tolist(),
                          standard_error=None if errors is None else float(errors[i]),
                          on_bound=bool(active[i])) for i, key in enumerate(free)],
@@ -549,6 +590,27 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         local_max_evaluations_per_start=LOCAL_MAX_NFEV, local_starts=LOCAL_STARTS,
     )
 
+    if candidate_keys:
+        result["candidate_parameters"] = dict(
+            keys=list(candidate_keys),
+            status="under validation (od-sas-autood-finite-probe-fit-extension); "
+                   "not offered in the app")
+    probe_free = [i for i, key in enumerate(free) if key in _PROBE_PARAMETERS]
+    if probe_free:
+        i = probe_free[0]
+        fitted = dict(current, **dict(zip(free, values)))
+        intensity = probe_peak_intensity_mw_cm2(fitted["probe_power_uw"], fitted["probe_waist_mm"])
+        relative = None
+        if errors is not None:
+            # I ∝ P and I ∝ w⁻²; the other quantity is fixed.
+            scale = 1.0 if free[i] == "probe_power_uw" else 2.0
+            relative = scale * float(errors[i]) / float(values[i])
+        result["probe_peak_intensity"] = dict(
+            value_mw_cm2=float(intensity),
+            standard_error_mw_cm2=None if relative is None else float(intensity * relative),
+            definition="I0 = 2P/(pi w^2), w the 1/e^2 radius; the only probe quantity "
+                       "this model constrains, conditional on the fixed "
+                       + ("beam radius" if free[i] == "probe_power_uw" else "probe power"))
     if profile is not None:
         result["weak_probe_profile"] = profile
     if markers is not None:
