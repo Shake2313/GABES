@@ -395,3 +395,50 @@ def test_automatic_scope_keeps_od_gate_and_acquisition_provenance():
     reopened = prepare_measurement_upload(export_comparison_csv(upload, trace, *theory(), metadata=META))
     assert reopened.metadata["scope"]["selected_samples"] == [422, 1178]
     assert reopened.metadata["scope"]["source_id"] == upload.sha256
+
+
+def test_comparison_stream_reads_bounded_rows_and_preserves_hash():
+    data = _historical_gabes_csv("Rb85", 0, True)
+
+    class ComparisonStream(io.BytesIO):
+        def read(self, *args):
+            pytest.fail("A recognized comparison must be read row by row")
+
+    upload = prepare_measurement_upload(ComparisonStream(data), max_comparison_bytes=len(data))
+    assert upload.sha256 == hashlib.sha256(data).hexdigest()
+    with pytest.raises(ExperimentalCSVError, match="byte limit"):
+        prepare_measurement_upload(ComparisonStream(data), max_comparison_bytes=len(data) - 1)
+
+
+@pytest.mark.parametrize("origin", [True, False])
+def test_utf16_comparison_decodes_headers_and_hashes_original_bytes(origin):
+    data = _historical_gabes_csv("Rb85", 0, origin)
+    encoded = data.decode("utf-8-sig").encode("utf-16")
+    utf16 = prepare_measurement_upload(io.BytesIO(encoded))
+    assert utf16.payload == prepare_measurement_upload(data).payload
+    assert utf16.sha256 == hashlib.sha256(encoded).hexdigest()
+
+
+def test_sparse_relative_overlay_replays_desktop_or_web_normalization():
+    data = paired_csv(range(4), [0, .1, 1, .4], header=("x", "volts"))
+    upload = prepare_measurement_upload(data)
+    web = load_measurement(upload)
+    desktop = load_measurement(upload, sparse_manual_overlay=True)
+    np.testing.assert_array_equal(desktop.raw_signal, desktop.transmission)
+    assert not np.array_equal(web.transmission, desktop.transmission)
+    assert desktop.diagnostics.gap_threshold == float("inf")
+    saved = replace(upload, metadata={"experiment_sparse_manual_overlay": True})
+    np.testing.assert_array_equal(load_measurement(saved).transmission, desktop.transmission)
+
+
+@pytest.mark.parametrize("extra", [[], {"scope": {"od": 70}}, {"original_file_sha256": "bad"},
+                                    {"experiment_columns": "a,b"}, {"experiment_sparse_manual_overlay": 1}])
+def test_autood_invalid_metadata_never_overrides_web_interpretation(extra):
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(("detuning_GHz", "theory_transmission", "experiment_input_x", "experiment_input_signal",
+                     "autood_version", "gabes_commit", "experiment_input_mode", "experiment_x_unit",
+                     "autood_measurement_v1"))
+    writer.writerow([0, 1, 0, 1, "0.2.2", "source", "relative", "MHz", json.dumps(extra)])
+    with pytest.raises(ExperimentalCSVError, match="Invalid"):
+        prepare_measurement_upload(output.getvalue().encode("utf-8"))

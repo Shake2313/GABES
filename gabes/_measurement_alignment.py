@@ -118,9 +118,10 @@ def _different_regions(centers, widths, scores, landmark):
 
 
 def quick_measurement_alignment(trace, theory_x_ghz, theory_transmission, *, current=None,
-                                reverse=False, invert=False):
+                                reverse=False, invert=False, fallback=None, match_signal=True):
     """Return a provisional affine display transform; require evidence in both traces."""
-    fallback = frame_alignment(trace.detuning, theory_x_ghz, reverse=reverse)
+    if fallback is None:
+        fallback = frame_alignment(trace.detuning, theory_x_ghz, reverse=reverse)
     miss = QuickFrameResult(fallback, False, 0)
     mx, my = np.asarray(trace.x), np.asarray(trace.transmission)
     tx, ty = np.asarray(theory_x_ghz), np.asarray(theory_transmission)
@@ -178,7 +179,7 @@ def quick_measurement_alignment(trace, theory_x_ghz, theory_transmission, *, cur
         return miss
 
     measured = median_filter(measured, size=3, mode="nearest")
-    fit_y = relative
+    fit_y = relative and match_signal
     # A calibrated transmission can distinguish a weak dip from a deep dip.
     # Use that evidence even when the display button also requests a Y frame.
 

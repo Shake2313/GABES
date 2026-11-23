@@ -65,7 +65,7 @@ def _channel_previews(signals):
     return tuple(previews)
 
 
-def select_scope_input(header, text, payload, channel=None, source_id=None):
+def select_scope_input(header, text, payload, channel=None, source_id=None, *, max_scope_rows=MAX_CSV_ROWS):
     """Return selected samples and provenance, or None for other CSV layouts."""
     header = list(header)
     while len(header) > 4 and not header[-1]:
@@ -93,8 +93,8 @@ def select_scope_input(header, text, payload, channel=None, source_id=None):
 
     def measurements():
         for row_number, row in enumerate(chain((first,), reader), start=2):
-            if row_number > MAX_CSV_ROWS:
-                raise ExperimentalCSVError(f"CSV exceeds the {MAX_CSV_ROWS:,}-row import limit.")
+            if max_scope_rows is not None and row_number > max_scope_rows:
+                raise ExperimentalCSVError(f"CSV exceeds the {max_scope_rows:,}-row import limit.")
             if np.isfinite(_number(row, time_col)):
                 yield tuple(_number(row, i) for i in columns)
 

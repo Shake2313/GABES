@@ -5,6 +5,7 @@ of the theory grid. Only recognized comparison files get the larger byte limit.
 """
 from __future__ import annotations
 
+import codecs
 import csv
 from dataclasses import asdict, dataclass, replace
 from hashlib import sha256
@@ -20,7 +21,8 @@ import numpy as np
 from . import __version__
 from ._arrays import readonly_float_array
 from ._csv_numeric import decode_csv_text
-from ._measurement_alignment import quick_measurement_alignment
+from ._measurement_alignment import QuickFrameResult, quick_measurement_alignment
+from ._scope_channels import ScopeChannels, identify_scope_channels
 from ._scope_measurement import ScopeChannelChoice, ScopeImport, select_scope_input
 from .experimental_alignment import AxisAlignment
 from .experimental_csv import (
@@ -70,10 +72,9 @@ def _is_comparison(names):
             {"autood_version", "gabes_commit", "experiment_input_mode", "experiment_x_unit"} <= set(names))
 
 
-def _decoded_line(stream):
-    line = stream.readline(_MAX_LINE + 1)
+def _decode_row(line):
     if len(line) > _MAX_LINE:
-        raise ExperimentalCSVError("Comparison CSV row exceeds 8192 bytes.")
+        raise ExperimentalCSVError("Comparison CSV row is too long (8192-byte limit).")
     if not line:
         return None
     text, _ = decode_csv_text(line, ExperimentalCSVError)
@@ -164,7 +165,62 @@ def native_frequency_reference(metadata):
     return origin
 
 
-def _read_comparison(stream, header, digest):
+def _validate_scope_record(scope):
+    if not isinstance(scope, dict):
+        raise ExperimentalCSVError("Invalid comparison scope record.")
+    channels = scope.get("channels")
+    if not isinstance(channels, list) or not channels or not all(isinstance(c, str) for c in channels):
+        raise ExperimentalCSVError("Invalid comparison scope channels.")
+    for key in ("od", "sas", "trigger"):
+        if key != "od" and scope.get(key) is None:
+            scope[key] = None
+            continue
+        index = scope.get(key)
+        if type(index) is not int or not 0 <= index < len(channels):
+            raise ExperimentalCSVError(f"Invalid comparison scope {key} channel.")
+    samples, total = scope.get("selected_samples"), scope.get("record_samples")
+    if (not isinstance(samples, list) or len(samples) != 2 or type(total) is not int
+            or not all(type(i) is int for i in samples) or not 0 <= samples[0] < samples[1] <= total
+            or type(scope.get("manual")) is not bool):
+        raise ExperimentalCSVError("Invalid comparison scope selection.")
+
+
+def _autood_acquisition_metadata(first):
+    """Restore typed acquisition fields; desktop model labels stay source metadata."""
+    text = first.get("autood_measurement_v1")
+    if not text:
+        return {}
+    try:
+        fields = json.loads(text)
+    except ValueError as exc:
+        raise ExperimentalCSVError("Invalid AutoOD acquisition metadata.") from exc
+    if not isinstance(fields, dict):
+        raise ExperimentalCSVError("Invalid AutoOD acquisition metadata.")
+    result = {}
+    for key in ("scope", "experiment_frequency_reference"):
+        if key in fields:
+            if not isinstance(fields[key], dict):
+                raise ExperimentalCSVError(f"Invalid AutoOD {key}.")
+            result[key] = fields[key]
+    if "original_file_sha256" in fields:
+        value = fields["original_file_sha256"]
+        if not isinstance(value, str) or not re.fullmatch("[0-9a-fA-F]{64}", value):
+            raise ExperimentalCSVError("Invalid AutoOD original file hash.")
+        result["original_file_sha256"] = value
+    if "experiment_columns" in fields:
+        names = fields["experiment_columns"]
+        if not isinstance(names, list) or len(names) != 2 or not all(isinstance(s, str) for s in names):
+            raise ExperimentalCSVError("Invalid AutoOD acquisition columns.")
+        result["experiment_columns"] = names
+    if "experiment_sparse_manual_overlay" in fields:
+        value = fields["experiment_sparse_manual_overlay"]
+        if not isinstance(value, bool):
+            raise ExperimentalCSVError("Invalid AutoOD sparse overlay setting.")
+        result["experiment_sparse_manual_overlay"] = value
+    return result
+
+
+def _read_comparison(read_row, header, digest):
     names = _labels(header)
     x, y = (names.index(name) for name in _INPUT_COLUMNS)
     if _GABES_META in names and _LEGACY_GABES_META in names:
@@ -172,15 +228,15 @@ def _read_comparison(stream, header, digest):
     meta_column = next((key for key in (_GABES_META, _LEGACY_GABES_META) if key in names), None)
     if "experiment input x" in [v.strip().casefold() for v in header]:
         for _ in range(2):
-            if _decoded_line(stream) is None:
+            if read_row() is None:
                 raise ExperimentalCSVError("Missing Origin worksheet headers.")
-        separator = _decoded_line(stream)
+        separator = read_row()
         if separator is None or any(separator):
             raise ExperimentalCSVError("Missing Origin worksheet separator.")
     native = io.BytesIO()
     metadata = None
     for index in range(MAX_CSV_ROWS + 1):
-        row = _decoded_line(stream)
+        row = read_row()
         if row is None:
             break
         if index == MAX_CSV_ROWS:
@@ -210,8 +266,12 @@ def _read_comparison(stream, header, digest):
                 metadata = {k: v for k, v in first.items() if k not in (*_INPUT_COLUMNS, names[0])
                             and not k.startswith(("experiment_display_", "experiment_original_",
                                                   "experiment_aligned_", "theory_"))}
+                metadata.pop("autood_measurement_v1", None)
+                metadata.update(_autood_acquisition_metadata(first))
                 if not metadata.get("autood_version") or not metadata.get("gabes_commit"):
                     raise ExperimentalCSVError("Missing AutoOD comparison provenance.")
+            if "scope" in metadata:
+                _validate_scope_record(metadata["scope"])
         if not row[x] and not row[y]:
             continue
         if not row[x] or not row[y] or max(len(row[x]), len(row[y])) > 32:
@@ -240,7 +300,7 @@ def _read_comparison(stream, header, digest):
         payload = compact.getvalue().rstrip(b"\n")
         if len(payload) > MAX_FILE_BYTES:
             raise ExperimentalCSVError("Native measurements exceed the 10 MiB import limit.")
-    return MeasurementUpload(payload, mode, unit, digest, metadata, None, _INPUT_COLUMNS)
+    return MeasurementUpload(payload, mode, unit, digest.hexdigest(), metadata, None, _INPUT_COLUMNS)
 
 
 def _column_indices(header):
@@ -261,28 +321,46 @@ def _column_indices(header):
     return x, y
 
 
-def prepare_measurement_upload(data, *, scope_channel=None, scope_source_id=None):
-    """Project normal, scope, AutoOD 0.2.2 and GABES comparison files to native samples."""
-    if hasattr(data, "read"):
-        data = data.read(MAX_COMPARISON_BYTES + 1)
-    if not isinstance(data, (bytes, bytearray, memoryview)):
+def prepare_measurement_upload(data, *, scope_channel=None, scope_source_id=None,
+                               max_comparison_bytes=MAX_COMPARISON_BYTES, max_scope_rows=MAX_CSV_ROWS):
+    """Project native acquisition pairs, streaming recognized comparison worksheets.
+
+    The web uses the default byte and raw scope row limits. A desktop file reader
+    can allow larger comparison worksheets and limit scope rows after channel
+    selection. Ordinary inputs and the projected pairs retain the CSV limits.
+    """
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        stream = io.BytesIO(data)
+    elif hasattr(data, "readline"):
+        stream = data
+    elif hasattr(data, "read"):
+        stream = io.BytesIO(data.read(max_comparison_bytes + 1))
+    else:
         raise TypeError("CSV input must be bytes or a binary stream.")
-    if len(data) > MAX_COMPARISON_BYTES:
-        raise ExperimentalCSVError("Comparison CSV exceeds the 16 MiB upload limit.")
-    data = bytes(data)
-    digest = sha256(data).hexdigest()
-    stream = io.BytesIO(data)
     first = stream.readline(_MAX_LINE + 1)
-    if len(first) <= _MAX_LINE and not data.startswith((b"\xff\xfe", b"\xfe\xff")):
-        stream.seek(0)
+    if len(first) <= _MAX_LINE and not first.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
         try:
-            header = _decoded_line(stream) or []
+            header = _decode_row(first) or []
         except ExperimentalCSVError:
             header = []
         if _is_comparison(_labels(header)):
-            return _read_comparison(stream, header, digest)
+            digest = sha256(first)
+            consumed = len(first)
+
+            def read_row():
+                nonlocal consumed
+                row = stream.readline(_MAX_LINE + 1)
+                consumed += len(row)
+                if consumed > max_comparison_bytes:
+                    raise ExperimentalCSVError(f"Comparison CSV exceeds the {max_comparison_bytes:,}-byte limit.")
+                digest.update(row)
+                return _decode_row(row)
+
+            return _read_comparison(read_row, header, digest)
+    data = first + stream.read(max(0, MAX_FILE_BYTES + 1 - len(first)))
     if len(data) > MAX_FILE_BYTES:
         raise ExperimentalCSVError("Only recognized comparison exports may exceed 10 MiB.")
+    digest = sha256(data).hexdigest()
     text, encoding = decode_csv_text(data, ExperimentalCSVError)
     reader = csv.reader(io.StringIO(text, newline=""))
     try:
@@ -291,13 +369,18 @@ def prepare_measurement_upload(data, *, scope_channel=None, scope_source_id=None
         if _is_comparison(names):
             # UTF-16 needs its BOM once, not at the start of every row.
             utf8 = io.BytesIO(text.encode("utf-8"))
-            return _read_comparison(utf8, _decoded_line(utf8), digest)
+
+            def read_utf8_row():
+                return _decode_row(utf8.readline(_MAX_LINE + 1))
+
+            return _read_comparison(read_utf8_row, read_utf8_row(), sha256(data))
         if (_GABES_META in names or _LEGACY_GABES_META in names or "autood_version" in names
                 or names[:2] == ["detuning_ghz", "theory_transmission"]
                 or (names and names[0].startswith("detuning_from_85rb_")
                     and names[1:] == ["transmission", "parameters"])):
             raise ExperimentalCSVError("Comparison CSV has no valid original measurement columns.")
-        scoped = select_scope_input(header, text, data, scope_channel, scope_source_id)
+        scoped = select_scope_input(header, text, data, scope_channel, scope_source_id,
+                                    max_scope_rows=max_scope_rows)
         if scoped is not None:
             payload, scope = scoped
             return MeasurementUpload(payload, "relative", "arbitrary", digest, {"encoding": encoding},
@@ -327,7 +410,7 @@ def prepare_measurement_upload(data, *, scope_channel=None, scope_source_id=None
 
 
 def load_measurement(upload, *, mode=None, x_unit=None, denoise=True, calibration_mode=None,
-                     dark_signal=None, reference_signal=None, gain=None, offset=None):
+                     dark_signal=None, reference_signal=None, gain=None, offset=None, sparse_manual_overlay=None):
     """Use explicit UI choices or declared input units. Unknown signals are relative."""
     mode = mode or upload.mode or "relative"
     unit = x_unit or upload.x_unit or "arbitrary"
@@ -352,9 +435,12 @@ def load_measurement(upload, *, mode=None, x_unit=None, denoise=True, calibratio
         else:
             calibration_mode = CALIBRATION_ABSOLUTE_GAIN_OFFSET
             gain, offset = (100. if mode == "percent" else 1.), 0.
+    if sparse_manual_overlay is None:
+        sparse_manual_overlay = upload.metadata.get("experiment_sparse_manual_overlay") is True
     trace = _load_measured_pairs(
         upload.payload, denoise=denoise, calibration_mode=calibration_mode, min_unique_points=2,
         dark_signal=dark_signal, reference_signal=reference_signal, gain=gain, offset=offset,
+        sparse_manual_overlay=sparse_manual_overlay,
     )
     factor = _UNITS[unit]
     if factor != 1.:
@@ -428,6 +514,8 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
         experiment_calibration_offset=correction.calibration_offset,
         experiment_display_scaling="display_only", experiment_alignment=asdict(alignment),
     )
+    if "experiment_sparse_manual_overlay" in upload.metadata:
+        meta["experiment_sparse_manual_overlay"] = upload.metadata["experiment_sparse_manual_overlay"]
     if "scope" in upload.metadata:
         meta["scope"] = upload.metadata["scope"]
     if "autood_version" in upload.metadata:

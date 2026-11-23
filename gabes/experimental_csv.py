@@ -14,6 +14,8 @@ import io
 from dataclasses import dataclass
 from functools import partial
 
+import math
+
 import numpy as np
 
 from ._arrays import readonly_float_array
@@ -247,7 +249,7 @@ def load_experimental_csv(
 
 
 def _load_measured_pairs(data, *, denoise, calibration_mode, dark_signal, reference_signal,
-                         gain, offset, min_unique_points):
+                         gain, offset, min_unique_points, sparse_manual_overlay=False):
     raw_bytes = _coerce_bytes(data)
     text, encoding = decode_csv_text(raw_bytes, ExperimentalCSVError)
     source_x, source_y, counts = _parse_first_two_columns(text)
@@ -259,13 +261,19 @@ def _load_measured_pairs(data, *, denoise, calibration_mode, dark_signal, refere
             f"detuning values; found {detuning.size}."
         )
 
-    segments, typical_spacing, largest_gap, gap_threshold = _find_segments(
-        detuning
-    )
     denoise = denoise and detuning.size >= MIN_UNIQUE_POINTS
-    denoised_signal, noise_sigma, replacements, windows = _denoise_signal(
-        detuning, raw_signal, segments, enabled=bool(denoise)
-    )
+    if sparse_manual_overlay and detuning.size < MIN_UNIQUE_POINTS:
+        # Historical desktop manual overlays use the extrema of every sample,
+        # without estimating a noise band or inferring gaps from 2–4 points.
+        spacing = np.diff(detuning)
+        segments = [slice(0, len(detuning))]
+        typical_spacing, largest_gap, gap_threshold = float(np.median(spacing)), float(np.max(spacing)), math.inf
+        denoised_signal, noise_sigma, replacements, windows = raw_signal, 0., 0, ()
+    else:
+        segments, typical_spacing, largest_gap, gap_threshold = _find_segments(detuning)
+        denoised_signal, noise_sigma, replacements, windows = _denoise_signal(
+            detuning, raw_signal, segments, enabled=bool(denoise)
+        )
     transmission, correction = _calibrate_transmission(
         denoised_signal,
         denoise_enabled=bool(denoise),
