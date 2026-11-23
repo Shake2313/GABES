@@ -506,7 +506,7 @@ streamlit run streamlit_app.py</pre>
     <p><b>OD 피크 읽기</b>　펌프를 끄고 <b>Absorption peak</b>에서 흡수 피크를 고르면
       같은 계산 표본에서 약한 프로브의 OD<sub>0</sub>, 현재 프로브의 OD<sub>eff</sub>와 투과율 T(%)를 읽을 수 있습니다.
       N<sub>eff</sub>는 가우스 프로브 빔과 겹치는 유효 원자 수여서 주파수를 옮겨도 같습니다.
-      <b>Fit OD data</b>에서도 이 네 이론값과 함께 가장 가까운 실측 표본을 확인할 수 있습니다.</p>
+      <a href="#od-csv-fit"><b>Fit OD data</b>에서 측정 CSV를 열면</a> 이 네 이론값과 함께 가장 가까운 실측 표본을 확인할 수 있습니다.</p>
     <p><b>SAS 기준선 읽기</b>　<b>Model reference</b>에서 전이나 교차 공명 후보를 골라 고정합니다.
       확대창을 옮겨 기준선이 화면 밖에 있어도 디튜닝은 그 기준을 따릅니다. 디튜닝은 선택한 표본의 주파수에서 기준 주파수를 뺀 값입니다. 양수면 기준보다 높은 주파수입니다.
       <b>Go to reference</b>는 기준에 가장 가까운 계산 표본으로 이동하므로 격자 간격에 따라 차이가 남습니다.
@@ -653,17 +653,39 @@ streamlit run streamlit_app.py</pre>
     주 결과로 표시됩니다.
   </p>
 
-  <p><b>실험 CSV와 OD 피팅</b>　Atom의 Isotope에서 <b>Custom</b>을 선택하면 ⁸⁵Rb 분율을 입력할 수 있습니다.
-    <b>Fit OD data</b>에서 일반 측정 CSV(최대 10 MiB)나 일반·Origin 형식의 비교 파일(최대 16 MiB)을 올립니다.
-    선택한 OD 채널, 주파수 단위와 신호 보정을 확인합니다. <b>Fit alignment</b>로 표시 좌표를 맞출 수 있습니다.
-    스펙트럼에서 주파수를 선택하면 이론값과 가장 가까운 측정점을 읽을 수 있습니다. 측정 공백은 빈 구간으로 표시합니다.
-    균일 셀에서 절대 투과율과 주파수 눈금을 교정한 뒤 <b>Fit physical OD parameters</b>에서 취득 방향과 피팅 변수를 고릅니다.
+  <h4 id="od-csv-fit">측정 CSV로 OD 스펙트럼 피팅하기</h4>
+  <p><b>Absorption spectroscopy → Fit OD data</b>에서 측정 CSV(최대 10 MiB)나 Standard·Origin 비교 파일(최대 16 MiB)을 엽니다.
+    이 화면의 이론선은 펌프를 끈 조건에서 계산합니다.</p>
+  <ol class="body">
+    <li><b>검출기 채널 확인.</b> 3채널 오실로스코프 파일을 열면 각 파형에서 트리거, SAS, 프로브 투과 신호를 찾아
+      트리거 구간의 중앙부를 선택합니다. <b>Inspect scope channels</b>에서 세 파형과 OD 채널을 확인하세요.
+      판별이 모호하면 <b>OD signal channel</b>에서 프로브 투과 신호를 고릅니다.
+      수동 선택은 해당 채널의 전체 기록을 사용합니다. 같은 시각으로 기록된 표본도 취득 순서대로 보존됩니다.</li>
+    <li><b>주파수 범위 맞추기.</b> 주파수 단위가 있는 파일은 원래 눈금으로 열립니다. 임의 단위의 스캔은
+      <b>Match ranges</b>를 눌러 측정선과 이론선의 모양을 맞춥니다. 비슷한 후보가 여럿이면 현재 정렬에 가장 가까운 위치를 고릅니다.
+      대응하는 특징을 찾지 못하면 화면에 측정 범위만 맞췄다고 표시합니다.</li>
+    <li><b>측정 구간 피팅.</b> <b>Refine alignment with OD model</b>을 켜고 전체 스펙트럼이나 Rb 전이군을 고릅니다.
+      그래프를 드래그하거나 <b>Measured samples (sorted by X)</b>에서 서로 다른 X값을 12개 이상 선택하세요.
+      선택한 측정점은 주파수 배율과 이동량을 조정해도 유지됩니다. 온도 등도 함께 추정하려면
+      <b>Vary model conditions</b>에서 변수와 허용 범위를 지정합니다.
+      <b>Preview profile fit</b>에서 곡선과 잔차를 확인한 뒤 <b>Apply profile fit</b>을 누르면 정렬과 선택한 조건이 반영됩니다.
+      선택한 구간이 직선에 가까워 상대 신호의 기울기만으로 주파수 배율을 정할 수 없다면, 흡수선의 굽은 부분까지 포함해 다시 피팅하세요.</li>
+  </ol>
+  <p>교정 전 검출기 전압을 피팅하면 모델에 맞춰 상대 신호의 이득과 오프셋도 추정합니다.
+    측정 전압에서 절대 투과율을 구하려면 <b>Transmission calibration</b>에서 암신호와 기준광 신호 또는 별도로 측정한 검출기 이득과 오프셋을 입력하세요.
+    독립적으로 교정한 투과율 <i>T</i>를 입력하면 그 값은 피팅 중에도 고정되며
+    <i>T</i> &gt; 0인 측정점에서 광학 깊이 OD = −ln <i>T</i>를 읽을 수 있습니다.
+    스펙트럼에서 주파수를 선택하면 가장 가까운 측정점과 이론값을 함께 보여 줍니다. 측정 공백은 빈 구간으로 표시합니다.</p>
+  <p><b>교정된 데이터로 물리량 피팅.</b> 균일 셀에서 절대 투과율과 주파수 눈금을 별도로 교정했다면
+    <b>Fit physical OD parameters</b>에서 취득 방향과 피팅 변수를 고르고
+    <b>The frequency scale above is calibrated</b>를 선택한 다음 <b>Run physical OD fit</b>을 누릅니다.
     약한 프로브 피팅에는 프로브 출력 0 µW를 사용합니다. Rb 조성을 <b>Custom</b>으로 설정하면 D₁·D₂에서 ⁸⁵Rb 분율을 추정할 수 있습니다.
     D₂의 유한 프로브 율방정식 모델에서는 빔 반경 <i>w</i>(세기가 중심의 1/e²인 반경)을 고정하고 프로브 출력(0–100 µW)을 추정합니다.
     결과의 <b>Probe peak intensity</b>는 중심 세기 <i>I</i>₀ = 2<i>P</i>/(π<i>w</i>²)와 그 반경에서의 표준오차입니다.
     수렴하고 식별 가능한 결과를 확인한 뒤 <b>Apply fitted conditions</b>를 누르면 추정한 출력·분율·온도가 조건에 반영됩니다.
     이 중 온도만 추정한 경우에는 <b>Apply fitted temperature</b>를 사용합니다. 추정값이 경계에 걸리면 적용 버튼이 비활성화됩니다.
-    비교 파일은 <b>Prepare comparison CSV</b>를 누른 뒤 <b>Download comparison CSV</b>로 저장합니다. 이 파일에는 원래 취득 순서와 보정 정보가 담깁니다.
+  </p>
+  <p><b>비교 파일 저장.</b> <b>Prepare comparison CSV</b>를 누른 뒤 <b>Download comparison CSV</b>로 저장합니다. 이 파일에는 원래 취득 순서와 보정 정보가 담깁니다.
     GABES 비교 파일을 다시 열면 현재 셀·프로브 조건에 파일에 기록된 펌프 없는 이론 모델을 적용합니다.
     파일을 제거하면 원래 선택한 모델로 돌아갑니다. 구형 파일의 <code>frequency_reference</code>는 이론 표시축의 영점입니다.
     새 파일은 표시축과 계산 모델의 영점을 따로 기록합니다. 측정 영점은 실험에서 지정한 경우에만 사용합니다.</p>
