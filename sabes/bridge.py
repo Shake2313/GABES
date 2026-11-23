@@ -125,6 +125,8 @@ class SabesResult:
 
     @property
     def noise_model(self):
+        if self.raw is None:
+            return fwm.NOISE_EXPERIMENTAL_JASPERSE
         return (self.observables or {}).get("noise_model", self.params.get("noise_model"))
 
     @property
@@ -367,6 +369,8 @@ def to_gabes_params(chain, settings, geometry, *, base=None, quantize=True,
     if "loss_pct" in overrides and "after_cell_eff_pct" not in overrides:
         overrides["after_cell_eff_pct"] = 100.0 - float(overrides["loss_pct"])
     params.update(overrides)
+    for key in fwm.FWMScheme.retired_squeezing_controls:
+        params.pop(key, None)
     params["loss_pct"] = 100.0 - float(params["after_cell_eff_pct"])
     if quantize:
         params = quantize_params(params)

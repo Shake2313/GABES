@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from gabes.passive_readout import passive_l1_from_spectrum
+from gabes.fwm_experiment_noise import experimental_jasperse_readout
 from gabes.schemes import fwm
 from sabes import bridge
 from sabes.apparatus import default_apparatus
@@ -47,12 +47,14 @@ def test_geometry_and_legacy_overrides_map_to_the_current_external_efficiency():
     assert explicit.params["after_cell_eff_pct"] == 90.0
     assert explicit.params["loss_pct"] == 10.0
     assert bridge.solve_key(old.params) == bridge.solve_key(result.params)
+    stale = bridge.run(solve=False, noise_model="Passive L1", velocity_measure="truncated")
+    assert stale.params == result.params
+    assert stale.noise_model == fwm.NOISE_EXPERIMENTAL_JASPERSE
 
 
-def test_page_noise_readout_is_cheap_current_and_matches_the_passive_api(monkeypatch):
+def test_page_noise_readout_is_cheap_current_and_matches_the_jasperse_api(monkeypatch):
     result = _result()
     params = dict(result.params, tpd=0.0, seed_classical_rin_scaled=2.0,
-                  noise_model=fwm.NOISE_PASSIVE_L1,
                   after_cell_eff_pct=75.0, qe_pct=80.0)
     # This page path must not invoke figures, headless tables, or the optional
     # pump-dressed absorption/QRT extraction.
@@ -60,9 +62,7 @@ def test_page_noise_readout_is_cheap_current_and_matches_the_passive_api(monkeyp
                         pytest.fail("full headless observables are not needed"))
     view = bridge.noise_observables(result.raw, params)
     current = replace(result, params=params, observables=view)
-    seed = view["jasperse_readout"]["seed_noise"]
-    expected = passive_l1_from_spectrum(dict(result.raw, eta=0.6),
-                                       seed_fano=seed["seed_fano"])
+    expected = experimental_jasperse_readout(result.raw, params)
     assert current.noise_factor == pytest.approx(expected["NF"][1])
     assert current.gain_referred_noise_db == pytest.approx(expected["NF_dB"][1])
     assert current.squeezing_db == current.gain_referred_noise_db
@@ -87,27 +87,19 @@ def test_invalid_current_nf_never_falls_back_to_finite_legacy_raw_noise():
     assert result.gain_referred_noise_db == -20.0
 
 
-def test_current_nonpassive_and_outside_points_keep_unavailable_status():
+def test_outside_point_keeps_unavailable_status():
     result = _result()
-    raw = dict(result.raw)
-    raw["T_canonical_small_signal"] = 1.1*raw["T_canonical_small_signal"]
-    params = dict(result.params, noise_model=fwm.NOISE_PASSIVE_L1)
-    current = replace(result, raw=raw, params=params,
-        observables=bridge.noise_observables(raw, params))
-    assert current.gain_referred_noise_db is None
-    outside_params = dict(params, tpd=30.0)
+    outside_params = dict(result.params, tpd=30.0)
     outside = replace(result, params=outside_params,
         observables=bridge.noise_observables(result.raw, outside_params))
     assert outside.gain_referred_noise_db is None
-    assert outside.observables["passive_l1_operating_point"]["passive_l1_status"] == "L1_OUTSIDE_SAMPLED_SCAN"
+    assert outside.readout_evidence["noise"]["status"] == "UNAVAILABLE_AT_SELECTED_DETUNING"
 
 
-@pytest.mark.parametrize("noise_model", [fwm.NOISE_EXPERIMENTAL_JASPERSE, fwm.NOISE_PASSIVE_L1])
 @pytest.mark.parametrize("calibrated", [False, True])
-def test_selected_gain_noise_and_evidence_match_fwm_headless(
-        noise_model, calibrated, monkeypatch):
+def test_selected_gain_noise_and_evidence_match_fwm_headless(calibrated, monkeypatch):
     result = _result()
-    params = dict(result.params, noise_model=noise_model, tpd=-1.0,
+    params = dict(result.params, tpd=-1.0,
                   experimental_gain_calibration=calibrated)
     expected = fwm.FWMScheme().headless_observables(result.raw, params)
     monkeypatch.setattr(fwm.FWMScheme, "compute", lambda *_:
@@ -118,7 +110,7 @@ def test_selected_gain_noise_and_evidence_match_fwm_headless(
     current = replace(result, params=params, observables=view)
     assert current.gains == tuple(expected["gain_operating_point"][k]
                                   for k in ("G_s", "G_c"))
-    assert current.noise_model == noise_model
+    assert current.noise_model == fwm.NOISE_EXPERIMENTAL_JASPERSE
     assert current.gain_referred_noise_db == expected["noise_operating_point"]["NF_dB"]
     assert current.noise_factor == expected["noise_operating_point"]["NF"]
     assert current.raw_gains == (4.0, 3.0)
@@ -127,7 +119,7 @@ def test_selected_gain_noise_and_evidence_match_fwm_headless(
     payload = session_payload(current, DetectionSettings(), default_calibration(),
                               default_apparatus(), PAPER_PROFILE)
     selected = payload["selected_readout"]
-    assert selected["noise_model"] == noise_model
+    assert selected["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
     assert selected["raw_atomic_gains"] == [4.0, 3.0]
     assert selected["physical_squeezing_dB"] is None
     assert selected["evidence"]["provenance"] == "computed"

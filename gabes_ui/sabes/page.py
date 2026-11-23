@@ -52,7 +52,7 @@ SETTINGS_VERSION = "sabes-apparatus-20261016-v4"
 
 FIDELITIES = (fwm.FIDELITY_FAST, fwm.FIDELITY_ULTRA)
 FWM_READOUT_KEYS = (
-    "noise_model", "experimental_gain_calibration", "gain_calibration_model",
+    "experimental_gain_calibration", "gain_calibration_model",
     "jasperse_loss_pct", "seed_classical_rin_scaled",
 )
 

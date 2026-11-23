@@ -264,7 +264,7 @@ def test_masked_l1_exports_as_strict_json_with_null_and_preserved_status():
     assert json.loads(encoded)["passive_l1_status"] == payload["passive_l1_status"]
 
 
-def test_strict_result_bundle_keeps_current_fano_and_invalid_point_evidence():
+def test_strict_result_bundle_preserves_historical_raw_l1_evidence():
     import json
 
     from gabes.schemes import fwm
@@ -276,20 +276,13 @@ def test_strict_result_bundle_keeps_current_fano_and_invalid_point_evidence():
         np.eye(2), np.array([[0.0, 0.0], [1.0, 0.0]]), np.eye(2)]),
         "G_s": np.ones(3), "eta": 0.8, "probe_axis_GHz": np.array([0.0, 1.0, 2.0])}
     raw.update(passive_l1_readout(raw["T_canonical_small_signal"], eta=raw["eta"]))
-    current = fwm._seeded_passive_l1_readout(raw, params)
-    point = fwm._passive_l1_selected(current, raw, 0.0)
     payload = build_export_payload(
         scheme=scheme, raw=raw, params=params,
-        view={"passive_l1_readout": current, "passive_l1_operating_point": point},
+        view={},
         plot_payloads=[], comparison_payload=None,
         cache_version=scheme.cache_version, readout_cache_version="independent-test")
     decoded = json.loads(json.dumps(payload, allow_nan=False))
     assert decoded["raw"]["seed_fano_input"] == [1.0] * 3
-    omega = fwm.seeded_option_a_wavenumbers(params["opd"], raw["probe_axis_GHz"])[1] * fwm.constants.C_LIGHT
-    expected_fano = 1.0 + 20e-14 / (2*fwm.constants.HBAR*omega/(params["probe_uw"]*1e-6))
-    np.testing.assert_allclose(
-        decoded["view"]["passive_l1_readout"]["seed_fano_input"], expected_fano, rtol=1e-14)
-    assert decoded["view"]["passive_l1_readout"]["passive_l1_noise_dB"][1] is None
-    assert not decoded["view"]["passive_l1_readout"]["passive_completion_valid"][1]
-    assert decoded["view"]["passive_l1_readout"]["passive_l1_status"][1] == "L1_COMPLETION_NOT_PASSIVE"
-    assert decoded["view"]["passive_l1_operating_point"]["passive_l1_available"]
+    assert decoded["raw"]["passive_l1_noise_dB"][1] is None
+    assert not decoded["raw"]["passive_completion_valid"][1]
+    assert decoded["raw"]["passive_l1_status"][1] == raw["passive_l1_status"][1]

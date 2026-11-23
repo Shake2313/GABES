@@ -12,7 +12,7 @@ APP = '''
 import json
 import streamlit as st
 from gabes import schemes
-from gabes_ui.controls import current_params, param_visible, render_rail
+from gabes_ui.controls import current_params, render_rail
 from gabes_ui.defaults import render_defaults
 from gabes_ui.defaults_store import create_default, dump_default, parse_default
 from gabes_ui.export import build_export_payload
@@ -30,19 +30,14 @@ if "booted" not in st.session_state:
 
 # Match streamlit_app.py: save/download controls are rendered before the rail.
 render_defaults(st, scheme)
-selected_specs = [specs[{mode!r}]]
-if scheme.name == "fwm":
-    selected_specs.append(specs["noise_model"])
-render_rail(st, scheme, selected_specs)
+render_rail(st, scheme, [specs[{mode!r}]])
 params = current_params(scheme.name, scheme)
 record = create_default(scheme, "Mode regression", params)
 restored = parse_default(scheme, dump_default(record))
 export = build_export_payload(
     scheme=scheme, raw={{}}, params=params, view={{}}, plot_payloads=[],
     comparison_payload=None, cache_version="selector-test", readout_cache_version="selector-test")
-st.json(dict(params=params, restored=restored["params"], exported=export["params"],
-             noise_visible=(param_visible(scheme.name, specs["noise_model"])
-                            if scheme.name == "fwm" else None)))
+st.json(dict(params=params, restored=restored["params"], exported=export["params"]))
 '''
 
 
@@ -81,13 +76,12 @@ def test_deselect_preserves_previous_mode_and_serializable_defaults(name, mode, 
     assert app.session_state[f"{name}__{mode}"] == selected
     for source in ("params", "restored", "exported"):
         assert data[source][mode] == selected
-    if name == "fwm":
-        assert data["noise_visible"] == (selected_index == 0)
-        assert data["params"]["noise_model"] == "Passive L1"
+        if name == "fwm":
+            assert "noise_model" not in data[source]
 
 
 @pytest.mark.parametrize("name,mode", [("fwm", "squeezing_view"), ("psr", "view")])
-def test_existing_empty_state_is_normalized_before_dependent_visibility(name, mode):
+def test_existing_empty_state_is_normalized_before_serializing_defaults(name, mode):
     app = _app(name, mode, None)
     data = _data(app)
     expected = schemes.get(name).defaults()[mode]
@@ -99,23 +93,19 @@ def test_existing_empty_state_is_normalized_before_dependent_visibility(name, mo
                     if item.proto.label == "Save locally")
     assert not download.proto.disabled
     assert not any("must be text" in item.value for item in app.caption)
-    if name == "fwm":
-        assert data["noise_visible"]
-        assert app.selectbox(key="fwm__noise_model").value == "Passive L1"
 
 
-def test_normal_fwm_switch_keeps_intensity_noise_selection():
+def test_fwm_view_switch_discards_stale_noise_selection():
     scheme = schemes.get("fwm")
     spec = next(sp for sp in scheme.param_schema() if sp.name == "squeezing_view")
     app = _app("fwm", "squeezing_view", spec.choices[0])
     _select_index(app, 1)
     data = _data(app)
     assert data["params"]["squeezing_view"] == spec.choices[1]
-    assert not data["noise_visible"]
+    assert "noise_model" not in data["params"]
     app.get("button_group")[0].set_value([]).run()
     assert _data(app)["params"]["squeezing_view"] == spec.choices[1]
     _select_index(app, 0)
     data = _data(app)
     assert data["params"]["squeezing_view"] == spec.choices[0]
-    assert data["noise_visible"]
-    assert app.selectbox(key="fwm__noise_model").value == "Passive L1"
+    assert "noise_model" not in data["params"]

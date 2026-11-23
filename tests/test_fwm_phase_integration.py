@@ -79,7 +79,7 @@ def test_selector_changes_only_readout_and_preserves_atomic_compute_arguments(mo
     assert set(selector.choices) == {
         fwm.SQUEEZING_INTENSITY_DIFFERENCE, fwm.SQUEEZING_QUADRATURE_PHASE}
     assert scheme.defaults()["squeezing_view"] == fwm.SQUEEZING_INTENSITY_DIFFERENCE
-    assert specs["noise_model"].visible_if["squeezing_view"] == fwm.SQUEEZING_INTENSITY_DIFFERENCE
+    assert "noise_model" not in specs
     calls = []
     monkeypatch.setattr(fwm, "compute_spectrum", lambda *a, **kw: calls.append((a, kw)) or {})
     scheme.compute(phase_params(squeezing_view=fwm.SQUEEZING_INTENSITY_DIFFERENCE))
@@ -87,7 +87,7 @@ def test_selector_changes_only_readout_and_preserves_atomic_compute_arguments(mo
     assert calls[0] == calls[1]
 
 
-def test_phase_switch_preserves_raw_and_the_saved_intensity_noise_model():
+def test_phase_switch_preserves_raw_and_ignores_a_retired_noise_selection():
     scheme = fwm.FWMScheme()
     params = phase_params(noise_model=fwm.NOISE_PASSIVE_L1)
     raw = phase_raw(params)
@@ -100,7 +100,7 @@ def test_phase_switch_preserves_raw_and_the_saved_intensity_noise_model():
     assert phase["squeezing_view"] == fwm.SQUEEZING_QUADRATURE_PHASE
     assert phase["quadrature_phase_scan"]["available"]
     assert params["noise_model"] == fwm.NOISE_PASSIVE_L1
-    assert after["noise_model"] == fwm.NOISE_PASSIVE_L1
+    assert after["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
     assert before["metrics"] == after["metrics"]
     np.testing.assert_array_equal(before["jasperse_readout"]["NF"], after["jasperse_readout"]["NF"])
     for key in ("G_s", "G_c", "T_canonical_small_signal", "S_dB", "probe_axis_GHz"):

@@ -1,4 +1,4 @@
-"""Current Jasperse NF routing over the preserved passive-L1 transfer API."""
+"""Old Passive L1 settings and raw audit fields cannot change practical FWM readouts."""
 from copy import deepcopy
 
 import matplotlib
@@ -21,7 +21,7 @@ def passive_spectrum():
         amplifier,
     ], dtype=complex)
     # Displayed powers deliberately differ from the transfer-map flux gains.
-    # The passive readout must not reconstruct a covariance from these values.
+    # Use the difference to distinguish a Jasperse readout from the old endpoint model.
     raw = {
         "D_GHz": 0.9,
         "probe_axis_GHz": center + np.array([-8.0, 0.0, 8.0]) * 1e-3,
@@ -49,20 +49,12 @@ def passive_spectrum():
     return raw
 
 
-def _current_reference(raw, params):
-    _, k, _ = fwm.seeded_option_a_wavenumbers(raw["D_GHz"], raw["probe_axis_GHz"])
-    b = 2*fwm.constants.HBAR*fwm.constants.C_LIGHT*k/raw["input_seed_power_W"]
-    fano = 1.0 + params.get("seed_classical_rin_scaled", 0.0)*1e-14/b
-    eta = params["after_cell_eff_pct"]*params["qe_pct"]/1e4
-    return passive_l1_from_spectrum(dict(raw, eta=eta), seed_fano=fano)
-
-
-def test_focused_headless_current_nf_mask_nonpassive_points_without_cache_mutation(passive_spectrum):
+def test_focused_headless_jasperse_includes_points_without_a_passive_completion(passive_spectrum):
     import matplotlib.pyplot as plt
     scheme = fwm.FWMScheme()
     params = dict(scheme.defaults(), noise_model=fwm.NOISE_PASSIVE_L1, tpd=-8.0, seed_classical_rin_scaled=3.0)
     original = deepcopy(passive_spectrum)
-    expected = _current_reference(passive_spectrum, params)
+    expected = fwm.experimental_jasperse_readout(passive_spectrum, params)
     rendered = scheme.observables(passive_spectrum, params)
     try:
         curve = rendered["figure"].axes[1].lines[0].get_ydata()
@@ -70,19 +62,20 @@ def test_focused_headless_current_nf_mask_nonpassive_points_without_cache_mutati
         delta = (passive_spectrum["probe_axis_GHz"]-passive_spectrum["raman_center_minus_GHz"])*1e3
         np.testing.assert_allclose(np.interp(delta, line.get_xdata(), curve),
                                    expected["NF_dB"], equal_nan=True)
-        assert np.isnan(np.interp(0.0, line.get_xdata(), curve))
+        assert np.isfinite(np.interp(0.0, line.get_xdata(), curve))
         assert rendered["metrics"][0]["label"] == "Squeezing [dB]"
         assert rendered["metrics"][0]["value"] == f"{expected['NF_dB'][0]:.2f} dB"
         current = rendered["jasperse_readout"]
-        np.testing.assert_allclose(current["seed_fano_input"],
-                                   expected["seed_fano_input"], rtol=1e-14)
+        np.testing.assert_allclose(current["seed_noise"]["seed_fano"],
+                                   expected["seed_noise"]["seed_fano"], rtol=1e-14)
         headless = scheme.headless_observables(passive_spectrum, params)
         assert headless["metrics"] == rendered["metrics"]
         np.testing.assert_allclose(headless["jasperse_readout"]["NF_dB"],
                                    expected["NF_dB"], equal_nan=True)
         for tpd in (0.0, -4.0):
-            missing = scheme.headless_observables(passive_spectrum, dict(params, tpd=tpd))
-            assert missing["metrics"][0]["value"] == "unavailable"
+            view = scheme.headless_observables(passive_spectrum, dict(params, tpd=tpd))
+            assert view["noise_operating_point"]["available"]
+            assert view["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
     finally:
         plt.close(rendered["figure"])
     for key in ("G_s", "G_c", "gain_referred_noise_dB", "S_dB",
@@ -103,10 +96,10 @@ def test_full_scan_uses_current_seed_rin_and_shared_external_efficiency(passive_
     figure = fwm.FWMScheme().extra_views()[0].render(full, params)
     try:
         for index, branch in enumerate(("minus", "plus")):
-            expected = _current_reference(full[branch], params)
+            expected = fwm.experimental_jasperse_readout(full[branch], params)
             np.testing.assert_allclose(figure.axes[1].lines[index].get_ydata(),
                                        expected["NF_dB"], equal_nan=True)
-            assert np.isnan(figure.axes[1].lines[index].get_ydata()[1])
+            assert np.isfinite(figure.axes[1].lines[index].get_ydata()[1])
             np.testing.assert_array_equal(full[branch]["S_dB"], original[branch]["S_dB"])
     finally:
         plt.close(figure)
@@ -130,7 +123,7 @@ def test_current_nf_independent_of_retired_pump_scatter_and_input_fano_ui(passiv
 def test_all_invalid_curve_and_point_outside_scan_remain_unavailable(passive_spectrum):
     import matplotlib.pyplot as plt
     raw = deepcopy(passive_spectrum)
-    raw["T_canonical_small_signal"][:] = raw["T_canonical_small_signal"][1]
+    raw["G_s"][:] = raw["G_c"][:] = 0.0
     scheme = fwm.FWMScheme()
     params = dict(scheme.defaults(), noise_model=fwm.NOISE_PASSIVE_L1, tpd=0.0)
     view = scheme.observables(raw, params)
@@ -141,19 +134,19 @@ def test_all_invalid_curve_and_point_outside_scan_remain_unavailable(passive_spe
         plt.close(view["figure"])
     outside = scheme.headless_observables(passive_spectrum, dict(params, tpd=20.0))
     assert outside["metrics"][0]["value"] == "unavailable"
-    assert outside["passive_l1_operating_point"]["passive_l1_status"] == "L1_OUTSIDE_SAMPLED_SCAN"
+    assert not outside["noise_operating_point"]["available"]
 
 
-def test_selected_nf_uses_canonical_transfer_instead_of_displayed_capped_gain(passive_spectrum):
+def test_selected_nf_uses_displayed_gains_and_interpolates_linear_noise(passive_spectrum):
     import matplotlib.pyplot as plt
     raw = deepcopy(passive_spectrum)
     raw["T_canonical_small_signal"][1] = raw["T_canonical_small_signal"][2]
     params = dict(fwm.FWMScheme().defaults(), noise_model=fwm.NOISE_PASSIVE_L1, tpd=-4.0, seed_classical_rin_scaled=3.0)
-    reference = _current_reference(raw, params)
+    reference = fwm.experimental_jasperse_readout(raw, params)
     expected_nf = 0.5*(reference["NF"][0]+reference["NF"][1])
     rendered = fwm.FWMScheme().observables(raw, params)
     try:
-        point = rendered["passive_l1_operating_point"]
+        point = rendered["noise_operating_point"]
         assert point["NF"] == pytest.approx(expected_nf)
         assert point["NF_dB"] == pytest.approx(10*np.log10(expected_nf))
         axis = rendered["figure"].axes[1]
@@ -161,7 +154,7 @@ def test_selected_nf_uses_canonical_transfer_instead_of_displayed_capped_gain(pa
         assert axis.collections[0].get_offsets()[0, 1] == pytest.approx(point["NF_dB"])
         changed = dict(raw, G_s=100*raw["G_s"], G_c=100*raw["G_c"])
         second = fwm.FWMScheme().headless_observables(changed, params)
-        assert second["metrics"][0] == rendered["metrics"][0]
+        assert second["noise_operating_point"]["NF"] != pytest.approx(point["NF"])
     finally:
         plt.close(rendered["figure"])
 
@@ -174,14 +167,17 @@ def test_result_export_separates_current_a_b_nf_from_cached_coherent_reference(p
     payload = build_export_payload(scheme=scheme, raw=passive_spectrum, params=params,
         view=view, plot_payloads=[], comparison_payload=None,
         cache_version=scheme.cache_version, readout_cache_version="test")
-    expected = _current_reference(passive_spectrum, params)
-    np.testing.assert_allclose(payload["view"]["jasperse_readout"]["seed_fano_input"],
-                               expected["seed_fano_input"])
+    expected = fwm.experimental_jasperse_readout(passive_spectrum, params)
+    np.testing.assert_allclose(payload["view"]["jasperse_readout"]["seed_noise"]["seed_fano"],
+                               expected["seed_noise"]["seed_fano"])
     assert payload["raw"]["seed_fano_input"] == [1.0]*3
-    assert payload["view"]["passive_l1_operating_point"]["NF"] == pytest.approx(
-        view["passive_l1_operating_point"]["NF"])
-    assert payload["view"]["passive_l1_operating_point"]["NF_dB"] == pytest.approx(
-        view["passive_l1_operating_point"]["NF_dB"])
+    assert payload["raw"]["NF_model"] == "Passive L1"
+    assert "noise_model" not in payload["params"]
+    assert payload["view"]["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
+    assert payload["view"]["noise_operating_point"]["NF"] == pytest.approx(
+        view["noise_operating_point"]["NF"])
+    assert payload["view"]["noise_operating_point"]["NF_dB"] == pytest.approx(
+        view["noise_operating_point"]["NF_dB"])
     assert payload["view"]["sidebar_readouts"]["seed_shot_noise_b"] == (
         view["sidebar_readouts"]["seed_shot_noise_b"])
 

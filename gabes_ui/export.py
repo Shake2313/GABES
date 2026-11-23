@@ -271,9 +271,6 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
             "noise_model": view.get("noise_model"),
             "measured_gain_reference": to_json_primitive(view.get("measured_gain_reference")),
             "dressed_cell_absorption": to_json_primitive(view.get("dressed_cell_absorption")),
-            "passive_l1_readout": to_json_primitive(view.get("passive_l1_readout")),
-            "passive_l1_operating_point": to_json_primitive(
-                view.get("passive_l1_operating_point")),
             "hero_count": view.get("hero_count", None),
             "tables": to_json_primitive(view.get("tables", [])),
             "figure_views": [

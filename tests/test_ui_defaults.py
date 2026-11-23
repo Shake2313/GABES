@@ -88,6 +88,8 @@ def test_old_fwm_defaults_load_inactive_flags_and_report_explicit_replay(state, 
     scheme = FWMScheme()
     record = create_default(scheme, "Older settings", {"temp_c": 101.0})
     inactive = dict(record, params=dict(record["params"],
+                                        noise_model="Passive L1",
+                                        velocity_measure="truncated",
                                         gain_closure_enabled=False,
                                         legacy_gain_calibration_fixture=False))
     replay = dict(record, name="Old replay", params={

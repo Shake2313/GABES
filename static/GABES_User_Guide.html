@@ -530,13 +530,14 @@ streamlit run streamlit_app.py</pre>
 
   <p>여섯 스킴 모두 메인 화면의 <b>Conditions → Atom</b> 팝오버에서 원자와 셀 조건을 확인합니다.
     지원하는 원자·동위원소·전이선·셀 종류를 한곳에서 선택하고, 온도(<b>°C</b>)와 셀 길이(<b>mm</b>)는 숫자로
-    직접 입력합니다. 선택은 즉시, 숫자는 Enter 또는 포커스 이동으로 반영됩니다.
+    직접 입력합니다. FWM 스퀴징의 온도 입력란은 <b>Atom</b> 버튼 옆에 항상 표시됩니다.
+    선택은 즉시, 숫자는 Enter 또는 포커스 이동으로 반영됩니다.
     각 스킴과 계산 모드가 지원하는 항목만 나타나며, 원자·전이가 고정된 모델에서는 해당 값을 읽기 전용으로 표시합니다.</p>
   <p>OD/SAS의 <b>Custom</b> 동위원소 구성에서는 <b>⁸⁵Rb fraction (Natural 0.7217)</b>이 나타납니다.
     Doppler 온도를 분리하거나 Rydberg의 온도 모형을 바꾸면 그 조건에 맞는 온도 입력이 Atom 안에 나타납니다.
     <b>Doppler group</b> 옆에서 펌프와 프로브 출력을 입력하고, <b>Advanced</b>에서 계산 표본 수 등을 조정합니다.
     <b>Fit OD data</b>에서는 펌프를 끈 OD 이론선과 측정 CSV를 비교합니다. 이론 화면으로 돌아가면 기존 펌프 설정으로 계산합니다.
-    FWM도 공통 원자·온도·셀 조건은 메인의 Atom에서 조정하며, 나머지 기존 컨트롤은 사이드바에서 사용합니다.</p>
+    FWM의 원자·셀 조건은 메인의 <b>Conditions</b>에서, 빔 출력과 검출 효율은 사이드바에서 조정합니다.</p>
 
   <div class="pipe">
     <div class="step"><div class="n">STEP 1</div><div class="t">Scheme 선택</div>
@@ -900,8 +901,10 @@ streamlit run streamlit_app.py</pre>
 
   <div class="callout note">
     <span class="tag">FWM 컨트롤 경계</span>
-    <p>메인 <b>Conditions → Atom</b>에서 선택한 모드의 원자·전이 정보를 확인하고 온도와 셀 길이를
-      직접 입력합니다. 씨앗형 모델은 ⁸⁵Rb D1이며, Biphoton의 원자·전이는 선택한 topology에 따릅니다.
+    <p>씨앗형 FWM은 ⁸⁵Rb D1을 사용합니다. 메인의 <b>Conditions</b>에서 <b>Atom</b> 옆
+      <b>Temperature (°C)</b>에 셀 온도를 입력하면 증기 밀도와 도플러 폭을 반영해 스펙트럼을 다시 계산합니다.
+      셀 길이는 <b>Atom</b>에서 입력합니다. Biphoton에서는 <b>Atom</b>에서 온도와 셀 길이를 입력하고
+      선택한 topology의 원자·전이를 확인합니다.
       나머지 기존 FWM 컨트롤은 사이드바에 있습니다.
       씨앗형 FWM에서는 <b>Seed power</b>, <b>Seed classical noise a</b>,
       <b>After-cell optical efficiency</b>, <b>Detector quantum efficiency</b>를 조절합니다.
@@ -930,7 +933,7 @@ streamlit run streamlit_app.py</pre>
       유한 씨앗 2차원 평균을 별도로 계산합니다. 81점, ±50&nbsp;MHz 범위에서 인접 Floquet 차수,
       횡속도 적분과 cutoff의 수렴을 확인합니다. 1.380&nbsp;MHz는 속도 분포의 Raman 폭이며,
       이득 선폭이나 RF 잡음 대역폭과 구별합니다. 이 기준 경로와 <a href="#fwm-limits">잡음 해석 범위</a>는 구분합니다.</p>
-    <p>Fast와 Balanced는 <b>Exact Maxwell</b>을 선택한 집중 창에서 강도차 잡음 곡선의 각 이조와
+    <p>Fast와 Balanced는 집중 창에서 강도차 잡음 곡선의 각 이조와
       선택한 동작점을 직접 계산합니다. 10/13 실험 이득 보정을 적용하면 프로브와 켤레광에 대응하는
       원본 이조도 각각 계산합니다. 이 동작은 무보정과 10/13 보정에서 기본으로 적용됩니다.</p>
   </div>
@@ -1152,25 +1155,20 @@ streamlit run streamlit_app.py</pre>
     <p>기본 모델의 절대 이득은 정량 미지원입니다. production은 1-D finite-seed Floquet 경로이고,
       2-D non-collinear Doppler는 별도의 느린 기준 계산에만 있습니다.</p>
     <p><b>Intensity-difference noise [dB]</b>는 두 빔의 강도차 잡음을 샷 노이즈에 대해
-      <b>10 log₁₀(NF)</b>로 표시합니다. 0 dB는 샷 노이즈, 음수는 그보다 낮은 잡음, 양수는 높은 잡음입니다.
-      정준 전달 행렬이 없는 이전 데이터를 <b>Passive L1</b>으로 읽으면
-      <b>Gain-referred noise diagnostic [dB]</b>가 표시됩니다. 이때 0 dB는 이득으로 계산한 진단 기준이며,
-      스퀴징을 판정하는 데 쓸 수 없습니다.</p>
-    <p><b>Exact Maxwell</b>은 Fast·Balanced·Ultra의 기본 Maxwell 평균입니다.
-      <b>Historical 4σ</b>는 이전의 절단된 속도 분포를 재현합니다.
+      <b>10 log₁₀(NF)</b>로 표시합니다. 0 dB는 샷 노이즈, 음수는 그보다 낮은 잡음, 양수는 높은 잡음입니다.</p>
+    <p>Fast·Balanced·Ultra 모두 <b>Exact Maxwell</b>을 사용해 속도 분포 전체를 평균합니다.
+      이전에 Historical 4σ나 Passive L1으로 저장한 설정을 불러와도 스퀴징 계산에는 Exact Maxwell과 Experimental Jasperse를 적용합니다.
       Ultra에서 집중 창의 선택 이조와 10/13 보정의 원본 이조를 직접 평가하려면
       <b>Exact source coordinates</b>를 켭니다. Fast와 Balanced는 같은 조건에서 이를 기본으로 수행합니다.
       다른 보정 모델은 각 모델의 좌표 표본을 사용합니다. 판독표에는 사용한 원본 좌표와 검증 범위가 표시됩니다.</p>
     <p>셀 출구와 검출기에서의 잡음 수치를 구별합니다. 셀 출구 값에는 셀 밖 광학 효율과 검출기 QE를
-      적용하기 전의 조건이 들어갑니다. 검출기 값에는 두 효율을 적용합니다. 선택한 잡음 모형과
-      출처를 결과의 판독표에서 확인할 수 있습니다.</p>
+      적용하기 전의 조건이 들어갑니다. 검출기 값에는 두 효율을 적용합니다. 결과의 판독표에서 잡음 모형의 가정과 출처를 확인할 수 있습니다.</p>
     <p><b>Experimental Jasperse</b>는 두 빔의 이득과 가정한 셀 내 공통 손실로 분포 이득·손실 모형의 잡음을 계산합니다.
       실험 보정을 적용한 이득은 측정 범위 밖에서 외삽됩니다. 이득 보정의 검증과 잡음 모형의 검증은 별개입니다.</p>
-    <p><b>Passive L1</b>을 선택하면 seed classical RIN <span class="var">a</span>와 계산된 shot RIN <span class="var">b</span>는
-      입력 Fano factor <b>1 + a/b</b>에 들어갑니다(a, b는 one-sided RIN PSD이며 UI 표시 단위는 10⁻¹⁴ Hz⁻¹). 셀 전파 뒤에는 after-cell transmission과
-      detector QE를 적용합니다. 이 진단은 annihilation-only vacuum completion을 가정합니다.
-      주파수 의존 원자 Langevin 확산과 full covariance, 보정된 pump scattering을 포함한
-      physical squeezing 예측은 제공하지 않습니다. 실험의 IDS −7.8&nbsp;dB 재현값으로 해석할 수 없습니다.</p>
+    <p>입력 시드의 Fano 계수는 <b>1 + a/b</b>입니다. <span class="var">a</span>는 입력한 고전 상대강도잡음,
+      <span class="var">b</span>는 시드 출력에서 계산한 샷 노이즈입니다. 둘 다 단측 상대강도잡음 전력 스펙트럼 밀도이며
+      화면 단위는 10⁻¹⁴ Hz⁻¹입니다. Jasperse는 두 빔에 분포하는 진공 손실 잡음을 포함하는 유효 모형입니다.
+      원자의 주파수 의존 Langevin 확산까지 포함한 스퀴징 예측은 별도의 검증이 필요합니다.</p>
   </div>
 
   <p>그 밖에 기억해 두면 좋은 점입니다.</p>

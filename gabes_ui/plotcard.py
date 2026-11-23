@@ -1167,7 +1167,7 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
             live = False
             if not (scheme.name == "fwm" and raw and raw.get("kind") == "biphoton"):
                 live = render_live_plot(page_fig, scheme.name, comparison_payload,
-                                        canonical_noise=bool(raw and "T_canonical_small_signal" in raw),
+                                        canonical_noise=view.get("experimental_jasperse_readout") is not None,
                                         gain_digits=6 if (raw or {}).get("claim_gate", {}).get("quantitative_gain_supported") else 3,
                                         interaction_context=interaction_context, description=description)
             if live:

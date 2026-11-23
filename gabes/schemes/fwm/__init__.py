@@ -76,7 +76,7 @@ from .common import (
     CS_CHANNEL_795, CS_CHANNEL_LABELS, SIDE_PLUS, SIDE_MINUS, SIDE_CHOICES, LevelSpec, FieldSpec,
     TopologySpec, thermal_transit_reset_superoperator, collisional_atom, WINDOW_GHZ, TPD_LIMIT_MHZ,
     FIDELITY_FAST, FIDELITY_BALANCED, FIDELITY_ULTRA, FIDELITY_LABELS, FWM_FIDELITY, RESOLUTION,
-    _tier_response_method, _FIDELITY_LEGACY, normalize_fidelity,
+    _FIDELITY_LEGACY, normalize_fidelity,
 )
 from .phase_matching import (
     _wavevector_nm, _side_sign, _side_label, transverse_matched_angle_deg, _field_with,
@@ -112,8 +112,8 @@ from .seeded import (
 from .readout import (
     _measured_gain_context, _measured_gain_rf_roundoff, _measured_gain_reference_readout,
     _detection_efficiency_from_params, _seeded_excess_noise, _seeded_noise_caption,
-    _seeded_passive_l1_readout, _seeded_sidebar_readouts, _seeded_absorption_readout,
-    _passive_l1_selected, NOISE_PASSIVE_L1, NOISE_EXPERIMENTAL_JASPERSE,
+    _seeded_sidebar_readouts, _seeded_absorption_readout,
+    NOISE_PASSIVE_L1, NOISE_EXPERIMENTAL_JASPERSE,
     SQUEEZING_INTENSITY_DIFFERENCE, SQUEEZING_QUADRATURE_PHASE, _power_gain_metric,
     _experimental_noise_selected, _focused_readout_reference, _focused_readout_source,
     _seeded_readout_rows, seeded_operating_readout, _plot_reference, _label_noise_axis,
