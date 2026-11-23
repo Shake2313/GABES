@@ -22,6 +22,13 @@ MAX_FIT_POINTS = 1200
 GLOBAL_LOG2_SAMPLES = 6
 LOCAL_STARTS = 3
 LOCAL_MAX_NFEV = 40
+# Identifiability gate shared by the OD fits. User decision 2026-11-23:
+# keep the GABES gate (not AutoOD's 0.95/0.85 warnings) for GABES fits.
+MAX_CONDITION_NUMBER = 1e5
+MAX_ABS_CORRELATION = 0.98
+# A normalized estimate this close to 0 or 1 counts as on its bound.
+BOUND_TOLERANCE = 1e-5
+
 PARAMETERS = {
     "temp_c": ("Cold-spot temperature", "°C", 20.0, 200.0),
     "cell_mm": ("Cell length", "mm", 0.5, 200.0),
@@ -584,15 +591,15 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     reduced_chi_squared = float(np.dot(best.fun, best.fun) / dof)
     _, singular, vectors = np.linalg.svd(best.jac, full_matrices=False)
     condition = float(singular[0] / singular[-1]) if singular[-1] > 0 else np.inf
-    active = (best.x < 1e-5) | (best.x > 1 - 1e-5)
-    identifiable = bool(best.success and condition <= 1e5 and not np.any(active))
+    active = (best.x < BOUND_TOLERANCE) | (best.x > 1 - BOUND_TOLERANCE)
+    identifiable = bool(best.success and condition <= MAX_CONDITION_NUMBER and not np.any(active))
     covariance = correlation = errors = None
-    if np.isfinite(condition) and condition <= 1e5:
+    if np.isfinite(condition) and condition <= MAX_CONDITION_NUMBER:
         weighted_vectors = (vectors.T * width[:, None]) / singular
         covariance = weighted_vectors @ weighted_vectors.T * max(reduced_chi_squared, 1.0)
         errors = np.sqrt(np.diag(covariance))
         correlation = covariance / np.outer(errors, errors)
-        if np.any(np.abs(correlation - np.eye(len(free))) > 0.98):
+        if np.any(np.abs(correlation - np.eye(len(free))) > MAX_ABS_CORRELATION):
             identifiable = False
     if not identifiable:
         errors = None
