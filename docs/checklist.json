@@ -644,6 +644,25 @@
       ]
     },
     {
+      "id": "od-sas-autood-profile-fit-and-scope-workflow",
+      "area": "OD/SAS 측정·피팅",
+      "title": "AutoOD 원시 스코프 입력과 전이군별 정밀 피팅을 GABES 웹에 이식",
+      "origin": "human_request",
+      "user_request": "2026-11-23 사용자 요청. ‘AutoOD 자동 정렬 설계’ 채팅에서 구현한 피팅 알고리즘과 오실로스코프 원자료의 OD 자동 인식 등 편의 기능을 AutoOD에서 GABES로 이식한다.",
+      "status": "done",
+      "priority": "P1",
+      "depends_on": [
+        "od-sas-autood-csv-web-workspace",
+        "od-sas-autood-finite-probe-fit-extension"
+      ],
+      "source_documents": [
+        "README.md#experimental-csv-comparison-od--sas",
+        "docs/ui_redesign/od_sas_experimental_csv_port.md"
+      ],
+      "implementation": "⟦AI⟧ 기존 공용 채널 판별기를 재사용한다. 모호한 취득은 파형 3개를 확인하고 수동 선택한다. 빠른 정렬을 시작점으로 원본 X의 고정 구간에서 주파수와 선택한 모델 변수를 함께 추정한다. 상대 검출기 신호의 이득·오프셋은 모델 조건부이며 절대 투과율은 고정한다. Preview/Apply 분리, 식별 불가 시 적용 차단. GABES의 D₂ 파워 상한 100 µW·고정 빔 반지름 및 기존 보정 피팅을 유지한다.",
+      "verification": "⟦AI⟧ 실측 CH2 트리거·CH1 SAS·CH3 OD, 취득점 2,000개 중 [630, 1385)의 755개 원시 전압이 기존 정규화 자료 및 웹 Standard/Origin 재입력과 모두 동일. AutoOD D₂ 샷 노이즈 CSV의 고정 1,129점에서 50 °C·30 µW로 시작해 54.5979 °C·37.3342 µW를 복원했다. 참값은 54.6 °C·37.4 µW. 상대 신호의 직선 구간은 주파수축을 식별할 수 없어 적용을 차단한다."
+    },
+    {
       "id": "autood-post-integration-theory-edition-and-release",
       "area": "AutoOD 이론 문서·Windows 배포",
       "title": "GABES–AutoOD 통합 완료 후 이론서 개정·버전 상향·ZIP 제작",
@@ -653,7 +672,8 @@
       "priority": "P2",
       "effort": "large",
       "depends_on": [
-        "od-sas-autood-csv-web-workspace"
+        "od-sas-autood-csv-web-workspace",
+        "od-sas-autood-profile-fit-and-scope-workflow"
       ],
       "activation_trigger": "GABES–AutoOD 통합 작업 전체가 끝난 뒤 새 이론서를 작성한다. 개정본 완성이 버전 상향 및 새 ZIP 제작의 선행 조건이다.",
       "acceptance_criteria": [

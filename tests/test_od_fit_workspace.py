@@ -459,6 +459,7 @@ def test_comparison_reopens_with_declared_raw_detector_law(workspace, mode):
     assert not app.exception and not app.error
     payload = exports[-1]["comparison_payload"]
     assert payload["calibration_mode"] == calibration
+    assert not app.checkbox(key="sas___csv_auto_correct").value
     inputs = payload["calibration_inputs"]
     if dark:
         assert (inputs["dark_signal"], inputs["reference_signal"]) == (.5,1.5)
@@ -764,3 +765,135 @@ def test_null_saved_model_uses_the_same_weak_spectrum_as_an_absent_setting(works
     replay = exports[-1]["comparison_payload"]
     assert replay["model"]["model_id"] == original["model"]["model_id"]
     assert replay["theory_trace"] == original["theory_trace"]
+
+
+def _run_profile_to_completion(app):
+    app.button(key="sas_profile_run").click().run()
+    if "sas_od_profile_job" in app.session_state:
+        app.session_state["sas_od_profile_job"].future.result(timeout=60)
+        app.run()
+    assert not app.exception and not app.error
+
+
+def test_profile_workflow_refines_relative_detector_and_preserves_native_data(workspace):
+    app, exports, _, uploads = workspace
+    absolute_csv = uploads[0].getvalue().decode().splitlines()[1:]
+    rows = [tuple(map(float, row.split(","))) for row in absolute_csv]
+    uploads[0] = _upload(("detuning_GHz,signal\n" + "\n".join(
+        f"{x:.17g},{.4 + 1.6 * t:.17g}" for x, t in rows)).encode())
+    app.run()
+    assert not app.exception and not app.error
+    app.checkbox(key="sas_profile_open").check().run()
+    app.multiselect(key="sas_profile_vary").set_value(["temp_c"]).run()
+    app.number_input(key="sas_profile_delta_temp_c").set_value(3.).run()
+    app.slider(key="sas_profile_roi").set_range(15, 480).run()
+    app.checkbox(key="sas___csv_auto_correct").uncheck().run()
+    assert app.slider(key="sas_profile_roi").value == (15, 480)
+    assert not any(button.key == "sas_run_od_fit" for button in app.button)
+    before_inputs = exports[-1]["comparison_payload"]["alignment"]
+    _run_profile_to_completion(app)
+    result = app.session_state["sas_profile_result"][1]
+    assert result.relative and result.identifiable and result.n_points == 466
+    assert result.condition_values["temp_c"] == pytest.approx(50., abs=.08)
+    assert app.session_state["sas__temp_c"] == 49.
+    assert exports[-1]["comparison_payload"]["alignment"] == before_inputs
+    app.button(key="sas_profile_discard").click().run()
+    assert "sas_profile_result" not in app.session_state and app.session_state["sas__temp_c"] == 49.
+    app.checkbox(key="sas_profile_open").uncheck().run()
+    app.checkbox(key="sas_profile_open").check().run()
+    assert app.slider(key="sas_profile_roi").value == (15, 480)
+    assert app.number_input(key="sas_profile_delta_temp_c").value == 3.
+    _run_profile_to_completion(app)
+    app.button(key="sas_profile_apply").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state["sas__temp_c"] == pytest.approx(50., abs=.08)
+    alignment = exports[-1]["comparison_payload"]["alignment"]
+    assert alignment["signal_offset"] == pytest.approx(result.alignment.signal_offset)
+    assert alignment["signal_scale"] == pytest.approx(result.alignment.signal_scale)
+
+
+def test_profile_group_uses_manual_seed_and_resets_for_new_measurement(workspace):
+    app, _, _, uploads = workspace
+    app.run()
+    app.checkbox(key="sas_profile_open").check().run()
+    app.selectbox(key="sas_profile_group").set_value("85-F3").run()
+    group_indices = tuple(app.slider(key="sas_profile_roi").value)
+    assert group_indices != (0, 500)
+    app.button(key="sas_profile_frame").click().run()
+    assert "frame" in app.session_state["sas_profile_options"]
+    assert app.number_input(key="sas___csv_x_shift").value == 0.
+    app.button(key="sas_profile_unframe").click().run()
+    assert "frame" not in app.session_state["sas_profile_options"]
+    app.number_input(key="sas___csv_x_shift").set_value(.012)
+    app.button(key="sas___csv_apply").click().run()
+    assert tuple(app.slider(key="sas_profile_roi").value) == group_indices
+    _run_profile_to_completion(app)
+    identity, result = app.session_state["sas_profile_result"]
+    assert identity[3].shift == pytest.approx(.012) and result.relative is False
+    assert result.alignment.signal_scale == 1. and result.alignment.signal_offset == 0.
+    app.checkbox(key="sas___csv_auto_correct").uncheck().run()
+    assert "sas_profile_result" not in app.session_state
+    assert tuple(app.slider(key="sas_profile_roi").value) == group_indices
+    uploads.append(_upload(b"detuning_GHz,transmission\n0,.7\n.1,.8\n.2,.9\n.3,1\n.4,.9\n"))
+    app.run()
+    assert not app.exception and not app.error
+    assert not app.checkbox(key="sas_profile_open").value
+    app.checkbox(key="sas_profile_open").check().run()
+    assert app.selectbox(key="sas_profile_group").value == "full"
+    assert tuple(app.slider(key="sas_profile_roi").value) == (0, 4)
+
+
+@pytest.mark.parametrize("action", ["cancel", "change_roi", "replace_upload"])
+def test_profile_job_cancels_without_applying(workspace, monkeypatch, action):
+    from threading import Event
+    from gabes import od_profile_fit
+    from gabes.od_spectrum_fit import ODFitCancelled, ODFitProgress
+
+    started, resume = Event(), Event()
+
+    def controlled_fit(trace, params, *, progress, **kwargs):
+        assert progress(ODFitProgress("global", 1, 2.))
+        started.set()
+        assert resume.wait(15)
+        update = ODFitProgress("local", 2, 1.)
+        assert not progress(update)
+        raise ODFitCancelled(update)
+
+    monkeypatch.setattr(od_profile_fit, "fit_od_profile", controlled_fit)
+    app, exports, _, uploads = workspace
+    app.run()
+    app.checkbox(key="sas_profile_open").check().run()
+    try:
+        app.button(key="sas_profile_run").click().run()
+        assert started.wait(5)
+        job = app.session_state["sas_od_profile_job"]
+        if action == "cancel":
+            app.button(key="sas_cancel_profile_fit").click().run()
+        elif action == "change_roi":
+            app.slider(key="sas_profile_roi").set_range(10, 457).run()
+        else:
+            uploads.append(_upload(b"detuning_GHz,transmission\n0,.7\n.1,.8\n.2,.9\n.3,1\n.4,.9\n"))
+            app.run()
+        assert not app.exception and not app.error
+        assert "sas_od_profile_job" not in app.session_state and "sas_profile_result" not in app.session_state
+        assert app.session_state["sas__temp_c"] == 49.
+        assert exports[-1]["comparison_payload"]["alignment"]["shift"] == 0.
+    finally:
+        resume.set()
+    with pytest.raises(ODFitCancelled):
+        job.future.result(timeout=5)
+
+
+def test_profile_refuses_incompatible_recorded_frequency_line(workspace):
+    from gabes.schemes.sas import EXACT_MODEL
+
+    app, _, _, uploads = workspace
+    rows = np.loadtxt(uploads[0].getvalue().decode().splitlines()[1:], delimiter=",")
+    uploads[:] = [_upload(_legacy_comparison(EXACT_MODEL, rows[:, 0], rows[:, 1]))]
+    app.run()
+    app.checkbox(key="sas_profile_open").check().run()
+    app.selectbox(key="conditions-sas-line").select("D1").run()
+    assert not app.exception
+    assert any("recorded measurement origin differs" in message.value for message in app.warning)
+    assert not any(widget.key == "sas_profile_run" for widget in app.button)
+    assert not any(widget.key == "sas_profile_apply" for widget in app.button)

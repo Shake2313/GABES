@@ -8,27 +8,29 @@ from gabes.core import blas_single_thread
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gabes-od-fit")
 SESSION_KEY = "sas_od_fit_job"
+PROFILE_JOB = "sas_od_profile_job"
 
 
 class ODFitJob:
     """Run a fit on its own prepared branch and a snapshot of the model inputs."""
 
-    def __init__(self, identity, data, params, **options):
+    def __init__(self, identity, data, params, *, fit_function=None, **options):
         self.identity = identity
         self.visible = True
         self._cancel = Event()
         self._lock = Lock()
         self._last_seen = monotonic()
         self._progress = None
-        self.future = _EXECUTOR.submit(self._run, data, deepcopy(params), options)
+        self.future = _EXECUTOR.submit(self._run, fit_function, data, deepcopy(params), options)
 
-    def _run(self, data, params, options):
-        from gabes.od_spectrum_fit import fit_od_spectrum
+    def _run(self, fit_function, data, params, options):
+        if fit_function is None:
+            from gabes.od_spectrum_fit import fit_od_spectrum as fit_function
         with self._lock:
             if not self._continue():
                 raise CancelledError()
         with blas_single_thread():
-            return fit_od_spectrum(data, params, progress=self._report, **options)
+            return fit_function(data, params, progress=self._report, **options)
 
     def _continue(self):
         return not self._cancel.is_set() and monotonic() - self._last_seen <= 120

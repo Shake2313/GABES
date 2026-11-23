@@ -253,6 +253,19 @@ def test_relative_quick_candidate_and_periodic_interference():
     assert not load_measurement(saved).is_absolute_transmission
 
 
+@pytest.mark.parametrize("absolute,invert", [(False, False), (False, True), (True, False)])
+def test_featureless_range_match_centers_flat_relative_display_only(absolute, invert):
+    from types import SimpleNamespace
+    x = np.linspace(0., 1., 15)
+    trace = SimpleNamespace(detuning=x, x=x, transmission=np.full(x.shape, 0.3),
+                            is_absolute_transmission=absolute)
+    theory = np.linspace(0.4, 0.8, x.size)
+    result = quick_measurement_alignment(trace, x, theory, invert=invert)
+    assert not result.matched and result.candidates == 0
+    displayed = result.alignment.transform_y(trace.transmission, invert=invert)
+    np.testing.assert_allclose(displayed, 0.3 if absolute else 0.6)
+
+
 def test_raw_detector_calibration_is_separate_from_display_and_restored():
     x = np.linspace(.1, 1., 501)
     upload = prepare_measurement_upload(paired_csv(x, 1 + 2 * x, header=("frequency_GHz", "detector volts")))

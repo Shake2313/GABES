@@ -6,7 +6,7 @@ aids; measured dark/reference calibration remains authoritative.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 
 import numpy as np
@@ -127,6 +127,20 @@ def estimate_axis_scale_correction(x, xlim, *, manual_min=0.1, manual_max=3.0):
         return AxisScaleCorrection(multiplier, target, raw_span, plot_span, True)
     except (TypeError, ValueError, OverflowError) as exc:
         return AxisScaleCorrection(reason=str(exc))
+
+
+def frame_signal_range(alignment, measured, theory, *, center_flat=False):
+    """Align relative display extrema; optionally center a flat signal at unit gain."""
+    measured_low, measured_high = float(np.min(measured)), float(np.max(measured))
+    theory_low, theory_high = float(np.min(theory)), float(np.max(theory))
+    if measured_high > measured_low and theory_high > theory_low:
+        gain = (theory_high - theory_low) / (measured_high - measured_low)
+    elif center_flat:
+        gain = 1.0
+    else:
+        return alignment
+    offset = 0.5 * theory_low + 0.5 * theory_high - gain * (0.5 * measured_low + 0.5 * measured_high)
+    return replace(alignment, signal_scale=gain, signal_offset=offset)
 
 
 def fit_signal_affine(source, target):

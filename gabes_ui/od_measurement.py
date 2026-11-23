@@ -1,5 +1,5 @@
 """File selection and fit-result ownership for the pump-free OD workspace."""
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 import numpy as np
 import streamlit as st
@@ -117,10 +117,22 @@ def measurement_model_view(view, raw, evaluation):
     return output_view, output_raw
 
 
+@dataclass(frozen=True)
+class _UnresolvedScope:
+    channels: tuple[str, ...]
+    previews: tuple[tuple[float, ...], ...]
+    source_id: str
+    reason: str
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _project(content, channel=None, source_id=None):
-    from gabes.od_measurement import prepare_measurement_upload
-    return prepare_measurement_upload(content, scope_channel=channel, scope_source_id=source_id)
+    from gabes.od_measurement import ScopeChannelChoice, prepare_measurement_upload
+    try:
+        return prepare_measurement_upload(content, scope_channel=channel, scope_source_id=source_id)
+    except ScopeChannelChoice as choice:
+        # cache_data caches return values. Ambiguity is an ordinary import outcome.
+        return _UnresolvedScope(choice.channels, choice.previews, choice.source_id, str(choice))
 
 
 @st.cache_data(show_spinner=False, max_entries=8)
@@ -129,43 +141,109 @@ def load_trace(upload, **options):
     return load_measurement(upload, **options)
 
 
-def select_upload(panel, name, uploaded, forget):
-    from gabes.od_measurement import ScopeChannelChoice
+def _scope_waveforms(panel, labels, previews):
+    """Draw the shared downsampled traces without bridging missing detector samples."""
+    rows = []
+    for label, samples in zip(labels, previews):
+        segment = 0
+        for i, value in enumerate(samples):
+            if np.isfinite(value):
+                rows.append({"channel": label, "fraction": i / max(1, len(samples) - 1),
+                             "level": float(value), "segment": segment})
+            else:
+                segment += 1
+        if not samples:
+            panel.caption(f"{label} · No finite preview samples")
+    if rows:
+        panel.vega_lite_chart(spec={
+            "data": {"values": rows},
+            "mark": {"type": "line", "clip": True},
+            "encoding": {
+                "row": {"field": "channel", "type": "nominal", "sort": labels, "title": None,
+                        "header": {"labelAngle": 0, "labelLimit": 100}},
+                "x": {"field": "fraction", "type": "quantitative", "title": "Acquisition order",
+                      "axis": {"format": "%", "values": [0, 0.5, 1]}, "scale": {"domain": [0, 1]}},
+                "y": {"field": "level", "type": "quantitative", "axis": None, "scale": {"domain": [0, 1]}},
+                "detail": {"field": "segment", "type": "nominal"},
+            },
+            "height": 42,
+        }, use_container_width=True)
+    panel.caption("Each channel has its own voltage scale. A manual selection uses the full recording.")
 
-    key = skey(name, "_csv_retained_file")
-    if uploaded is None:
-        saved = st.session_state.get(key)
-        if saved is None:
+
+def _select_scope_channel(panel, name, detected, content, previous):
+    unresolved = isinstance(detected, _UnresolvedScope)
+    scope = detected if unresolved else detected.scope
+    labels = tuple(
+        f"CH{label}" if label.isdecimal() else label for label in scope.channels
+    )
+    if len(set(labels)) < len(labels):
+        labels = tuple(f"Column {i + 1} · {label}" for i, label in enumerate(labels))
+    automatic = None if unresolved else f"Automatic · {labels[scope.od]}"
+    options = labels if unresolved else (automatic, *labels)
+    panel_scope = panel.expander("Inspect scope channels", expanded=unresolved)
+    _scope_waveforms(panel_scope, labels, scope.previews)
+    widget_key = skey(name, "_csv_scope_" + scope.source_id)
+    if widget_key not in st.session_state and getattr(previous, "sha256", None) == scope.source_id:
+        if previous.scope and previous.scope.manual:
+            st.session_state[widget_key] = labels[previous.scope.od]
+    choice = panel_scope.selectbox("OD signal channel", options, index=None if unresolved else 0,
+                                   key=widget_key)
+    if choice is None:
+        reason = f"{scope.reason} " if unresolved else ""
+        panel_scope.info(reason + "Choose the channel measuring the transmitted probe.")
+        return None
+    if choice == automatic:
+        projected = detected
+        roles = f"OD {labels[scope.od]} · SAS {labels[scope.sas]} · Trigger {labels[scope.trigger]}"
+    else:
+        selected = labels.index(choice)
+        try:
+            projected = _project(content, selected, scope.source_id)
+        except ValueError as exc:
+            # An empty detector channel should not discard the remaining waveforms.
+            panel_scope.warning(str(exc))
             return None
-        filename, projection = saved
+        roles = f"OD {choice} (manual)"
+    span = projected.scope
+    region = (f"Full recording ({span.total:,} samples)" if span.manual else
+              f"Samples {span.start + 1:,}–{span.stop:,} of {span.total:,}")
+    panel.caption(f"{roles} · {region} · Raw detector signal")
+    return projected
+
+
+def select_upload(panel, name, uploaded, forget):
+    key = skey(name, "_csv_retained_file")
+    scope_key = skey(name, "_csv_retained_scope")
+    saved = st.session_state.get(key)
+    previous = saved[1] if saved else None
+    if uploaded is None:
+        retained_scope = st.session_state.get(scope_key)
+        if saved is None and retained_scope is None:
+            return None
         panel.button("Remove retained CSV", key=skey(name, "_csv_remove_retained"),
                      on_click=forget, args=(name,))
-        # Older sessions retained the original bytes until the first view switch.
-        if isinstance(projection, bytes):
-            projection = _project(projection)
-            st.session_state[key] = filename, projection
-        return filename, projection
+        if retained_scope is not None:
+            filename, content = retained_scope
+        elif isinstance(previous, bytes):
+            filename, content = saved  # Older sessions kept the entire upload.
+        else:
+            return saved
+    else:
+        filename, content = uploaded.name, uploaded.getvalue()
 
-    content = uploaded.getvalue()
-    try:
-        projection = _project(content)
-        scope = projection.scope
-        channels = scope.channels if scope else ()
-        source_id = projection.sha256
-        automatic = scope.od if scope else None
-    except ScopeChannelChoice as choice:
-        projection = None
-        channels, source_id, automatic = choice.channels, choice.source_id, None
-    if channels:
-        channel = panel.selectbox("OD signal channel", channels, index=automatic,
-                                  key=skey(name, "_csv_scope_" + source_id))
-        if channel is None:
-            panel.info("Choose the channel measuring the transmitted probe.")
+    projection = _project(content)
+    if isinstance(projection, _UnresolvedScope) or projection.scope is not None:
+        # A remounted uploader may be empty. Preserve the other detector channels
+        # only for a raw scope file so the user can revise the choice in this session.
+        st.session_state[scope_key] = filename, content
+        projection = _select_scope_channel(panel, name, projection, content, previous)
+        if projection is None:
             return None
-        if automatic is None or channel != channels[automatic]:
-            projection = _project(content, channel, source_id)
-    st.session_state[key] = uploaded.name, projection
-    return uploaded.name, projection
+    else:
+        st.session_state.pop(scope_key, None)
+    st.session_state[key] = filename, projection
+    return filename, projection
 
 
 def restore_detector_law(name, upload, calibration_options):

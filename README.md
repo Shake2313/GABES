@@ -85,7 +85,7 @@ These practical approximations are separate from Grand Challenge acceptance.
 
 | Cluster | Scheme | Output |
 |---|---|---|
-| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to frozen outputs from the retired AutoOD-Rb calculator at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. Imports oscilloscope A/B CSV data for robust correction and manual transmission-overlay alignment. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
+| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to frozen outputs from the retired AutoOD-Rb calculator at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. In **Fit OD data**, a three-channel oscilloscope CSV can be gated and assigned to OD, SAS and trigger by waveform. The measured OD trace can then be aligned and fitted to the pump-free model. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
 | A | **Lambda coherence (EIT / AT / CPT)** | one 3-level Lambda engine with regime-driven defaults, physical MHz/kHz controls, Rb/Cs D-line media, EIT transparency, AT splitting, and CPT dark resonance |
 | A | **Rydberg-EIT electrometry** | 85Rb cascade EIT / microwave AT spectrum for the 5S-5P-40D ladder and 37 GHz 40D-39F RF leg; first-order finite-IF weak-SIG response, AT→field calibration, balanced-detector PSN/RIN/electronics budget, temperature/cold-spot sweep, and conditional absolute sensitivity |
 | C — Magneto-optics | **Hanle / EIA / NMOR** | two distinct effects vs B: the **Hanle** effect (zero-field transmission dip/peak, EIA variant) from ground-state coherence, and **magneto-optical rotation** (MOR/NMOR, polarization-plane rotation) — both over the Zeeman manifold |
@@ -242,19 +242,37 @@ under `archive/` for historical reference only.
 Choose **Fit OD data** to compare a measurement with pump-off transmission.
 **Simulate spectra** keeps the theory pump power, waist and depletion settings.
 Upload a measured CSV or a standard or Origin comparison export. A named
-transmission column takes precedence over reference intensity. For a multichannel
-scope recording, check the selected OD channel. General files can be up to
-10 MiB and self-describing comparison exports up to 16 MiB.
+transmission column takes precedence over reference intensity. General files
+can be up to 10 MiB and self-describing comparison exports up to 16 MiB.
 
-Declared frequency axes keep their native scale. An experimental frequency
-origin must come from calibration or file metadata. **Bring into view** and
-**Fit alignment** help place relative traces. **Precise alignment** controls
-the display transform. Confirm the frequency scale and absolute transmission
-calibration before fitting physical parameters. Select one acquisition branch in
-**Fit physical OD parameters**. While the fit runs, the panel shows the search
-stage, evaluation count and lowest weighted cost so far. **Cancel fit** stops
-the calculation between evaluations. **Apply fitted temperature** transfers a
-converged, identifiable temperature to the cell conditions.
+For a three-channel scope CSV, the workspace identifies the trigger, SAS and
+transmitted probe from the waveforms and extracts the central part of the gate.
+**Inspect scope channels** shows all three traces. If the assignment is
+ambiguous, choose the transmitted probe there. A manual choice uses the full
+recording. Acquisition indices preserve individual readings when timestamps
+repeat. The detector voltage remains relative until calibrated.
+
+**Match ranges** uses line shape to place the measurement on the current theory
+curve. For comparable placements it prefers the one nearest the current
+alignment. If no feature matches, it frames the span and reports the fallback.
+A declared frequency axis keeps its native scale on import.
+
+- **Refine alignment with OD model** fits the frequency scale and shift jointly
+  with optional model conditions. Choose a full spectrum or Rb ground-state
+  group, select the measured samples and set a search interval for each free
+  condition. The sample selection stays fixed as the frequency axis moves.
+  For relative signals the fit also estimates detector gain and offset.
+  For calibrated transmission the measured Y values stay fixed.
+  **Preview profile fit** shows the result before **Apply profile fit** updates
+  the alignment and selected conditions. A shape fit to detector voltage
+  gives model-dependent estimates. An independent transmission calibration is
+  required to report measured optical depth.
+- **Fit physical OD parameters** uses an independently calibrated frequency
+  scale and absolute transmission. Select an acquisition branch to fit.
+  The bounded fit reports residuals and identifiability, and transfers
+  selected conditions only when applied. D2 probe power is offered on the Rb
+  rate model at fixed beam radius (0–100 µW). A custom Rb mixture can release
+  its ⁸⁵Rb fraction on either D line.
 
 Select a frequency in the spectrum to compare the theory sample with the nearest
 measured point. The detail view shows measured optical depth for absolute

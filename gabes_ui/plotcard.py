@@ -30,7 +30,7 @@ from gabes.experimental_alignment import AxisAlignment, frame_alignment, fit_tra
 from gabes.plot_style import PALETTE, apply_gabes_plot_style
 from gabes_ui import export as ui_export
 from gabes_ui.controls import render_param, skey
-from gabes_ui.od_fit_job import ODFitJob, SESSION_KEY as OD_FIT_JOB
+from gabes_ui.od_fit_job import ODFitJob, PROFILE_JOB, SESSION_KEY as OD_FIT_JOB
 from gabes_ui.plot_focus import focused_axes, focus_signature, resonance_window
 from gabes_ui.readout import caption_html
 
@@ -157,46 +157,53 @@ def _save_overlay_preferences(scheme_name):
         {key: state[key] for key in keys if key in state})
 
 
-def cancel_od_fit():
-    job = st.session_state.pop(OD_FIT_JOB, None)
+def _cancel_job(key):
+    job = st.session_state.pop(key, None)
     if job is not None:
         job.cancel()
+
+
+def cancel_od_fit():
+    for key in (OD_FIT_JOB, PROFILE_JOB):
+        _cancel_job(key)
 
 
 @contextmanager
 def cancel_hidden_od_fit():
     """A fit belongs to the visible controls that launched it."""
-    job = st.session_state.get(OD_FIT_JOB)
-    if job is not None:
+    jobs = {key: st.session_state[key] for key in (OD_FIT_JOB, PROFILE_JOB) if key in st.session_state}
+    for job in jobs.values():
         job.visible = False
     try:
         yield
     finally:
-        if job is not None and not job.visible and st.session_state.get(OD_FIT_JOB) is job:
-            cancel_od_fit()
+        for key, job in jobs.items():
+            if not job.visible and st.session_state.get(key) is job:
+                _cancel_job(key)
 
 
-def _cancel_requested_fit(job):
-    if st.session_state.get(OD_FIT_JOB) is job:
-        cancel_od_fit()
-        st.session_state["sas_od_fit_cancelled"] = True
+def _cancel_requested_fit(job, key):
+    if st.session_state.get(key) is job:
+        _cancel_job(key)
+        st.session_state["sas_od_fit_cancelled" if key == OD_FIT_JOB else "sas_profile_cancelled"] = True
 
 
 @st.fragment(run_every=0.75)
-def _render_fit_progress(job):
+def _render_fit_progress(job, key=OD_FIT_JOB):
     # Poll only this row; a terminal result needs the complete fit identity
     # (file, widgets and model) revalidated by its owner before it can publish.
-    if st.session_state.get(OD_FIT_JOB) is not job or job.future.done():
+    if st.session_state.get(key) is not job or job.future.done():
         st.rerun(scope="app")
     progress = job.observe()
     if progress is not None:
-        stage = "Global search" if progress.stage == "global" else "Local refinement"
+        stage = {"global": "Global search", "local": "Local refinement"}.get(progress.stage, "Profile search")
         count = f"{progress.evaluations} evaluation" + ("" if progress.evaluations == 1 else "s")
         st.caption(f"{stage} · {count} · "
                    f"Best weighted cost {progress.best_cost:.4g}")
     else:
         st.caption("Evaluating the OD model…" if job.future.running() else "Fit queued.")
-    st.button("Cancel fit", key="sas_cancel_od_fit", on_click=_cancel_requested_fit, args=(job,))
+    st.button("Cancel fit", key="sas_cancel_od_fit" if key == OD_FIT_JOB else "sas_cancel_profile_fit",
+              on_click=_cancel_requested_fit, args=(job, key))
 
 
 def remember_overlay_for_comparison(scheme_name, *, entering):
@@ -225,6 +232,7 @@ def _forget_retained_csv(scheme_name):
         st.session_state.pop("sas_od_fit_cancelled", None)
         st.session_state.pop("sas_csv_source", None)
     st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
+    st.session_state.pop(skey(scheme_name, "_csv_retained_scope"), None)
     st.session_state.pop(skey(scheme_name, "_csv_fingerprint"), None)
     st.session_state.pop("sas_od_physical_fit", None)
     st.session_state.pop("sas_od_pending_fit_conditions", None)
@@ -363,7 +371,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
     job = st.session_state.get(OD_FIT_JOB)
     if job is not None and job.identity != job_identity:
         box.info("The fit inputs changed. Run the fit again with the current settings.")
-        cancel_od_fit()
+        _cancel_job(OD_FIT_JOB)
         job = None
     if job is not None and job.future.done():
         st.session_state.pop(OD_FIT_JOB)
@@ -484,13 +492,18 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             panel.caption("CSV A = X (time/frequency), B = detector signal. Metadata and later columns are ignored.")
             uploaded = _csv_uploader(panel, scheme_name, workspace=False)
         if workspace:
-            source_key = (projection.sha256, projection.columns, projection.scope.od if projection.scope else None)
+            scope = projection.scope
+            acquisition = (scope.od, scope.start, scope.stop, scope.manual) if scope else None
+            source_key = (projection.sha256, projection.columns, acquisition)
             new_source = st.session_state.get("sas_csv_source") != source_key
             if new_source:
                 st.session_state["sas_csv_source"] = source_key
                 for control in ("_csv_mode", "_csv_unit", "_csv_calibration_mode", "_csv_dark_signal",
                                 "_csv_reference_signal", "_csv_detector_gain", "_csv_detector_offset"):
                     st.session_state.pop(skey(scheme_name, control), None)
+                # AutoOD records 0/1 as text, GABES records JSON booleans.
+                flag = projection.metadata.get("experiment_denoised", True)
+                st.session_state[skey(scheme_name, "_csv_auto_correct")] = str(flag).lower() not in ("0", "false")
                 st.session_state.pop("sas_od_fit_frequency_scale", None)
             unit_labels = {"arbitrary": "Arbitrary units", "GHz": "GHz", "MHz": "MHz", "Hz": "Hz"}
             mode_labels = {"relative": "Relative detector signal", "fraction": "Transmission (0–1)",
@@ -597,6 +610,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         signal_offset_key = skey(scheme_name, "_csv_y_offset")
         fit_key = skey(scheme_name, "_csv_alignment_fit")
         native_shift = 0.0
+        origin_warning = None
         if workspace and unit != "arbitrary":
             native_shift, origin_warning = workspace_ui.native_reference_shift(projection, params)
             if origin_warning:
@@ -605,7 +619,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             fingerprint, native_shift,
             axis_index,
             str(x_unit),
-            str(raw_x_unit), unit, None if projection is None else projection.columns,
+            str(raw_x_unit), unit, source_key if workspace else None,
         )
         try:
             if workspace:
@@ -643,7 +657,15 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
 
         if st.session_state.get(fingerprint_key) != alignment_identity or scale_key not in st.session_state:
             st.session_state[fingerprint_key] = alignment_identity
-            set_alignment(AxisAlignment(shift=native_shift) if workspace and unit != "arbitrary" else framed)
+            reset = AxisAlignment(shift=native_shift) if workspace and unit != "arbitrary" else framed
+            if workspace and not new_source and scale_key in st.session_state:
+                # Reinterpreting X units leaves detector polarity and display gain intact.
+                reset = AxisAlignment(scale=reset.scale, shift=reset.shift, reverse=st.session_state[reverse_key],
+                                      signal_scale=st.session_state[signal_scale_key],
+                                      signal_offset=st.session_state[signal_offset_key])
+                set_alignment(reset, invert=st.session_state[invert_key])
+            else:
+                set_alignment(reset)
         if trace.is_absolute_transmission:
             st.session_state[invert_key] = False
             st.session_state[signal_scale_key] = 1.0
@@ -694,15 +716,15 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         fit_context = (
             fingerprint, auto_correct, calibration_mode,
             dark_signal, reference_signal, gain, offset, unit, mode,
-            None if projection is None else projection.columns,
+            source_key if workspace else None,
             None if theory_x is None else hashlib.sha256(np.asarray([theory_x, theory_y]).tobytes()).hexdigest(),
         )
         if st.session_state.get(fit_context_key) != fit_context:
             st.session_state.pop(fit_key, None)
             st.session_state[fit_context_key] = fit_context
         if panel.button(
-            "Fit alignment", key=skey(scheme_name, "_csv_fit"),
-            use_container_width=True, disabled=theory is None,
+            "Match ranges" if workspace else "Fit alignment", key=skey(scheme_name, "_csv_fit"),
+            use_container_width=True, disabled=theory_x is None,
             help="Align X scale/shift to the current theoretical transmission. "
                  "For relative data, also fit detector gain/offset. Physical "
                  "parameters are held fixed; choose sweep direction first.",
@@ -724,6 +746,19 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
                 if workspace or result.success:
                     set_alignment(result.alignment, invert=st.session_state[invert_key])
                 st.session_state[fit_key] = result
+            except ValueError as exc:
+                panel.error(str(exc))
+
+        if workspace and theory_x is not None and params is not None:
+            from gabes_ui.od_profile_fit import render_profile_fit
+            try:
+                current_alignment = AxisAlignment(
+                    scale=st.session_state[scale_key] * st.session_state[multiplier_key],
+                    shift=st.session_state[shift_key], reverse=st.session_state[reverse_key],
+                    signal_scale=st.session_state[signal_scale_key], signal_offset=st.session_state[signal_offset_key])
+                render_profile_fit(panel, projection, params, trace, current_alignment, st.session_state[invert_key],
+                                   source_key, fit_context, theory_x, theory_y, set_alignment, _render_fit_progress,
+                                   origin_issue=origin_warning)
             except ValueError as exc:
                 panel.error(str(exc))
 
@@ -792,9 +827,13 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         if fit_result is not None:
             if workspace:
                 if fit_result.matched:
-                    panel.caption(f"Feature alignment · {fit_result.candidates} candidate(s)")
+                    if fit_result.candidates == 1:
+                        panel.caption("Matched the measured and theoretical line shapes.")
+                    else:
+                        panel.caption(f"{fit_result.candidates} similar placements. Showing the one nearest the current alignment.")
                 else:
-                    panel.info("No matching feature. Showing the measured span within the plot.")
+                    panel.info("No clear shape match. The display uses the frequency span"
+                               + ("." if trace.is_absolute_transmission else " and relative signal range."))
             elif fit_result.success:
                 panel.caption(
                     f"Alignment RMSE {fit_result.rmse:.4g} · "

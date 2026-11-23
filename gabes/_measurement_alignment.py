@@ -9,7 +9,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d, median_filter
 from scipy.signal import find_peaks
 
-from .experimental_alignment import AxisAlignment, frame_alignment
+from .experimental_alignment import AxisAlignment, frame_alignment, frame_signal_range
 
 
 @dataclass(frozen=True)
@@ -120,14 +120,16 @@ def _different_regions(centers, widths, scores, landmark):
 def quick_measurement_alignment(trace, theory_x_ghz, theory_transmission, *, current=None,
                                 reverse=False, invert=False, fallback=None, match_signal=True):
     """Return a provisional affine display transform; require evidence in both traces."""
-    if fallback is None:
-        fallback = frame_alignment(trace.detuning, theory_x_ghz, reverse=reverse)
-    miss = QuickFrameResult(fallback, False, 0)
     mx, my = np.asarray(trace.x), np.asarray(trace.transmission)
     tx, ty = np.asarray(theory_x_ghz), np.asarray(theory_transmission)
     relative = not trace.is_absolute_transmission
     if invert and relative:
         my = 1.0 - my
+    if fallback is None:
+        fallback = frame_alignment(mx, tx, reverse=reverse)
+        if match_signal and relative:
+            fallback = frame_signal_range(fallback, my, ty, center_flat=True)
+    miss = QuickFrameResult(fallback, False, 0)
     if min(len(mx), len(tx)) < 12:
         return miss
     raw_span = float(mx[-1] - mx[0])
