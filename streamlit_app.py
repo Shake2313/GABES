@@ -15,6 +15,7 @@ Run with:
 """
 from contextlib import nullcontext
 from pathlib import Path
+import sys
 
 # Streamlit selects Agg for its server. The default SVG workspace imports no Matplotlib.
 import streamlit as st
@@ -48,6 +49,14 @@ from gabes_ui.shell import (
     render_preset_selector,
     render_regime_selector,
 )
+
+# Streamlit sets MPLBACKEND before a cold import. Already loaded Matplotlib
+# retains its own backend setting and could create Tk objects on a script thread.
+if "matplotlib" in sys.modules:
+    import matplotlib
+
+    with PLOT_LOCK:
+        matplotlib.use("Agg")
 
 APP_DIR = Path(__file__).resolve().parent
 

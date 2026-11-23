@@ -3,13 +3,24 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
 
-def test_default_od_workspace_defers_matplotlib_until_fit_view():
+
+@pytest.mark.parametrize("startup", ["cold", "preloaded-pyplot"])
+def test_default_od_workspace_defers_matplotlib_until_fit_view(startup):
     # Other tests import pyplot during collection. Measure the normal app entry
     # in a fresh interpreter and stub only the browser's custom-component mount.
     script = """
 import sys
 from unittest.mock import patch
+
+if sys.argv[1] == "preloaded-pyplot":
+    # Use a different noninteractive backend to exercise import order without
+    # creating a native window on a Streamlit or pytest thread.
+    import matplotlib
+    matplotlib.use("svg")
+    import matplotlib.pyplot as plt
+    assert plt.get_backend().lower() == "svg"
 
 import streamlit as st
 from streamlit.testing.v1 import AppTest
@@ -18,7 +29,8 @@ with patch.object(st.components.v2, "component", return_value=lambda *a, **kw: {
     default = AppTest.from_file("streamlit_app.py", default_timeout=60).run()
     assert not default.exception and not default.error
     assert any(button.label == "Result bundle (JSON)" for button in default.get("download_button"))
-    assert "matplotlib" not in sys.modules
+    if sys.argv[1] == "cold":
+        assert "matplotlib" not in sys.modules
 
     detail = AppTest.from_file("streamlit_app.py", default_timeout=60)
     detail.query_params["compare"] = "0"
@@ -28,5 +40,5 @@ with patch.object(st.components.v2, "component", return_value=lambda *a, **kw: {
     assert "matplotlib.pyplot" in sys.modules
     assert sys.modules["matplotlib"].get_backend().lower() == "agg"
 """
-    subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
+    subprocess.run([sys.executable, "-c", script, startup], cwd=Path(__file__).resolve().parents[1],
                    check=True, timeout=150)
