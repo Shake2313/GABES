@@ -82,7 +82,8 @@ def measurement_model_view(view, raw, evaluation):
                                       "cell_length_m", "line_strength")} if changed else dict(old))
     readout.update(transmission=evaluation.transmission, optical_depth=evaluation.optical_depth,
                    decadic_absorbance=evaluation.optical_depth / np.log(10.), od0=evaluation.od0,
-                   effective=conditions.probe_power_uw > 0., model_id=evaluation.model_id)
+                   n_eff=old.get("n_eff"), effective=conditions.probe_power_uw > 0.,
+                   model_id=evaluation.model_id)
     accuracy = MODELS[evaluation.model_id].accuracy
     if accuracy:
         readout["model_accuracy"] = accuracy

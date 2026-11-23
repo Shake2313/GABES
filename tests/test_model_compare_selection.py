@@ -25,6 +25,32 @@ def test_committed_sample_matches_physical_coordinate_and_context(comparison):
         group_id="left", sample_index=1, x_mhz=-1., power_mw=.5, window_mhz=[-2., 0.], show_powers=False)
 
 
+def test_lock_reference_validated_and_signed_against_the_stored_model_frequency(comparison):
+    crossover = dict(kind="crossover_candidate", label="CO?", x_mhz=-1.25)
+    transition = dict(kind="transition", label="1→2′", x_mhz=-.75)
+    comparison["groups"][0]["markers"] = [crossover, transition]
+    entry = dict(context="run", group_id="left", sample_index=1)
+    auto = comparison_selection(comparison, entry, "run")
+    # Equidistant references prefer a transition; the lower frequency is red-detuned.
+    assert auto["reference"] == dict(transition, group_id="left")
+    assert auto["detuning_mhz"] == -.25
+    entry.update(reference=dict(crossover, group_id="left"), detuning_mhz=999.)
+    assert comparison_selection(comparison, entry, "run")["detuning_mhz"] == .25
+    entry["reference"]["x_mhz"] = -1.  # Stale or altered reference is never used in an export.
+    assert comparison_selection(comparison, entry, "run") == auto
+    entry.update(window_mhz=[-.8, 1.], sample_index=2)
+    assert comparison_selection(comparison, entry, "run")["detuning_mhz"] == .75
+    entry["window_mhz"] = [-.5, 1.]
+    assert "reference" not in comparison_selection(comparison, entry, "run")
+    # The chosen real reference survives zooming away, even with no markers visible.
+    entry["reference"] = dict(crossover, group_id="left")
+    assert comparison_selection(comparison, entry, "run")["detuning_mhz"] == 1.25
+    entry.update(window_mhz=[1., 2.], group_id="right", sample_index=3)
+    assert "reference" not in comparison_selection(comparison, entry, "run")
+    comparison["default_power_mw"] = 0.
+    assert "reference" not in comparison_selection(comparison, None, "run")
+
+
 def test_sample_outside_group_cannot_appear_in_export(comparison):
     saved = dict(group_id="right", sample_index=0, power_mw=1000., context="current")
     point = comparison_selection(comparison, saved, "current")

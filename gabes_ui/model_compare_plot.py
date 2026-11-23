@@ -25,6 +25,26 @@ def _sample_nearest(grid, frequency):
     return right
 
 
+def _frequency_reference(groups, group, limits, grid, x_mhz, requested):
+    # Zooming can take an explicitly chosen reference off screen. Only a group
+    # preset restricts which saved transition may continue to define detuning.
+    eligible = limits if group else (grid[0], grid[-1])
+    visible = []
+    for g in ([group] if group else groups):
+        for marker in g.get("markers", ()):
+            freq = marker["x_mhz"]
+            if (marker["kind"] not in ("transition", "crossover_candidate")
+                    or not marker["label"] or not eligible[0] <= freq <= eligible[1]):
+                continue
+            ref = dict(group_id=g["id"], kind=marker["kind"], label=marker["label"], x_mhz=freq)
+            if ref == requested:
+                return ref
+            if limits[0] <= freq <= limits[1]:
+                visible.append(ref)
+    return min(visible, key=lambda ref: (abs(x_mhz - ref["x_mhz"]), ref["kind"] != "transition"),
+               default=None)
+
+
 def comparison_selection(dataset, entry, context):
     """Validate a client selection against this calculation before export."""
     saved = entry if isinstance(entry, Mapping) and entry.get("context") == context else {}
@@ -45,8 +65,13 @@ def comparison_selection(dataset, entry, context):
             or not limits[0] <= grid[index] <= limits[1]):
         index = max(bisect_left(grid, limits[0]), min(bisect_right(grid, limits[1])-1,
                     _sample_nearest(grid, sum(limits) / 2)))
-    return dict(group_id=group["id"] if group else None, power_mw=dataset["default_power_mw"],
-                sample_index=index, x_mhz=grid[index], window_mhz=list(limits), show_powers=False)
+    point = dict(group_id=group["id"] if group else None, power_mw=dataset["default_power_mw"],
+                 sample_index=index, x_mhz=grid[index], window_mhz=list(limits), show_powers=False)
+    if point["power_mw"] * 1e-3 > 0:
+        ref = _frequency_reference(groups, group, limits, grid, point["x_mhz"], saved.get("reference"))
+        if ref is not None:
+            point.update(reference=ref, detuning_mhz=point["x_mhz"] - ref["x_mhz"])
+    return point
 
 
 def _current_selection(dataset, key, context):

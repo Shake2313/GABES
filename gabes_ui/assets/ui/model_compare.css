@@ -72,6 +72,31 @@
 .mc .mc-export { margin-top:.45rem; font-size:.83rem; }
 .mc .mc-marker-note { margin:.15rem 0 .5rem; }
 .mc .mc-sr { position:absolute; height:1px; width:1px; clip-path:inset(50%); overflow:hidden; white-space:nowrap; }
+/* Model spectroscopy and fitted OD share a compact, unit-bearing readout. */
+.mc .mc-readings {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:baseline;
+  margin:.55rem 0 .75rem;
+  font-variant-numeric:tabular-nums;
+}
+.mc .mc-readings :is(dt,dd) { margin:0; padding:.27rem 0; border-bottom:1px solid var(--mc-edge); }
+.mc .mc-readings dt { padding-right:.55rem; font-size:.86rem; }
+.mc .mc-readings dd { font-weight:650; text-align:right; }
+.mc .mc-od-reader { border:0; border-top:1px solid var(--mc-edge); padding:.45rem 0 0; }
+.mc .mc-od-reader .mc-loc { color:var(--mc-muted); font-size:.88rem; font-weight:500; margin:.05rem 0 .7rem; }
+.mc .mc-od-reader .mc-pick { display:grid; gap:.18rem; }
+.mc .mc-od-reader select { width:100%; min-width:0; text-overflow:ellipsis; font-weight:500; }
+.mc .mc-od-reader .mc-cursor { flex-wrap:nowrap; }
+.mc .mc-od-reader .mc-cursor label { min-width:0; flex:1; }
+.mc .mc-od-reader .mc-cursor input { width:100%; min-width:0; font-variant-numeric:tabular-nums; }
+.mc .mc-od-reader .mc-cursor button { flex:none; }
+.mc .mc-od-reader .mc-go-ref { padding:0 .15rem; min-height:28px; font-size:.82rem; border:0; background:transparent; text-decoration:underline; text-underline-offset:.16em; }
+.mc .mc-od-reader :disabled { color:var(--mc-muted); cursor:default; }
+.mc .mc-od-reader summary { color:var(--mc-text); }
+.mc .mc-od-reader .mc-values tr[data-selected=true] { background:color-mix(in srgb,var(--mc-text) 6%,transparent); }
+.mc .mc-od-reader .mc-model p { margin:.5rem 0; }
+
 @container (max-width: 840px) {
   .mc .mc-layout { grid-template-columns:minmax(0,1fr); gap:.5rem; }
   .mc .mc-reader { border-left:0; border-top:1px solid var(--mc-edge); padding:.5rem 0 0; }

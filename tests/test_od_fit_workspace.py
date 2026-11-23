@@ -529,6 +529,8 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
         assert comparison["model"]["contract_reference"]["isotope"] == "Rb85"
         assert comparison["model"]["conditions"]["line_strength"] == .5
         np.testing.assert_array_equal(comparison["theory_trace"]["transmission"], expected.transmission)
+        np.testing.assert_array_equal(comparison["theory_trace"]["od0"], expected.od0)
+        assert comparison["theory_trace"]["n_eff"] == output["view"]["optical_readout"]["n_eff"] > 0
         np.testing.assert_array_equal(output["view"]["optical_readout"]["optical_depth"], expected.optical_depth)
         np.testing.assert_array_equal(output["plot_payloads"][0]["traces"][0]["y_data"], expected.transmission)
         snapshot = build_export_payload(**output, include_quantitative=True)

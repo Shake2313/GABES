@@ -61,6 +61,8 @@ def test_d20_finite_probe_is_the_rate_model_on_both_views():
     np.testing.assert_array_equal(raw["alpha_unit"] * 0.5 * length, evaluation.od0)
     assert chi is None
     view = SASScheme().observables(raw, p, include_figures=False)
+    np.testing.assert_array_equal(view["optical_readout"]["od0"], evaluation.od0)
+    np.testing.assert_array_equal(view["optical_readout"]["optical_depth"], evaluation.optical_depth)
     assert any(m.get("label") == "Probe model" for m in view["metrics"])
 
 

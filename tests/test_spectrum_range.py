@@ -51,3 +51,45 @@ assert.equal(to.reports,10);
                             text=True, encoding="utf-8", capture_output=True,
                             timeout=20)
     assert result.returncode == 0, result.stderr[-4000:]
+
+
+def test_od_peak_and_sas_reference_follow_native_samples():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js required for spectrum readout tests")
+    module = (UI_ASSETS / "model_compare.js").read_text(encoding="utf-8")
+    assertions = r"""
+import assert from 'node:assert/strict';
+assert.deepEqual(absorptionPeaks([7,6,4,3]), []);
+assert.deepEqual(absorptionPeaks([0,2,2,2,1,5,4,7]), [2,5]);
+assert.deepEqual(absorptionPeaks([0,2,2,null,0,4,NaN,2]), []);
+const marker=(kind,label,x_mhz)=>({kind,label,x_mhz});
+const groups=[
+  {id:'Rb87',markers:[marker('crossover_candidate','CO candidate',4),
+                      marker('transition','a',8),marker('transition','out',12)]},
+  {id:'Rb85',markers:[marker('transition','b',8)]}
+];
+const all=modelReferences(groups,null,[4,8]);
+const rb=modelReferences(groups,'Rb87',[4,8]);
+assert.equal(all.length,3);
+assert.equal(rb.length,2);
+const nearest=chooseReference(rb,null,6);
+assert.equal(nearest.label,'a');  // equally distant candidate and allowed line
+assert.equal(chooseReference(rb,nearest,4).label,'a');  // retain reference as cursor moves
+assert.equal(chooseReference(all,all[2],4).group_id,'Rb85');  // coincident isotope labels
+assert.equal(chooseReference(rb,all[2],4).label,'CO candidate');  // another group
+assert.equal(chooseReference(rb,{...nearest,x_mhz:4},4).label,'CO candidate');
+// A custom window with no reference begins empty. An existing anchor remains
+// usable there only if its full identity belongs to the current solved scan.
+assert.equal(chooseReference(modelReferences(groups,null,[9,11]),null,10),undefined);
+assert.deepEqual(modelReferences(groups,null,[9,11],nearest,[3,13]),[nearest]);
+assert.equal(modelReferences(groups,null,[9,11],nearest,[9,13]).length,0);
+assert.equal(modelReferences(groups,null,[9,11],{...nearest,label:'forged'},[3,13]).length,0);
+assert.equal(modelReferences(groups,'Rb85',[9,11],nearest,[3,13]).length,0);
+const shifted=modelReferences(groups,null,[11,13],nearest,[3,13]);
+assert.deepEqual(shifted.map(m=>m.label),['a','out']);
+assert.equal(chooseReference(shifted,nearest,12).label,'a');
+"""
+    result = subprocess.run([node, "--input-type=module"], input=module + assertions,
+                            text=True, encoding="utf-8", capture_output=True, timeout=20)
+    assert result.returncode == 0, result.stderr[-4000:]

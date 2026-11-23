@@ -876,8 +876,10 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         if physical_fit:
             metadata["fit_model_id"] = physical_fit.get("probe_model")
         theory_trace = {"detuning": theory_x.tolist(), "transmission": theory_y.tolist()}
-        if readout.get("optical_depth") is not None:
-            theory_trace["optical_depth"] = np.asarray(readout["optical_depth"]).tolist()
+        for quantity in ("optical_depth", "od0"):
+            if readout.get(quantity) is not None:
+                theory_trace[quantity] = np.asarray(readout[quantity]).tolist()
+        theory_trace["n_eff"] = readout.get("n_eff")
         workspace_payload = dict(measurement_workspace=True, coverage_ghz=coverage,
                                  theory_trace=theory_trace, model=metadata, input_metadata=projection.metadata)
         if metadata.get("axis_reference") and x_unit == "GHz":

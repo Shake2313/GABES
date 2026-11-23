@@ -1,8 +1,7 @@
 .od-measurement .od-history, .od-measurement .od-controls { display:flex; align-items:end; flex-wrap:wrap; gap:.45rem; margin:.45rem 0; }
 .od-measurement .od-controls label { display:grid; gap:.2rem; }
 .od-measurement input { width:7.5rem; max-width:100%; }
-.od-measurement .mc-reader { border:1px solid var(--mc-edge); border-radius:6px; padding:.65rem .8rem; background:linear-gradient(125deg,#e8f4fb,#f6fafc 75%); }
-.od-measurement .mc-reader output { display:block; margin-top:.35rem; font-variant-numeric:tabular-nums; }
-.od-measurement .mc-reader strong { display:block; }
+.od-measurement .mc-reader h4 { margin-top:.85rem; }
+.od-measurement .mc-reader output { display:block; margin-top:.2rem; font-variant-numeric:tabular-nums; }
 .od-measurement button:disabled { opacity:.5; cursor:default; }
 .od-measurement .mc-nav-window { fill:#e0eef8; }

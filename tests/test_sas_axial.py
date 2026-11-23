@@ -45,6 +45,9 @@ def test_graded_cell_carries_local_pressure_field_and_segment_integral():
     raw = scheme.compute(params)
     view = scheme.headless_observables(raw, params)["optical_readout"]
     axial = view["axial_cell"]
+    area = np.pi * (params["probe_waist_mm"] * 1e-3) ** 2 / 2
+    assert view["n_eff"] == pytest.approx(
+        area * np.dot(np.diff(axial["z_edges_m"]), axial["density_m3"]["Rb85"]), rel=1e-13)
     assert axial["status"] == "converged"
     np.testing.assert_allclose(axial["field_ut"], [-30., -10., 10., 30.])
     np.testing.assert_allclose(axial["temperature_c"], [45.5, 48.5, 51.5, 54.5])

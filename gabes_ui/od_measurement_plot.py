@@ -24,7 +24,8 @@ def render_measurement_plot(comparison):
         x, y = x[::-1], y[::-1]
     payload = dict(
         grid=theory["detuning"], transmission=theory["transmission"],
-        depth=theory.get("optical_depth"), measuredX=x,
+        depth=theory.get("optical_depth"), od0=theory.get("od0"), nEff=theory.get("n_eff"),
+        measuredX=x,
         measuredY=y, coverage=comparison["coverage_ghz"],
         absolute=comparison["calibration_mode"] != "relative_extrema",
         source=comparison["source_fingerprint_sha256"],

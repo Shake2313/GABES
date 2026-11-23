@@ -85,9 +85,6 @@ st.set_page_config(page_title="GABES — Atomic Bloch Equation Solver",
                    page_icon=ICON_SVG, layout="wide")
 
 
-READOUT_CACHE_VERSION = "v17-rydberg-workspace-20261105"
-
-
 def _inject_css():
     # Tokens + stylesheet live in gabes_ui/theme.py and gabes_ui/assets/ui/gabes.css.
     # The anchor lets the stylesheet hide its own element slot (no layout gap).
@@ -213,6 +210,7 @@ else:
 # Reserve the main instrument above saved settings, but mount the defaults
 # store before any editable parameter widgets so preset callbacks stay atomic.
 is_sas = scheme.name == "sas"
+READOUT_CACHE_VERSION = "v18-od-sas-selected-readout-20261123" if is_sas else "v17-rydberg-workspace-20261105"
 fit_od_view = is_sas and st.query_params.get("compare") == "0"
 has_spectra = scheme.model_comparison_parameter is not None
 if has_spectra:

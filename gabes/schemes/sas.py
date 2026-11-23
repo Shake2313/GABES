@@ -48,6 +48,7 @@ from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
                          subdoppler_refinement)
 from ..optical_pumping import steady_populations as _pump_pops
 from ..report import derived_table
+from ..rydberg_experiment import effective_atom_number
 from .base import ExtraView, ParamSpec, Scheme
 from . import sas_axial
 
@@ -1360,7 +1361,7 @@ class SASScheme(Scheme):
         x = raw["scan"] / (2 * np.pi) / 1e9                  # GHz (relative)
         finite_probe = raw.get("probe_model") in (TWO_LEVEL_MODEL, RATE_MODEL)
         optical_readout = _optical_readout(
-            x, "GHz", alpha, L, params, effective=finite_probe)
+            x, "GHz", alpha, L, params, raw, effective=finite_probe)
         T_trans = optical_readout["transmission"]
         if "optical_collisions" in raw:
             optical_readout["optical_collisions"] = raw["optical_collisions"]
@@ -1576,7 +1577,7 @@ class SASScheme(Scheme):
 
     def _obs_generic(self, raw, params, alpha, chi_real, L, include_figures=True):
         x = raw["scan"] / (2 * np.pi) / 1e6                  # MHz
-        optical_readout = _optical_readout(x, "MHz", alpha, L, params)
+        optical_readout = _optical_readout(x, "MHz", alpha, L, params, raw)
         T_trans = optical_readout["transmission"]
         if "optical_collisions" in raw:
             optical_readout["optical_collisions"] = raw["optical_collisions"]
@@ -1771,15 +1772,38 @@ def _finish_quantitative_export(evidence):
                 reason="Independent grids agree on the fixed feature and both derivative flanks.")
 
 
-def _optical_readout(x, x_unit, alpha, L, params, *, effective=False):
+def _probe_atom_count(raw, params, length_m):
+    """Gaussian intensity-weighted atom count for the same cell and probe."""
+    if raw["mode"] != "species":
+        return None  # The generic toy has no physical probe waist.
+    if axial := raw.get("axial_cell"):
+        segment_densities = sum(axial["density_m3"].values())
+        density = np.average(segment_densities, weights=np.diff(axial["z_edges_m"]))
+    elif raw.get("isotope_fractions"):
+        cold_k, path_k, _ = _temperatures(params)
+        density = sum(_species_path_density(species.ISOTOPES[name], cold_k, path_k, fraction)
+                      for name, fraction in raw["isotope_fractions"].items())
+    else:
+        return None
+    return effective_atom_number(
+        density, length_m=length_m,
+        probe_radius_m=float(params.get("probe_waist_mm", 1.0)) * 1e-3).atoms
+
+
+def _optical_readout(x, x_unit, alpha, L, params, raw, *, effective=False):
     """Typed attenuation values shared by plots, headless readout and export."""
+    depth = observables.optical_depth(alpha, L)
+    # For a finite probe this is the weak-input coefficient already used in
+    # the propagation table, evaluated with the same pump and model.
+    od0 = (observables.optical_depth(raw["alpha_unit"] * params["line_strength"], L)
+           if effective else depth)
     return dict(
         schema="gabes-optical-attenuation-v1",
         x=x,
         x_unit=x_unit,
         transmission=observables.transmission(alpha, L),
         decadic_absorbance=observables.decadic_absorbance(alpha, L),
-        optical_depth=observables.optical_depth(alpha, L),
+        optical_depth=depth, od0=od0, n_eff=_probe_atom_count(raw, params, L),
         cell_length_m=float(L),
         line_strength=float(params["line_strength"]),
         effective=bool(effective),

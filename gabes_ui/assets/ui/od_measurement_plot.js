@@ -69,8 +69,11 @@ export default function mount({parentElement, data:d}) {
         <label>Window end (GHz)<input type="number" step="any" name="high"></label>
         <label>Selected frequency (GHz)<input type="number" step="any" name="point"></label></div>
       <div class="mc-layout"><div class="mc-local"><div class="od-detail"></div><div class="od-depth"></div></div>
-      <section class="mc-reader" aria-label="Selected point"><strong>Selected point</strong>
-        <output aria-live="polite"></output></section></div></div>`;
+      <section class="mc-reader" aria-label="Selected point">
+        <h3>Model at selected frequency</h3><p class="mc-loc"></p>
+        <dl class="mc-readings" aria-live="polite"></dl>
+        <h4>Nearest measured sample</h4><output aria-live="polite"></output>
+      </section></div></div>`;
   const q = query => root.querySelector(query);
   q('.mc-legend i').style.borderColor = d.theoryColor;
   q('.mc-legend .off').style.borderColor = d.measuredColor;
@@ -95,11 +98,14 @@ export default function mount({parentElement, data:d}) {
     q('[data-action=forward]').disabled = state.position === state.views.length-1;
     q('[data-action=home]').disabled = view.every((v,i)=>v===domain[i]);
     const nearest = curveSample(native, x, selected);
-    const theoryReadout = 'Theory T '+format(d.transmission[state.index],7)+' · OD '+format(depth[state.index],7);
-    const signalLabel = d.absolute ? 'T ' : 'relative signal ';
-    q('output').textContent = format(selected,8)+' GHz · '+theoryReadout+' · '+(nearest.x === null
-      ? 'No measured point' : 'Nearest measured '+format(nearest.x,8)+' GHz · '+signalLabel+format(nearest.y,7)
-        +(d.absolute ? ' · OD '+format(opticalDepth(nearest.y),7) : ''));
+    q('.mc-loc').textContent = format(selected,8)+' GHz';
+    renderOdReadings(q('.mc-readings'), {od0:d.od0?.[state.index], odEff:depth[state.index],
+      nEff:d.nEff, transmission:d.transmission[state.index]});
+    const measured = nearest.x === null ? 'No measured point at this frequency'
+      : format(nearest.x,8)+' GHz · '+(d.absolute
+        ? 'T '+format(100*nearest.y,6)+'% · OD '+format(opticalDepth(nearest.y),6)
+        : 'Relative signal '+format(nearest.y,6));
+    q('output').textContent = measured;
     function panel(selector,title,limits,isDepth,overview) {
       const host=q(selector);
       const oldChart=host.querySelector('svg');

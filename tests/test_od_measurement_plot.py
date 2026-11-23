@@ -14,12 +14,15 @@ def test_reversed_display_axis_is_sorted_for_inspection_without_modifying_source
     monkeypatch.setattr(plot, "_COMPONENT", lambda **kwargs: calls.append(kwargs["data"]))
     measured = {"detuning": [3.0, 2.8, -2.5], "transmission": [0.91, 0.3, 0.89]}
     assert plot.render_measurement_plot({
-        "theory_trace": {"detuning": [-3, 0, 3], "transmission": [1, 0.6, 1]},
+        "theory_trace": {"detuning": [-3, 0, 3], "transmission": [1, 0, 1],
+                        "od0": [0, 1200, 0], "optical_depth": [0, 900, 0], "n_eff": 1.2e9},
         "comparison_trace": measured, "coverage_ghz": [[-2.5, -2.5], [2.8, 3.0]],
         "source_fingerprint_sha256": "example", "calibration_mode": "relative_extrema",
     })
     assert calls[0]["measuredX"] == [-2.5, 2.8, 3.0]
     assert calls[0]["measuredY"] == [0.89, 0.3, 0.91]
+    assert calls[0]["depth"][1] == 900 and calls[0]["od0"][1] == 1200
+    assert calls[0]["transmission"][1] == 0 and calls[0]["nEff"] == 1.2e9
     assert not calls[0]["absolute"]
     assert measured["detuning"] == [3.0, 2.8, -2.5]
 

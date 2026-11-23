@@ -86,7 +86,7 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
     series = {}
     for condition, raw, view in conditions:
         readout = view["optical_readout"]
-        if "resolution" not in readout:
+        if "od0" not in readout or "n_eff" not in readout or "resolution" not in readout:
             # A running app may have cached a pre-comparison optical view.
             readout = scheme.headless_observables(raw, condition)["optical_readout"]
         x = np.asarray(readout["x"], dtype=float)
@@ -107,6 +107,7 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             baseline = transmission
             mode = raw["mode"]
             composition = raw.get("isotope_fractions", {})
+            n_eff = readout["n_eff"]
         else:
             if readout["x_unit"] != native_unit:
                 raise ValueError("Inconsistent native frequency units in OD/SAS comparison.")
@@ -118,6 +119,7 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "power_mw": power,
             "transmission": sample_values(transmission),
             "optical_depth": sample_values(optical_depth),
+            "od0": sample_values(readout["od0"]),
             "effective": bool(readout["effective"]),
             "delta": sample_values(transmission - baseline),
             "resolution": readout["resolution"],
@@ -145,11 +147,16 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
         "axis": {"label": "Relative frequency", "unit": "MHz",
                  "reference": reference, "overview_unit": native_unit},
         "series": [series[power] for power in powers], "groups": groups,
-        "default_power_mw": current,
+        "default_power_mw": current, "n_eff": n_eff,
         "fixed": {k: v for k, v in params.items() if k != key},
         "varied": {"key": key, "unit": "mW", "values": powers},
         "observables": {
             "transmission": {"label": "Transmission", "unit": "1"},
+            "od0": {"label": "Weak-probe optical depth", "unit": "1",
+                    "definition": "Weak-probe optical depth at the same pump power and frequency."},
+            "n_eff": {"label": "Effective atom number", "unit": "atoms",
+                      "definition": "Gaussian intensity-weighted atom count across all isotopes "
+                                    "along the probe path, independent of frequency."},
             "optical_depth": {"label": "Optical depth", "symbol": "τ", "unit": "1",
                               "definition": readout["conventions"]["optical_depth"]},
             "delta": {"label": "Transmission difference", "unit": "1",

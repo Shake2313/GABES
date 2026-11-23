@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from gabes import schemes
+from gabes import schemes, species
 from gabes.core import blas_single_thread
 from gabes.model_comparison import comparison_values, sample_values, same_grid
 from gabes.schemes.sas import (
@@ -54,6 +54,12 @@ def test_full_resolution_natural_rb_reuses_current_and_differences_at_every_poin
     np.testing.assert_array_equal(current["optical_depth"],
                                   current_view["optical_readout"]["optical_depth"])
     assert not current["effective"]
+    # With no probe saturation OD0 and OD_eff coincide even with the pump on.
+    for row in model["series"]:
+        np.testing.assert_array_equal(row["od0"], row["optical_depth"])
+    n = species.number_density(species.RB85, model["fixed"]["temp_c"] + 273.15)
+    area = np.pi * (model["fixed"]["probe_waist_mm"] * 1e-3) ** 2 / 2
+    assert model["n_eff"] == pytest.approx(n * model["fixed"]["cell_mm"] * 1e-3 * area)
     assert current["resolution"] == current_view["optical_readout"]["resolution"]
     assert model["series"][0]["resolution"]["width_mhz"] is None
     assert [g["label"] for g in model["groups"]] == [
@@ -68,8 +74,12 @@ def test_full_resolution_natural_rb_reuses_current_and_differences_at_every_poin
 
 def test_mixed_rb_composition_isotope_absence_and_native_reference_do_not_conflate():
     model, solves, _ = _compare(line="D2", rb_composition=RB_COMPOSITION_CUSTOM,
-                                rb85_fraction=0., scan_points=401, pump_power_mw=.7)
+                                rb85_fraction=0., scan_points=401, pump_power_mw=.7,
+                                temp_c=40., constrain_doppler_temp=False, doppler_temp_c=60.,
+                                cell_mm=25., probe_waist_mm=.4, waist_mm=2., line_strength=.6)
     assert solves == [0.]
+    density = species.number_density(species.RB87, 313.15) * (313.15 / 333.15)
+    assert model["n_eff"] == pytest.approx(density * .025 * np.pi * .0004**2 / 2, rel=1e-13)
     assert model["default_power_mw"] == .7
     assert len(model["groups"]) == 2 and all("⁸⁷Rb" in g["label"] for g in model["groups"])
     assert model["axis"]["reference"].startswith("Rb85 D2")
@@ -153,6 +163,10 @@ def test_other_manifolds_use_own_grid_and_no_invented_rb_groups(atom, reference,
     assert model["axis"]["overview_unit"] == unit
     assert model["axis"]["reference"] == reference
     assert len(model["groups"]) == count and model["fixed"]["temp_c"] == 65.
+    if atom == GENERIC:
+        assert model["n_eff"] is None
+    else:
+        assert model["n_eff"] > 0
     factor = 1000 if unit == "GHz" else 1
     np.testing.assert_array_equal(model["x"], current["optical_readout"]["x"] * factor)
 
@@ -168,6 +182,7 @@ def test_native_depth_survives_underflow_and_carries_finite_probe_scope():
     c = opaque["series"][-1]
     deep = int(np.argmax(c["optical_depth"]))
     assert c["transmission"][deep] == 0
+    assert c["od0"][deep] == c["optical_depth"][deep]
     assert np.isfinite(c["optical_depth"][deep]) and c["optical_depth"][deep] > 745.
 
     finite, solves, current = _compare(scan_points=401, line="D2", probe_power_uw=.1,
@@ -175,6 +190,10 @@ def test_native_depth_survives_underflow_and_carries_finite_probe_scope():
     assert solves == [0.]
     assert finite["varied"]["values"] == [0., .83]
     assert all(c["effective"] for c in finite["series"])
+    off, on = finite["series"]
+    assert np.max(np.abs(np.subtract(off["od0"], off["optical_depth"]))) > 1e-6
+    assert np.max(np.abs(np.subtract(on["od0"], off["od0"]))) > 1e-6
+    np.testing.assert_array_equal(on["od0"], current["optical_readout"]["od0"])
     np.testing.assert_array_equal(finite["series"][-1]["optical_depth"],
                                   current["optical_readout"]["optical_depth"])
 

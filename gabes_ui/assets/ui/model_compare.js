@@ -1,6 +1,53 @@
 // SAS-specific controls over the shared sampled-spectrum renderer.
 const sessions = new Map();
 
+// A sampled maximum needs lower neighbours on both sides. Use one native
+// sample near the middle of a plateau and leave clipped or missing edges out.
+function absorptionPeaks(values) {
+  const peaks=[];
+  for (let first=1; first<values.length-1; first++) {
+    const value=values[first], left=values[first-1];
+    if (!Number.isFinite(value) || !Number.isFinite(left) || value<=left) continue;
+    let last=first;
+    while (values[last+1]===value) last++;
+    const right=values[last+1];
+    if (Number.isFinite(right) && right<value) peaks.push(Math.floor((first+last)/2));
+    first=last;
+  }
+  return peaks;
+}
+
+function sameReference(marker, saved) {
+  return saved && marker.group_id===saved.group_id && marker.kind===saved.kind
+    && marker.label===saved.label && marker.x_mhz===saved.x_mhz;
+}
+
+function modelReferences(groups, groupId, [low,high], saved, [first,last]=[low,high]) {
+  return groups.filter(g=>!groupId || g.id===groupId).flatMap(g=>
+    g.markers.filter(m=>Number.isFinite(m.x_mhz) && m.x_mhz>=first && m.x_mhz<=last
+      && ['transition','crossover_candidate'].includes(m.kind) && typeof m.label==='string' && m.label)
+      .map(m=>({group_id:g.id,kind:m.kind,label:m.label,x_mhz:m.x_mhz})))
+    .filter(m=>(m.x_mhz>=low && m.x_mhz<=high) || (!groupId && sameReference(m,saved)));
+}
+
+function chooseReference(markers, saved, x) {
+  const retained=markers.find(m=>sameReference(m,saved));
+  if (retained) return retained;
+  let nearest, distance=Infinity;
+  for (const m of markers) {
+    const delta=Math.abs(x-m.x_mhz);
+    if (delta<distance || (delta===distance && m.kind==='transition' && nearest?.kind!=='transition')) {
+      nearest=m; distance=delta;
+    }
+  }
+  return nearest;
+}
+
+function signedReadout(value, digits) {
+  if (!Number.isFinite(value)) return '—';
+  return (value>0?'+':'')+format(value,digits);
+}
+
 export default function mount({parentElement, data, key, setStateValue}) {
   const root = parentElement.querySelector('.mc');
   if (!root) return;
@@ -24,19 +71,26 @@ export default function mount({parentElement, data, key, setStateValue}) {
     </div><p class="mc-frequency-reference mc-muted"></p>
     <div class="mc-layout"><div class="mc-graphs"><div class="mc-overview"></div>
       <div class="mc-local"><div class="mc-zoom"></div><div class="mc-od"></div></div></div>
-      <aside class="mc-reader" aria-label="Selected sample readout">
-        <h3>Selected sample</h3><p class="mc-loc"></p>
+      <aside class="mc-reader mc-od-reader" aria-label="Spectrum readout">
+        <h3></h3><p class="mc-loc"></p>
+        <label class="mc-pick"><span></span><select></select></label>
+        <dl class="mc-readings mc-sas-readings" hidden>
+          <dt>Detuning from reference</dt><dd class="mc-offset"></dd>
+          <dt>Pump on − off, ΔT</dt><dd class="mc-delta"></dd>
+        </dl>
         <div class="mc-cursor"><label>Sample frequency (MHz)<input type="number" step="any" inputmode="decimal"></label>
         <button type="button" class="prev" aria-label="Previous sample">←</button>
         <button type="button" class="next" aria-label="Next sample">→</button></div>
-        <table class="mc-values"><caption></caption><thead><tr>
-          <th scope="col">Pump</th><th scope="col">Transmission T</th><th scope="col">OD τ</th>
-        </tr></thead><tbody></tbody></table>
-        <p class="mc-feature mc-model"></p><p class="mc-probe mc-model" hidden></p><p class="mc-basis mc-muted"></p>
-        <details class="mc-model"><summary>Transition markers and model conditions</summary>
-          <p class="mc-marker-note"></p><p class="mc-condition-note"></p></details>
-        <button type="button" class="mc-export">Download comparison JSON</button>
-        <output class="mc-sr" aria-live="polite"></output>
+        <button type="button" class="mc-go-ref" hidden>Go to reference</button>
+        <dl class="mc-readings mc-od-readings" hidden></dl>
+        <details class="mc-model"><summary>Model details</summary>
+          <table class="mc-values"><caption></caption><thead><tr>
+            <th scope="col">Pump</th><th scope="col">Transmission T</th><th scope="col">OD τ</th>
+          </tr></thead><tbody></tbody></table>
+          <p class="mc-feature"></p><p class="mc-probe" hidden></p><p class="mc-basis"></p>
+          <p class="mc-marker-note"></p><p class="mc-condition-note"></p>
+          <button type="button" class="mc-export">Download comparison JSON</button>
+        </details><output class="mc-sr" aria-live="polite"></output>
       </aside></div>`;
   const q=s=>root.querySelector(s), groups=q('.mc-groups');
   q('.mc-tools').hidden=data.show_groups===false;
@@ -44,7 +98,15 @@ export default function mount({parentElement, data, key, setStateValue}) {
   q('.mc-frequency-reference').textContent='Frequency reference: '+d.axis.reference+'.';
   const groupFor = () => d.groups.find(g=>g.id===state.group_id);
   const curveFor = () => d.series.find(c=>c.power_mw===d.default_power_mw) || base;
-  const active=curveFor();
+  const active=curveFor(), driven=active.power_mw*1e-3>0;
+  const peaks=driven ? [] : absorptionPeaks(active.optical_depth);
+  const picker=q('.mc-pick select');
+  let pickerWindow='', references=[];
+  q('.mc-od-reader h3').textContent=driven ? 'SAS detuning' : 'Optical depth';
+  q('.mc-pick span').textContent=driven ? 'Model reference' : 'Absorption peak';
+  q('.mc-sas-readings').hidden=!driven;
+  q('.mc-go-ref').hidden=!driven;
+  q('.mc-od-readings').hidden=driven;
   const onLabel='Pump '+format(active.power_mw,8)+' mW';
   q('.mc-legend .off').classList.toggle('mc-off-only',active===base);
   q('.mc-on-legend').hidden=active===base;
@@ -107,7 +169,10 @@ export default function mount({parentElement, data, key, setStateValue}) {
     pickSample(result.cursor);
   }
   function snapshot() {
-    return {...state,x_mhz:d.x[state.sample_index]};
+    const {reference,detuning_mhz,...selection}=state, x=d.x[state.sample_index];
+    return reference && driven
+      ? {...selection,x_mhz:x,reference,detuning_mhz:x-reference.x_mhz}
+      : {...selection,x_mhz:x};
   }
   function publish() {
     const value = {...snapshot(),context:data.context,navigation_revision:revision}, stamp=JSON.stringify(value);
@@ -128,16 +193,16 @@ export default function mount({parentElement, data, key, setStateValue}) {
     label.append(radio,element('span',g.label));groups.append(label);
   }
   if (!d.groups.length) groups.append(element('span','Full scan · no grouped transition markers','mc-muted'));
+  function navigateToFrequency(value) {
+    if (!Number.isFinite(value)) return;
+    const [a,b]=bounds(), sample=d.x[nearestSample(d.x,value)];
+    if (value<a || value>b || sample<a || sample>b) {
+      applyWindow(navigateSpectrumWindow('center',{window:[a,b],x:value,cursor:d.x[state.sample_index]},
+                                         value,full,minWidth));
+    } else pickSample(value);
+  }
   function goFrequency() {
-    const value=freq.valueAsNumber;
-    if (Number.isFinite(value)) {
-      const [a,b]=bounds();
-      if(value<a||value>b) {
-        const result=navigateSpectrumWindow('center',{window:[a,b],x:value,cursor:d.x[state.sample_index]},
-                                            value,full,minWidth);
-        applyWindow(result);
-      } else pickSample(value);
-    }
+    navigateToFrequency(freq.valueAsNumber);
     refresh();publish();
   }
   freq.onchange=goFrequency;
@@ -155,6 +220,16 @@ export default function mount({parentElement, data, key, setStateValue}) {
     refresh();publish();
   }
   q('.prev').onclick=()=>step(-1);q('.next').onclick=()=>step(1);
+  picker.onchange=()=>{
+    if (driven) {
+      state.reference=references[picker.selectedIndex];
+      pickerWindow='';  // Remove a former off-screen anchor from the options.
+    } else if (picker.value) state.sample_index=Number(picker.value);
+    refresh();publish();
+  };
+  q('.mc-go-ref').onclick=()=>{
+    if (state.reference) {navigateToFrequency(state.reference.x_mhz);refresh();publish();}
+  };
   q('.mc-export').onclick=()=>{
     const value={...d,selection:snapshot()};
     const url=URL.createObjectURL(new Blob([JSON.stringify(value)],{type:'application/json'}));
@@ -184,14 +259,66 @@ export default function mount({parentElement, data, key, setStateValue}) {
       series:seriesFor('optical_depth'),marks,keyboardInspector:true,
       description:'Natural-log optical depth. The vertical scale fits both curves inside this frequency window. Hover to read the computed samples.'});
   }
+  function updatePicker(group, x) {
+    const limits=bounds(), windowKey=JSON.stringify([state.group_id,...limits]);
+    if (pickerWindow!==windowKey) {
+      pickerWindow=windowKey;
+      picker.replaceChildren();
+      if (driven) {
+        references=modelReferences(d.groups,group?.id,limits,state.reference,full);
+        for (const m of references) {
+          const name=group ? m.label : d.groups.find(g=>g.id===m.group_id).label+' · '+m.label;
+          const outside=m.x_mhz<limits[0] || m.x_mhz>limits[1];
+          picker.append(element('option',name+' · '+format(m.x_mhz,8)+' MHz'+(outside?' · outside window':'')));
+        }
+        if (!references.length) picker.append(element('option','No named reference in window'));
+        picker.disabled=q('.mc-go-ref').disabled=!references.length;
+      } else {
+        const inWindow=peaks.filter(i=>d.x[i]>=limits[0] && d.x[i]<=limits[1]);
+        const cursor=element('option',inWindow.length ? 'Choose a peak…' : 'No sampled peak in window');
+        cursor.value='';picker.append(cursor);
+        for (const i of inWindow) {
+          const option=element('option',format(d.x[i],8)+' MHz');
+          option.value=String(i);picker.append(option);
+        }
+        picker.disabled=!inWindow.length;
+      }
+    }
+    if (driven) {
+      state.reference=chooseReference(references,state.reference,x);
+      const offscreen=state.reference && (state.reference.x_mhz<limits[0] || state.reference.x_mhz>limits[1]);
+      q('.mc-pick span').textContent=offscreen ? 'Model reference · outside window' : 'Model reference';
+      if (state.reference) picker.selectedIndex=references.indexOf(state.reference);
+    } else {
+      picker.value=String(state.sample_index);
+      if (picker.selectedIndex<0) picker.value='';
+    }
+  }
+
+  function showPoint(i) {
+    freq.value=Number(d.x[i].toPrecision(12)).toString();
+    const delta=active.delta?.[i], ref=state.reference;
+    if (driven) {
+      q('.mc-offset').textContent=ref ? signedReadout(d.x[i]-ref.x_mhz,6)+' MHz' : '—';
+      q('.mc-delta').textContent=Number.isFinite(delta) ? signedReadout(delta*100,5)+' pp' : '—';
+    } else {
+      renderOdReadings(q('.mc-od-readings'),{
+        od0:active.od0?.[i], odEff:active.optical_depth[i], nEff:d.n_eff,
+        transmission:active.transmission[i]
+      });
+    }
+  }
+
   function refresh() {
     const group=groupFor(),curve=curveFor(),i=state.sample_index,[a,b]=getIndices();
     state.x_mhz=d.x[i];
     for (const radio of groups.querySelectorAll('input')) radio.checked=radio.value===state.group_id;
-    freq.min=String(full[0]);freq.max=String(full[1]);freq.value=Number(d.x[i].toPrecision(12)).toString();
+    freq.min=String(full[0]);freq.max=String(full[1]);
     q('.prev').setAttribute('aria-disabled',String(i<=a));
     q('.next').setAttribute('aria-disabled',String(i>=b));
-    q('.mc-loc').textContent=(group?.label||(bounds()[0]===full[0]&&bounds()[1]===full[1]?'Full scan':'Custom window'))+' · '+format(d.x[i],8)+' MHz';
+    q('.mc-loc').textContent=group?.label||(bounds()[0]===full[0]&&bounds()[1]===full[1]?'Full scan':'Custom window');
+    updatePicker(group,d.x[i]);
+    showPoint(i);
     from.value=bounds()[0];to.value=bounds()[1];to.setCustomValidity('');
     q('.mc-values caption').textContent='T and optical depth at the selected frequency';
     const tbody=q('tbody');tbody.replaceChildren();
@@ -216,7 +343,9 @@ export default function mount({parentElement, data, key, setStateValue}) {
     const probe=q('.mc-probe');
     probe.hidden=!curve.probe_model_scope;
     probe.textContent=curve.probe_model_scope ? 'Probe model: '+curve.probe_model_scope + (curve.probe_model_note ? '. '+curve.probe_model_note : '') : '';
-    q('.mc-basis').textContent=curve.effective ? 'Effective OD τ = −ln(T), using the collected Gaussian-beam power.' : 'Optical depth τ = −ln(T). T is the transmitted fraction of the probe intensity.';
+    q('.mc-basis').textContent=driven
+      ? 'Detuning is the sample frequency minus the model reference. Go to reference selects the nearest solved sample. ΔT is the pump-on minus pump-off transmission in percentage points.'
+      : 'OD₀ is the weak-probe optical depth. Effective OD equals −ln(T) at the selected probe power. The effective atom count includes atoms in the Gaussian probe volume across all isotopes.';
     const markerText=visibleMarkers().map(m=>m.label+' at '+format(m.x_mhz,8)+' MHz').join(' · ');
     let markerNote = markerText ? markerText+'. CO? marks a candidate crossover at the midpoint of two allowed transitions.' : 'No named transition markers in this window.';
     if (group?.overlaps?.length) markerNote += ' Group windows overlap. Curves show total transmission.';
@@ -227,7 +356,10 @@ export default function mount({parentElement, data, key, setStateValue}) {
     if (Number.isFinite(fixed.probe_power_uw)) conditions.push(fixed.probe_power_uw+' µW probe');
     conditions.push(d.x.length+' solved samples per curve',d.axis.reference);
     q('.mc-condition-note').textContent=conditions.filter(Boolean).join(' · ')+'. Zoom retains the original samples.';
-    q('output').textContent='Sample '+format(d.x[i],8)+' MHz at '+curve.power_mw+' mW. Transmission '+format(curve.transmission[i],6)+', optical depth '+format(curve.optical_depth[i],6)+'.';
+    const ref=state.reference;
+    q('output').textContent='Sample '+format(d.x[i],8)+' MHz. '+(driven && ref
+      ? 'Detuning '+q('.mc-offset').textContent+' from '+ref.label+'.'
+      : 'Transmission '+format(curve.transmission[i],6)+', optical depth '+format(curve.optical_depth[i],6)+'.');
     draw();
   }
   let width=0, frame=0;
@@ -268,6 +400,7 @@ export default function mount({parentElement, data, key, setStateValue}) {
       for(const svg of graphs.querySelectorAll('svg'))if(svg._navigation)previewMarkers(svg,bounds(),state.sample_index);
       for(const radio of groups.querySelectorAll('input'))radio.checked=radio.value===state.group_id;
       root.dataset.gesture='preview';
+      showPoint(state.sample_index);
       q('.mc-loc').textContent='Preview · '+format(d.x[state.sample_index],8)+' MHz · window '+bounds().map(v=>format(v,7)).join(' to ')+' MHz';
     },
     commit(drag,e) {
