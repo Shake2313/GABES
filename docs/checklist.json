@@ -663,12 +663,25 @@
       "verification": "⟦AI⟧ 실측 CH2 트리거·CH1 SAS·CH3 OD, 취득점 2,000개 중 [630, 1385)의 755개 원시 전압이 기존 정규화 자료 및 웹 Standard/Origin 재입력과 모두 동일. AutoOD D₂ 샷 노이즈 CSV의 고정 1,129점에서 50 °C·30 µW로 시작해 54.5979 °C·37.3342 µW를 복원했다. 참값은 54.6 °C·37.4 µW. 상대 신호의 직선 구간은 주파수축을 식별할 수 없어 적용을 차단한다."
     },
     {
+      "id": "od-sas-profile-fit-window-interpolation",
+      "area": "OD/SAS 측정·피팅",
+      "title": "약한 탐침 피팅에서 표시 주파수 범위에 따른 보간 오차 검토",
+      "origin": "agent_review",
+      "status": "parked",
+      "priority": "P3",
+      "depends_on": [
+        "od-sas-autood-profile-fit-and-scope-workflow"
+      ],
+      "observation": "⟦AI⟧ Claude가 c7fe427의 2,001점 표시 격자와 직접 평가한 투과율을 비교했다. −4~+6.5 GHz에서 −10~+12 GHz로 넓히면 D₁(113 °C, 12.5 mm) 최대 절대차가 1.1×10⁻⁴에서 4.8×10⁻⁴로, D₂(54.6 °C, 75 mm)는 9.1×10⁻⁵에서 4.0×10⁻⁴로 커졌다. 피팅 계수의 오차를 측정한 수치는 아니다.",
+      "next_check": "⟦AI⟧ 동일한 원시 측정 구간과 보정으로 표시 범위만 바꾸고 현행 보간, 표시와 독립적인 이론 격자, 측정점 직접 평가를 비교한다. 투과율·손실·추정 온도/파워·소요 시간을 기록한 뒤 적용 여부를 결정한다."
+    },
+    {
       "id": "autood-post-integration-theory-edition-and-release",
       "area": "AutoOD 이론 문서·Windows 배포",
       "title": "GABES–AutoOD 통합 완료 후 이론서 개정·버전 상향·ZIP 제작",
       "origin": "human_request",
       "user_request": "2026-11-23 사용자가 공유 허브에 기록해 Claude와 공유하도록 요청. 통합 후 현행 문서의 스타일로 새 이론서를 쓰고, 완성한 뒤 주요 변경을 반영해 AutoOD 버전을 올리고 새 ZIP을 만든다.",
-      "status": "parked",
+      "status": "done",
       "priority": "P2",
       "effort": "large",
       "depends_on": [
@@ -683,7 +696,9 @@
         "새 이론서가 완성되면 AutoOD 버전을 올리고 개정 문서를 포함한 새 ZIP을 만든다."
       ],
       "review_skill": "atom-optics-proofread",
-      "coordination_memo": "20261123-1759_codex-to-claude_user-request-post-integration-theory-and-zip.md"
+      "coordination_memo": "20261123-1759_codex-to-claude_user-request-post-integration-theory-and-zip.md",
+      "completion": "⟦AI⟧ AutoOD 로컬 4828e40, 버전 0.3.0, 공개 GABES 기준 75facf4. atom-optics-proofread 교정과 18쪽 렌더링 후 버전 상향. 새 Windows ZIP의 SHA-256은 8a9372e341f3b38f188da72b59f4467feefcdefaeffdf3f2fd1f4fa039e9c22a.",
+      "verification": "⟦AI⟧ 기준 스펙트럼 24개, 구형 CSV 및 양 앱 교환 20건, 샷 노이즈 피팅 2건, 한글 경로의 압축 해제 실행 확인. 데스크톱 총 186개 검사에서 로컬 디스크 전체 실행은 184개 통과, Tk 초기화 실패 2개는 독립 재실행 통과. AutoOD VALIDATION.md에 Drive 실행과 실패 항목별 재검증도 기록."
     },
     {
       "id": "od-sas-autood-finite-probe-fit-extension",
