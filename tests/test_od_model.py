@@ -325,7 +325,8 @@ def test_rate_model_documents_its_accuracy_against_the_full_obe():
     from gabes.od_model import MODELS, RATE_MODEL_ACCURACY
 
     assert MODELS[RATE].accuracy == RATE_MODEL_ACCURACY
-    assert "0.59 %" in RATE_MODEL_ACCURACY and "1.61 %" in RATE_MODEL_ACCURACY
+    assert "0.59 %" in RATE_MODEL_ACCURACY and "1.62 %" in RATE_MODEL_ACCURACY
+    assert "1.85e-3" in RATE_MODEL_ACCURACY and "0.20 %" in RATE_MODEL_ACCURACY
 
 
 def test_public_native_axis_reproduces_autood_through_the_display_entry():

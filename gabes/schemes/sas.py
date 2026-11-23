@@ -622,9 +622,9 @@ class SASScheme(Scheme):
             "longitudinal depletion and Gaussian beam averaging. The same model "
             "draws the theory curve and fits measured OD. Rate equations drop "
             "coherences between optical links; against the full optical Bloch model "
-            "the local absorption is higher by at most 0.59 % at 100 µW and 1.61 % "
+            "the local absorption is higher by at most 0.59 % at 100 µW and 1.62 % "
             "up to 2 mW (1 mm beam radius); after beam averaging and propagation "
-            "the transmission differs by at most 1.8×10⁻³. Other media, and a finite probe with "
+            "the transmission differs by at most 1.85×10⁻³. Other media, and a finite probe with "
             "the pump on, use independent-transition two-level power broadening; "
             "the Finite-probe model table reports its scope and limits.\n\n"
             "The **pump power** maps to the Rabi scale via I = 2P/(πw²) and "
@@ -850,7 +850,8 @@ class SASScheme(Scheme):
         if probe_supported and not _pump_is_driven(power):
             pump_free_model = _pump_free_model_id(params)
             if reason := _pump_free_model_reason(params, pump_free_model):
-                raise ValueError(reason)
+                # A valid model outside its scope is an input error the app shows.
+                raise ODModelSettingError(reason)
             if explicit_model in (LEGACY_MODEL, EXACT_MODEL, TRANSIT_WEAK_MODEL):
                 # An explicit weak-probe model fixes its velocity measure.
                 params = dict(params, weak_probe_profile=(

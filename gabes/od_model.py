@@ -46,11 +46,11 @@ RATE_MODEL_ACCURACY = (
     "Rate equations drop coherences between optical links. Against the full "
     "optical Bloch model (local absorption at the beam centre and line centre, "
     "25 °C, transit 2π·100 kHz, 1 mm 1/e² radius) the rate model is higher by "
-    "at most 0.59 % at 100 µW and 1.61 % up to 2 mW (⁸⁵Rb F=2 lines); ⁸⁷Rb stays "
+    "at most 0.59 % at 100 µW and 1.62 % up to 2 mW (⁸⁵Rb F=2 lines); ⁸⁷Rb stays "
     "within 0.87 % up to 2 mW. After Gaussian-beam averaging and propagation "
     "through 75 mm (pure isotopes, D2, line centres, OD0 1.1-1.8) the "
-    "transmission differs by at most 1.8e-3 and the effective optical depth by "
-    "at most 1.21 %; at 100 µW by at most 6.1e-4 and 0.19 %."
+    "transmission differs by at most 1.85e-3 and the effective optical depth by "
+    "at most 1.21 %; at 100 µW by at most 6.1e-4 and 0.20 %."
 )
 
 
@@ -146,9 +146,13 @@ class ODConditions:
 
         ``od_model`` holds a model set ("pre_d20", "d20") or an explicit model
         ID; the SAS scheme resolves it, so the evaluator and the plot agree.
-        Without the key the pre-D20 choice applies, so older settings replay.
+        Without the key the pre-D20 choice applies, so older settings replay,
+        exactly as in the SAS solve; the defaults merged below must not add it.
         """
+        missing_model = MODEL_KEY not in params
         params = {**SASScheme().defaults(), **od_fit_conditions(params)}
+        if missing_model:
+            params.pop(MODEL_KEY, None)
         if params.get("species") not in species.SPECIES_ORDER:
             raise ODUnsupportedError("Choose a resolved Rb or Cs medium.")
         if params.get("cell_propagation", "Uniform") != "Uniform":

@@ -109,3 +109,28 @@ def test_pure_rb87_display_axis_under_d20():
     alpha, _chi, length = _collected_response(raw, p)
     np.testing.assert_array_equal(alpha * length, evaluation.optical_depth)
     np.testing.assert_allclose(evaluation.offsets_hz, raw["scan"] / TWO_PI + 78.095e6, rtol=1e-15)
+
+
+@pytest.mark.parametrize("probe_uw", [0.0, 100.0])
+def test_scheme_and_evaluator_resolve_the_same_model_from_one_dictionary(probe_uw):
+    """Missing key: pre_d20 in both. None: the current default. An ID: that model."""
+    base = {k: v for k, v in params(probe_power_uw=probe_uw).items() if k != OD_MODEL_KEY}
+    explicit = TRANSIT_WEAK_MODEL if probe_uw == 0.0 else RATE_MODEL
+    for setting in ("missing", None, OD_MODELS_D20, OD_MODELS_PRE_D20, explicit):
+        p = dict(base) if setting == "missing" else dict(base, **{OD_MODEL_KEY: setting})
+        scheme_model = SASScheme().compute(p)["probe_model"]
+        assert ODConditions.from_params(p).model_id == scheme_model, setting
+    assert SASScheme().compute(base)["probe_model"] == (
+        "weak_probe_exact_maxwell_voigt" if probe_uw == 0.0 else "finite_power_2level_gaussian_propagation")
+    assert ODConditions.from_params(dict(base, **{OD_MODEL_KEY: None})).model_id == (
+        TRANSIT_WEAK_MODEL if probe_uw == 0.0 else RATE_MODEL)
+
+
+def test_a_valid_model_outside_its_scope_is_a_displayed_input_error():
+    with pytest.raises(ODModelSettingError, match="needs zero probe power"):
+        SASScheme().compute(params(**{OD_MODEL_KEY: TRANSIT_WEAK_MODEL}, probe_power_uw=5.0))
+    with pytest.raises(ODModelSettingError, match="Exact Maxwell Voigt models"):
+        SASScheme().compute(params(**{OD_MODEL_KEY: TRANSIT_WEAK_MODEL}, ne_pressure_torr=5.0))
+    with pytest.raises(ODModelSettingError, match="rubidium"):
+        SASScheme().compute(params(**{OD_MODEL_KEY: RATE_MODEL}, species=species.CS133.label,
+                                   probe_power_uw=5.0))
