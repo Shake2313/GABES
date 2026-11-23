@@ -108,6 +108,7 @@ def test_rate_model_fit_uses_the_same_evaluator_at_finite_probe_power():
         fit_od_spectrum(data, params, free=("offset_mhz",))
     fit = fit_od_spectrum(data, params, free=("offset_mhz",), model_id=rate)
     assert fit["probe_model"] == rate and fit["probe_power_uw"] == 100.0
+    assert fit["probe_power_role"] == "fixed_input"
     assert fit["model"] == "resolved uniform pump-off OD, finite probe"
     assert fit["parameters"][0]["value"] == pytest.approx(-8.4, abs=1e-6)
     assert fit["fit_residuals"]["rms"] < 1e-9
@@ -212,6 +213,8 @@ def test_probe_power_is_recovered_and_reported_as_peak_intensity(monkeypatch):
     start["probe_power_mw"] = 0.03          # the legacy key must not pin the free power
     fit = fit_od_spectrum(data, start, free=("probe_power_uw",), model_id=RATE)
     assert fit["parameters"][0]["value"] == pytest.approx(50.0, rel=1e-5)
+    # The top-level power stays the input; the fitted value is the parameter row.
+    assert fit["probe_power_uw"] == 30.0 and fit["probe_power_role"] == "fit_starting_value"
     assert fit["candidate_parameters"]["keys"] == ["probe_power_uw"]
     assert fit["candidate_parameters"]["scope"]["probe_power_uw"] == VALIDATED_SCOPE["probe_power_uw"]
     intensity = fit["probe_peak_intensity"]

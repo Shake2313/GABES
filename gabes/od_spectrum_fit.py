@@ -444,6 +444,12 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     By default the fit estimates cold-spot temperature and frequency offset,
     omitting either when fixed by the corresponding calibration. An explicit
     offset on a marker-anchored axis is interpreted as a residual offset.
+
+    The top-level ``probe_power_uw`` is always the input power.
+    ``probe_power_role`` says whether that input was a fixed model condition
+    (``"fixed_input"``) or only the starting value of a fitted power
+    (``"fit_starting_value"``); a fitted power is the ``parameters`` row with
+    key ``probe_power_uw``.
     """
     reason = od_fit_unavailable(params, model_id=model_id)
     if reason:
@@ -608,6 +614,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         model=("resolved uniform pump-off OD, finite probe" if finite
                else "resolved uniform weak-probe pump-off OD"),
         probe_model=applied_model, probe_power_uw=_probe_power_mw(params) * 1e3,
+        probe_power_role="fit_starting_value" if "probe_power_uw" in free else "fixed_input",
         source_points=data.source_points,
         medium=params["species"], line=params["line"],
         acquisition_sampling="evenly spaced record indices, no averaging" if data.source_points > x.size else "all branch points",
