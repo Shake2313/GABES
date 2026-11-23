@@ -605,6 +605,7 @@
     },
     {
       "id": "od-sas-autood-csv-web-workspace",
+      "m3_verification_2026_11_23": "⟦AI⟧ AutoOD e155e74가 GABES 41bee30의 공용 CSV 판독·스코프 채널 선택·빠른 정렬과 신호 이득/오프셋 피팅을 사용한다. 표준·Origin 양방향 18만 쌍에서 계측값·순서·분기·공백·단위가 일치했다. 부호 있는 이득, 암신호·참조광 보정과 원본 파일 해시를 보존한다. 웹 비교 CSV 한도는 16 MiB이며 구형 20.5 MB AutoOD 일반·Origin 파일은 데스크톱에서 복원했다. 2–4점 상대 신호의 수동 정규화는 명시적으로 재현한다. ⁸⁷Rb 미세구조 중심이 기록된 측정은 같은 D선의 ⁸⁵Rb 표시축으로 한 번만 변환한다(D₁ +77.690 MHz, D₂ +78.095 MHz). 서로 다른 D선에서는 원본 행을 보존하고 정렬·겹침 열을 비운다. 기준 스펙트럼 24개·판독 48,024개와 빠른 정렬 288건에서 기존 수치가 비트 동일했다.",
       "m2_verification_2026_11_23": "⟦AI⟧ 11월 20일 기록의 빔 평균 미측정·국소 상한 1.61%는 d3bda39의 D₂ 검증으로 갱신했다. 순수 ⁸⁵Rb·⁸⁷Rb의 선중심 4곳 × 0.1·0.5·2 mW, 25 °C·75 mm·빔 반지름 1 mm에서 전파 후 |ΔT| ≤ 0.00185, 유효 OD 상대차 ≤ 1.21%, 입사 중심 국소 흡수 상대차 ≤ 1.62%. 100 µW 한정 각각 ≤ 0.00061·0.20%·0.59%. AutoOD가 d3bda39의 공용 축과 평가기를 호출하며 기존 기준 스펙트럼 24개·판독점 48,024개에서 계산 배열과 판독값이 비트 동일하다.",
       "gemini_api_review_2026_11_20": {
         "source": "사용자가 전달한 Gemini 독립 리뷰, 2026-11-20",
@@ -625,11 +626,11 @@
       "web_implementation_2026_11_20": "⟦AI⟧ GABES 8770ede·6da8962·a5acb18. Fit OD data가 펌프 없는 파생 조건으로 계산하고 Simulate spectra의 설정과 저장 프리셋을 보존한다. 일반·Origin 각각 18만 행을 브라우저에서 보기 세 번 왕복 후 다시 내보내 원본 취득 쌍과 분기를 확인했다. 상대 신호의 표시 정렬과 절대 투과율 피팅을 구분하고, 적용 시 파일·분기·보정·모델을 다시 확인한다. AutoOD A3 7079605·A4 0026235는 기존 엔진 핀 8846193에서 검증했다. 그림과 피팅은 지원 조건에서 같은 공용 모델을 쓴다. 계산 결과의 캐시 키에는 표본 각주파수 배열을 포함한다. 유한 프로브 모델의 국소 흡수 정확도는 판독부와 내보낸 CSV에 기록한다.",
       "user_decision_u2_2026_11_20": "사용자 결정 2026-11-20(U2): 지원 영역의 유한 프로브 기본 모델로 자기 부준위 rate 모델(od_finite_rb_mf_rate_v1)을 유지하고, full OBE 대비 정확도를 문서화한다. 정량 범위는 제한하지 않는다. ⟦AI⟧ 근거(국소 흡수 α, 빔 중심, 선 중심, 25 °C, γₜ/2π = 100 kHz, 1/e² 반경 1 mm, 자기 확대 없음, OBE 차수 12): ⁸⁵Rb F=2→2′·3′는 0.25–2 mW에서 +1.18…+1.61 %(0.5 mW 최대), ⁸⁵Rb F=3→4′는 2 mW에서 +1.28 %, ⁸⁷Rb는 2 mW까지 ≤ +0.87 %, 100 µW에서는 최대 +0.59 %. 빔 평균·전파 후 투과율 차이는 이보다 작으며 아직 측정하지 않았다(확장 게이트: D₁, 투과율 단위). 문서화 위치: od_model.MODELS 정확도 메모(코드), M2에서 SAS About·Fit OD data 화면 안내와 AutoOD 이론 매뉴얼.",
       "user_decision_2026_11_20": "사용자 결정 2026-11-20(U1): Exact 약한 프로브 기본 선폭에 통과 완화 γₜ를 광학 HWHM으로 더해, 0 µW와 유한 프로브가 같은 선폭 규칙을 쓴다. ⟦AI⟧ 규칙은 HWHM = ½(Γ + Γ_self + Γ_buffer) + γₜ + π·FWHM_extra, 점유율 재설정률 γₜ. 값 변경이므로 자체 커밋으로 착지하고 새 모델 ID를 쓴다(통과 폭을 포함한 프로파일에 weak_probe_exact_maxwell_voigt 재사용 금지). 모델 키가 없는 이전 저장 설정은 현행 Exact(통과 폭 없음)로 재생. 정정 2026-11-20: Legacy 속도 격자의 프로브 Lorentzian(hwhm = gamma_eff/2)에도 γₜ가 없다. with_reset의 γₜ는 펌프 점유율에만 작용한다. Legacy는 과거 재현용이라 그대로 둔다. 예상 변화: 자연 Rb D₂·25 °C·75 mm·+1.6503615363 GHz 표본에서 투과율 39.2663 → 39.2789 %(+0.0126 %p), 같은 데이터의 추가 선폭 피팅값 −2γₜ/2π(기본 γₜ에서 −0.2 MHz). AutoOD 기준 fixture 2,001점 최대 |ΔT|: 자연 Rb D₂ 25 °C 1.49×10⁻⁴, ⁸⁵Rb D₂ 90 °C 12.5 mm 2.23×10⁻³, ⁸⁷Rb D₁ 90 °C 12.5 mm 1.03×10⁻³. 영향 받는 OD/SAS 스냅샷을 재캡처하고 변화량을 커밋에 기록. 범위는 펌프 꺼짐 Exact 프로파일. 수치 근거는 이식안의 '공통 OD 모델 채택 기준' 대조표. 사용자 결정 2026-11-20(U3): 펌프 켬 'Exact Voigt + SAS correction'의 배경 Voigt에도 같은 γₜ HWHM을 더한다. ⟦AI⟧ 현재 배경(_component_response의 species_complex_voigt(..., gamma_eff))은 γₜ가 없다. 정정 2026-11-20: 보정항의 펌프 점유율은 γₜ 재설정을 포함하지만, 보정항의 프로브 Lorentzian(hwhm = gamma_eff/2)도 γₜ가 없다. 사용자 결정 2026-11-20(U3 범위): 보정항의 프로브 Lorentzian에도 같은 γₜ HWHM을 적용한다. ⟦AI⟧ 즉 펌프 켬 Exact 프로파일의 프로브 선폭 전체(배경 Voigt와 잔차의 pumped·thermal 속도 합)가 hwhm = gamma_eff/2 + γₜ를 쓴다. _component_response의 hwhm은 Legacy와 공유하므로 새 모델 ID에서만 바꾸고, Legacy 속도 격자는 과거 재현용으로 유지한다. 펌프 0 극한에서 U1 곡선과 연속이어야 하므로 U1과 같은 규칙·같은 값 변경 커밋(또는 바로 다음 커밋)으로 착지하고, 펌프 켬 SAS 스냅샷·판독 변화량을 따로 기록한다. D20의 펌프 SAS 모델 범위(펌프 보정 방식)는 그대로 둔다.",
-      "status": "in_progress",
+      "status": "done",
       "priority": "P2",
       "effort": "large",
       "depends_on": [],
-      "adoption_status": "⟦AI⟧ 두 보기·CSV 비교, 유한 프로브 Rb 기본 모델, AutoOD 공용 OD 평가기 적용 완료. 공용 측정 API 전환(M3)은 다음 단계다.",
+      "adoption_status": "⟦AI⟧ 웹 OD 측정·피팅과 AutoOD 공용 계산·측정 API 전환을 완료했다. 유한 프로브 추정 변수별 검증은 별도 항목 od-sas-autood-finite-probe-fit-extension에서 진행한다.",
       "acceptance_criteria": [
         "⟦AI⟧ 왼쪽 Simulate spectra를 기본 진입으로, 오른쪽 Fit OD data를 OD 전용으로 설계. ?compare=0 및 이전 보기 링크 유지. 파일명·CSV 형식 대신 각 버튼에 이론 계산·실험 OD 피팅 동작을 표시.",
         "⟦AI⟧ 오른쪽에서는 펌프 입력·파생 판독·스캔을 숨기고, 이론·정렬·피팅·캐시·내보내기에는 펌프가 꺼진 동일한 유효 조건을 사용. 프로브 파워와 빔 크기는 유지. 왼쪽의 펌프 파워·빔 설정·기타 펌프 전용 값은 별도 보존해 반복 전환·취소 후 그대로 복원.",
@@ -638,6 +639,28 @@
         "⟦AI⟧ 공용화는 AutoOD 기존 호출의 수치·판독을 보존하는 단계와 GABES의 현행 유한 프로브 기본값을 바꾸는 단계로 나눈다. 기존 설정 재현, D₁/D₂·약한 프로브 한계·유한 파워 수렴·비용을 검증하고 구 모델 대비 변화량과 기준선 갱신을 따로 기록. 펌프가 켜진 SAS 및 Cs 모델 적용 범위는 유지. 새 기본 모델의 통과 완화 선폭을 0 µW와 유한 파워에서 일관되게 적용하고, 추가 선폭 피팅 시 중복 계산을 검사. 같은 조건을 사용한 2,001점 대조 수치는 이식안에 기록.",
         "⟦AI⟧ 보정된 약한 프로브 OD의 방향별 피팅·검증 구간·불확도를 보존. 보기 전환, D₁/D₂ 변경, 늦은 피팅 결과와 원래 7개 회귀 사례를 검사. 커서·확대·표시 변경의 이론 재계산 0회, 키보드 조작·두 단계 그라데이션 검수."
       ]
+    },
+    {
+      "id": "autood-post-integration-theory-edition-and-release",
+      "area": "AutoOD 이론 문서·Windows 배포",
+      "title": "GABES–AutoOD 통합 완료 후 이론서 개정·버전 상향·ZIP 제작",
+      "origin": "human_request",
+      "user_request": "2026-11-23 사용자가 공유 허브에 기록해 Claude와 공유하도록 요청. 통합 후 현행 문서의 스타일로 새 이론서를 쓰고, 완성한 뒤 주요 변경을 반영해 AutoOD 버전을 올리고 새 ZIP을 만든다.",
+      "status": "parked",
+      "priority": "P2",
+      "effort": "large",
+      "depends_on": [
+        "od-sas-autood-csv-web-workspace"
+      ],
+      "activation_trigger": "GABES–AutoOD 통합 작업 전체가 끝난 뒤 새 이론서를 작성한다. 개정본 완성이 버전 상향 및 새 ZIP 제작의 선행 조건이다.",
+      "acceptance_criteria": [
+        "원자광학에 익숙한 박사과정 수료 연구자가 ChatGPT의 도움을 곁들여 AutoOD 기능의 물리적 근거와 계산을 처음부터 끝까지 유도할 수 있는 수준으로 쓴다. 교과서형 또는 소논문형의 현행 서술 방식을 유지한다.",
+        "도입하는 이론, 가정, 계산과 관측량의 관계를 중심으로 설명한다. 병렬 처리 같은 순수 전산 사항은 사용하는 단계와 목적만 짧게 밝힌다.",
+        "집필·교정 때 atom-optics-proofread 스킬을 사용한다.",
+        "새 이론서가 완성되면 AutoOD 버전을 올리고 개정 문서를 포함한 새 ZIP을 만든다."
+      ],
+      "review_skill": "atom-optics-proofread",
+      "coordination_memo": "20261123-1759_codex-to-claude_user-request-post-integration-theory-and-zip.md"
     },
     {
       "id": "od-sas-autood-finite-probe-fit-extension",

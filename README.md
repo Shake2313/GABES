@@ -266,6 +266,9 @@ Reopening a GABES comparison CSV uses its recorded pump-off theory model with
 the current conditions in **Fit OD data**. Removing the file restores the
 active model selection. The fit result's model ID is separate. Plain
 measurement CSVs and AutoOD 0.2.2 comparison files keep the active selection.
+AutoOD source builds using GABES `41bee30` or later can reopen both worksheet
+formats with the original measurements and recorded detector calibration.
+A desktop export can exceed the web comparison upload limit of 16 MiB.
 
 GABES comparison exports record the origin of `detuning_GHz` in
 `axis_reference` and the evaluator's origin in `contract_reference` (⁸⁵Rb for
