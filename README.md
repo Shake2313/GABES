@@ -260,6 +260,18 @@ and **Download comparison CSV** save the original acquisition rows alongside
 the aligned display values, theory grid and calibration metadata. The projected
 measurement survives a round trip to the theory view.
 
+Reopening a GABES comparison CSV uses its recorded pump-off theory model with
+the current conditions in **Fit OD data**. Removing the file restores the
+active model selection. The fit result's model ID is separate. Plain
+measurement CSVs and AutoOD 0.2.2 comparison files keep the active selection.
+
+GABES comparison exports record the origin of `detuning_GHz` in
+`axis_reference` and the evaluator's origin in `contract_reference` (⁸⁵Rb for
+rubidium, ¹³³Cs for cesium). Add `display_reference_offset_hz` once to the
+display detuning in Hz to obtain the contract detuning. Older GABES exports
+stored the display origin as `frequency_reference`. An independently declared
+`experiment_frequency_reference` applies to the original measurement samples.
+
 Choose **Rb isotope composition → Custom** to set the ⁸⁵Rb fraction from 0 to 1;
 the ⁸⁷Rb fraction is complementary. Natural composition stays at 72.17/27.83%.
 Mixtures use a fixed ⁸⁵Rb frequency centroid even when the dominant isotope

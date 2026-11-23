@@ -6,14 +6,36 @@ import streamlit as st
 
 from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
                             evaluate_od_display, od_fit_conditions, od_unavailable)
+from gabes.schemes.sas import TWO_LEVEL_MODEL
 from gabes_ui.controls import skey
 
 
-def workspace_params(params, state):
-    """Honor a reserved model from existing session state until the SAS schema exposes it."""
+def recorded_model_id(upload):
+    """Only GABES comparison envelopes declare a replayable pump-free ID."""
+    metadata = upload.metadata if upload is not None else {}
+    # AutoOD column values, including any user-supplied headers, are strings.
+    if metadata.get("generated_by") == "GABES" and metadata.get("format_version") in (1, 2):
+        return metadata["model_id"]
+    return None
+
+
+def workspace_params(params, state, upload=None):
+    """Derive a pump-free view without changing the active preset or theory controls."""
     derived = od_fit_conditions(params)
     if MODEL_KEY not in derived and state.get(skey("sas", MODEL_KEY)) is not None:
         derived[MODEL_KEY] = state[skey("sas", MODEL_KEY)]
+    model_id = recorded_model_id(upload)
+    if model_id is not None:
+        if model_id not in MODELS:
+            raise ODUnsupportedError(f"Unknown recorded pump-free OD model ID {model_id!r}.")
+        derived[MODEL_KEY] = model_id
+        conditions = ODConditions.from_params(derived)
+        if MODELS[model_id].status == "implemented":
+            reason = od_unavailable(conditions)
+            if reason:
+                raise ODUnsupportedError(reason)
+        elif model_id == TWO_LEVEL_MODEL and conditions.probe_power_uw == 0:
+            raise ODUnsupportedError("The recorded finite-power two-level model needs positive probe power.")
     return derived
 
 
@@ -179,30 +201,30 @@ def plot_metadata(params, actual_model):
         conditions = ODConditions.from_params(params)
     except ODUnsupportedError:
         return metadata
-    reference = frequency_reference(conditions)
+    contract = frequency_reference(conditions)
+    axis = asdict(contract)
+    if conditions.species == species.RB87.label:
+        axis["isotope"] = species.RB87.name
     metadata.update(model_id=actual_model or conditions.model_id,
                     conditions=asdict(conditions),
-                    frequency_reference=asdict(reference),
+                    axis_reference=axis, contract_reference=asdict(contract),
                     display_reference_offset_hz=display_reference_offset_hz(conditions))
     if accuracy := MODELS[metadata["model_id"]].accuracy:
         metadata["model_accuracy"] = accuracy
-    if conditions.species == species.RB87.label:
-        metadata["frequency_reference"] = dict(asdict(reference), isotope=species.RB87.name)
     return metadata
 
 
 def native_reference_shift(upload, params):
     """Convert a declared native fine-centroid origin to the current plot, in GHz."""
-    from gabes.optical_frequency import reference_offset_hz
+    from gabes.od_measurement import native_frequency_reference
     from gabes.od_model import frequency_reference
+    from gabes.optical_frequency import reference_offset_hz
 
-    source = upload.metadata.get("experiment_frequency_reference")
+    source = native_frequency_reference(upload.metadata)
     if not source:
         return 0.0, None
     try:
         conditions = ODConditions.from_params(params)
-        if isinstance(source, str):
-            source = {"isotope": source, "line": upload.metadata.get("line")}
         isotope, line = source["isotope"], source.get("line")
         if line != conditions.line or source.get("point", "fine_centroid") != "fine_centroid":
             raise ValueError

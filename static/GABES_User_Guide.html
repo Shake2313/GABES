@@ -650,7 +650,10 @@ streamlit run streamlit_app.py</pre>
     스펙트럼에서 주파수를 선택하면 이론값과 가장 가까운 측정점을 읽을 수 있습니다. 측정 공백은 빈 구간으로 표시합니다.
     균일 셀에서 절대 투과율과 주파수 눈금을 교정한 뒤 <b>Fit physical OD parameters</b>에서 취득 방향과 피팅 변수를 고릅니다.
     약한 프로브 피팅에는 프로브 출력 0 µW를 사용합니다. <b>Apply fitted temperature</b>로 수렴하고 식별 가능한 온도를 셀 조건에 적용합니다.
-    비교 파일은 <b>Prepare comparison CSV</b>를 누른 뒤 <b>Download comparison CSV</b>로 저장합니다. 이 파일에는 원래 취득 순서와 보정 정보가 담깁니다.</p>
+    비교 파일은 <b>Prepare comparison CSV</b>를 누른 뒤 <b>Download comparison CSV</b>로 저장합니다. 이 파일에는 원래 취득 순서와 보정 정보가 담깁니다.
+    GABES 비교 파일을 다시 열면 현재 셀·프로브 조건에 파일에 기록된 펌프 없는 이론 모델을 적용합니다.
+    파일을 제거하면 원래 선택한 모델로 돌아갑니다. 구형 파일의 <code>frequency_reference</code>는 이론 표시축의 영점입니다.
+    새 파일은 표시축과 계산 모델의 영점을 따로 기록합니다. 측정 영점은 실험에서 지정한 경우에만 사용합니다.</p>
   <p><b>축 방향 분할 셀</b>　Advanced의 <b>Cell propagation → Segmented reference</b>에서
     <b>Axial segments</b>(기본 4), 온도 변화와 종방향 자기장을 지정합니다. 온도·자기장 변화는
     프로브 출구에서 입구를 뺀 값입니다. 온도 구배를 넣을 때는 Doppler 온도 연결을 풀고 경로 중심

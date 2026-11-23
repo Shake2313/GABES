@@ -295,13 +295,20 @@ def render_spectra():
         visible_specs = specs
         if fit_od_view:
             from gabes.od_model import PUMP_GROUP
-            from gabes_ui.od_measurement import workspace_params
+            from gabes_ui.od_measurement import recorded_model_id, workspace_params
             visible_specs = [sp for sp in specs if sp.group != PUMP_GROUP]
         params = render_conditions(scheme, visible_specs)
         if not comparing:
             params = render_power_inputs(scheme, visible_specs)
         if fit_od_view:
-            params = workspace_params(params, st.session_state)
+            try:
+                upload = plotcard.select_workspace_measurement(st.container(), scheme.name)
+                params = workspace_params(params, st.session_state, upload)
+            except ValueError as error:
+                st.error(str(error))
+                return
+            if model_id := recorded_model_id(upload):
+                st.caption(f"Recorded OD model applied at the current conditions: {model_id}")
     else:
         from gabes_ui.conditions import render_atom_conditions
         with st.container(key="gabes_conditions"):

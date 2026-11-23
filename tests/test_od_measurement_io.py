@@ -1,7 +1,9 @@
 """Frozen AutoOD 0.2.2 measurement contracts, without an external desktop checkout."""
 import csv
+from dataclasses import replace
 import hashlib
 import io
+import json
 from pathlib import Path
 
 import numpy as np
@@ -15,7 +17,8 @@ from gabes.od_measurement import (
 )
 from gabes.od_spectrum_fit import prepare_od_fit
 
-META = {"model_id": "weak_probe_exact_maxwell_voigt", "frequency_reference": "Rb85",
+META = {"model_id": "weak_probe_exact_maxwell_voigt", "axis_reference": "Rb85",
+        "contract_reference": "Rb85", "display_reference_offset_hz": 0.,
         "line": "D2", "temperature_c": 25., "transit_khz": 100.}
 
 
@@ -65,8 +68,150 @@ def test_raw_pairs_and_order_survive_display_transform(origin):
     assert measured.branches[0].stop_index == trace.branches[0].stop_index
     assert restored.metadata["input_file_sha256"] == upload.sha256
     assert restored.metadata["model_id"] == META["model_id"]
-    assert restored.metadata["frequency_reference"] == "Rb85"
+    assert restored.metadata["axis_reference"] == restored.metadata["contract_reference"] == "Rb85"
+    assert restored.metadata["format_version"] == 2
+    assert "frequency_reference" not in restored.metadata
     assert restored.metadata["experiment_alignment"]["reverse"]
+
+
+def _historical_gabes_csv(reference, offset, origin, native=None):
+    # Construct the v1 wire format independently of the current writer.
+    headers = ["detuning_GHz", "theory_transmission", "experiment_input_x",
+               "experiment_input_signal", "gabes_comparison_v1"]
+    metadata = dict(format_version=1, generated_by="GABES", model_id="weak_probe_legacy",
+                    frequency_reference=reference, display_reference_offset_hz=offset,
+                    experiment_input_mode="fraction", experiment_x_unit="GHz", line="D2")
+    if native is not None:
+        metadata["experiment_frequency_reference"] = native
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    if origin:
+        writer.writerow([key.replace("_", " ") for key in headers[:-1]] + headers[-1:])
+        writer.writerows([["GHz", "1", "GHz", "1", ""], ["Comments", "", "", "", ""], []])
+    else:
+        writer.writerow(headers)
+    writer.writerow([0., 1., 0.25, 0.5, json.dumps(metadata)])
+    writer.writerow([1., 1., -0.75, 1., ""])
+    return output.getvalue().encode("utf-8-sig")
+
+
+@pytest.mark.parametrize("origin", [False, True])
+@pytest.mark.parametrize("isotope,contract,offset", [("Rb87", "Rb85", 78_095_000.0),
+                                                    ("Rb85", "Rb85", 0.), ("Cs133", "Cs133", 0.)])
+def test_read_v1_and_reexport_v2_without_moving_native_samples(isotope, contract, offset, origin):
+    axis = dict(isotope=isotope, line="D2", point="fine_centroid")
+    native = dict(isotope="Rb85", line="D2") if isotope == "Rb87" else None
+    upload = prepare_measurement_upload(_historical_gabes_csv(axis, offset, origin, native))
+    assert upload.metadata["axis_reference"] == axis
+    assert upload.metadata["contract_reference"] == dict(axis, isotope=contract)
+    assert upload.metadata["display_reference_offset_hz"] == offset
+    assert "frequency_reference" not in upload.metadata
+    assert upload.metadata.get("experiment_frequency_reference") == native
+    trace = load_measurement(upload, denoise=False)
+    exported = export_comparison_csv(upload, trace, [0., 1.], [1., 1.],
+                                     metadata=upload.metadata, origin=origin)
+    assert b"gabes_comparison_v2" in exported.splitlines()[0]
+    reopened = prepare_measurement_upload(exported)
+    for key in ("axis_reference", "contract_reference", "display_reference_offset_hz", "model_id"):
+        assert reopened.metadata[key] == upload.metadata[key]
+    assert reopened.metadata.get("experiment_frequency_reference") == native
+    assert reopened.payload == upload.payload
+
+
+@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize("native,source_line,expected", [
+    ("Rb85", "D2", {"isotope": "Rb85", "line": "D2"}),
+    ("Rb85", None, {"isotope": "Rb85", "line": None}),
+    ({"isotope": "Rb85"}, "D2", {"isotope": "Rb85"}),  # No line was declared in this object.
+    (None, "D2", None),
+])
+def test_changing_theory_line_never_relabels_native_origin(version, native, source_line, expected):
+    sample = _historical_gabes_csv("Rb85", 0., False, native=native)
+    rows = list(csv.reader(io.StringIO(sample.decode("utf-8-sig"))))
+    metadata = json.loads(rows[1][-1])
+    if source_line is None:
+        del metadata["line"]
+    if version == 2:
+        rows[0][-1] = "gabes_comparison_v2"
+        metadata.pop("frequency_reference")
+        metadata.update(format_version=2, axis_reference="Rb85", contract_reference="Rb85")
+    rows[1][-1] = json.dumps(metadata)
+    output = io.StringIO(newline="")
+    csv.writer(output).writerows(rows)
+    uploaded = prepare_measurement_upload(output.getvalue().encode("utf-8"))
+    assert uploaded.metadata.get("experiment_frequency_reference") == expected
+    exported = export_comparison_csv(uploaded, load_measurement(uploaded), [0.], [1.],
+                                     metadata={**META, "line": "D1"})
+    reread = prepare_measurement_upload(exported)
+    assert reread.metadata["line"] == "D1"
+    assert reread.metadata.get("experiment_frequency_reference") == expected
+    assert reread.payload == uploaded.payload
+
+
+def test_cached_legacy_projection_keeps_original_native_line_on_reexport():
+    native_key = "experiment_frequency_reference"
+    uploaded = prepare_measurement_upload(paired_csv([-1., 0.], [.5, 1.]))
+    uploaded = replace(uploaded, metadata={"line": "D2", native_key: "Rb85"})
+    # A caller can copy the original shorthand into its new theory metadata.
+    exported = export_comparison_csv(uploaded, load_measurement(uploaded), [0.], [1.],
+                                     metadata={**META, "line": "D1", native_key: "Rb85"})
+    reopened = prepare_measurement_upload(exported)
+    assert reopened.metadata[native_key] == {"isotope": "Rb85", "line": "D2"}
+
+
+def test_export_accepts_legacy_metadata_argument_without_deriving_native_origin():
+    upload = prepare_measurement_upload(paired_csv([-1., 0.], [.5, 1.]))
+    legacy = {"model_id": "weak_probe_legacy", "frequency_reference": "Rb87", "line": "D2"}
+    exported = export_comparison_csv(upload, load_measurement(upload), [0.], [1.], metadata=legacy)
+    assert "axis_reference" not in legacy
+    reopened = prepare_measurement_upload(exported).metadata
+    assert (reopened["axis_reference"], reopened["contract_reference"]) == ("Rb87", "Rb85")
+    assert reopened["display_reference_offset_hz"] == pytest.approx(78_095_000.)
+    assert "frequency_reference" not in reopened and "experiment_frequency_reference" not in reopened
+
+
+def test_reference_fields_and_envelope_version_must_match():
+    upload = prepare_measurement_upload(paired_csv([-1., 0.], [.5, 1.]))
+    trace = load_measurement(upload)
+    for field in ("axis_reference", "contract_reference", "display_reference_offset_hz"):
+        with pytest.raises(ValueError, match="both theory references and a finite offset"):
+            export_comparison_csv(upload, trace, [0.], [1.],
+                                  metadata={k: v for k, v in META.items() if k != field})
+    legacy = _historical_gabes_csv("Rb87", 78_095_000., False)
+    with pytest.raises(ExperimentalCSVError, match="version"):
+        prepare_measurement_upload(legacy.replace(b"gabes_comparison_v1", b"gabes_comparison_v2"))
+    for field, value in (("axis_reference", []), ("axis_reference", True), ("axis_reference", "invalid"),
+                         ("contract_reference", {"line": "D2"}), ("contract_reference", "Cs133"),
+                         ("axis_reference", {"isotope": "Rb85", "line": "D1"}),
+                         ("axis_reference", {"isotope": "Rb85", "point": "lower_ground_centroid"}),
+                         ("display_reference_offset_hz", True), ("display_reference_offset_hz", 1.0),
+                         ("display_reference_offset_hz", float("inf")),
+                         ("display_reference_offset_hz", 10**309)):
+        with pytest.raises(ValueError, match="both theory references and a finite offset"):
+            export_comparison_csv(upload, trace, [0.], [1.], metadata={**META, field: value})
+
+
+@pytest.mark.parametrize("extra", [{"display_reference_offset_hz": 10**309},
+                                    {"axis_reference": ["Rb85"]}, {"frequency_reference": "Rb87"}])
+def test_v2_reader_rejects_malformed_references_even_with_real_native_pairs(extra):
+    sample = _historical_gabes_csv("Rb85", 0., False)
+    rows = list(csv.reader(io.StringIO(sample.decode("utf-8-sig"))))
+    rows[0][-1] = "gabes_comparison_v2"
+    metadata = json.loads(rows[1][-1])
+    del metadata["frequency_reference"]
+    metadata.update(format_version=2, axis_reference="Rb85", contract_reference="Rb85")
+    rows[1][-1] = json.dumps({**metadata, **extra})
+    output = io.StringIO(newline="")
+    csv.writer(output).writerows(rows)
+    with pytest.raises(ExperimentalCSVError, match="Invalid v2 comparison theory references or offset"):
+        prepare_measurement_upload(output.getvalue().encode("utf-8"))
+
+
+def test_v1_custom_reference_remains_readable_without_guessing_a_contract():
+    upload = prepare_measurement_upload(_historical_gabes_csv("old instrument setting", 0., False))
+    assert upload.metadata["axis_reference"] == "old instrument setting"
+    assert "contract_reference" not in upload.metadata
+    assert "experiment_frequency_reference" not in upload.metadata
 
 
 @pytest.mark.parametrize("reverse", [False, True])

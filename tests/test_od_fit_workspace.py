@@ -6,6 +6,46 @@ import numpy as np
 import pytest
 
 
+def _upload(content, name="comparison.csv"):
+    return SimpleNamespace(name=name, size=len(content), getvalue=lambda: content)
+
+
+def _legacy_comparison(model_id, x, signal, *, origin=False):
+    """Construct the historical wire format independently of the current writer."""
+    import csv
+    import io
+    import json
+
+    display = {"isotope": "Rb87", "line": "D2", "point": "fine_centroid"}
+    old_metadata = {
+        "format_version": 1, "generated_by": "GABES", "model_id": model_id,
+        "fit_model_id": "od_weak_exact_voigt_transit_v1",
+        "line": "D2", "frequency_reference": display,
+        "display_reference_offset_hz": 78_095_000,
+        "experiment_frequency_reference": dict(display, isotope="Rb85"),
+        "experiment_input_mode": "fraction", "experiment_x_unit": "GHz",
+    }
+    columns = ["detuning_GHz", "theory_transmission", "experiment_display_transmission_on_theory_grid",
+               "experiment_input_x", "experiment_input_signal", "experiment_calibrated_transmission",
+               "experiment_aligned_detuning_GHz", "experiment_display_transmission", "gabes_comparison_v1"]
+    stream = io.StringIO(newline="")
+    rows = csv.writer(stream)
+    if origin:
+        rows.writerow([c.replace("_", " ") for c in columns[:-1]] + columns[-1:])
+        rows.writerow(["GHz", "1", "1", "GHz", "1", "1", "GHz", "1", ""])
+        rows.writerow(["Theory detuning", "Theory transmission", "Measured transmission",
+                       "Native detuning", "Detector signal", "Calibrated transmission",
+                       "Aligned detuning", "Display transmission", "Metadata"])
+        rows.writerow([])
+    else:
+        rows.writerow(columns)
+    for index, (native_x, t) in enumerate(zip(x, signal, strict=True)):
+        display_x = native_x - .078095
+        rows.writerow([display_x, t, t, native_x, t, t, display_x, t,
+                       json.dumps(old_metadata) if index == 0 else ""])
+    return stream.getvalue().encode("utf-8-sig")
+
+
 @pytest.fixture
 def workspace(monkeypatch):
     import streamlit as st
@@ -188,8 +228,11 @@ def test_comparison_reopens_with_declared_raw_detector_law(workspace, mode):
     native = prepare_measurement_upload(b"detuning_GHz,voltage\n-1,1.5\n0,0.7\n1,1.5\n")
     detector = dict(dark_signal=.5, reference_signal=1.5) if dark else dict(gain=1., offset=.5)
     trace = load_measurement(native, denoise=False, calibration_mode=calibration, **detector)
-    content = export_comparison_csv(native, trace, [-1,0,1], [1.,.2,1.],
-        metadata={"model_id":"weak_probe_legacy","frequency_reference":{"isotope":"Rb85","line":"D2"}})
+    reference = {"isotope": "Rb85", "line": "D2", "point": "fine_centroid"}
+    content = export_comparison_csv(native, trace, [-1,0,1], [1.,.2,1.], metadata={
+        "model_id": "weak_probe_legacy", "axis_reference": reference,
+        "contract_reference": reference, "display_reference_offset_hz": 0.,
+    })
     upload = SimpleNamespace(name="calibrated.csv", size=len(content), getvalue=lambda:content)
     uploads[:] = [upload]
     app.run()
@@ -229,39 +272,109 @@ def test_manual_channel_override_updates_the_projected_scope_samples(workspace):
     assert after.scope.od == 2 and after.scope.manual
 
 
-def test_quantitative_fit_converts_declared_native_centroid_once(workspace):
+@pytest.mark.parametrize("origin", [False, True], ids=["Standard-v1", "Origin-v1"])
+def test_legacy_replay_fits_recorded_model_and_converts_native_centroid_once(workspace, origin):
     from gabes import species
-    from gabes.od_measurement import prepare_measurement_upload, load_measurement, export_comparison_csv
     from gabes.od_model import ODConditions, evaluate_od
     from gabes.schemes.sas import SASScheme
 
     app, exports, _, uploads = workspace
+    ordinary_csv = uploads[0].getvalue()
+    model_id = "weak_probe_exact_maxwell_voigt"
     params = dict(SASScheme().defaults(), species=species.RB87.label, line="D2", temp_c=50.,
-                  probe_power_uw=0., cell_mm=75., cell_propagation="Uniform")
+                  probe_power_uw=0., cell_mm=75., cell_propagation="Uniform", od_model=model_id)
     canonical = np.linspace(-2, 2, 501)
     signal = evaluate_od(ODConditions.from_params(params), canonical * 1.e9).transmission
-    body = ("detuning_GHz,transmission\n" + "\n".join(
-        f"{a:.17g},{b:.17g}" for a,b in zip(canonical, signal))).encode()
-    native = prepare_measurement_upload(body)
-    trace = load_measurement(native, denoise=False)
-    reference = {"isotope":"Rb85", "line":"D2", "point":"fine_centroid"}
-    content = export_comparison_csv(native, trace, canonical, signal,
-        metadata={"model_id": "weak_probe_legacy", "frequency_reference":reference,
-                  "experiment_frequency_reference":reference, "line":"D2"})
-    uploads[:] = [SimpleNamespace(name="rb85-origin.csv", size=len(content), getvalue=lambda:content)]
+    uploads[:] = [_upload(_legacy_comparison(model_id, canonical, signal, origin=origin))]
     app.session_state["sas__species"] = species.RB87.label
     app.run()
     assert not app.exception and not app.error
     displayed = exports[-1]["comparison_payload"]
     assert displayed["alignment"]["shift"] == pytest.approx(-.078095)
-    assert displayed["model"]["frequency_reference"]["isotope"] == "Rb87"
+    assert displayed["model"]["axis_reference"]["isotope"] == "Rb87"
+    assert displayed["model"]["contract_reference"]["isotope"] == "Rb85"
+    assert displayed["model"]["display_reference_offset_hz"] == pytest.approx(78_095_000)
     assert displayed["model"]["experiment_frequency_reference"]["isotope"] == "Rb85"
+    assert displayed["model"]["model_id"] == exports[-1]["raw"]["probe_model"] == model_id
+    assert app.session_state["sas__od_model"] == "d20"
+    assert "physical_od_fit" not in displayed
+
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     app.button(key="sas_run_od_fit").click().run()
     result = exports[-1]["comparison_payload"]["physical_od_fit"]
+    assert result["probe_model"] == model_id and result["identifiable"]
     np.testing.assert_allclose(result["frequency_mhz"], (canonical - .078095)*1.e3, atol=1.e-10, rtol=0)
     assert result["fit_residuals"]["rms"] < 1.e-12
+    # A click from the previous waveform may arrive while a replacement file
+    # is being chosen. Its fitted temperature belongs to the prior model/file.
+    if origin:
+        uploads[:] = [_upload(ordinary_csv)]
+    app.button(key="sas_od_apply_temperature").click().run()
+    assert not app.exception and not app.error
+    if origin:
+        assert app.session_state["sas__temp_c"] == 49.
+        assert "physical_od_fit" not in exports[-1]["comparison_payload"]
+    else:
+        assert app.session_state["sas__temp_c"] == pytest.approx(50.)
+
+
+def test_recorded_two_level_model_remains_an_overlay(workspace):
+    app, exports, _, uploads = workspace
+    model_id = "finite_power_2level_gaussian_propagation"
+    app.session_state["sas__probe_power_uw"] = 25.
+    uploads[:] = [_upload(_legacy_comparison(model_id, [-1., 0., 1.], [.9, .4, .9]))]
+    app.run()
+    assert not app.exception and not app.error
+    comparison = exports[-1]["comparison_payload"]
+    assert comparison["model"]["model_id"] == exports[-1]["raw"]["probe_model"] == model_id
+    assert "physical_od_fit" not in comparison
+    assert any("magnetic-sublevel" in note.value for note in app.caption)
+    assert app.session_state["sas__od_model"] == "d20"
+
+
+def test_autood_source_metadata_does_not_override_the_active_gabes_model(workspace):
+    app, exports, _, uploads = workspace
+    # AutoOD permits extra columns. Text labels must not turn an AutoOD file
+    # into a versioned GABES comparison or supply a native measurement origin.
+    body = (
+        "detuning_GHz,theory_transmission,experiment_input_x,experiment_input_signal,"
+        "experiment_input_mode,experiment_x_unit,autood_version,gabes_commit,model,"
+        "frequency_reference,generated_by,format_version,model_id\n"
+        "-1,.9,-1,.9,fraction,GHz,0.2.2,8846193,weak_probe_legacy,Rb85,GABES,2,weak_probe_legacy\n"
+        "0,.5,0,.5,,,,,,,,,\n1,.9,1,.9,,,,,,,,,\n"
+    ).encode()
+    uploads[:] = [_upload(body)]
+    app.run()
+    assert not app.error and not app.exception
+    payload = exports[-1]["comparison_payload"]
+    assert payload["input_metadata"]["model"] == "weak_probe_legacy"
+    assert payload["model"]["model_id"] == "od_weak_exact_voigt_transit_v1"
+    assert "experiment_frequency_reference" not in payload["model"]
+
+
+@pytest.mark.parametrize(("model_id", "power"), [
+    ("unknown_model_from_future_version", 0.),
+    ("finite_power_2level_gaussian_propagation", 0.),
+    ("d20", 0.),
+    ("od_weak_exact_voigt_transit_v1", 5.),
+])
+def test_unusable_recorded_model_can_be_replaced_on_the_same_route(workspace, model_id, power):
+    app, exports, _, uploads = workspace
+    plain = uploads[0].getvalue()
+    app.session_state["sas__probe_power_uw"] = power
+    uploads[:] = [_upload(_legacy_comparison(model_id, [-1., 0., 1.], [.9, .4, .9]))]
+    app.run()
+    assert not app.exception and app.error
+    assert not any(output.get("comparison_payload") for output in exports)
+    assert app.session_state["sas__od_model"] == "d20"
+
+    uploads[:] = [_upload(plain)]
+    app.run()
+    assert not app.error and not app.exception
+    model = exports[-1]["comparison_payload"]["model"]
+    expected = "od_finite_rb_mf_rate_v1" if power else "od_weak_exact_voigt_transit_v1"
+    assert model["model_id"] == expected
 
 
 def test_history_bridge_refreshes_each_traversal_once_and_detaches(tmp_path):
@@ -328,7 +441,8 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
         expected = evaluate_od_display(conditions, raw["scan"])
         assert len(expected.transmission) == size
         assert comparison["model"]["model_id"] == raw["probe_model"] == model_id
-        assert comparison["model"]["frequency_reference"]["isotope"] == "Rb87"
+        assert comparison["model"]["axis_reference"]["isotope"] == "Rb87"
+        assert comparison["model"]["contract_reference"]["isotope"] == "Rb85"
         assert comparison["model"]["conditions"]["line_strength"] == .5
         np.testing.assert_array_equal(comparison["theory_trace"]["transmission"], expected.transmission)
         np.testing.assert_array_equal(output["view"]["optical_readout"]["optical_depth"], expected.optical_depth)
@@ -354,6 +468,8 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
             downloads.append(kwargs["data"])
         return native_button(panel, label, *args, **kwargs)
     monkeypatch.setattr(DeltaGenerator, "download_button", capture)
+    if power == 0.:
+        app.selectbox(key="sas_measurement_export_format").select("Origin").run()
     app.button(key="sas_prepare_measurement_csv").click().run()
     assert not app.error and not app.exception and len(downloads) == 1
     metadata = prepare_measurement_upload(downloads[0]).metadata
@@ -365,10 +481,44 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
     else:
         assert "model_accuracy" not in metadata
     assert metadata["fit_model_id"] == metadata["model_id"] == model_id
-    assert metadata["frequency_reference"]["isotope"] == "Rb87"
-    rows = csv.DictReader(io.StringIO(downloads[0].decode("utf-8-sig")))
-    np.testing.assert_array_equal([float(row["theory_transmission"]) for row in rows],
-                                  expected.transmission)
+    assert metadata["axis_reference"]["isotope"] == "Rb87"
+    assert metadata["contract_reference"]["isotope"] == "Rb85"
+    assert metadata["format_version"] == 2
+    assert "frequency_reference" not in metadata and "experiment_frequency_reference" not in metadata
+    rows = list(csv.reader(io.StringIO(downloads[0].decode("utf-8-sig"))))
+    assert rows[0][-1] == "gabes_comparison_v2"
+    records = rows[4:] if power == 0. else rows[1:]
+    np.testing.assert_array_equal([float(row[1]) for row in records], expected.transmission)
+
+    # Reopen the downloaded file with a different active preset. The pump-free
+    # view uses its recorded ID immediately, without changing the theory preset.
+    app.session_state["sas__od_model"] = "pre_d20"
+    uploads[:] = [_upload(downloads[0])]
+    app.run()
+    assert not app.error and not app.exception
+    replay = exports[-1]["comparison_payload"]
+    assert exports[-1]["raw"]["probe_model"] == replay["model"]["model_id"] == model_id
+    np.testing.assert_array_equal(replay["theory_trace"]["transmission"], expected.transmission)
+    assert "physical_od_fit" not in replay and "fit_model_id" not in replay["model"]
+    app.button(key="sas___save_browser").click().run()
+    saved = app.session_state["sas___defaults_command"]["record"]["params"]
+    assert saved["od_model"] == "pre_d20" and saved["pump_power_mw"] == 1.5
+    app.query_params.pop("compare", None)
+    app.run()
+    app.query_params["compare"] = ["0"]
+    app.run()
+    assert not app.exception and not app.error
+    assert exports[-1]["comparison_payload"]["model"]["model_id"] == model_id
+
+    restored = "finite_power_2level_gaussian_propagation" if power else "weak_probe_exact_maxwell_voigt"
+    if power == 0.:
+        app.button(key="sas___csv_remove_retained").click().run()
+        assert not app.exception and not app.error
+        assert exports[-1]["raw"]["probe_model"] == restored
+    uploads[:] = [_upload(body)]
+    app.run()
+    assert not app.error and not app.exception
+    assert exports[-1]["comparison_payload"]["model"]["model_id"] == restored
 
 
 @pytest.mark.parametrize("invalid", ["unknown_saved_model", "", "   ", 0, [], {}, ["od_finite_rb_mf_rate_v1"]])

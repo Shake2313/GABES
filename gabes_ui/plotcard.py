@@ -174,6 +174,8 @@ def remember_overlay_for_comparison(scheme_name, *, entering):
 
 
 def _forget_retained_csv(scheme_name):
+    if scheme_name == "sas":
+        st.session_state.pop("sas_csv_source", None)
     st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
     st.session_state.pop(skey(scheme_name, "_csv_fingerprint"), None)
     st.session_state.pop("sas_od_physical_fit", None)
@@ -181,7 +183,45 @@ def _forget_retained_csv(scheme_name):
     st.session_state.pop(skey(scheme_name, "_model_return_overlay"), None)
 
 
-def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, workspace=False,
+def _csv_uploader(panel, scheme_name, *, workspace):
+    uploader_options = {}
+    if "max_upload_size" in inspect.signature(panel.file_uploader).parameters:
+        # Streamlit added this per-widget guard after the project's oldest
+        # supported release; retain the backend byte check as the fallback.
+        limit = MAX_FILE_BYTES
+        if workspace:
+            from gabes.od_measurement import MAX_COMPARISON_BYTES
+            limit = MAX_COMPARISON_BYTES
+        uploader_options["max_upload_size"] = limit // (1024 * 1024)
+    return panel.file_uploader(
+        "Measurement CSV" if workspace else "Oscilloscope CSV",
+        type=("csv",),
+        key=_overlay_upload_key(scheme_name),
+        on_change=_forget_retained_csv,
+        args=(scheme_name,),
+        help=("Open a measured trace, oscilloscope file, or a standard or Origin comparison export."
+              if workspace else "A and B are read as arbitrary units; no header is required."),
+        **uploader_options,
+    )
+
+
+def select_workspace_measurement(panel, scheme_name):
+    """Read the file before computing the curve so its recorded model can select the solve."""
+    from gabes_ui.od_measurement import select_upload
+
+    uploaded = _csv_uploader(panel, scheme_name, workspace=True)
+    try:
+        selected = select_upload(panel, scheme_name, uploaded, _forget_retained_csv)
+    except ValueError:
+        _forget_retained_csv(scheme_name)
+        raise
+    if selected is None:
+        st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
+        return None
+    return selected[1]
+
+
+def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upload=None,
                             pending_temperature=None):
     from gabes.od_model import ODConditions, ODUnsupportedError, od_unavailable
     from gabes_ui.od_measurement import request_temperature, fit_conditions_key, workspace_params
@@ -190,6 +230,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, wor
         PARAMETERS, fit_od_spectrum, od_fit_unavailable, prepare_od_fit,
     )
 
+    workspace = upload is not None
     box = panel.expander("Fit physical OD parameters", expanded=False)
     if workspace:
         notice = st.session_state.pop("sas_od_apply_notice", None)
@@ -244,7 +285,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, wor
     saved = st.session_state.get(key)
     if workspace and pending_temperature is not None:
         try:
-            live = workspace_params(current_params("sas", schemes.get("sas")), st.session_state)
+            live = workspace_params(current_params("sas", schemes.get("sas")), st.session_state, upload)
             current_key = fit_conditions_key(live, free)
         except (ValueError, TypeError):
             current_key = None
@@ -325,35 +366,21 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
     with panel:
         if view.get("experimental_workspace") and not workspace:
             panel.caption("This generic model uses a relative MHz axis. Choose a resolved Rb or Cs line for calibrated OD fitting.")
-        if not workspace:
-            panel.caption("CSV A = X (time/frequency), B = detector signal. Metadata and later columns are ignored.")
-        uploader_options = {}
-        if "max_upload_size" in inspect.signature(panel.file_uploader).parameters:
-            # Streamlit added this per-widget guard after the project's oldest
-            # supported release; retain the backend byte check as the fallback.
-            limit = measurement.MAX_COMPARISON_BYTES if workspace else MAX_FILE_BYTES
-            uploader_options["max_upload_size"] = limit // (1024 * 1024)
-        uploaded = panel.file_uploader(
-            "Measurement CSV" if workspace else "Oscilloscope CSV",
-            type=("csv",),
-            key=_overlay_upload_key(scheme_name),
-            on_change=_forget_retained_csv,
-            args=(scheme_name,),
-            help=("Open a measured trace, oscilloscope file, or a standard or Origin comparison export."
-                  if workspace else "A and B are read as arbitrary units; no header is required."),
-            **uploader_options,
-        )
-        projection = None
+        projection = uploaded = None
         mode = unit = None
-        if workspace:
-            try:
-                selected = workspace_ui.select_upload(panel, scheme_name, uploaded, _forget_retained_csv)
-            except ValueError as exc:
-                panel.error(str(exc))
-                return
+        if view.get("experimental_workspace"):
+            selected = st.session_state.get(skey(scheme_name, "_csv_retained_file"))
             if selected is None:
                 return
-            filename, projection = selected
+            filename, measurement_file = selected
+            if workspace:
+                projection = measurement_file
+            else:
+                csv_bytes = measurement_file.payload
+        else:
+            panel.caption("CSV A = X (time/frequency), B = detector signal. Metadata and later columns are ignored.")
+            uploaded = _csv_uploader(panel, scheme_name, workspace=False)
+        if workspace:
             source_key = (projection.sha256, projection.columns, projection.scope.od if projection.scope else None)
             new_source = st.session_state.get("sas_csv_source") != source_key
             if new_source:
@@ -445,7 +472,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             fingerprint = projection.sha256
         elif uploaded is not None:
             filename, csv_bytes = uploaded.name, uploaded.getvalue()
-        else:
+        elif not view.get("experimental_workspace"):
             retained = st.session_state.get(skey(scheme_name, "_csv_retained_file"))
             if retained is None:
                 return
@@ -678,7 +705,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         if scheme_name == "sas" and params is not None and x_unit == "GHz":
             # Exclude the displayed curve from the physical fit's file/calibration identity.
             physical_fit = _render_physical_od_fit(panel, trace, alignment, params,
-                fit_context[:-1] if workspace else fit_context, workspace=workspace,
+                fit_context[:-1] if workspace else fit_context, upload=projection,
                 pending_temperature=pending_temperature)
 
         import_diag = trace.import_diagnostics
@@ -769,8 +796,8 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             if raw_overlay is not None:
                 raw_overlay = (plot_x, break_gaps(raw_overlay[1]))
         metadata = workspace_ui.plot_metadata(params, view.get("od_model_id"))
-        if projection.metadata.get("experiment_frequency_reference"):
-            metadata["experiment_frequency_reference"] = projection.metadata["experiment_frequency_reference"]
+        if native_reference := measurement.native_frequency_reference(projection.metadata):
+            metadata["experiment_frequency_reference"] = native_reference
         if physical_fit:
             metadata["fit_model_id"] = physical_fit.get("probe_model")
         theory_trace = {"detuning": theory_x.tolist(), "transmission": theory_y.tolist()}
@@ -778,7 +805,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             theory_trace["optical_depth"] = np.asarray(readout["optical_depth"]).tolist()
         workspace_payload = dict(measurement_workspace=True, coverage_ghz=coverage,
                                  theory_trace=theory_trace, model=metadata, input_metadata=projection.metadata)
-        if metadata.get("frequency_reference") and x_unit == "GHz":
+        if metadata.get("axis_reference") and x_unit == "GHz":
             fmt = panel.selectbox("Comparison CSV format", ["Standard", "Origin"], key="sas_measurement_export_format")
             if panel.button("Prepare comparison CSV", key="sas_prepare_measurement_csv"):
                 try:
@@ -1025,8 +1052,11 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
 
     with card:
         plot_area = st.container()
+        measurement_panel = view.get("experimental_workspace")
+        if measurement_panel and skey(scheme.name, "_csv_retained_file") not in st.session_state:
+            overlay_on = False
         if overlay_on:
-            label = ("Experimental CSV · upload, calibrate and fit" if view.get("experimental_workspace")
+            label = ("Experimental CSV · calibrate and fit" if measurement_panel
                      else "Overlay settings · upload, calibrate and fit")
             panel = st.expander(label, expanded=True)
             comparison_payload = _render_experimental_comparison(view, scheme.name, panel, params)

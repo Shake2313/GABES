@@ -13,6 +13,7 @@ from itertools import zip_longest
 import json
 import math
 import re
+import sys
 
 import numpy as np
 
@@ -36,7 +37,8 @@ _DECLARED_TRANSMISSION = re.compile(
     r"(?:transmission|trans)(?:[\s_(\[]*(?:%|pct|percent|fraction|1)[\s)\]]*)?"
 )
 _INPUT_COLUMNS = ("experiment_input_x", "experiment_input_signal")
-_GABES_META = "gabes_comparison_v1"
+_GABES_META = "gabes_comparison_v2"
+_LEGACY_GABES_META = "gabes_comparison_v1"
 
 
 @dataclass(frozen=True)
@@ -64,7 +66,7 @@ def _is_comparison(names):
     if names[0] not in ("detuning_ghz", "detuning_from_rb-85_d1_centroid",
                         "detuning_from_rb-85_d2_centroid"):
         return False
-    return (_GABES_META in names or
+    return (_GABES_META in names or _LEGACY_GABES_META in names or
             {"autood_version", "gabes_commit", "experiment_input_mode", "experiment_x_unit"} <= set(names))
 
 
@@ -103,9 +105,71 @@ def _compact_float(text):
     return sign + min((decimal, coefficient + "e" + str(power)), key=len)
 
 
+def _split_legacy_reference(metadata):
+    """In a v1 GABES worksheet frequency_reference describes the plotted theory axis."""
+    axis = metadata.pop("frequency_reference")
+    metadata["axis_reference"] = axis
+    isotope = axis.get("isotope") if isinstance(axis, dict) else axis
+    if isotope not in ("Rb85", "Rb87", "Cs133"):
+        return  # Preserve an older caller's axis description without guessing its origin.
+    contract_isotope = "Cs133" if isotope == "Cs133" else "Rb85"
+    if isinstance(axis, dict):
+        line = axis.get("line", metadata.get("line"))
+        metadata["contract_reference"] = {"isotope": contract_isotope, "point": "fine_centroid"}
+        if line is not None:
+            metadata["contract_reference"]["line"] = line
+        point = axis.get("point", "fine_centroid")
+    else:
+        metadata["contract_reference"] = contract_isotope
+        line, point = metadata.get("line"), "fine_centroid"
+    if "display_reference_offset_hz" not in metadata and point == "fine_centroid":
+        if isotope == contract_isotope:
+            metadata["display_reference_offset_hz"] = 0.0
+        elif line in ("D1", "D2"):
+            from .optical_frequency import reference_offset_hz
+            metadata["display_reference_offset_hz"] = reference_offset_hz(isotope, line)
+
+
+def _valid_theory_references(metadata):
+    line = metadata.get("line")
+    isotopes = []
+    for key in ("axis_reference", "contract_reference"):
+        reference = metadata.get(key)
+        isotope = reference
+        if isinstance(reference, dict):
+            isotope = reference.get("isotope")
+            ref_line = reference.get("line", line)
+            if (reference.get("point", "fine_centroid") != "fine_centroid"
+                    or ref_line not in ("D1", "D2") or (line is not None and ref_line != line)):
+                return False
+            line = ref_line
+        if isotope not in ("Rb85", "Rb87", "Cs133"):
+            return False
+        isotopes.append(isotope)
+    axis, contract = isotopes
+    if contract != ("Cs133" if axis == "Cs133" else "Rb85") or line not in (None, "D1", "D2"):
+        return False
+    offset = metadata.get("display_reference_offset_hz")
+    return (type(offset) in (int, float) and abs(offset) <= sys.float_info.max
+            and (axis != contract or offset == 0))
+
+
+def native_frequency_reference(metadata):
+    """Resolve an explicitly recorded native isotope shorthand in its source worksheet."""
+    origin = metadata.get("experiment_frequency_reference")
+    if isinstance(origin, str) and origin:
+        # The shorthand uses the original worksheet's line, even when re-exported
+        # against a theory curve on the other D line. A missing line stays unknown.
+        return {"isotope": origin, "line": metadata.get("line")}
+    return origin
+
+
 def _read_comparison(stream, header, digest):
     names = _labels(header)
     x, y = (names.index(name) for name in _INPUT_COLUMNS)
+    if _GABES_META in names and _LEGACY_GABES_META in names:
+        raise ExperimentalCSVError("Conflicting GABES comparison versions.")
+    meta_column = next((key for key in (_GABES_META, _LEGACY_GABES_META) if key in names), None)
     if "experiment input x" in [v.strip().casefold() for v in header]:
         for _ in range(2):
             if _decoded_line(stream) is None:
@@ -125,15 +189,23 @@ def _read_comparison(stream, header, digest):
             raise ExperimentalCSVError("Comparison CSV column count does not match its header.")
         if metadata is None:
             first = dict(zip(names, row))
-            if _GABES_META in names:
+            if meta_column is not None:
                 try:
-                    metadata = json.loads(first[_GABES_META])
+                    metadata = json.loads(first[meta_column])
                 except (ValueError, TypeError) as exc:
                     raise ExperimentalCSVError("Invalid GABES comparison metadata.") from exc
-                if (not isinstance(metadata, dict) or metadata.get("format_version") != 1
-                        or metadata.get("generated_by") != "GABES" or not metadata.get("model_id")
-                        or not metadata.get("frequency_reference")):
+                version = 1 if meta_column == _LEGACY_GABES_META else 2
+                if (not isinstance(metadata, dict) or metadata.get("format_version") != version
+                        or metadata.get("generated_by") != "GABES"):
                     raise ExperimentalCSVError("Unsupported GABES comparison version.")
+                if not isinstance(metadata.get("model_id"), str) or not metadata["model_id"].strip():
+                    raise ExperimentalCSVError("GABES comparison requires a non-blank recorded model_id.")
+                if version == 1:
+                    if not metadata.get("frequency_reference"):
+                        raise ExperimentalCSVError("Missing v1 comparison frequency reference.")
+                    _split_legacy_reference(metadata)
+                elif "frequency_reference" in metadata or not _valid_theory_references(metadata):
+                    raise ExperimentalCSVError("Invalid v2 comparison theory references or offset.")
             else:
                 metadata = {k: v for k, v in first.items() if k not in (*_INPUT_COLUMNS, names[0])
                             and not k.startswith(("experiment_display_", "experiment_original_",
@@ -152,6 +224,8 @@ def _read_comparison(stream, header, digest):
             raise ExperimentalCSVError("Invalid native sample in comparison CSV.") from exc
     if metadata is None or not native.tell():
         raise ExperimentalCSVError("Comparison CSV has no original experimental samples.")
+    if origin := native_frequency_reference(metadata):
+        metadata["experiment_frequency_reference"] = origin
     mode, unit = metadata.get("experiment_input_mode"), metadata.get("experiment_x_unit")
     if mode not in _MODES or unit not in _UNITS:
         raise ExperimentalCSVError("Unknown comparison signal mode or X unit.")
@@ -218,7 +292,7 @@ def prepare_measurement_upload(data, *, scope_channel=None, scope_source_id=None
             # UTF-16 needs its BOM once, not at the start of every row.
             utf8 = io.BytesIO(text.encode("utf-8"))
             return _read_comparison(utf8, _decoded_line(utf8), digest)
-        if (_GABES_META in names or "autood_version" in names
+        if (_GABES_META in names or _LEGACY_GABES_META in names or "autood_version" in names
                 or names[:2] == ["detuning_ghz", "theory_transmission"]
                 or (names and names[0].startswith("detuning_from_85rb_")
                     and names[1:] == ["transmission", "parameters"])):
@@ -309,12 +383,18 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
                           mode=None, x_unit=None):
     """Export theory/display and original pairs independently, preserving acquisition order.
 
-    metadata records the model ID, theory frequency reference and conditions.
-    experiment_frequency_reference can separately identify the native measurements'
-    frequency origin, if the experiment established it.
+    axis_reference identifies detuning_GHz, contract_reference the evaluator's origin.
+    Add display_reference_offset_hz to the displayed detuning in Hz to get contract Hz.
+    experiment_frequency_reference independently identifies an established native origin.
     """
-    if not metadata.get("model_id") or not metadata.get("frequency_reference"):
-        raise ValueError("Comparison export requires a model ID and its frequency reference.")
+    meta = dict(metadata)
+    if "axis_reference" not in meta and meta.get("frequency_reference"):
+        _split_legacy_reference(meta)
+    meta.pop("frequency_reference", None)
+    if not isinstance(meta.get("model_id"), str) or not meta["model_id"].strip():
+        raise ValueError("Comparison export requires a non-blank recorded model_id.")
+    if not _valid_theory_references(meta):
+        raise ValueError("Comparison export requires both theory references and a finite offset.")
     tx, ty = np.asarray(theory_x_ghz, dtype=float), np.asarray(theory_transmission, dtype=float)
     if tx.ndim != 1 or tx.size == 0 or tx.shape != ty.shape or not np.all(np.isfinite(tx)) or not np.all(np.isfinite(ty)):
         raise ValueError("Theory must contain paired finite detunings and transmissions.")
@@ -335,10 +415,9 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
         inside = (x[0] <= tx) & (tx <= x[-1])
         grid[inside] = np.interp(tx[inside], x, y)
 
-    meta = dict(metadata)
     correction = trace.correction
     meta.update(
-        format_version=1, generated_by="GABES", gabes_version=__version__,
+        format_version=2, generated_by="GABES", gabes_version=__version__,
         experiment_x_unit=unit, experiment_input_mode=mode,
         input_file_sha256=upload.sha256,
         original_file_sha256=upload.metadata.get("original_file_sha256", upload.sha256),
@@ -362,8 +441,13 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
         meta["scope"] = dict(channels=scope.channels, od=scope.od, sas=scope.sas,
                              trigger=scope.trigger, selected_samples=[scope.start, scope.stop],
                              record_samples=scope.total, manual=scope.manual, source_id=scope.source_id)
-    if "experiment_frequency_reference" not in meta and upload.metadata.get("experiment_frequency_reference"):
-        meta["experiment_frequency_reference"] = upload.metadata["experiment_frequency_reference"]
+    native_key = "experiment_frequency_reference"
+    # A retained pre-upgrade upload can still hold the old shorthand. Resolve
+    # inherited metadata against that upload before changing the theory line.
+    source = (upload.metadata if native_key not in meta or meta[native_key] == upload.metadata.get(native_key)
+              else meta)
+    if origin_reference := native_frequency_reference(source):
+        meta[native_key] = origin_reference
     encoded_meta = json.dumps(meta, ensure_ascii=True, allow_nan=False, separators=(",", ":"))
     columns = ["detuning_GHz", "theory_transmission", f"experiment_display_{signal}_on_theory_grid",
                *_INPUT_COLUMNS, f"experiment_calibrated_{signal}", "experiment_aligned_detuning_GHz",
