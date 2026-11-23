@@ -35,22 +35,33 @@ state whose couplings are adjoint partners.
 import math
 import os
 from concurrent.futures import ThreadPoolExecutor
+import threading
 
 import numpy as np
 
 from . import core, doppler, kernels
 
 _POOL = None
+_POOL_LOCK = threading.Lock()
 _POOL_WORKERS = max(1, int(os.cpu_count() or 1))
 _MIN_EIG_CHUNK = 4          # below this a task costs more to dispatch than to run
 
 
 def _pool():
+    """The shared executor, created once even when first callers overlap.
+
+    Only construction is locked; submitted work runs concurrently. If
+    construction fails, the next call tries again.
+    """
     global _POOL
-    if _POOL is None:
-        _POOL = ThreadPoolExecutor(max_workers=_POOL_WORKERS,
-                                   thread_name_prefix="gabes-poles")
-    return _POOL
+    pool = _POOL
+    if pool is None:
+        with _POOL_LOCK:
+            if _POOL is None:
+                _POOL = ThreadPoolExecutor(max_workers=_POOL_WORKERS,
+                                           thread_name_prefix="gabes-poles")
+            pool = _POOL
+    return pool
 
 
 def _eig_stacks(stacks):
