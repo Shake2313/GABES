@@ -689,6 +689,7 @@
         "⟦AI⟧ 식별 판정 기준: GABES |ρ| ≤ 0.98·조건수 ≤ 1e5 유지 또는 AutoOD 경고 0.95/0.85 채택. 이 연구에서 D2 파워 피팅은 |ρ| 0.81–0.955에서 pull RMS ≈ 1로 불확도가 맞았다. 0.85 경고를 쓰면 D2 25 µW 피팅 대부분이 경고다. 결정 전까지 현행 GABES 기준 유지.",
         "⟦AI⟧ 파워 등록 상한 100 µW(앱 슬라이더 최대)를 넓힐지. 참값이 상한에 가까우면 경계 판정이 난다. 결정 전까지 100 µW 유지."
       ],
+      "user_decision_thresholds_and_power_bound_2026_11_23": "User decision 2026-11-23 on both open items above: \"판정 기준은 GABES 유지, 100 µW 상한도 유지\". ⟦AI⟧ Both questions are closed with the current values: fit_od_spectrum keeps |ρ| ≤ 0.98, condition number ≤ 1e5 and the bound check; probe_power_uw keeps the registered range 0–100 µW. No code or value changes. A true power near 100 µW still reports a bound hit. AutoOD's own warnings (|ρ| 0.95/0.85) were not part of this question and stay unchanged.",
       "last_reviewed_at": "2026-11-23",
       "user_decision_2026_11_23": "User decision 2026-11-23, after the 192-fit study: \"분율+D2 파워\" — the app offers the ⁸⁵Rb fraction and the D2 probe power (reported with the peak intensity); D1 power and the beam radius stay hidden. ⟦AI⟧ Engine: offered_fit_parameters(params, model_id) adds rb85_fraction for a custom Rb composition and probe_power_uw on D2 under the rate model; VALIDATED_SCOPE holds the evidence text. The app wiring (replacing PARAMETERS in the free-parameter picker, showing probe_peak_intensity and the scope text) belongs to the web lane."
     },
