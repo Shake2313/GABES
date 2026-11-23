@@ -5,6 +5,8 @@ transfer matrix, and explicitly labelled gain-referred noise fixtures.  It does
 not derive the microscopic Langevin diffusion needed for a physical FWM
 squeezing spectrum.
 """
+from dataclasses import dataclass
+
 import numpy as np
 
 from . import constants
@@ -569,39 +571,249 @@ def intensity_difference_squeezing_dB(G_s, G_c, eta, *, excess_noise=0.0):
     return gain_referred_noise_dB(G_s, G_c, eta, excess_noise=excess_noise)
 
 
+# Origin of a twin-beam covariance. Only measured or microscopically propagated
+# covariances can support a physical (not ideal-fixture) nonclassicality claim.
+COVARIANCE_IDEAL_CANONICAL = "explicit_ideal_canonical_fixture"
+COVARIANCE_EFFECTIVE = "assumed_effective_closure"
+COVARIANCE_MEASURED = "measured"
+COVARIANCE_MICROSCOPIC = "microscopic_propagated"
+_COVARIANCE_ORIGINS = (COVARIANCE_IDEAL_CANONICAL, COVARIANCE_EFFECTIVE,
+                       COVARIANCE_MEASURED, COVARIANCE_MICROSCOPIC)
+
+
+class CovarianceUnavailable(ValueError):
+    """The requested covariance class has no implementation or record."""
+
+
+@dataclass(frozen=True)
+class TwinBeamMoments:
+    """Photon-number moments of the detected signal (s) and conjugate (c) arms.
+
+    Counts are per detection interval. ``source`` names the input state and
+    ``environment`` the channel after the source; ``covariance_origin`` is one
+    of the ``COVARIANCE_*`` classes. A moment set built in the bright-seed limit
+    holds the coefficients of the seed photon number n0 (n0 → ∞).
+    """
+    mean_s: np.ndarray
+    mean_c: np.ndarray
+    var_s: np.ndarray
+    var_c: np.ndarray
+    cov: np.ndarray
+    source: str
+    environment: str
+    covariance_origin: str
+
+    def __post_init__(self):
+        if self.covariance_origin not in _COVARIANCE_ORIGINS:
+            raise ValueError(f"Unknown covariance origin {self.covariance_origin!r}")
+
+
+def ideal_twin_beam_moments(gain, eta_s=1.0, eta_c=1.0, *, seed_photons=0.0,
+                            env_photons_s=0.0, env_photons_c=0.0,
+                            bright_seed_limit=False):
+    """Detected moments of an explicitly ideal canonical twin-beam source.
+
+    Source: the phase-insensitive amplifier a_s → √G a_s + √(G−1) a_c†,
+    a_c → √G a_c + √(G−1) a_s† (G_s = G, G_c = G−1), with a coherent seed of
+    ``seed_photons`` in the signal and vacuum in the conjugate. Without a seed
+    this is the two-mode squeezed vacuum (thermal marginals, n̄ = G−1); with
+    one, each marginal is displaced thermal.
+
+    Channel: each arm passes a beam splitter of power transmission η whose
+    open port carries a thermal state of ``env_photons`` (0 = pure loss, i.e.
+    conditional binomial thinning), so n_out = η n_in + (1−η) n_E.
+
+    The Gaussian quadrature covariance (vacuum = 1/2) gives, with
+    ν = η(2G−1) + (1−η)(2n_E+1):
+
+        <n_s> = n0 η_s G + (ν_s − 1)/2,       Var n_s = (ν_s² − 1)/4 + n0 η_s G ν_s
+        <n_c> = n0 η_c (G−1) + (ν_c − 1)/2,   Var n_c = (ν_c² − 1)/4 + n0 η_c (G−1) ν_c
+        Cov   = η_s η_c G (G−1) (1 + 2 n0).
+
+    ``bright_seed_limit=True`` returns the coefficients of n0. With pure loss
+    they are η_s G, η_c (G−1), η_s² A(A+B) + η_s(1−η_s)A,
+    η_c² B(A+B) + η_c(1−η_c)B and 2 η_s η_c AB (A = G, B = G−1).
+
+    This is an ideal fixture. It is not a covariance of the noncanonical,
+    absorbing production FWM transfer.
+    """
+    G = np.asarray(gain, dtype=float)
+    eta_s = np.asarray(eta_s, dtype=float)
+    eta_c = np.asarray(eta_c, dtype=float)
+    n_s = np.asarray(env_photons_s, dtype=float)
+    n_c = np.asarray(env_photons_c, dtype=float)
+    n0 = np.asarray(seed_photons, dtype=float)
+    for name, value, low, high in (("gain", G, 1.0, np.inf), ("eta_s", eta_s, 0.0, 1.0),
+                                   ("eta_c", eta_c, 0.0, 1.0),
+                                   ("env_photons_s", n_s, 0.0, np.inf),
+                                   ("env_photons_c", n_c, 0.0, np.inf),
+                                   ("seed_photons", n0, 0.0, np.inf)):
+        if not np.all(np.isfinite(value)) or np.any(value < low) or np.any(value > high):
+            raise ValueError(f"{name} must be finite and within [{low}, {high}]")
+    B = G - 1.0
+    nu_s = eta_s * (2.0 * G - 1.0) + (1.0 - eta_s) * (2.0 * n_s + 1.0)
+    nu_c = eta_c * (2.0 * G - 1.0) + (1.0 - eta_c) * (2.0 * n_c + 1.0)
+    if bright_seed_limit:
+        mean_s, mean_c = eta_s * G, eta_c * B
+        var_s, var_c = mean_s * nu_s, mean_c * nu_c
+        cov = 2.0 * eta_s * eta_c * G * B
+        source = "coherent_seeded_bright_limit"
+    else:
+        mean_s = n0 * eta_s * G + 0.5 * (nu_s - 1.0)
+        mean_c = n0 * eta_c * B + 0.5 * (nu_c - 1.0)
+        var_s = 0.25 * (nu_s * nu_s - 1.0) + n0 * eta_s * G * nu_s
+        var_c = 0.25 * (nu_c * nu_c - 1.0) + n0 * eta_c * B * nu_c
+        cov = eta_s * eta_c * G * B * (1.0 + 2.0 * n0)
+        source = ("vacuum_input_tmsv" if np.all(n0 == 0.0)
+                  else "coherent_seeded_displaced_thermal")
+    pure = np.all(n_s == 0.0) and np.all(n_c == 0.0)
+    return TwinBeamMoments(
+        mean_s=np.asarray(mean_s), mean_c=np.asarray(mean_c),
+        var_s=np.asarray(var_s), var_c=np.asarray(var_c), cov=np.asarray(cov),
+        source=source,
+        environment="pure_loss_vacuum" if pure else "thermal_attenuation",
+        covariance_origin=COVARIANCE_IDEAL_CANONICAL)
+
+
+def optimal_difference_weight(moments):
+    """Weight w > 0 minimizing Var(K_s − w K_c) / (<K_s> + w²<K_c>).
+
+    Setting the derivative of the ratio to zero gives
+    C m_c w² + (V_c m_s − V_s m_c) w − C m_s = 0, whose positive root is
+    returned. The weight therefore depends on the full covariance and the SQL
+    denominator. It equals sqrt(m_s/m_c) only when V_c m_s = V_s m_c, for
+    example Poissonian arms or the ideal canonical source with equal arm
+    efficiencies.
+    """
+    ms, mc = np.asarray(moments.mean_s, float), np.asarray(moments.mean_c, float)
+    vs, vc = np.asarray(moments.var_s, float), np.asarray(moments.var_c, float)
+    c = np.asarray(moments.cov, float)
+    if np.any(c <= 0.0) or np.any(ms <= 0.0) or np.any(mc <= 0.0):
+        raise ValueError("An optimal difference weight needs positive means and covariance")
+    b = vc * ms - vs * mc
+    disc = np.sqrt(b * b + 4.0 * c * c * ms * mc)
+    # Stable root: avoid cancelling b against disc.
+    return np.where(b >= 0.0, 2.0 * c * ms / (b + disc), (disc - b) / (2.0 * c * mc))
+
+
+def _difference_weight(reference_weight, mean_s, mean_c, moments=None):
+    if not isinstance(reference_weight, str):
+        return np.asarray(reference_weight, dtype=float)
+    mode = reference_weight.lower()
+    if mode == "raw":
+        return np.asarray(1.0)
+    if mode == "dc":
+        return mean_s / np.maximum(mean_c, 1e-30)
+    if mode == "shot":
+        return np.sqrt(mean_s / np.maximum(mean_c, 1e-30))
+    if mode in ("optimal", "opt"):
+        if moments is None:
+            raise ValueError("An optimal weight needs the arm covariance")
+        return optimal_difference_weight(moments)
+    raise ValueError("reference_weight must be scalar, raw, dc, shot or optimal")
+
+
+def difference_noise(moments, reference_weight=1.0):
+    """Var(K_s − w K_c) normalized to the shot noise <K_s> + w²<K_c>.
+
+    ``reference_weight`` is a scalar, "raw" (w=1), "dc" (cancels the mean
+    currents), "shot" (sqrt of the mean ratio) or "optimal"
+    (:func:`optimal_difference_weight`).
+    """
+    w = _difference_weight(reference_weight, moments.mean_s, moments.mean_c, moments)
+    var = moments.var_s + w * w * moments.var_c - 2.0 * w * moments.cov
+    shot = moments.mean_s + w * w * moments.mean_c
+    return var / np.maximum(shot, 1e-30)
+
+
+def twin_beam_correlations(moments):
+    """g² functions and the Cauchy–Schwarz ratio of a typed moment set.
+
+    g²_ii = 1 + (Var n_i − <n_i>)/<n_i>² and g²_sc = 1 + Cov/(<n_s><n_c>), so
+    a seeded (displaced-thermal) marginal is not forced to g² = 2. Only a
+    measured or microscopically propagated covariance supports a physical
+    nonclassicality claim; the ideal fixture supports an ideal claim only.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        g2_ss = 1.0 + (moments.var_s - moments.mean_s) / moments.mean_s ** 2
+        g2_cc = 1.0 + (moments.var_c - moments.mean_c) / moments.mean_c ** 2
+        g2_sc = 1.0 + moments.cov / (moments.mean_s * moments.mean_c)
+        ratio = g2_sc ** 2 / (g2_ss * g2_cc)
+    origin = moments.covariance_origin
+    violated = np.asarray(ratio > 1.0)
+    return {
+        "g2_ss": g2_ss, "g2_cc": g2_cc, "g2_sc": g2_sc, "cauchy_schwarz": ratio,
+        "evidence": {"origin": origin, "source": moments.source,
+                     "environment": moments.environment},
+        "ideal_nonclassicality": violated if origin == COVARIANCE_IDEAL_CANONICAL else None,
+        "physical_nonclassicality": (
+            violated if origin in (COVARIANCE_MEASURED, COVARIANCE_MICROSCOPIC) else None),
+    }
+
+
 def balanced_twin_beam_noise(
         G_s, G_c, eta_s=1.0, eta_c=1.0, *, reference_weight=1.0,
-        source_noise=None,
+        source_noise=None, covariance=None,
         seed_excess_noise=0.0, reference_excess_noise=0.0):
     """
-    Twin-beam intensity-difference noise with unequal arm efficiencies.
+    Twin-beam intensity-difference noise with explicit arm efficiencies.
 
     The returned value is linear noise power normalized to the coherent-state
     shot-noise level of the same weighted photocurrent difference,
 
         D = I_s - w I_c,      S = Var(D) / (I_s + w^2 I_c).
 
-    `eta_s` and `eta_c` are total intensity efficiencies after the FWM source
-    (cell transmission, path loss and detector QE).  `reference_weight` may be a
-    scalar electronic gain, or one of:
+    `eta_s` and `eta_c` are external intensity efficiencies after the FWM
+    source (path loss and detector QE). Absorption inside the cell belongs to
+    the source propagation and must not be passed here a second time.
+    `reference_weight` is a scalar electronic gain or "raw", "dc", "shot"
+    (w = sqrt(<I_s>/<I_c>)) or "optimal" (derived from the covariance; see
+    :func:`optimal_difference_weight`).
 
-    - "raw": w = 1.
-    - "dc": w = <I_s>/<I_c>, which cancels the mean photocurrents.
-    - "shot": w = sqrt(<I_s>/<I_c>), which minimizes the normalized quantum
-      noise for fixed detected powers.
+    `covariance` selects the closure. Two mean gains do not determine it:
 
-    `source_noise`, when provided, replaces the ideal GABES source covariance
-    with a measured/inferred source intensity-difference noise in linear units.
-    This is useful for paper-anchored resonant-FWM operating points where the
-    compact four-level gain model is not the final source metrology reference.
+    - None or "effective" (default): an assumed effective closure. Each arm is
+      treated as Poissonian and the covariance is chosen so that w=1 with
+      equal efficiencies gives (G_s − G_c)²/(G_s + G_c). It serves
+      noncanonical production gains. With unequal efficiencies or w ≠ 1 it is
+      an approximation: for an ideal canonical source it can differ from the
+      exact result by order unity. "shot" is optimal only inside this closure.
+    - "ideal_canonical": the exact bright-seed covariance of
+      :func:`ideal_twin_beam_moments`. It requires G_s − G_c = 1.
+    - "microscopic": raises :class:`CovarianceUnavailable`; the seeded path
+      has no distributed Langevin covariance.
 
-    For eta_s == eta_c == eta, w == 1 and source_noise is None this reduces
-    exactly to `intensity_difference_squeezing_dB(..., eta)` in linear units.
+    `source_noise`, when provided, is a measured or paper-anchored source
+    intensity-difference noise in linear units for the symmetric raw
+    difference. Unequal efficiencies or a weight other than 1 then need the
+    effective closure declared explicitly (``covariance="effective"``).
+
+    For eta_s == eta_c == eta, w == 1 and source_noise is None both closures
+    reduce exactly to `intensity_difference_squeezing_dB(..., eta)` in linear
+    units at G_s − G_c = 1.
     """
     G_s = np.asarray(G_s, dtype=float)
     G_c = np.asarray(G_c, dtype=float)
     eta_s = np.clip(np.asarray(eta_s, dtype=float), 0.0, 1.0)
     eta_c = np.clip(np.asarray(eta_c, dtype=float), 0.0, 1.0)
+    tech = (max(float(seed_excess_noise), 0.0)
+            + max(float(reference_excess_noise), 0.0))
+    if covariance == "microscopic":
+        raise CovarianceUnavailable(
+            "No microscopically propagated twin-beam covariance is available; "
+            "the seeded FWM path lacks the distributed Langevin solve.")
+    if covariance == "ideal_canonical":
+        if source_noise is not None:
+            raise ValueError("source_noise replaces the source covariance; "
+                             "it cannot be combined with the ideal canonical fixture")
+        if (not np.all(np.isfinite(G_s)) or not np.all(np.isfinite(G_c))
+                or np.any(G_s < 1.0) or np.any(G_c < 0.0)
+                or not np.allclose(G_s - G_c, 1.0, rtol=1e-9, atol=1e-12)):
+            raise ValueError("Ideal canonical fixture requires G_s>=1, G_c>=0 and G_s-G_c=1")
+        moments = ideal_twin_beam_moments(G_s, eta_s, eta_c, bright_seed_limit=True)
+        return np.maximum(difference_noise(moments, reference_weight) + tech, 1e-30)
+    if covariance not in (None, "effective"):
+        raise ValueError("covariance must be None, 'effective', 'ideal_canonical' or 'microscopic'")
 
     mean_s = eta_s * G_s
     mean_c = eta_c * G_c
@@ -614,39 +826,38 @@ def balanced_twin_beam_noise(
         cov0 = 0.5 * ((G_s + G_c) - (G_s - G_c) ** 2)
         cov0 = np.clip(cov0, 0.0, np.sqrt(np.maximum(G_s * G_c, 0.0)))
     else:
+        if isinstance(reference_weight, str):
+            unit_weight = reference_weight.lower() == "raw"
+        else:
+            unit_weight = bool(np.all(np.asarray(reference_weight, dtype=float) == 1.0))
+        if not (unit_weight and np.all(eta_s == eta_c)) and covariance != "effective":
+            raise ValueError(
+                "A scalar source_noise describes the symmetric raw difference; unequal "
+                "efficiencies or a weight other than 1 need covariance='effective'")
         S0 = np.clip(np.asarray(source_noise, dtype=float), 0.0, None)
         cov0 = 0.5 * (G_s + G_c) * (1.0 - S0)
         cov0 = np.clip(cov0, 0.0, np.sqrt(np.maximum(G_s * G_c, 0.0)))
     cov = eta_s * eta_c * cov0
 
-    if isinstance(reference_weight, str):
-        mode = reference_weight.lower()
-        if mode == "raw":
-            w = np.asarray(1.0)
-        elif mode == "dc":
-            w = mean_s / np.maximum(mean_c, 1e-30)
-        elif mode in ("shot", "optimal", "opt"):
-            w = np.sqrt(mean_s / np.maximum(mean_c, 1e-30))
-        else:
-            raise ValueError("reference_weight must be scalar, raw, dc, or shot")
-    else:
-        w = np.asarray(reference_weight, dtype=float)
+    if isinstance(reference_weight, str) and reference_weight.lower() in ("optimal", "opt"):
+        # Poissonian arms give V_c m_s = V_s m_c, so the covariance optimum of
+        # this closure is exactly the square-root weight.
+        reference_weight = "shot"
+    w = _difference_weight(reference_weight, mean_s, mean_c)
 
     var = mean_s + w * w * mean_c - 2.0 * w * cov
     shot = mean_s + w * w * mean_c
-    tech = (max(float(seed_excess_noise), 0.0)
-            + max(float(reference_excess_noise), 0.0))
     return np.maximum(var / np.maximum(shot, 1e-30) + tech, 1e-30)
 
 
 def balanced_twin_beam_squeezing_dB(
         G_s, G_c, eta_s=1.0, eta_c=1.0, *, reference_weight=1.0,
-        source_noise=None,
+        source_noise=None, covariance=None,
         seed_excess_noise=0.0, reference_excess_noise=0.0):
     """dB wrapper for `balanced_twin_beam_noise`."""
     S = balanced_twin_beam_noise(
         G_s, G_c, eta_s, eta_c, reference_weight=reference_weight,
-        source_noise=source_noise,
+        source_noise=source_noise, covariance=covariance,
         seed_excess_noise=seed_excess_noise,
         reference_excess_noise=reference_excess_noise)
     return 10.0 * np.log10(S)

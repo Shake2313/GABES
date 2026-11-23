@@ -756,7 +756,7 @@ def point_noise_metrics(source: dict, args: argparse.Namespace, T: float,
     w = np.sqrt(mean_s / max(mean_c, 1e-30)) * float(weight_scale)
     S = observables.balanced_twin_beam_noise(
         Gs, Gc, eta_s=eta_s, eta_c=eta_c, reference_weight=w,
-        source_noise=src["source_noise_linear"],
+        source_noise=src["source_noise_linear"], covariance="effective",
         seed_excess_noise=args.seed_excess_noise,
         reference_excess_noise=args.reference_excess_noise)
     abs_sens = absolute_field_sensitivity(
@@ -856,7 +856,7 @@ def weighted_noise_over_hanle(source: dict, hanle: dict,
     P_c = cfg.seed_w * Gc * eta_c
     S = observables.balanced_twin_beam_noise(
         Gs, Gc, eta_s=eta_s, eta_c=eta_c, reference_weight=balance_mode,
-        source_noise=src["source_noise_linear"],
+        source_noise=src["source_noise_linear"], covariance="effective",
         seed_excess_noise=args.seed_excess_noise,
         reference_excess_noise=args.reference_excess_noise)
     # Reconstruct the electronic weight used by the observable for sensitivity
