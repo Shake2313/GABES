@@ -2,6 +2,12 @@
 
 최신이 위. 항목 = 날짜 · 단계 · 한 일 · 측정/검증 · 남은 일·주의.
 
+## 2026-11-24 · 정보 계층 감사 1단계 (읽기 전용)
+
+⟦AI⟧ Gemini 검수 R1–R6의 1단계. `ui_audit --tag pre_anti_slop`과 17개 화면 인벤토리로 스킴별 위반 후보를 기록했다. [감사 표](audit/pre_anti_slop/anti_slop_inventory.md)
+
+⟦AI⟧ 상시 문장은 Model spectra 비교 화면에서 Λ 7–12, Rydberg 6–13, Magneto 9, PSR 3이고, OD/SAS 1, FWM 0이다. 첫 그래프 상단은 비교 화면 617–703 px, OD/SAS 376 px. Λ·Rydberg·Magneto·PSR 위반 대부분(공통 문장, Sample·Observable 상수 열, 제목+축 중복, readout 라벨 굵게·값 보통, 3단 적층)이 같은 비교 컴포넌트에서 나온다. OD/SAS 판독부는 이미 R3 방향이다. 감사 중 Fit OD data의 CSV 경고(`sas___csv_auto_correct`)와 Magneto B=0 회전값 −1.7×10⁻¹⁷ rad 표시를 발견했다. 코드는 바꾸지 않았다. 2–4단계는 OD/SAS 통합 마감 뒤.
+
 ## 2026-11-23 · FWM 스퀴징 온도와 모델 선택
 
 사용자 요청으로 씨앗형 FWM의 셀 온도를 메인 Conditions의 Atom 옆에 노출했다. 속도 평균은 Exact Maxwell, 잡음은 Experimental Jasperse로 고정했다.

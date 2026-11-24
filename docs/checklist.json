@@ -784,7 +784,8 @@
         "⟦AI⟧ R2·R5: 옮긴 정보는 툴팁·Advanced·Guide에서 한 번의 조작으로 닿아야 한다(D4). 계산 경로는 바꾸지 않는다(DESIGN.md 규칙).",
         "⟦AI⟧ 공용 UI 파일(conditions.py, plotcard.py, readout.py 등)은 다른 세션의 미커밋 변경이 착지한 뒤에 고친다. Codex의 OD 작업공간 파일(plotcard.py, od_measurement.py, od_profile_fit.py)은 통합 마감 전까지 Codex와 조율한다."
       ],
-      "last_reviewed_at": "2026-11-23"
+      "status_note": "⟦AI⟧ 2026-11-24 1단계(읽기 전용) 완료: docs/ui_redesign/audit/pre_anti_slop/anti_slop_inventory.md. 2–4단계는 activation_trigger대로 대기.",
+      "last_reviewed_at": "2026-11-24"
     },
     {
       "id": "magneto-doppler-fallback-policy",
