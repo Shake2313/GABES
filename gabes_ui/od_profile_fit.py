@@ -128,7 +128,8 @@ def _fit_bounds(box, params, model_id, settings):
 
 
 def _select_samples(box, params, trace, alignment, invert, settings, theory_range, theory_x, theory_y):
-    from gabes.od_profile_fit import profile_frame_alignment, profile_group_windows
+    from gabes.od_profile_fit import profile_group_windows
+    from gabes.od_measurement import quick_profile_alignment
 
     state = st.session_state
     groups = profile_group_windows(params, theory_range)
@@ -156,18 +157,19 @@ def _select_samples(box, params, trace, alignment, invert, settings, theory_rang
                          help="Drag across the preview or adjust these inclusive sample indices. Changing the frequency alignment preserves this selection.")
     settings.update(group=group, indices=tuple(indices))
     roi = tuple(float(trace.detuning[i]) for i in indices)
-    frame_key = group, window, alignment, invert, trace.is_absolute_transmission
+    frame_key = group, window, tuple(indices), alignment, invert, trace.is_absolute_transmission
     frame = settings.get("frame")
     if frame and frame[0] != frame_key:
         settings.pop("frame")
         frame = None
     controls = box.columns(2)
-    if controls[0].button("Frame selection in region", key="sas_profile_frame", disabled=indices[1] - indices[0] < 11,
-                          help="Stretch the selected samples over the chosen spectral region for this preview."):
-        framed = profile_frame_alignment(trace, params, roi, group=group, theory_range_ghz=theory_range,
-                                         current=alignment, reverse=alignment.reverse, invert=invert,
-                                         theory_x_ghz=theory_x, theory_transmission=theory_y)
-        frame = settings["frame"] = (frame_key, framed)
+    if controls[0].button("Fast fitting", key="sas_profile_frame", disabled=indices[1] - indices[0] < 11,
+                          help="Match the selected measured samples to the model in this spectral region."):
+        result = quick_profile_alignment(trace, theory_x, theory_y, indices=indices, window=window,
+                                         current=alignment, invert=invert)
+        frame = settings["frame"] = (frame_key, result.alignment)
+        if not result.matched:
+            box.info("No clear shape match. The preview uses the selected frequency span.")
     if controls[1].button("Use current alignment", key="sas_profile_unframe", disabled=frame is None):
         settings.pop("frame")
         frame = None
@@ -235,6 +237,7 @@ def _review_result(box, result, trace, indices, params, model_id, upload, invert
         apply_alignment(result.alignment, invert=invert)
         state.update({skey("sas", name): value for name, value in result.condition_values.items()})
         state.pop("sas_profile_result")
+        state.pop("sas_precise_open", None)
         state.sas_profile_notice = "Applied profile alignment and selected model conditions." if result.condition_values else "Applied profile alignment."
         st.rerun()
     if discard.button("Discard preview", key="sas_profile_discard"):
@@ -243,23 +246,15 @@ def _review_result(box, result, trace, indices, params, model_id, upload, invert
 
 
 def render_profile_fit(panel, upload, params, trace, alignment, invert, source, fit_context,
-                       theory_x, theory_y, apply_alignment, render_progress, *, origin_issue=None):
+                       theory_x, theory_y, apply_alignment, render_progress):
     """Run only on explicit request; opening the editor never changes main controls."""
     from gabes.od_model import ODConditions, od_unavailable
 
     state = st.session_state
     settings = _setup(source)
-    if origin_issue:
-        state.pop("sas_profile_result", None)
-        panel.caption("For profile fitting, choose the recorded transition line or select arbitrary X units to align this trace manually.")
-        return
-    if not panel.checkbox("Refine alignment with OD model", key="sas_profile_open"):
-        state.pop("sas_profile_result", None)
-        settings.pop("frame", None)
-        return
     from gabes.od_profile_fit import fit_od_profile
 
-    box = panel.container(border=True)
+    box = panel
     conditions = ODConditions.from_params(params)
     reason = od_unavailable(conditions)
     if reason:

@@ -38,6 +38,7 @@ const x = Array.from({length: 202}, (_, i) =>
 const y = x.map(v => v === 2.8 ? 0.2 : 1);
 const coverage = [[-3,-2.5],[2.5,3]];
 const reduced = measurementPath(x,y,coverage,[-3,3],4);
+const hole=measurementPath([0,1,2,3,4,5],[2,1,null,2,3,4],[[0,5]],[0,5],1);
 const curve = {...reduced,sampleX:x,sampleY:y,coverage};
 const detail = [2.5,3], state = {position:0, views:[[-4,4]],detail,index:161};
 chooseOverview(state,detail);
@@ -47,7 +48,7 @@ chooseOverview(state,[-4,4]);
 console.log(JSON.stringify({nav, selected:x[state.index],detail:state.detail,
   peak:curveSample(curve,x,2.8),gap:curveSample(curve,x,0),
   breakCount:reduced.y.filter(v=>v===null).length,hasDip:reduced.y.includes(0.2),
-  missingDepth:opticalDepth(0), validDepth:opticalDepth(0.2)}));
+  missingDepth:opticalDepth(0), validDepth:opticalDepth(0.2),hole}));
 """, encoding="utf-8")
     result = subprocess.run([node, str(module)], text=True, capture_output=True, check=True)
     data = json.loads(result.stdout)
@@ -59,3 +60,4 @@ console.log(JSON.stringify({nav, selected:x[state.index],detail:state.detail,
     assert data["breakCount"] == 1 and data["hasDip"]
     assert data["missingDepth"] is None
     assert data["validDepth"] == pytest.approx(1.6094379124341003)
+    assert data["hole"]["y"][data["hole"]["x"].index(2)] is None

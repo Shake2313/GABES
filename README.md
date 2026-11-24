@@ -107,7 +107,7 @@ no analysis-frequency or detector-electronics response.
 
 | Cluster | Scheme | Output |
 |---|---|---|
-| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to frozen outputs from the retired AutoOD-Rb calculator at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. In **Fit OD data**, a three-channel oscilloscope CSV can be gated and assigned to OD, SAS and trigger by waveform. The measured OD trace can then be aligned and fitted to the pump-free model. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
+| A — Absorption | **OD / SAS** | probe absorption with a counter-propagating pump. Pump off → Doppler-broadened OD (validated ⁸⁵Rb D1 hyperfine scale); pump on → Doppler-free Lamb dips + crossovers with **hyperfine optical pumping**. A 0–100 µW finite-probe control adds transition-resolved two-level saturation/power broadening plus self-consistent Gaussian transverse/longitudinal propagation, with 0 µW preserving the exact weak-probe result. Natural/pure-isotope Rb D2 is software-reference matched to frozen outputs from the retired AutoOD-Rb calculator at its baseline conditions; Rb D1 and Cs D1/D2 are clearly labelled generalized qualitative estimates. An Advanced paraffin-cell switch adds ground-hyperfine population memory between velocity-randomized beam passages without adding a coating-throughput loss. In the weak-probe branch, a **Dispersion** view carries the Kramers-Kronig partner of the same complex line profile (refractive index, single-pass phase), and the cold-spot and beam-path (Doppler-width) temperatures can be released from each other; the beam-path density is then the ideal gas at the cold-spot vapor pressure, n_sat(T_cold)·T_cold/T_path. Under **Fit OD Data**, a three-channel oscilloscope CSV can be gated and assigned to OD, SAS and trigger by waveform. The measured OD trace can then be aligned and fitted to the pump-free model. ⁸⁵Rb / ⁸⁷Rb / ¹³³Cs · D1/D2 or natural Rb |
 | A | **Lambda coherence (EIT / AT / CPT)** | one 3-level Lambda engine with regime-driven defaults, physical MHz/kHz controls, Rb/Cs D-line media, EIT transparency, AT splitting, and CPT dark resonance |
 | A | **Rydberg-EIT electrometry** | 85Rb cascade EIT / microwave AT spectrum for the 5S-5P-40D ladder and 37 GHz 40D-39F RF leg; first-order finite-IF weak-SIG response, AT→field calibration, balanced-detector PSN/RIN/electronics budget, temperature/cold-spot sweep, and conditional absolute sensitivity |
 | C — Magneto-optics | **Hanle / EIA / NMOR** | two distinct effects vs B: the **Hanle** effect (zero-field transmission dip/peak, EIA variant) from ground-state coherence, and **magneto-optical rotation** (MOR/NMOR, polarization-plane rotation) — both over the Zeeman manifold |
@@ -263,25 +263,31 @@ under `archive/` for historical reference only.
 
 ### Experimental CSV comparison (OD / SAS)
 
-Choose **Fit OD data** to compare a measurement with pump-off transmission.
-**Simulate spectra** keeps the theory pump power, waist and depletion settings.
-Upload a measured CSV or a standard or Origin comparison export. A named
+Under the OD/SAS readout, choose **Fit OD Data → Open CSV...**. The full spectrum
+and both zoom plots stay on screen. While a file is open, the theory uses zero
+pump power and the pump controls disappear. **Close CSV** restores the simulation
+pump power, waist and depletion settings. Open a measured CSV or a Standard or
+Origin comparison export. A named
 transmission column takes precedence over reference intensity. General files
 can be up to 10 MiB and self-describing comparison exports up to 16 MiB.
 
 For a three-channel scope CSV, the workspace identifies the trigger, SAS and
 transmitted probe from the waveforms and extracts the central part of the gate.
-**Inspect scope channels** shows all three traces. If the assignment is
+**OD Channel...** shows the available scope traces. If the assignment is
 ambiguous, choose the transmitted probe there. A manual choice uses the full
 recording. Acquisition indices preserve individual readings when timestamps
 repeat. The detector voltage remains relative until calibrated.
 
-**Match ranges** uses line shape to place the measurement on the current theory
+**Fast fitting** uses line shape to place the measurement on the current theory
 curve. For comparable placements it prefers the one nearest the current
 alignment. If no feature matches, it frames the span and reports the fallback.
-A declared frequency axis keeps its native scale on import.
+Ordinary CSVs start with an arbitrary X axis and relative signal. A comparison
+export retains its declared units and calibration. **Automatic noise correction**
+and **Invert X-axis** act on the display. **Back to initial** restores the
+initial alignment for the open file.
 
-- **Refine alignment with OD model** fits the frequency scale and shift jointly
+- **Precise fitting** opens a dialog. **Fast fitting** in the dialog seeds the
+  fit from the selected samples. The profile fit estimates the frequency scale and shift jointly
   with optional model conditions. Choose a full spectrum or Rb ground-state
   group, select the measured samples and set a search interval for each free
   condition. The sample selection stays fixed as the frequency axis moves.
@@ -302,11 +308,10 @@ Select a frequency in the spectrum to compare the theory sample with the nearest
 measured point. The detail view shows measured optical depth for absolute
 transmission. Gaps stay empty, including in the export. **Prepare comparison CSV**
 and **Download comparison CSV** save the original acquisition rows alongside
-the aligned display values, theory grid and calibration metadata. The projected
-measurement survives a round trip to the theory view.
+the aligned display values, theory grid and calibration metadata.
 
 Reopening a GABES comparison CSV uses its recorded pump-off theory model with
-the current conditions in **Fit OD data**. Removing the file restores the
+the current conditions. **Close CSV** restores the
 active model selection. The fit result's model ID is separate. Plain
 measurement CSVs and AutoOD 0.2.2 comparison files keep the active selection.
 AutoOD source builds using GABES `41bee30` or later can reopen both worksheet
@@ -325,9 +330,8 @@ the ⁸⁷Rb fraction is complementary. Natural composition stays at 72.17/27.83
 Mixtures use a fixed ⁸⁵Rb frequency centroid even when the dominant isotope
 changes. The existing pure-isotope menu retains its own isotope centroid.
 
-The OD/SAS theory plot selector currently shows **Transmission** only. **Decadic absorbance A10**,
-**Optical depth tau**, and weak-probe **Dispersion** are temporarily hidden from
-the plot selector; their calculated curves remain available in exports. The dimensionless quantities
+The OD/SAS workspace shows the full transmission spectrum and zoomed
+transmission and optical depth at the selected frequency window. The dimensionless quantities
 are `A10 = -log10(T)` and `tau = -ln(T) = ln(10)*A10`. The compatibility API
 `observables.optical_density()` retains its original base-10 value. For finite
 probe power, both logs describe the effective collected transmission. JSON and

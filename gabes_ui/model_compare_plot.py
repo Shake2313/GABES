@@ -17,6 +17,25 @@ _COMPONENT = st.components.v2.component(
     js=spectrum_component_js("model_compare.js"),
 )
 
+_OUTLET = st.components.v2.component(
+    "gabes_model_compare_outlet",
+    html='<div class="mc mc-outlet"></div>',
+    css=asset_text("ui/model_compare.css"),
+    js=asset_text("ui/model_compare_outlet.js"),
+)
+
+
+def render_readout_outlet(key, part):
+    """Place a live readout or its details beside the native fitting controls."""
+    try:
+        _OUTLET(key=f"{key}-{part}", data={"group": key, "part": part}, width="stretch")
+    except ValueError as error:
+        if not missing_apptest_component(error, "gabes_model_compare_outlet"):
+            raise
+    except TypeError as error:
+        if "bad argument type for built-in operation" not in str(error):
+            raise
+
 
 def _sample_nearest(grid, frequency):
     right = min(bisect_left(grid, frequency), len(grid) - 1)
@@ -135,12 +154,14 @@ def _receive_selection(dataset, key, context):
     st.session_state[key + "-group-control"] = selection["group_id"]
 
 
-def render_model_compare(dataset, *, key="sas-model-compare", context, show_groups=True):
+def render_model_compare(dataset, *, key="sas-model-compare", context, show_groups=True,
+                         split_readout=False, measurement=None):
     """Mount the browser plot and return its last committed physical selection."""
     selection = _current_selection(dataset, key, context)
     try:
         _COMPONENT(key=key, data=dict(dataset=dataset, context=context, selection=selection,
-                                    show_groups=show_groups,
+                                    show_groups=show_groups, outlet_group=key if split_readout else None,
+                                    measurement=measurement,
                                     navigation_revision=st.session_state.get(key + "-navigation-revision", 0)),
                    default={"selection": None},
                    on_selection_change=lambda: _receive_selection(dataset, key, context), width="stretch")

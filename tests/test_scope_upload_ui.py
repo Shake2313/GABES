@@ -31,15 +31,14 @@ def picker(monkeypatch):
 
     monkeypatch.setattr(_scope_channels, "identify_scope_channels", counted)
     app = AppTest.from_string("""
-from types import SimpleNamespace
 import streamlit as st
-from gabes_ui.od_measurement import select_upload
-from gabes_ui.plotcard import _forget_retained_csv
+from gabes_ui.od_fit_panel import install_csv, render_fit_panel
 
 if st.session_state.get("in_workspace", True):
-    data = st.session_state.get("source")
-    uploaded = SimpleNamespace(name="scope.csv", getvalue=lambda: data) if data is not None else None
-    select_upload(st, "sas", uploaded, _forget_retained_csv)
+    data = st.session_state.pop("source", None)
+    if data is not None:
+        install_csv("scope.csv", data)
+    render_fit_panel(st.container())
 """)
     return app, observed
 
@@ -52,9 +51,10 @@ def test_ambiguous_scope_shows_waveforms_without_guessing_and_only_detects_once(
     app.session_state["source"] = scope_csv(("CH1", "CH1", "CH3"), (rows // 2, rows, 2 * rows, missing))
     app.run()
     assert not app.exception and not app.error
+    app.button(key="sas_od_channel").click().run()
     assert app.selectbox[0].value is None
     assert "sas___csv_retained_file" not in app.session_state
-    assert "trigger" in app.info[0].value
+    assert any("trigger" in info.value for info in app.info)
     preview = app.get("arrow_vega_lite_chart")[0].proto
     spec = json.loads(preview.spec)
     assert spec["encoding"]["detail"]["field"] == "segment"
@@ -65,6 +65,7 @@ def test_ambiguous_scope_shows_waveforms_without_guessing_and_only_detects_once(
     assert "fewer than two finite samples" in app.warning[0].value
     assert "sas___csv_retained_file" not in app.session_state
     app.selectbox[0].select("Column 2 · CH1").run()
+    app.button(key="sas_confirm_od_channel").click().run()
     chosen = app.session_state["sas___csv_retained_file"][1]
     assert chosen.scope.od == 1 and chosen.scope.manual
     measured = np.loadtxt(io.BytesIO(chosen.payload), delimiter=",", skiprows=1)
@@ -81,11 +82,13 @@ def test_retained_scope_can_switch_between_gated_and_full_recording(picker):
     app.session_state["source"] = scope_csv(("1", "2", "3"), (times, waves["trigger"], waves["od"], waves["sas"]))
     app.run()
     assert not app.exception and not app.error
+    app.button(key="sas_od_channel").click().run()
     assert app.selectbox[0].value == "Automatic · CH2"
     assert any("SAS CH3 · Trigger CH1" in c.value for c in app.caption)
     original = app.session_state["sas___csv_retained_file"][1]
     assert (original.scope.od, original.scope.start, original.scope.stop) == (1, 422, 1178)
     app.selectbox[0].select("CH2").run()
+    app.button(key="sas_confirm_od_channel").click().run()
     full = app.session_state["sas___csv_retained_file"][1]
     assert full.scope.od == 1 and full.scope.manual
     assert (full.scope.start, full.scope.stop) == (0, 1600)
@@ -97,13 +100,19 @@ def test_retained_scope_can_switch_between_gated_and_full_recording(picker):
     app.run()
     app.session_state["in_workspace"] = True
     app.run()
+    app.button(key="sas_od_channel").click().run()
     assert app.selectbox[0].value == "CH2"
     app.selectbox[0].select("CH3").run()
+    app.button(key="sas_confirm_od_channel").click().run()
     assert app.session_state["sas___csv_retained_file"][1].scope.od == 2
+    app.run()
+    app.button(key="sas_od_channel").click().run()
     app.selectbox[0].select("Automatic · CH2").run()
+    app.button(key="sas_confirm_od_channel").click().run()
     assert app.session_state["sas___csv_retained_file"][1].payload == original.payload
     assert observed == [(1600, 3)]
-    app.button[0].click().run()
+    app.run()
+    app.button(key="sas_close_csv").click().run()
     assert not app.selectbox
     assert "sas___csv_retained_file" not in app.session_state
     assert "sas___csv_retained_scope" not in app.session_state

@@ -159,7 +159,7 @@ function sampleInspector(fig, svg, spec, geometry) {
       spec.series.forEach((curve,k)=>{
         const point=curveSample(curve,spec.grid,x), y=point.y,shown=displaySample(curve,point);
         const scope=sampleScope(curve,spec.grid,point.x);
-        values[k].textContent=point.x==null ? (curve.coverage ? 'no measured point' : 'outside scan') : format(y,6)+(Number.isFinite(y) && spec.yUnit && spec.yUnit!=='1' ? ' '+spec.yUnit : '')+(curve.x ? ' @ '+format(point.x,7)+' '+spec.unit : '')+(scope.status && scope.status!=='available'?' · '+scope.status:'');
+        values[k].textContent=point.x==null ? (curve.coverage ? 'no measured point' : 'outside scan') : format(y,6)+(Number.isFinite(y) && spec.yUnit && spec.yUnit!=='1' ? ' '+spec.yUnit : '')+(curve.x ? ' @ '+format(point.x/unitScale,7)+' '+spec.unit : '')+(scope.status && scope.status!=='available'?' · '+scope.status:'');
         values[k].parentElement.title=scope.reasons.join('; ');
         const inside=sampleInsidePlot(shown,geometry);
         dots[k].setAttribute('visibility',inside?'inherit':'hidden');

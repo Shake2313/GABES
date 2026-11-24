@@ -134,29 +134,6 @@ def _diagnostic_value(obj, *names, default=None):
     return default
 
 
-_OVERLAY_PREFERENCES = (
-    "_overlay", "_csv_auto_correct", "_csv_show_raw", "_csv_calibration_mode",
-    "_csv_dark_signal", "_csv_reference_signal", "_csv_detector_gain", "_csv_detector_offset",
-    "_csv_x_scale", "_csv_x_multiplier", "_csv_x_shift", "_csv_reverse", "_csv_invert",
-    "_csv_y_scale", "_csv_y_offset", "_csv_mode", "_csv_unit",
-)
-
-
-def _overlay_upload_key(scheme_name):
-    epoch = st.session_state.get(skey(scheme_name, "_csv_upload_epoch"), 0)
-    return skey(scheme_name, f"_csv_upload_{epoch}" if epoch else "_csv_upload")
-
-
-def _save_overlay_preferences(scheme_name):
-    state = st.session_state
-    keys = [skey(scheme_name, name) for name in _OVERLAY_PREFERENCES]
-    keys.extend(("sas_od_fit_branch", "sas_od_fit_free", "sas_od_fit_frequency_scale",
-                 "sas_od_fit_holdout", "sas_od_fit_start", "sas_od_fit_end",
-                 "sas_od_holdout_start", "sas_od_holdout_end"))
-    state.setdefault(skey(scheme_name, "_model_return_overlay"), {}).update(
-        {key: state[key] for key in keys if key in state})
-
-
 def _cancel_job(key):
     job = st.session_state.pop(key, None)
     if job is not None:
@@ -206,75 +183,12 @@ def _render_fit_progress(job, key=OD_FIT_JOB):
               on_click=_cancel_requested_fit, args=(job, key))
 
 
-def remember_overlay_for_comparison(scheme_name, *, entering):
-    """Streamlit drops hidden widgets; keep a session-only copy across model comparison."""
-    state = st.session_state
-    saved_key = skey(scheme_name, "_model_return_overlay")
-    if entering:
-        cancel_od_fit()
-        state.pop("sas_od_pending_fit_conditions", None)
-        _save_overlay_preferences(scheme_name)
-    else:
-        for key, value in state.pop(saved_key, {}).items():
-            state[key] = value
-        if skey(scheme_name, "_csv_retained_file") in state:
-            # A remounted native uploader can have an empty browser file list
-            # while Python still sees its previous UploadedFile. Give the new
-            # picker a fresh identity and let the visible retained-file control
-            # own the previous file and its removal.
-            epoch_key = skey(scheme_name, "_csv_upload_epoch")
-            state[epoch_key] = state.get(epoch_key, 0) + 1
-
-
-def _forget_retained_csv(scheme_name):
-    if scheme_name == "sas":
-        cancel_od_fit()
-        st.session_state.pop("sas_od_fit_cancelled", None)
-        st.session_state.pop("sas_csv_source", None)
-    st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
-    st.session_state.pop(skey(scheme_name, "_csv_retained_scope"), None)
-    st.session_state.pop(skey(scheme_name, "_csv_fingerprint"), None)
-    st.session_state.pop("sas_od_physical_fit", None)
-    st.session_state.pop("sas_od_pending_fit_conditions", None)
-    st.session_state.pop(skey(scheme_name, "_model_return_overlay"), None)
-
-
-def _csv_uploader(panel, scheme_name, *, workspace):
-    uploader_options = {}
+def _csv_uploader(panel, scheme_name):
+    options = {}
     if "max_upload_size" in inspect.signature(panel.file_uploader).parameters:
-        # Streamlit added this per-widget guard after the project's oldest
-        # supported release; retain the backend byte check as the fallback.
-        limit = MAX_FILE_BYTES
-        if workspace:
-            from gabes.od_measurement import MAX_COMPARISON_BYTES
-            limit = MAX_COMPARISON_BYTES
-        uploader_options["max_upload_size"] = limit // (1024 * 1024)
-    return panel.file_uploader(
-        "Measurement CSV" if workspace else "Oscilloscope CSV",
-        type=("csv",),
-        key=_overlay_upload_key(scheme_name),
-        on_change=_forget_retained_csv,
-        args=(scheme_name,),
-        help=("Open a measured trace, oscilloscope file, or a standard or Origin comparison export."
-              if workspace else "A and B are read as arbitrary units; no header is required."),
-        **uploader_options,
-    )
-
-
-def select_workspace_measurement(panel, scheme_name):
-    """Read the file before computing the curve so its recorded model can select the solve."""
-    from gabes_ui.od_measurement import select_upload
-
-    uploaded = _csv_uploader(panel, scheme_name, workspace=True)
-    try:
-        selected = select_upload(panel, scheme_name, uploaded, _forget_retained_csv)
-    except ValueError:
-        _forget_retained_csv(scheme_name)
-        raise
-    if selected is None:
-        st.session_state.pop(skey(scheme_name, "_csv_retained_file"), None)
-        return None
-    return selected[1]
+        options["max_upload_size"] = MAX_FILE_BYTES // (1024 * 1024)
+    return panel.file_uploader("Oscilloscope CSV", type=("csv",), key=skey(scheme_name, "_csv_upload"),
+                               help="A and B are read as arbitrary units; no header is required.", **options)
 
 
 def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upload=None,
@@ -468,54 +382,9 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
     raw_x_unit = descriptor.get("raw_x_unit", "Arb. unit")
     raw_y_unit = descriptor.get("raw_y_unit", "Arb. unit")
 
-    workspace = bool(view.get("experimental_workspace")) and x_unit == "GHz"
-    pending_conditions = st.session_state.pop("sas_od_pending_fit_conditions", None) if workspace else None
-    if workspace:
-        from gabes import od_measurement as measurement
-        from gabes_ui import od_measurement as workspace_ui
-
     with panel:
-        if view.get("experimental_workspace") and not workspace:
-            panel.caption("This generic model uses a relative MHz axis. Choose a resolved Rb or Cs line for calibrated OD fitting.")
-        projection = uploaded = None
-        mode = unit = None
-        if view.get("experimental_workspace"):
-            selected = st.session_state.get(skey(scheme_name, "_csv_retained_file"))
-            if selected is None:
-                return
-            filename, measurement_file = selected
-            if workspace:
-                projection = measurement_file
-            else:
-                csv_bytes = measurement_file.payload
-        else:
-            panel.caption("CSV A = X (time/frequency), B = detector signal. Metadata and later columns are ignored.")
-            uploaded = _csv_uploader(panel, scheme_name, workspace=False)
-        if workspace:
-            scope = projection.scope
-            acquisition = (scope.od, scope.start, scope.stop, scope.manual) if scope else None
-            source_key = (projection.sha256, projection.columns, acquisition)
-            new_source = st.session_state.get("sas_csv_source") != source_key
-            if new_source:
-                st.session_state["sas_csv_source"] = source_key
-                for control in ("_csv_mode", "_csv_unit", "_csv_calibration_mode", "_csv_dark_signal",
-                                "_csv_reference_signal", "_csv_detector_gain", "_csv_detector_offset"):
-                    st.session_state.pop(skey(scheme_name, control), None)
-                # AutoOD records 0/1 as text, GABES records JSON booleans.
-                flag = projection.metadata.get("experiment_denoised", True)
-                st.session_state[skey(scheme_name, "_csv_auto_correct")] = str(flag).lower() not in ("0", "false")
-                st.session_state.pop("sas_od_fit_frequency_scale", None)
-            unit_labels = {"arbitrary": "Arbitrary units", "GHz": "GHz", "MHz": "MHz", "Hz": "Hz"}
-            mode_labels = {"relative": "Relative detector signal", "fraction": "Transmission (0–1)",
-                           "percent": "Transmission (%)"}
-            cols = panel.columns(2)
-            unit = cols[0].selectbox("Measured X unit", tuple(unit_labels),
-                index=tuple(unit_labels).index(projection.x_unit or "arbitrary"),
-                format_func=unit_labels.get, key=skey(scheme_name, "_csv_unit"))
-            mode = cols[1].selectbox("Measured signal", tuple(mode_labels),
-                index=tuple(mode_labels).index(projection.mode or "relative"),
-                format_func=mode_labels.get, key=skey(scheme_name, "_csv_mode"))
-            raw_x_unit = ("GHz" if unit != "arbitrary" else "Arb. unit")
+        panel.caption("CSV A = X (time/frequency), B = detector signal. Metadata and later columns are ignored.")
+        uploaded = _csv_uploader(panel, scheme_name)
         auto_correct = panel.checkbox(
             "Automatic noise correction",
             value=True,
@@ -537,14 +406,6 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             "Absolute transmission (gain/offset)":
                 CALIBRATION_ABSOLUTE_GAIN_OFFSET,
         }
-        if workspace and new_source and mode == "relative":
-            try:
-                workspace_ui.restore_detector_law(scheme_name, projection, calibration_options)
-            except ValueError as exc:
-                panel.error(str(exc))
-                return
-        if workspace and mode != "relative":
-            calibration_options = {mode_labels[mode]: None}
         calibration_choice = panel.selectbox(
             "Transmission calibration",
             tuple(calibration_options),
@@ -584,22 +445,10 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
                 key=skey(scheme_name, "_csv_detector_offset"),
                 help="Signal value corresponding to zero transmission.",
             )
-        if projection is not None:
-            fingerprint = projection.sha256
-        elif uploaded is not None:
-            filename, csv_bytes = uploaded.name, uploaded.getvalue()
-        elif not view.get("experimental_workspace"):
-            retained = st.session_state.get(skey(scheme_name, "_csv_retained_file"))
-            if retained is None:
-                return
-            filename, csv_bytes = retained
-            if not isinstance(csv_bytes, bytes):
-                csv_bytes = csv_bytes.payload
-            panel.button("Remove retained CSV", key=skey(scheme_name, "_csv_remove_retained"),
-                         on_click=_forget_retained_csv, args=(scheme_name,),
-                         help="Remove the file kept in this session during model comparison.")
-        if projection is None:
-            fingerprint = hashlib.sha256(csv_bytes).hexdigest()
+        if uploaded is None:
+            return
+        filename, csv_bytes = uploaded.name, uploaded.getvalue()
+        fingerprint = hashlib.sha256(csv_bytes).hexdigest()
         fingerprint_key = skey(scheme_name, "_csv_fingerprint")
         scale_key = skey(scheme_name, "_csv_x_scale")
         multiplier_key = skey(scheme_name, "_csv_x_multiplier")
@@ -609,27 +458,10 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         signal_scale_key = skey(scheme_name, "_csv_y_scale")
         signal_offset_key = skey(scheme_name, "_csv_y_offset")
         fit_key = skey(scheme_name, "_csv_alignment_fit")
-        native_shift = 0.0
-        origin_warning = None
-        if workspace and unit != "arbitrary":
-            native_shift, origin_warning = workspace_ui.native_reference_shift(projection, params)
-            if origin_warning:
-                panel.warning(origin_warning)
-        alignment_identity = (
-            fingerprint, native_shift,
-            axis_index,
-            str(x_unit),
-            str(raw_x_unit), unit, source_key if workspace else None,
-        )
+        alignment_identity = fingerprint, axis_index, str(x_unit), str(raw_x_unit)
         try:
-            if workspace:
-                trace = workspace_ui.load_trace(projection, mode=mode, x_unit=unit, denoise=auto_correct,
-                    calibration_mode=calibration_mode, dark_signal=dark_signal,
-                    reference_signal=reference_signal, gain=gain, offset=offset)
-                calibration_mode = trace.correction_diagnostics.calibration_mode
-            else:
-                trace = _cached_experimental_csv(csv_bytes, auto_correct, calibration_mode,
-                    dark_signal, reference_signal, gain, offset)
+            trace = _cached_experimental_csv(csv_bytes, auto_correct, calibration_mode,
+                dark_signal, reference_signal, gain, offset)
         except ValueError as exc:
             panel.error(str(exc))
             return
@@ -657,15 +489,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
 
         if st.session_state.get(fingerprint_key) != alignment_identity or scale_key not in st.session_state:
             st.session_state[fingerprint_key] = alignment_identity
-            reset = AxisAlignment(shift=native_shift) if workspace and unit != "arbitrary" else framed
-            if workspace and not new_source and scale_key in st.session_state:
-                # Reinterpreting X units leaves detector polarity and display gain intact.
-                reset = AxisAlignment(scale=reset.scale, shift=reset.shift, reverse=st.session_state[reverse_key],
-                                      signal_scale=st.session_state[signal_scale_key],
-                                      signal_offset=st.session_state[signal_offset_key])
-                set_alignment(reset, invert=st.session_state[invert_key])
-            else:
-                set_alignment(reset)
+            set_alignment(framed)
         if trace.is_absolute_transmission:
             st.session_state[invert_key] = False
             st.session_state[signal_scale_key] = 1.0
@@ -696,34 +520,28 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         ):
             try:
                 raw_axis = AxisAlignment(
-                    shift=native_shift, signal_scale=st.session_state[signal_scale_key],
+                    signal_scale=st.session_state[signal_scale_key],
                     signal_offset=st.session_state[signal_offset_key],
                 )
                 set_alignment(raw_axis, invert=st.session_state[invert_key])
             except ValueError as exc:
                 panel.error(str(exc))
-        # The workspace compares against the scheme's typed attenuation readout.
-        readout = view.get("optical_readout", {})
         theory = axis.lines[0] if axis.lines else None
-        if workspace and "transmission" in readout and "x" in readout:
-            theory_x = np.asarray(readout["x"])
-            theory_y = np.asarray(readout["transmission"])
-        elif theory is not None:
+        if theory is not None:
             theory_x, theory_y = np.asarray(theory.get_xdata()), np.asarray(theory.get_ydata())
         else:
             theory_x = theory_y = None
         fit_context_key = skey(scheme_name, "_csv_fit_context")
         fit_context = (
             fingerprint, auto_correct, calibration_mode,
-            dark_signal, reference_signal, gain, offset, unit, mode,
-            source_key if workspace else None,
+            dark_signal, reference_signal, gain, offset,
             None if theory_x is None else hashlib.sha256(np.asarray([theory_x, theory_y]).tobytes()).hexdigest(),
         )
         if st.session_state.get(fit_context_key) != fit_context:
             st.session_state.pop(fit_key, None)
             st.session_state[fit_context_key] = fit_context
         if panel.button(
-            "Match ranges" if workspace else "Fit alignment", key=skey(scheme_name, "_csv_fit"),
+            "Fit alignment", key=skey(scheme_name, "_csv_fit"),
             use_container_width=True, disabled=theory_x is None,
             help="Align X scale/shift to the current theoretical transmission. "
                  "For relative data, also fit detector gain/offset. Physical "
@@ -737,34 +555,15 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
                     signal_scale=st.session_state[signal_scale_key],
                     signal_offset=st.session_state[signal_offset_key],
                 )
-                if workspace:
-                    result = measurement.quick_measurement_alignment(trace, theory_x, theory_y,
-                        current=initial, reverse=initial.reverse, invert=st.session_state[invert_key])
-                else:
-                    result = fit_trace_alignment(trace, theory_x, theory_y,
-                        initial=initial, invert=st.session_state[invert_key])
-                if workspace or result.success:
+                result = fit_trace_alignment(trace, theory_x, theory_y,
+                    initial=initial, invert=st.session_state[invert_key])
+                if result.success:
                     set_alignment(result.alignment, invert=st.session_state[invert_key])
                 st.session_state[fit_key] = result
             except ValueError as exc:
                 panel.error(str(exc))
 
-        if workspace and theory_x is not None and params is not None:
-            from gabes_ui.od_profile_fit import render_profile_fit
-            try:
-                current_alignment = AxisAlignment(
-                    scale=st.session_state[scale_key] * st.session_state[multiplier_key],
-                    shift=st.session_state[shift_key], reverse=st.session_state[reverse_key],
-                    signal_scale=st.session_state[signal_scale_key], signal_offset=st.session_state[signal_offset_key])
-                render_profile_fit(panel, projection, params, trace, current_alignment, st.session_state[invert_key],
-                                   source_key, fit_context, theory_x, theory_y, set_alignment, _render_fit_progress,
-                                   origin_issue=origin_warning)
-            except ValueError as exc:
-                panel.error(str(exc))
-
         panel.caption(
-            "The native frequency scale is preserved. Confirm its calibration before a quantitative fit."
-            if workspace and unit != "arbitrary" else
             "X span is framed automatically. Confirm the frequency calibration before a quantitative fit."
         )
         # Forms keep slider drags in the browser and send one update on Apply.
@@ -782,14 +581,10 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             )
             shift_now = float(st.session_state[shift_key])
             shift_margin = 2.0 * abs(plot_span)
-            if workspace:
-                # Changing the plotted line must never change the measurement's calibration.
-                x_shift = st.number_input(f"X shift  [{x_unit}]", key=shift_key, step=0.001, format="%.8g")
-            else:
-                x_shift = st.slider(
-                    f"X shift  [{x_unit}]", min(xlim[0] - shift_margin, shift_now),
-                    max(xlim[1] + shift_margin, shift_now),
-                    step=abs(plot_span) / 1000.0, key=shift_key)
+            x_shift = st.slider(
+                f"X shift  [{x_unit}]", min(xlim[0] - shift_margin, shift_now),
+                max(xlim[1] + shift_margin, shift_now),
+                step=abs(plot_span) / 1000.0, key=shift_key)
             reverse = st.checkbox("Reverse sweep", key=reverse_key)
             invert = st.checkbox(
                 "Invert transmission", key=invert_key,
@@ -825,16 +620,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             return
         fit_result = st.session_state.get(fit_key)
         if fit_result is not None:
-            if workspace:
-                if fit_result.matched:
-                    if fit_result.candidates == 1:
-                        panel.caption("Matched the measured and theoretical line shapes.")
-                    else:
-                        panel.caption(f"{fit_result.candidates} similar placements. Showing the one nearest the current alignment.")
-                else:
-                    panel.info("No clear shape match. The display uses the frequency span"
-                               + ("." if trace.is_absolute_transmission else " and relative signal range."))
-            elif fit_result.success:
+            if fit_result.success:
                 panel.caption(
                     f"Alignment RMSE {fit_result.rmse:.4g} · "
                     f"overlap {fit_result.overlap_fraction:.0%}. "
@@ -845,10 +631,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
 
         physical_fit = None
         if scheme_name == "sas" and params is not None and x_unit == "GHz":
-            # Exclude the displayed curve from the physical fit's file/calibration identity.
-            physical_fit = _render_physical_od_fit(panel, trace, alignment, params,
-                fit_context[:-1] if workspace else fit_context, upload=projection,
-                pending_conditions=pending_conditions)
+            physical_fit = _render_physical_od_fit(panel, trace, alignment, params, fit_context)
 
         import_diag = trace.import_diagnostics
         correction_diag = trace.correction_diagnostics
@@ -863,7 +646,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             "duplicate_rows", default="?"
         )
         panel.caption(
-            f"{filename} · " + (f"{projection.columns[0]} / {projection.columns[1]} · " if workspace else "") +
+            f"{filename} · "
             f"{valid_rows} numeric rows · "
             f"{len(detuning)} unique detuning points · {merged_rows} duplicates "
             f"merged · {ignored_rows} rows ignored"
@@ -925,43 +708,6 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
             f"{trace.transmission_label.lower()}"
         )
 
-    workspace_payload = {}
-    plot_x, plot_y = aligned_x, aligned_y
-    if workspace:
-        parts = measurement.gap_slices(trace)
-        coverage = sorted(tuple(sorted((float(aligned_x[s.start]), float(aligned_x[s.stop - 1]))))
-                          for s in parts)
-        if len(parts) > 1:
-            def break_gaps(values):
-                return np.concatenate([np.r_[values[s], np.nan] for s in parts])[:-1]
-            plot_x, plot_y = break_gaps(aligned_x), break_gaps(aligned_y)
-            if raw_overlay is not None:
-                raw_overlay = (plot_x, break_gaps(raw_overlay[1]))
-        metadata = workspace_ui.plot_metadata(params, view.get("od_model_id"))
-        if native_reference := measurement.native_frequency_reference(projection.metadata):
-            metadata["experiment_frequency_reference"] = native_reference
-        if physical_fit:
-            metadata["fit_model_id"] = physical_fit.get("probe_model")
-        theory_trace = {"detuning": theory_x.tolist(), "transmission": theory_y.tolist()}
-        for quantity in ("optical_depth", "od0"):
-            if readout.get(quantity) is not None:
-                theory_trace[quantity] = np.asarray(readout[quantity]).tolist()
-        theory_trace["n_eff"] = readout.get("n_eff")
-        workspace_payload = dict(measurement_workspace=True, coverage_ghz=coverage,
-                                 theory_trace=theory_trace, model=metadata, input_metadata=projection.metadata)
-        if metadata.get("axis_reference") and x_unit == "GHz":
-            fmt = panel.selectbox("Comparison CSV format", ["Standard", "Origin"], key="sas_measurement_export_format")
-            if panel.button("Prepare comparison CSV", key="sas_prepare_measurement_csv"):
-                try:
-                    download = measurement.export_comparison_csv(
-                        projection, trace, theory_x, theory_y, alignment=alignment, invert=bool(invert),
-                        metadata=metadata, origin=fmt == "Origin", mode=mode, x_unit=unit)
-                except ValueError as exc:
-                    panel.error(str(exc))
-                else:
-                    panel.download_button("Download comparison CSV", data=download, key="sas_download_measurement_csv",
-                        file_name="od-comparison.csv", mime="text/csv", on_click="ignore")
-
     with PLOT_LOCK:
         if raw_overlay is not None:
             axis.plot(
@@ -969,7 +715,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
                 ls=":", lw=1.0, alpha=0.45, label="CSV · unfiltered", zorder=2,
             )
         axis.plot(
-            plot_x, plot_y, color=PALETTE["rose"], lw=1.4, alpha=0.88,
+            aligned_x, aligned_y, color=PALETTE["rose"], lw=1.4, alpha=0.88,
             label=overlay_label, zorder=3,
         )
         # Arbitrary input units must never autoscale the theoretical plot away.
@@ -984,7 +730,6 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
         return {
             "enabled": True,
             "kind": "experimental_csv_overlay",
-            **workspace_payload,
             "overlay_filename": filename,
             "source_fingerprint_sha256": fingerprint,
             "alignment_revision": st.session_state.get(
@@ -1015,10 +760,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
                 "signal_offset": float(signal_offset),
             },
             **({"physical_od_fit": physical_fit} if physical_fit is not None else {}),
-            "alignment_fit": None if fit_result is None else ({
-                "success": fit_result.matched, "candidates": fit_result.candidates,
-                "physical_parameters_fitted": False,
-            } if workspace else {
+            "alignment_fit": None if fit_result is None else {
                 "success": bool(fit_result.success),
                 "rmse": float(fit_result.rmse),
                 "initial_rmse": float(fit_result.initial_rmse),
@@ -1026,7 +768,7 @@ def _render_experimental_comparison(view, scheme_name, panel, params=None):
                 "points_used": int(fit_result.points_used),
                 "message": str(fit_result.message),
                 "physical_parameters_fitted": False,
-            }),
+            },
             "show_raw": bool(show_raw),
             "in_view": bool(in_view),
             "framed_scale": float(framed_scale),
@@ -1190,22 +932,14 @@ def render_plot_card(view, scheme, spec_by_name, raw=None, params=None):
             window = saved[1]
         else:
             st.session_state.pop(window_key, None)
-        overlay_on = bool(view.get("comparison")) and (
-            view.get("experimental_workspace") or st.toggle("Overlay data", key=skey(scheme.name, "_overlay")))
+        overlay_on = bool(view.get("comparison")) and st.toggle("Overlay data", key=skey(scheme.name, "_overlay"))
         export_box = st.popover("Export", icon=":material/download:", type="tertiary")
 
     with card:
         plot_area = st.container()
-        measurement_panel = view.get("experimental_workspace")
-        if measurement_panel and skey(scheme.name, "_csv_retained_file") not in st.session_state:
-            overlay_on = False
         if overlay_on:
-            label = ("Experimental CSV · calibrate and fit" if measurement_panel
-                     else "Overlay settings · upload, calibrate and fit")
-            panel = st.expander(label, expanded=True)
+            panel = st.expander("Overlay settings · upload, calibrate and fit", expanded=True)
             comparison_payload = _render_experimental_comparison(view, scheme.name, panel, params)
-            if view.get("experimental_workspace"):
-                _save_overlay_preferences(scheme.name)
         else:
             comparison_payload = None
 

@@ -210,8 +210,10 @@ else:
 # Reserve the main instrument above saved settings, but mount the defaults
 # store before any editable parameter widgets so preset callbacks stay atomic.
 is_sas = scheme.name == "sas"
-READOUT_CACHE_VERSION = "v18-od-sas-selected-readout-20261123" if is_sas else "v17-rydberg-workspace-20261105"
-fit_od_view = is_sas and st.query_params.get("compare") == "0"
+READOUT_CACHE_VERSION = "v19-od-sas-unified-workspace-20261124" if is_sas else "v17-rydberg-workspace-20261105"
+if is_sas:
+    from gabes_ui import od_fit_panel
+measurement_open = is_sas and od_fit_panel.has_csv()
 has_spectra = scheme.model_comparison_parameter is not None
 if has_spectra:
     workspace = st.container(key="gabes_sas_workspace")
@@ -246,7 +248,7 @@ with topbar:
                        help="What this scheme models, and its references.")
     if regime_spec is not None:
         render_regime_selector(scheme.name, regime_spec, scheme)
-    elif isinstance(_rec_sets, dict) and _rec_sets and not _mode_driven_defaults and not fit_od_view:
+    elif isinstance(_rec_sets, dict) and _rec_sets and not _mode_driven_defaults and not measurement_open:
         render_preset_selector(scheme.name, scheme, _rec_sets)
     with st.container(horizontal=True, horizontal_alignment="right",
                       vertical_alignment="center", gap="small", key="gabes_topbar_end"):
@@ -267,56 +269,47 @@ with about:
 
 
 def render_spectra():
-    comparing = has_spectra and st.query_params.get("compare") != "0"
+    comparing = has_spectra and (is_sas or st.query_params.get("compare") != "0")
     derived_slots = {}
     if has_spectra:
         from gabes_ui.conditions import render_conditions, render_power_inputs
 
-        view_key = skey(scheme.name, "_spectra_view")
-        model_label = "Simulate spectra" if is_sas else "Model spectra"
-        csv_label = "Fit OD data" if is_sas else "Single-condition details"
-        if is_sas:
-            previous = st.session_state.get("_sas_simulating", comparing)
-            if previous != comparing:
-                plotcard.remember_overlay_for_comparison(scheme.name, entering=comparing)
-            st.session_state["_sas_simulating"] = comparing
-        st.session_state[view_key] = model_label if comparing else csv_label
-
-        def change_view():
-            picked = st.session_state[view_key]
-            if picked is None:
-                return
-            entering = picked == model_label
-            if entering:
-                st.query_params.pop("compare", None)
-            else:
-                st.query_params["compare"] = "0"
-
         with st.container(horizontal=True, vertical_alignment="center", gap="small",
                           key="gabes_comparison_actions"):
-            st.segmented_control("Spectrum view", [model_label, csv_label], key=view_key,
-                                 on_change=change_view, label_visibility="collapsed")
             if is_sas:
                 guide_button(GUIDE_URL, key="sas_first_spectrum", label="First spectrum",
                              anchor="first-spectrum")
+            else:
+                model_label, details_label = "Model spectra", "Single-condition details"
+                view_key = skey(scheme.name, "_spectra_view")
+                st.session_state[view_key] = model_label if comparing else details_label
+
+                def change_view():
+                    picked = st.session_state[view_key]
+                    if picked == model_label:
+                        st.query_params.pop("compare", None)
+                    elif picked == details_label:
+                        st.query_params["compare"] = "0"
+
+                st.segmented_control("Spectrum view", [model_label, details_label], key=view_key,
+                                     on_change=change_view, label_visibility="collapsed")
             render_update_status(scheme.name)
         visible_specs = specs
-        if fit_od_view:
+        if measurement_open:
             from gabes.od_model import PUMP_GROUP
-            from gabes_ui.od_measurement import recorded_model_id, workspace_params
+            from gabes_ui.od_measurement import workspace_params
             visible_specs = [sp for sp in specs if sp.group != PUMP_GROUP]
         params = render_conditions(scheme, visible_specs)
         if not comparing:
             params = render_power_inputs(scheme, visible_specs)
-        if fit_od_view:
+        if measurement_open:
             try:
-                upload = plotcard.select_workspace_measurement(st.container(), scheme.name)
+                upload = od_fit_panel.current_upload()
                 params = workspace_params(params, st.session_state, upload)
             except ValueError as error:
                 st.error(str(error))
+                od_fit_panel.render_fit_panel(st.container())
                 return
-            if model_id := recorded_model_id(upload):
-                st.caption(f"Recorded OD model applied at the current conditions: {model_id}")
     else:
         from gabes_ui.conditions import render_atom_conditions
         with st.container(key="gabes_conditions"):
@@ -344,14 +337,17 @@ def render_spectra():
             scheme.name, recompute_items, cache_version)
     except input_errors as error:
         st.error(str(error))
+        if is_sas:
+            od_fit_panel.render_fit_panel(st.container())
         return
-    if fit_od_view:
+    if measurement_open:
         from gabes.od_model import ODUnsupportedError
         from gabes_ui.od_measurement import evaluate_workspace, measurement_model_view
         try:
             evaluation = evaluate_workspace(params, raw)
         except ODUnsupportedError as error:
             st.error(str(error))
+            od_fit_panel.render_fit_panel(st.container())
             return
 
     param_items = tuple(sorted(params.items()))
@@ -383,22 +379,17 @@ def render_spectra():
                                     view=view, readout_version=READOUT_CACHE_VERSION,
                                     resolve_raw=resolve_condition)
         else:
+            if measurement_open:
+                view, raw = measurement_model_view(view, raw, evaluation)
             render_comparison(comparison, comparison_context(scheme, params, comparison["schema"]),
                               scheme=scheme, raw=raw, params=params, view=view,
-                              readout_version=READOUT_CACHE_VERSION)
+                              readout_version=READOUT_CACHE_VERSION,
+                              fit_view=view if measurement_open else None)
         if is_sas:
             render_on_demand(scheme, params, cache_version, READOUT_CACHE_VERSION)
         return
 
     spec_by_name = {sp.name: sp for sp in specs}
-    if is_sas:
-        view, raw = measurement_model_view(view, raw, evaluation)
-        if accuracy := view.get("optical_readout", {}).get("model_accuracy"):
-            st.caption(accuracy)
-        render_plot_section(view, scheme, spec_by_name, raw, params,
-                            cache_version, READOUT_CACHE_VERSION)
-        return
-
     metrics = present_metrics(view.get("metrics", []), scheme_name=scheme.name, raw=raw)
     if metrics:
         heroes, secondary, statuses, overflow = partition_readout(

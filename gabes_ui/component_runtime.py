@@ -10,7 +10,7 @@ def spectrum_component_js(asset_name):
     if asset_name in {"model_compare.js", "spectral_compare.js", "od_measurement_plot.js"}:
         names.append("spectrum_plot.js")
     if asset_name in {"model_compare.js", "od_measurement_plot.js"}:
-        names.append("od_point_readout.js")
+        names.extend(("od_point_readout.js", "measurement_curve.js"))
     if asset_name == "spectral_compare.js":
         names.append("spectrum_map.js")
     names.append(asset_name)

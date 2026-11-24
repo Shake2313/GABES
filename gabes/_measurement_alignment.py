@@ -120,9 +120,15 @@ def _different_regions(centers, widths, scores, landmark):
 def quick_measurement_alignment(trace, theory_x_ghz, theory_transmission, *, current=None,
                                 reverse=False, invert=False, fallback=None, match_signal=True):
     """Return a provisional affine display transform; require evidence in both traces."""
-    mx, my = np.asarray(trace.x), np.asarray(trace.transmission)
-    tx, ty = np.asarray(theory_x_ghz), np.asarray(theory_transmission)
-    relative = not trace.is_absolute_transmission
+    return _quick_alignment(trace.x, trace.transmission, theory_x_ghz, theory_transmission,
+                            relative=not trace.is_absolute_transmission, current=current,
+                            reverse=reverse, invert=invert, fallback=fallback, match_signal=match_signal)
+
+
+def _quick_alignment(x, y, theory_x, theory_y, *, relative, current, reverse, invert, fallback=None,
+                     match_signal=True):
+    mx, my = np.asarray(x), np.asarray(y)
+    tx, ty = np.asarray(theory_x), np.asarray(theory_y)
     if invert and relative:
         my = 1.0 - my
     if fallback is None:
@@ -234,3 +240,27 @@ def quick_measurement_alignment(trace, theory_x_ghz, theory_transmission, *, cur
                         signal_scale=float(gain[best]) if fit_y else fallback.signal_scale,
                         signal_offset=float(offset[best]) if fit_y else fallback.signal_offset)
     return QuickFrameResult(alignment, True, len(tied))
+
+
+def quick_profile_alignment(trace, theory_x, theory_y, *, indices, window, current, invert=False):
+    """Match the selected samples and model region, returning a full-record alignment."""
+    first, last = indices
+    if not 0 <= first < last < len(trace.detuning):
+        raise ValueError("Choose at least two different measured samples.")
+    tx, ty = np.asarray(theory_x), np.asarray(theory_y)
+    within = (tx >= window[0]) & (tx <= window[1])
+    if np.count_nonzero(within) < 2:
+        raise ValueError("The selected spectral region needs at least two model samples.")
+    selected = slice(first, last + 1)
+    sample_x = trace.detuning[selected]
+    full_mid = 0.5 * trace.detuning[0] + 0.5 * trace.detuning[-1]
+    roi_mid = 0.5 * sample_x[0] + 0.5 * sample_x[-1]
+
+    def recenter(alignment, pivot_delta):
+        slope = -alignment.scale if alignment.reverse else alignment.scale
+        return replace(alignment, shift=alignment.shift + (1.0 - slope) * pivot_delta)
+
+    result = _quick_alignment(sample_x, trace.transmission[selected], tx[within], ty[within],
+                              relative=not trace.is_absolute_transmission, current=recenter(current, full_mid - roi_mid),
+                              reverse=current.reverse, invert=invert)
+    return replace(result, alignment=recenter(result.alignment, roi_mid - full_mid))

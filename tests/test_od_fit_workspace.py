@@ -15,8 +15,21 @@ def _run_fit_to_completion(app):
     assert not app.exception and not app.error
 
 
-def _upload(content, name="comparison.csv"):
-    return SimpleNamespace(name=name, size=len(content), getvalue=lambda: content)
+def _upload(content, name="comparison.csv", *, calibrated=False):
+    return SimpleNamespace(name=name, size=len(content), getvalue=lambda: content, calibrated=calibrated)
+
+
+def _calibrated_worksheet(content):
+    """AutoOD worksheet with an independently calibrated GHz axis and fractional T."""
+    header = ("detuning_GHz,theory_transmission,experiment_input_x,experiment_input_signal,"
+              "experiment_input_mode,experiment_x_unit,autood_version,gabes_commit")
+    rows = []
+    for index, native in enumerate(content.decode().splitlines()[1:]):
+        x, y = native.split(",")
+        metadata = "fraction,GHz,0.2.2,8846193" if index == 0 else ",,,"
+        rows.append(f"{x},{y},{x},{y},{metadata}")
+    return ("\n".join([header, *rows]) + "\n").encode()
+
 
 
 def _legacy_comparison(model_id, x, signal, *, origin=False):
@@ -60,7 +73,7 @@ def workspace(monkeypatch):
     import streamlit as st
     from streamlit.testing.v1 import AppTest
     from streamlit.testing.v1.element_tree import ButtonGroup
-    from streamlit.delta_generator import DeltaGenerator
+    from gabes_ui import od_fit_panel
     from gabes import schemes, species
     from gabes.od_model import ODConditions, evaluate_od
     from gabes_ui import export
@@ -71,7 +84,7 @@ def workspace(monkeypatch):
     x = np.linspace(-2, 2, 501)
     y = evaluate_od(ODConditions.from_params(params), x * 1.e9).transmission
     content = ("detuning_GHz,transmission\n" + "\n".join(f"{a:.17g},{b:.17g}" for a,b in zip(x,y))).encode()
-    uploads = [SimpleNamespace(name="measured.csv", size=len(content), getvalue=lambda: content)]
+    uploads = [_upload(content, "measured.csv", calibrated=True)]
     # AppTest has no browser registry for v2 components. Its ButtonGroup assumes a
     # list for the native single-select control; encode the same frontend indices.
     monkeypatch.setattr(st, "_bidi_component", lambda *a, **k: {})
@@ -79,12 +92,18 @@ def workspace(monkeypatch):
         values = widget.value if isinstance(widget.value, list) else [widget.value]
         return [widget.options.index(widget.format_func(v)) for v in values if v is not None]
     monkeypatch.setattr(ButtonGroup, "indices", property(indices))
-    real_uploader = DeltaGenerator.file_uploader
-    def uploader(panel, label, *args, **kwargs):
-        if label == "Measurement CSV":
-            return uploads.pop(0) if uploads else None
-        return real_uploader(panel, label, *args, **kwargs)
-    monkeypatch.setattr(DeltaGenerator, "file_uploader", uploader)
+    # AppTest cannot submit a browser file picker. Deliver queued bytes through
+    # the same install operation the Open CSV dialog calls, before the solve.
+    original_has_csv = od_fit_panel.has_csv
+    def staged_upload():
+        if uploads:
+            file = uploads.pop(0)
+            data = file.getvalue()
+            if getattr(file, "calibrated", False):
+                data = _calibrated_worksheet(data)
+            od_fit_panel.install_csv(file.name, data)
+        return original_has_csv()
+    monkeypatch.setattr(od_fit_panel, "has_csv", staged_upload)
     exports, solves = [], []
     monkeypatch.setattr(export, "render_export", lambda *a, **kw: exports.append(kw))
     compute = scheme.compute
@@ -101,7 +120,8 @@ def workspace(monkeypatch):
 
 
 def test_pump_free_fit_apply_and_preset_round_trip(workspace):
-    app, exports, solves, _ = workspace
+    app, exports, solves, uploads = workspace
+    original = uploads[0]
     app.run()
     assert not app.exception
     payload = exports[-1]["comparison_payload"]
@@ -118,6 +138,7 @@ def test_pump_free_fit_apply_and_preset_round_trip(workspace):
     app.button(key="sas___save_browser").click().run()
     preset = app.session_state["sas___defaults_command"]["record"]["params"]
     assert (preset["pump_power_mw"], preset["waist_mm"], preset["axial_pump_depletion"]) == (1.5, 1.4, True)
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     _run_fit_to_completion(app)
@@ -125,18 +146,42 @@ def test_pump_free_fit_apply_and_preset_round_trip(workspace):
     assert fit["points_used"] == 501 and fit["fit_residuals"]["rms"] < 1.e-12
     app.button(key="sas_od_apply_temperature").click().run()
     assert app.session_state["sas__temp_c"] == pytest.approx(50.)
-    # Native toggle and URL navigation both use the same route and persisted projection.
-    toggle = next(x for x in app.get("button_group") if x.key == "sas___spectra_view")
-    toggle.set_value(["Simulate spectra"]).run()
-    assert not app.exception
-    assert app.query_params.get("compare") is None
+    app.button(key="sas_close_csv").click().run()
+    assert not app.exception and not app.error
+    assert not any(w.key == "sas___spectra_view" for w in app.get("button_group"))
+    assert app.text_input(key="power-input-sas-pump_power_mw").value == "1.5"
     assert (app.session_state["sas__pump_power_mw"], app.session_state["sas__waist_mm"],
             app.session_state["sas__axial_pump_depletion"]) == (1.5, 1.4, True)
-    app.query_params["compare"] = ["0"]
+    uploads[:] = [original]
     app.run()
-    assert not app.exception
     assert exports[-1]["comparison_payload"]["source_fingerprint_sha256"] == payload["source_fingerprint_sha256"]
     assert app.session_state["sas__temp_c"] == pytest.approx(50.)
+
+
+def test_plain_csv_controls_and_axis_reset(workspace):
+    app, exports, _, uploads = workspace
+    uploads.clear()
+    app.run()
+    assert app.button(key="sas_open_csv").label == "Open CSV..."
+    assert not any(b.key == "sas_open_precise" for b in app.button)
+    uploads.append(_upload(b"detuning_GHz,transmission\n0,.9\n1,.4\n2,.8\n3,1\n"))
+    app.run()
+    assert not app.exception and not app.error
+    labels = [b.label for b in app.button if b.key in {
+        "sas_open_csv", "sas_od_channel", "sas_close_csv",
+        "sas_fast_fit", "sas_open_precise", "sas_back_to_initial",
+    }]
+    assert labels == ["Open CSV...", "Close CSV", "Fast fitting", "Precise fitting", "Back to initial"]
+    assert not any(w.label in ("Measured X unit", "Measured signal") for w in app.selectbox)
+    original = exports[-1]["comparison_payload"]
+    assert original["calibration_mode"] == "relative_extrema"
+    assert original["alignment"]["scale"] != 1.0
+    app.checkbox(key="sas___csv_reverse").check().run()
+    assert exports[-1]["comparison_payload"]["alignment"]["reverse"]
+    app.button(key="sas_back_to_initial").click().run()
+    assert not app.exception
+    assert not app.checkbox(key="sas___csv_reverse").value
+    assert exports[-1]["comparison_payload"]["alignment"] == original["alignment"]
 
 
 def test_fit_picker_filters_unavailable_estimates_as_conditions_change(workspace):
@@ -148,6 +193,7 @@ def test_fit_picker_filters_unavailable_estimates_as_conditions_change(workspace
     app.session_state["sas__probe_power_uw"] = 15.
     app.run()
 
+    app.button(key="sas_open_precise").click().run()
     def picker():
         assert not app.exception and not app.error
         return app.multiselect(key="sas_od_fit_free")
@@ -185,12 +231,13 @@ def test_probe_intensity_and_custom_mixture_apply_only_after_identifiable_fit(wo
     transmission = od.od_transmission(1000*x, truth, model_id=RATE_MODEL)
     content = ("detuning_GHz,transmission\n" + "\n".join(
         f"{v:.17g},{y:.17g}" for v, y in zip(x, transmission))).encode()
-    uploads[:] = [_upload(content)]
+    uploads[:] = [_upload(content, calibrated=True)]
     for key in ("species", "rb_composition", "probe_waist_mm"):
         app.session_state["sas__"+key] = truth[key]
     app.session_state["sas__probe_power_uw"] = 15.
     app.session_state["sas__rb85_fraction"] = initial_fraction
     app.run()
+    app.button(key="sas_open_precise").click().run()
     keys = ["probe_power_uw"] if at_bound else ["probe_power_uw", "rb85_fraction"]
     app.multiselect(key="sas_od_fit_free").set_value(keys)
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
@@ -292,6 +339,7 @@ def test_running_fit_is_cancelled_without_publishing_a_partial_result(workspace,
     app, exports, _, _ = workspace
     app.session_state["sas__probe_power_uw"] = 15.
     app.run()
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_od_fit_free").set_value(["probe_power_uw"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     try:
@@ -311,8 +359,7 @@ def test_running_fit_is_cancelled_without_publishing_a_partial_result(workspace,
             app.selectbox(key="conditions-sas-line").select("D1").run()
             assert "probe_power_uw" not in app.multiselect(key="sas_od_fit_free").value
         else:
-            route = next(w for w in app.get("button_group") if w.key == "sas___spectra_view")
-            route.set_value(["Simulate spectra"]).run()
+            app.button(key="sas_close_csv").click().run()
         assert not app.exception
         assert "sas_od_fit_job" not in app.session_state
         assert "sas_od_physical_fit" not in app.session_state
@@ -354,6 +401,7 @@ def test_fit_worker_queues_sessions_and_keeps_its_model_snapshot(monkeypatch):
 def test_reject_stale_result_and_keep_finite_power_overlay(workspace):
     app, exports, _, _ = workspace
     app.run()
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     _run_fit_to_completion(app)
@@ -400,9 +448,10 @@ def test_apply_compares_new_measurement_widgets_in_the_same_rerun(workspace, cha
     header, *rows = original.splitlines()
     content = b"\n".join([header, *rows, *reversed(rows[:-1])])
     def send(data):
-        return SimpleNamespace(name="same-name.csv", size=len(data), getvalue=lambda: data)
+        return _upload(data, "same-name.csv", calibrated=True)
     uploads[:] = [send(content)]
     app.run()
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     _run_fit_to_completion(app)
@@ -413,7 +462,10 @@ def test_apply_compares_new_measurement_widgets_in_the_same_rerun(workspace, cha
         uploads[:] = [send(original)]
     else:
         app.number_input(key="sas___csv_x_shift").set_value(.03)
-    app.button(key="sas_od_apply_temperature").click().run()
+        app.button(key="sas___csv_apply").click().run()
+        assert not any(b.key == "sas_od_apply_temperature" for b in app.button)
+    if change != "scale":
+        app.button(key="sas_od_apply_temperature").click().run()
     assert not app.exception
     assert app.session_state["sas__temp_c"] == 49.
     assert "physical_od_fit" not in exports[-1]["comparison_payload"]
@@ -423,6 +475,7 @@ def test_apply_compares_new_measurement_widgets_in_the_same_rerun(workspace, cha
 def test_frequency_alignment_survives_line_change_and_view_switch(workspace, initial_shift):
     app, exports, _, _ = workspace
     app.run()
+    app.button(key="sas_open_precise").click().run()
     app.number_input(key="sas___csv_x_shift").set_value(initial_shift)
     app.button(key="sas___csv_apply").click().run()
     app.selectbox(key="conditions-sas-line").select("D1").run()
@@ -481,13 +534,15 @@ def test_manual_channel_override_updates_the_projected_scope_samples(workspace):
     writer.writerows(zip(times, waves["trigger"], waves["od"], waves["sas"]))
     content = data.getvalue().encode()
     scope = SimpleNamespace(name="scope.csv", size=len(content), getvalue=lambda: content)
-    uploads[:] = [scope, scope]
+    uploads[:] = [scope]
     app.run()
     assert not app.exception and not app.error
     before = app.session_state["sas___csv_retained_file"][1]
     assert before.scope.od == 1 and not before.scope.manual
+    app.button(key="sas_od_channel").click().run()
     picker = next(widget for widget in app.selectbox if widget.label == "OD signal channel")
-    picker.select("CH3").run()
+    picker.select("CH3")
+    app.button(key="sas_confirm_od_channel").click().run()
     assert not app.exception and not app.error
     after = app.session_state["sas___csv_retained_file"][1]
     assert after.sha256 == before.sha256 and after.payload != before.payload
@@ -521,6 +576,7 @@ def test_legacy_replay_fits_recorded_model_and_converts_native_centroid_once(wor
     assert app.session_state["sas__od_model"] == "d20_d2sb"
     assert "physical_od_fit" not in displayed
 
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     _run_fit_to_completion(app)
@@ -551,7 +607,8 @@ def test_recorded_two_level_model_remains_an_overlay(workspace):
     comparison = exports[-1]["comparison_payload"]
     assert comparison["model"]["model_id"] == exports[-1]["raw"]["probe_model"] == model_id
     assert "physical_od_fit" not in comparison
-    assert any("magnetic-sublevel" in note.value for note in app.caption)
+    row, = exports[-1]["model_comparison"]["series"]
+    assert row["probe_model"] == model_id and row["probe_model_scope"]
     assert app.session_state["sas__od_model"] == "d20_d2sb"
 
 
@@ -649,7 +706,7 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
     signal = evaluate_od_display(conditions, x * (2*np.pi*1.e9)).transmission
     body = ("detuning_GHz,transmission\n" + "\n".join(
         f"{a:.17g},{b:.17g}" for a,b in zip(x,signal))).encode()
-    uploads[:] = [SimpleNamespace(name="model.csv", size=len(body), getvalue=lambda: body)]
+    uploads[:] = [_upload(body, "model.csv", calibrated=True)]
     for key in ("species", "line", "line_strength", "probe_power_uw", "od_model"):
         app.session_state[f"sas__{key}"] = p[key]
 
@@ -674,6 +731,7 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
         snapshot = build_export_payload(**output, include_quantitative=True)
         assert snapshot["raw"]["probe_model"] == snapshot["view"]["optical_readout"]["model_id"] == model_id
         np.testing.assert_array_equal(snapshot["raw"]["offsets_hz"], expected.offsets_hz)
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_od_fit_free").set_value(["offset_mhz"])
     app.checkbox(key="sas_od_fit_frequency_scale").check().run()
     _run_fit_to_completion(app)
@@ -701,7 +759,8 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
     if MODELS[model_id].accuracy:
         assert metadata["model_accuracy"] == MODELS[model_id].accuracy
         assert metadata["model_accuracy"] == snapshot["view"]["optical_readout"]["model_accuracy"]
-        assert any(item.value == MODELS[model_id].accuracy for item in app.caption)
+        row, = exports[-1]["model_comparison"]["series"]
+        assert row["probe_model_note"] == MODELS[model_id].accuracy
     else:
         assert "model_accuracy" not in metadata
     assert metadata["fit_model_id"] == metadata["model_id"] == model_id
@@ -722,6 +781,7 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
     assert not app.error and not app.exception
     replay = exports[-1]["comparison_payload"]
     assert exports[-1]["raw"]["probe_model"] == replay["model"]["model_id"] == model_id
+    app.button(key="sas_open_precise").click().run()
     offered = app.multiselect(key="sas_od_fit_free").options
     assert ("Probe power" in offered) == (power > 0.)
     np.testing.assert_array_equal(replay["theory_trace"]["transmission"], expected.transmission)
@@ -738,9 +798,9 @@ def test_explicit_model_drives_curves_export_and_measured_point_fit(workspace, m
 
     restored = "finite_power_2level_gaussian_propagation" if power else "weak_probe_exact_maxwell_voigt"
     if power == 0.:
-        app.button(key="sas___csv_remove_retained").click().run()
+        app.button(key="sas_close_csv").click().run()
         assert not app.exception and not app.error
-        assert exports[-1]["raw"]["probe_model"] == restored
+        assert exports[-1]["params"]["pump_power_mw"] == 1.5
     uploads[:] = [_upload(body)]
     app.run()
     assert not app.error and not app.exception
@@ -784,13 +844,14 @@ def test_profile_workflow_refines_relative_detector_and_preserves_native_data(wo
         f"{x:.17g},{.4 + 1.6 * t:.17g}" for x, t in rows)).encode())
     app.run()
     assert not app.exception and not app.error
-    app.checkbox(key="sas_profile_open").check().run()
+    app.button(key="sas_open_precise").click().run()
     app.multiselect(key="sas_profile_vary").set_value(["temp_c"]).run()
     app.number_input(key="sas_profile_delta_temp_c").set_value(3.).run()
     app.slider(key="sas_profile_roi").set_range(15, 480).run()
     app.checkbox(key="sas___csv_auto_correct").uncheck().run()
     assert app.slider(key="sas_profile_roi").value == (15, 480)
     assert not any(button.key == "sas_run_od_fit" for button in app.button)
+    app.button(key="sas_profile_frame").click().run()
     before_inputs = exports[-1]["comparison_payload"]["alignment"]
     _run_profile_to_completion(app)
     result = app.session_state["sas_profile_result"][1]
@@ -800,29 +861,37 @@ def test_profile_workflow_refines_relative_detector_and_preserves_native_data(wo
     assert exports[-1]["comparison_payload"]["alignment"] == before_inputs
     app.button(key="sas_profile_discard").click().run()
     assert "sas_profile_result" not in app.session_state and app.session_state["sas__temp_c"] == 49.
-    app.checkbox(key="sas_profile_open").uncheck().run()
-    app.checkbox(key="sas_profile_open").check().run()
+    app.button(key="sas_close_precise").click().run()
+    app.button(key="sas_open_precise").click().run()
     assert app.slider(key="sas_profile_roi").value == (15, 480)
     assert app.number_input(key="sas_profile_delta_temp_c").value == 3.
+    assert "frame" not in app.session_state["sas_profile_options"]
     _run_profile_to_completion(app)
+    result = app.session_state["sas_profile_result"][1]
     app.button(key="sas_profile_apply").click().run()
     assert not app.exception and not app.error
     assert app.session_state["sas__temp_c"] == pytest.approx(50., abs=.08)
     alignment = exports[-1]["comparison_payload"]["alignment"]
     assert alignment["signal_offset"] == pytest.approx(result.alignment.signal_offset)
     assert alignment["signal_scale"] == pytest.approx(result.alignment.signal_scale)
+    assert not app.session_state.filtered_state.get("sas_precise_open")
+    trace = app.session_state["sas_od_export_context"][0]
+    x, t = np.asarray(rows).T
+    np.testing.assert_array_equal(trace.detuning, x)
+    np.testing.assert_array_equal(trace.raw_signal, .4 + 1.6 * t)
 
 
 def test_profile_group_uses_manual_seed_and_resets_for_new_measurement(workspace):
     app, _, _, uploads = workspace
     app.run()
-    app.checkbox(key="sas_profile_open").check().run()
+    app.button(key="sas_open_precise").click().run()
     app.selectbox(key="sas_profile_group").set_value("85-F3").run()
     group_indices = tuple(app.slider(key="sas_profile_roi").value)
     assert group_indices != (0, 500)
     app.button(key="sas_profile_frame").click().run()
     assert "frame" in app.session_state["sas_profile_options"]
-    assert app.number_input(key="sas___csv_x_shift").value == 0.
+    assert app.button(key="sas_profile_frame").label == "Fast fitting"
+    assert app.session_state["sas_csv_alignment"].shift == 0.
     app.button(key="sas_profile_unframe").click().run()
     assert "frame" not in app.session_state["sas_profile_options"]
     app.number_input(key="sas___csv_x_shift").set_value(.012)
@@ -835,16 +904,17 @@ def test_profile_group_uses_manual_seed_and_resets_for_new_measurement(workspace
     app.checkbox(key="sas___csv_auto_correct").uncheck().run()
     assert "sas_profile_result" not in app.session_state
     assert tuple(app.slider(key="sas_profile_roi").value) == group_indices
+    app.button(key="sas_close_precise").click().run()
     uploads.append(_upload(b"detuning_GHz,transmission\n0,.7\n.1,.8\n.2,.9\n.3,1\n.4,.9\n"))
     app.run()
     assert not app.exception and not app.error
-    assert not app.checkbox(key="sas_profile_open").value
-    app.checkbox(key="sas_profile_open").check().run()
+    assert not app.session_state.filtered_state.get("sas_precise_open")
+    app.button(key="sas_open_precise").click().run()
     assert app.selectbox(key="sas_profile_group").value == "full"
     assert tuple(app.slider(key="sas_profile_roi").value) == (0, 4)
 
 
-@pytest.mark.parametrize("action", ["cancel", "change_roi", "replace_upload"])
+@pytest.mark.parametrize("action", ["cancel", "dismiss", "change_roi", "replace_upload"])
 def test_profile_job_cancels_without_applying(workspace, monkeypatch, action):
     from threading import Event
     from gabes import od_profile_fit
@@ -863,17 +933,19 @@ def test_profile_job_cancels_without_applying(workspace, monkeypatch, action):
     monkeypatch.setattr(od_profile_fit, "fit_od_profile", controlled_fit)
     app, exports, _, uploads = workspace
     app.run()
-    app.checkbox(key="sas_profile_open").check().run()
+    app.button(key="sas_open_precise").click().run()
     try:
         app.button(key="sas_profile_run").click().run()
         assert started.wait(5)
         job = app.session_state["sas_od_profile_job"]
         if action == "cancel":
             app.button(key="sas_cancel_profile_fit").click().run()
+        elif action == "dismiss":
+            app.button(key="sas_close_precise").click().run()
         elif action == "change_roi":
             app.slider(key="sas_profile_roi").set_range(10, 457).run()
         else:
-            uploads.append(_upload(b"detuning_GHz,transmission\n0,.7\n.1,.8\n.2,.9\n.3,1\n.4,.9\n"))
+            uploads.append(_upload(b"detuning_GHz,transmission\n0,.7\n.1,.8\n.2,.9\n.3,1\n.4,.9\n", calibrated=True))
             app.run()
         assert not app.exception and not app.error
         assert "sas_od_profile_job" not in app.session_state and "sas_profile_result" not in app.session_state
@@ -892,7 +964,7 @@ def test_profile_refuses_incompatible_recorded_frequency_line(workspace):
     rows = np.loadtxt(uploads[0].getvalue().decode().splitlines()[1:], delimiter=",")
     uploads[:] = [_upload(_legacy_comparison(EXACT_MODEL, rows[:, 0], rows[:, 1]))]
     app.run()
-    app.checkbox(key="sas_profile_open").check().run()
+    app.button(key="sas_open_precise").click().run()
     app.selectbox(key="conditions-sas-line").select("D1").run()
     assert not app.exception
     assert any("recorded measurement origin differs" in message.value for message in app.warning)

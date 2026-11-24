@@ -13,7 +13,7 @@ from gabes.experimental_alignment import AxisAlignment
 from gabes.experimental_csv import ExperimentalCSVError, MAX_FILE_BYTES, load_experimental_csv
 from gabes.od_measurement import (
     ScopeChannelChoice, export_comparison_csv, gap_slices, load_measurement,
-    prepare_measurement_upload, quick_measurement_alignment,
+    prepare_measurement_upload, quick_measurement_alignment, quick_profile_alignment,
 )
 from gabes.od_spectrum_fit import prepare_od_fit
 
@@ -251,6 +251,27 @@ def test_relative_quick_candidate_and_periodic_interference():
     assert saved.mode == "relative"
     assert saved.metadata["experiment_display_scaling"] == "display_only"
     assert not load_measurement(saved).is_absolute_transmission
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_fast_profile_preview_keeps_the_full_record_pivot(reverse):
+    # The brushed ROI is deliberately far from the full sweep midpoint.
+    tx, ty = theory()
+    native = np.linspace(-10., 8., 1901)
+    ids = (200, 1000)
+    section = slice(ids[0], ids[1] + 1)
+    cropped_x = native[section]
+    mapped = -3.9 + (cropped_x - cropped_x[0]) * 8.5 / np.ptp(cropped_x)
+    if reverse:
+        mapped = mapped[::-1]
+    volts = np.full_like(native, 1.)
+    volts[section] = np.interp(mapped, tx, ty)
+    trace = load_measurement(prepare_measurement_upload(paired_csv(native, volts)), denoise=False)
+    result = quick_profile_alignment(trace, tx, ty, indices=ids, window=(tx[0], tx[-1]),
+                                     current=AxisAlignment(reverse=reverse))
+    assert result.matched
+    actual = result.alignment.transform_x(trace.detuning)[section]
+    np.testing.assert_allclose(actual, mapped, atol=0.09, rtol=0)
 
 
 @pytest.mark.parametrize("absolute,invert", [(False, False), (False, True), (True, False)])

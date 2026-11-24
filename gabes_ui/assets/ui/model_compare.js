@@ -56,7 +56,8 @@ export default function mount({parentElement, data, key, setStateValue}) {
   // local gesture. Preserve the newest choice while this dataset is mounted.
   const revision=data.navigation_revision || 0;
   const sameNavigation=previous?.context===data.context && (previous.navigationRevision||0)===revision;
-  if (previous?.root === root && sameNavigation) return;
+  const measured=data.measurement;
+  if (previous?.root === root && sameNavigation && previous.measurementRevision===measured?.revision) return;
   previous?.cleanup();
   const state = {...(sameNavigation ? previous.state : data.selection)};
   const base = d.series.find(c=>c.power_mw===0);
@@ -67,7 +68,8 @@ export default function mount({parentElement, data, key, setStateValue}) {
       <fieldset class="mc-group-field"><legend>Doppler group</legend><div class="mc-groups"></div></fieldset>
     </div>
     <div class="mc-legend" aria-label="Curve legend">
-      <span><i class="off"></i>Pump off · 0 mW</span><span class="mc-on-legend"><i></i><span></span></span>
+      <span><i class="off"></i><span class="mc-off-label">Pump off · 0 mW</span></span><span class="mc-on-legend"><i></i><span></span></span>
+      <span class="mc-measured-legend" hidden><i></i>Measurement</span>
     </div><p class="mc-frequency-reference mc-muted"></p>
     <div class="mc-layout"><div class="mc-graphs"><div class="mc-overview"></div>
       <div class="mc-local"><div class="mc-zoom"></div><div class="mc-od"></div></div></div>
@@ -83,6 +85,7 @@ export default function mount({parentElement, data, key, setStateValue}) {
         <button type="button" class="next" aria-label="Next sample">→</button></div>
         <button type="button" class="mc-go-ref" hidden>Go to reference</button>
         <dl class="mc-readings mc-od-readings" hidden></dl>
+        <p class="mc-measured-point mc-muted" hidden></p>
         <details class="mc-model"><summary>Model details</summary>
           <table class="mc-values"><caption></caption><thead><tr>
             <th scope="col">Pump</th><th scope="col">Transmission T</th><th scope="col">OD τ</th>
@@ -92,7 +95,20 @@ export default function mount({parentElement, data, key, setStateValue}) {
           <button type="button" class="mc-export">Download comparison JSON</button>
         </details><output class="mc-sr" aria-live="polite"></output>
       </aside></div>`;
-  const q=s=>root.querySelector(s), groups=q('.mc-groups');
+  const reader=root.querySelector('.mc-reader'), details=reader.querySelector('.mc-model');
+  const q=s=>root.querySelector(s) || reader.querySelector(s) || details.querySelector(s), groups=q('.mc-groups');
+  // The chart owns the live cursor, including while dragging without a server
+  // event. Mount its readout and details into their own Streamlit column slots.
+  const outletEvent='gabes:od-readout:'+data.outlet_group;
+  const connectOutlet=({detail})=>{
+    if (detail.part==='point') detail.host.replaceChildren(reader);
+    if (detail.part==='details') detail.host.replaceChildren(details);
+  };
+  if (data.outlet_group) {
+    root.classList.add('mc-split');
+    window.addEventListener(outletEvent,connectOutlet);
+    window.dispatchEvent(new Event(outletEvent+':ready'));
+  }
   q('.mc-tools').hidden=data.show_groups===false;
   const freq=q('.mc-cursor input');
   q('.mc-frequency-reference').textContent='Frequency reference: '+d.axis.reference+'.';
@@ -111,6 +127,13 @@ export default function mount({parentElement, data, key, setStateValue}) {
   q('.mc-legend .off').classList.toggle('mc-off-only',active===base);
   q('.mc-on-legend').hidden=active===base;
   q('.mc-on-legend span').textContent=onLabel;
+  q('.mc-measured-legend').hidden=!measured;
+  q('.mc-measured-point').hidden=!measured;
+  if (measured) q('.mc-off-label').textContent='Theory';
+  const nativeMeasurement=measured && {
+    sampleX:measured.x, sampleY:measured.y, coverage:measured.coverage
+  };
+  const measuredDepth=measured?.absolute ? measured.y.map(opticalDepth) : null;
   const bounds = () => state.window_mhz || groupFor()?.window_mhz || full;
   const visibleMarkers = () => {
     const group=groupFor();
@@ -237,7 +260,7 @@ export default function mount({parentElement, data, key, setStateValue}) {
     link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   };
   function seriesFor(key) {
-    const off={y:base[key],color:ink.off,dash:active===base ? '' : '6 4',label:'Pump off'};
+    const off={y:base[key],color:ink.off,dash:active===base ? '' : '6 4',label:measured?'Theory':'Pump off'};
     return active===base ? [off] : [off,{y:active[key],color:ink.on,label:onLabel}];
   }
   function draw() {
@@ -247,7 +270,16 @@ export default function mount({parentElement, data, key, setStateValue}) {
     const spec={grid:d.x,index:state.sample_index,unit:'MHz',xlim:limit,ylim:transmissionRange,
                 series:curves,yLabel:'Transmission T'};
     const panel=(selector,config)=>{
-      const host=q(selector);host.replaceChildren();spectrum(host,{...spec,...config});
+      const host=q(selector), chart={...spec,...config}, isDepth=selector==='.mc-od';
+      const samples=isDepth ? measuredDepth : measured?.y;
+      if (samples) {
+        const path=measurementPath(measured.x,samples,measured.coverage,chart.xlim,host.clientWidth || 500);
+        chart.series=[...chart.series,{...path,...nativeMeasurement,sampleY:samples,
+          color:'#a23c5c',dash:'5 3',label:'Measurement'}];
+        chart.ylim=plotLimits(chart.series,d.x,chart.xlim,isDepth?0:1);
+        if (!isDepth && !measured.absolute) chart.yLabel='Transmission / relative signal';
+      }
+      host.replaceChildren();spectrum(host,chart);
     };
     panel('.mc-overview',{title:'Full transmission spectrum',xlim:full,unit:d.axis.overview_unit,
       band:limit,description:'Full transmission. Drag the shaded zoom window, its edges or the dotted sample cursor. Click outside the window to recenter it.'});
@@ -307,6 +339,13 @@ export default function mount({parentElement, data, key, setStateValue}) {
         transmission:active.transmission[i]
       });
     }
+    if (measured) {
+      const sample=curveSample(nativeMeasurement,d.x,d.x[i]);
+      q('.mc-measured-point').textContent=!Number.isFinite(sample.y) ? 'No measured point at this frequency'
+        : 'Measurement · '+format(sample.x,8)+' MHz · '+(measured.absolute
+          ? 'T '+format(100*sample.y,6)+'% · OD '+format(opticalDepth(sample.y),6)
+          : 'Relative signal '+format(sample.y,6));
+    }
   }
 
   function refresh() {
@@ -342,7 +381,8 @@ export default function mount({parentElement, data, key, setStateValue}) {
     q('.mc-feature').textContent=status?feature.join(' · '):'';
     const probe=q('.mc-probe');
     probe.hidden=!curve.probe_model_scope;
-    probe.textContent=curve.probe_model_scope ? 'Probe model: '+curve.probe_model_scope + (curve.probe_model_note ? '. '+curve.probe_model_note : '') : '';
+    const modelId=measured && curve.probe_model ? ' ('+curve.probe_model+')' : '';
+    probe.textContent=curve.probe_model_scope ? 'Probe model: '+curve.probe_model_scope+modelId + (curve.probe_model_note ? '. '+curve.probe_model_note : '') : '';
     q('.mc-basis').textContent=driven
       ? 'Detuning is the sample frequency minus the model reference. Go to reference selects the nearest solved sample. ΔT is the pump-on minus pump-off transmission in percentage points.'
       : 'OD₀ is the weak-probe optical depth. Effective OD equals −ln(T) at the selected probe power. The effective atom count includes atoms in the Gaussian probe volume across all isotopes.';
@@ -420,7 +460,14 @@ export default function mount({parentElement, data, key, setStateValue}) {
     const action=hit(svg,e)?.action;
     svg.style.cursor=action==='pan'?'grab':action==='left'||action==='right'||action==='cursor'?'ew-resize':'crosshair';
   };
-  const entry={root,state,pointer,context:data.context,navigationRevision:revision,lastSent:'',cleanup:()=>{observer.disconnect();cancelAnimationFrame(frame);stopPointer();}};
+  const entry={root,state,pointer,context:data.context,navigationRevision:revision,
+    measurementRevision:measured?.revision,lastSent:'',cleanup:()=>{
+      observer.disconnect();cancelAnimationFrame(frame);stopPointer();
+      if (data.outlet_group) {
+        window.removeEventListener(outletEvent,connectOutlet);
+        reader.remove();details.remove();
+      }
+    }};
   sessions.set(key,entry);
   entry.lastSent=JSON.stringify({...snapshot(),context:data.context,navigation_revision:revision});
   refresh();observer.observe(root);

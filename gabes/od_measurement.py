@@ -21,7 +21,7 @@ import numpy as np
 from . import __version__
 from ._arrays import readonly_float_array
 from ._csv_numeric import decode_csv_text
-from ._measurement_alignment import QuickFrameResult, quick_measurement_alignment
+from ._measurement_alignment import QuickFrameResult, quick_measurement_alignment, quick_profile_alignment
 from ._scope_channels import ScopeChannels, identify_scope_channels
 from ._scope_measurement import ScopeChannelChoice, ScopeImport, select_scope_input
 from .experimental_alignment import AxisAlignment

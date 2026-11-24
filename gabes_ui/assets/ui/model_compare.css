@@ -58,6 +58,9 @@
 .mc .mc-legend i { width:19px; border-top:2px solid var(--mc-on); }
 .mc .mc-legend .off { border-top:2px dashed var(--mc-off); }
 .mc .mc-legend .off.mc-off-only { border-top-style:solid; }
+.mc .mc-measured-legend i { border-top:2px dashed #a23c5c; }
+.mc.mc-split .mc-layout { display:block; }
+.mc .mc-measured-point { margin:.4rem 0; }
 .mc .mc-cursor { align-items:flex-end; margin:.5rem 0; gap:.3rem; }
 .mc .mc-cursor label { display:grid; gap:.2rem; }
 .mc .mc-cursor input { width:8rem; }

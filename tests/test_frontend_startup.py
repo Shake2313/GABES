@@ -7,7 +7,7 @@ import pytest
 
 
 @pytest.mark.parametrize("startup", ["cold", "preloaded-pyplot"])
-def test_default_od_workspace_defers_matplotlib_until_fit_view(startup):
+def test_default_and_legacy_od_routes_remain_figureless(startup):
     # Other tests import pyplot during collection. Measure the normal app entry
     # in a fresh interpreter and stub only the browser's custom-component mount.
     script = """
@@ -36,9 +36,13 @@ with patch.object(st.components.v2, "component", return_value=lambda *a, **kw: {
     detail.query_params["compare"] = "0"
     detail.run()
     assert not detail.exception and not detail.error
-    assert any(widget.label == "Measurement CSV" for widget in detail.get("file_uploader"))
-    assert "matplotlib.pyplot" in sys.modules
-    assert sys.modules["matplotlib"].get_backend().lower() == "agg"
+    assert not any(widget.label == "Measurement CSV" for widget in detail.get("file_uploader"))
+    assert not any(button.label == "Spectrum view" for button in detail.get("button_group"))
+    assert detail.button(key="sas_open_csv").label == "Open CSV..."
+    if sys.argv[1] == "cold":
+        assert "matplotlib" not in sys.modules
+    else:
+        assert sys.modules["matplotlib"].get_backend().lower() == "agg"
 """
     subprocess.run([sys.executable, "-c", script, startup], cwd=Path(__file__).resolve().parents[1],
                    check=True, timeout=150)
