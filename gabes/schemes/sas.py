@@ -584,17 +584,11 @@ class SASScheme(Scheme):
                       control="checkbox", advanced=True, advanced_group="Axial reference",
                       visible_if={"cell_propagation": sas_axial.SEGMENTED},
                       help="Propagate the pump from the probe exit toward the probe entrance."),
+            # User decision 2026-11-24: use Automatic for new calculations.
+            # Retain the profile values in the schema for saved-model replay.
             ParamSpec("weak_probe_profile", "Weak-probe line profile", "Numerics",
                       AUTO_WEAK_PROBE, choices=(AUTO_WEAK_PROBE, LEGACY_WEAK_PROBE, EXACT_WEAK_PROBE),
-                      advanced=True, advanced_group="Doppler average",
-                      visible_if={"species": _RB_MEDIA, "probe_power_uw": 0.0,
-                                  "cell_propagation": "Uniform",
-                                  "optical_collision_model": collisions.LEGACY_COLLISIONS,
-                                  "paraffin_coated": False, "ne_pressure_torr": 0.0},
-                      help="Automatic uses Exact Maxwell Voigt as the absorption and dispersion "
-                           "background and adds the SAS correction when the pump is on. "
-                           "Exact Maxwell Voigt alone applies at 0 mW pump. "
-                           "Legacy velocity grid reproduces the historical spectrum."),
+                      hidden=True),
             ParamSpec("scan_points", "Scan points", "Numerics", 1401,
                       401, 4001, 100, "", advanced=True),
             ParamSpec(OD_MODEL_KEY, "OD model", "Numerics", OD_MODELS_DEFAULT,
@@ -638,8 +632,10 @@ class SASScheme(Scheme):
             "**Transit width.** Atoms crossing the beam relax at the transit rate "
             "γ_t, which also widens each optical line: the Exact Maxwell Voigt "
             "profiles use an optical HWHM of (Γ + Γ_self + Γ_buffer)/2 + γ_t, with "
-            "and without the pump. The Legacy velocity grid keeps its historical "
-            "width without γ_t.\n\n"
+            "and without the pump. Uniform, uncoated Rb with zero probe power and "
+            "no buffer gas uses the Exact background under the standard collision "
+            "model. A driven pump adds a velocity-resolved population correction. "
+            "Grid-based configurations use the historical width without γ_t.\n\n"
             "**Finite probe power.** With the pump off, a nonzero probe on a uniform, "
             "uncoated, buffer-free Rb cell uses the magnetic-sublevel rate model: a "
             "linearly polarized probe at zero field drives π links between (F, |m|) "

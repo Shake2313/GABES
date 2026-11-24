@@ -72,6 +72,42 @@ def test_od_doppler_voigt_width():
     assert 0.98 <= ratio <= 1.06            # Voigt ≥ Gaussian, slightly wider
 
 
+@pytest.mark.parametrize("measured", [False, True])
+def test_single_od_exact_complex_maxwell_average(measured):
+    from scipy.integrate import quad
+
+    from gabes import atoms, collisions, core
+    from gabes.schemes.absorption import PROBE_RABI
+
+    od = ODScheme()
+    mode = collisions.REFERENCE_COLLISIONS if measured else collisions.LEGACY_COLLISIONS
+    params = _params(od, model="single 2-level", ne_pressure_torr=10.0,
+                     optical_collision_model=mode)
+    raw = od.compute(params)
+    effects = collisions.pressure_effects("Rb85", "D1", 10.0, raw["T"], mode=mode)
+    radiative_gamma = G if measured else G + effects.fwhm_rad_s
+    atom = atoms.two_level(gamma=radiative_gamma)
+    if measured:
+        atom = atom.with_optical_dephasing(effects.optical_dephasing_rad_s)
+    probe = PROBE_RABI * G
+    hamiltonian = np.array([[0., probe / 2], [probe / 2, 0.]], dtype=complex)
+    generator = core.build_liouvillian(hamiltonian, atom)
+    indices = [0, 223, 300, 357, 600]
+    sigma = K * raw["sigma_v"]
+    for i in indices:
+        delta = raw["scan"][i] - effects.shift_rad_s
+
+        def weighted_coherence(v_over_sigma):
+            effective = np.array([delta - sigma * v_over_sigma])
+            rho = core.steady_state_batched(generator, effective, atom.S_v, atom.n_levels)
+            weight = np.exp(-0.5 * v_over_sigma**2) / np.sqrt(2 * np.pi)
+            return (rho[0, 1, 0] / probe) * weight
+
+        expected = quad(weighted_coherence, -10., 10., complex_func=True,
+                        points=[delta / sigma], epsabs=1e-22, epsrel=1e-11)[0]
+        np.testing.assert_allclose(raw["chi_bar"][i], expected, rtol=5e-12, atol=1e-22)
+
+
 _tz = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
 

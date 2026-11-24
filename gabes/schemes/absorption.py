@@ -8,7 +8,8 @@ CPT : same Λ, narrow two-photon scan → sub-natural dark resonance.
 
 The four-line OD model evaluates normalized weak-probe profiles through
 Faddeeva. Single-line OD and the Λ schemes solve the rotating-frame steady
-state and read the probe coherence ρ_eg/Ω_p = χ̄. Co-propagating geometry is
+state and read the probe coherence ρ_eg/Ω_p = χ̄. The single-line OD uses
+the closed-form Maxwell average. Co-propagating geometry is
 the default: the optical line is Doppler-broadened and the Λ two-photon
 resonance retains the small longitudinal wave-vector difference. Angled beams
 can use a scalar residual shift or a joint Maxwell reference calculation.
@@ -31,9 +32,6 @@ PROBE_RABI = 1e-3              # weak probe, in units of Γ
 GAMMA_MHZ = GAMMA / (2 * np.pi) / 1e6
 MHZ = 2 * np.pi * 1e6
 KHZ = 2 * np.pi * 1e3
-
-_TABLE_STEP = GAMMA / 30.0          # Δ_eff sampling for the Doppler χ̄ table
-
 
 def _ne_optics(params, T, isotope="Rb85", line="D1"):
     mode = params.get("optical_collision_model", collisions.LEGACY_COLLISIONS)
@@ -71,59 +69,6 @@ def _od_atom(natural_and_self, effects, reference):
     return atoms.two_level(gamma=natural_and_self + effects.fwhm_rad_s)
 
 
-def _solve_chi_avg(atom, build_H0, probe_coh, scan, params, h_dep,
-                   probe_omega=None, k_vec=None, mass=None, scan_shift=None, fallback_rows=None):
-    """
-    χ̄(scan) = probe coherence ρ_eg / Ω_p, Doppler-averaged over the Maxwell
-    velocity distribution (optical shift plus optional per-level residual shifts).
-
-    Doppler off: a single v = 0 solve per scan point.
-    Doppler on, scan-independent H (OD): one fine χ̄(Δ_eff) table + interpolated
-        Doppler average — decouples velocity sampling from the solve (accurate
-        Voigt without millions of solves), mirroring the FWM Δ_eff trick.
-    Doppler on, scan-dependent H (Λ): the exact Maxwell average of every scan
-        point (`AffineScan.maxwell_mean`). The Λ two-photon feature is Doppler-free
-        unless atom.S_v carries an optional residual two-photon k-ratio.
-    """
-    e, g = probe_coh
-    om_p = PROBE_RABI * GAMMA if probe_omega is None else probe_omega
-    k_vec = K_VEC if k_vec is None else k_vec
-    mass = constants.MASS_85RB if mass is None else mass
-    scan_shift = atom.S_v if scan_shift is None else scan_shift
-    n = atom.n_levels
-    doppler_on = params.get("doppler", "off") == "on"
-
-    if not doppler_on:
-        if not h_dep:
-            L0 = core.build_liouvillian(build_H0(0.0), atom)
-            rho = core.steady_state_batched(L0, scan, atom.S_v, n)
-            return rho[:, e, g] / om_p
-        # Scan-dependent H, single (v = 0) class: Δ_eff = s.
-        return affine_doppler.AffineScan(
-            atom, build_H0, probe_coh, om_p, scan_shift).stationary(scan)
-
-    T = params["temp_c"] + 273.15
-
-    if not h_dep:
-        # OD: scan-independent H solved once on a fine Δ_eff table, then averaged.
-        # The solve cost is independent of the velocity grid, so keep it fine
-        # (dv = 1) — this path feeds the AutoOD-validated absolute scale.
-        v, w = doppler.velocity_grid(T, mass=mass, dv=1.0, cutoff_sigma=4.0)
-        kvmax = k_vec * np.abs(v).max()
-        L0 = core.build_liouvillian(build_H0(0.0), atom)
-        lo, hi = scan.min() - kvmax, scan.max() + kvmax
-        deff = np.linspace(lo, hi, int((hi - lo) / _TABLE_STEP) + 2)
-        rho = core.steady_state_batched(L0, deff, atom.S_v, n)
-        table = rho[:, e, g] / om_p
-        return doppler.doppler_average_1d(table, deff, scan, v, w, k_vec=k_vec)
-
-    # Scan-dependent H (Λ): the optical background and any optional residual
-    # two-photon Doppler, per scan point.
-    return affine_doppler.AffineScan(
-        atom, build_H0, probe_coh, om_p, scan_shift).maxwell_mean(
-            scan, T, mass, k_vec, fallback_rows=fallback_rows)
-
-
 def _hyperfine_alpha(scan, params, line_strength=None):
     T = params["temp_c"] + 273.15
     effects = _ne_optics(params, T)
@@ -142,7 +87,7 @@ def _hyperfine_alpha(scan, params, line_strength=None):
 # =========================================================
 class ODScheme(Scheme):
     name = "od"
-    cache_version = "ne-optical-reference-v2-faddeeva"
+    cache_version = "ne-optical-reference-v3-single-exact-maxwell"
     cluster = "A — Absorption"
     title = "Optical absorption (OD)"
     supports_headless_observables = True
@@ -286,15 +231,22 @@ class ODScheme(Scheme):
         centered_scan = np.linspace(-half, half, 601)
         scan = centered_scan + effects.shift_rad_s
 
-        atom = _od_atom(GAMMA, effects, reference)
-
-        def build_H0(_s):
-            H = np.zeros((2, 2), dtype=complex)
-            H[0, 1] = H[1, 0] = PROBE_RABI * GAMMA / 2
-            return H
-
-        chi_bar = _solve_chi_avg(
-            atom, build_H0, (1, 0), centered_scan, params, h_dep=False)
+        probe = PROBE_RABI * GAMMA
+        if params["doppler"] == "on":
+            optical_hwhm = gamma_eff / 2
+            radiative_gamma = GAMMA if reference else gamma_eff
+            # The steady-state reduced coherence is (Δ − iγ₂)/[2(Δ² + b²)],
+            # where b includes the small broadening from the fixed probe drive.
+            broadened_hwhm = np.sqrt(optical_hwhm**2 + probe**2 * optical_hwhm / radiative_gamma)
+            mean = doppler.maxwell_resolvent_mean(
+                centered_scan + 1j * broadened_hwhm, 0.0, K_VEC * sigma_v)
+            chi_bar = (mean.real + 1j * (optical_hwhm / broadened_hwhm) * mean.imag) / 2
+        else:
+            atom = _od_atom(GAMMA, effects, reference)
+            H = np.array([[0.0, probe / 2], [probe / 2, 0.0]], dtype=complex)
+            generator = core.build_liouvillian(H, atom)
+            rho = core.steady_state_batched(generator, centered_scan, atom.S_v, atom.n_levels)
+            chi_bar = rho[:, 1, 0] / probe
         N = species.rb85_natural_density(T)
         raw = dict(model="single", scan=scan, chi_bar=chi_bar, N=N, T=T,
                    L=params.get("cell_mm", 10.0) * 1e-3, ls=1.0,
@@ -692,10 +644,13 @@ class LambdaScheme(Scheme):
             Dc_mhz=Dc_mhz, gg_khz=gg_khz)
         scan_shift = core.comm_super(np.diag([0.0, 0.0, 1.0]))
         fallback = []
-        chi_bar = _solve_chi_avg(
-            atom, build_H0, (2, 0), scan, params, h_dep=True,
-            probe_omega=probe, k_vec=medium["k_vec"], mass=medium["mass"],
-            scan_shift=scan_shift, fallback_rows=fallback)
+        affine = affine_doppler.AffineScan(atom, build_H0, (2, 0), probe, scan_shift)
+        if params.get("doppler", "off") == "on":
+            temperature = params["temp_c"] + 273.15
+            chi_bar = affine.maxwell_mean(
+                scan, temperature, medium["mass"], medium["k_vec"], fallback_rows=fallback)
+        else:
+            chi_bar = affine.stationary(scan)
         raw = dict(scan=scan, chi_bar=chi_bar, N=medium["N"], T=medium["T"], Dc=Dc,
                     L=params.get("cell_mm", 10.0) * 1e-3, ls=1.0,
                     gamma=gamma, gamma_mhz=gamma_mhz, k_vec=medium["k_vec"],

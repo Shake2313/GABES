@@ -1619,6 +1619,46 @@
       "implementation_2026_11_13": "⟦AI⟧ OD/SAS uses Steck v2.3.4 Table 7 effective far-detuned pi pump I_sat in mW/cm^2: Rb85/Rb87 D1 4.4876(43), D2 2.50399(73), Cs D1 2.5055(65), D2 1.6573(42). The inherited 4.484 lies within the stated Rb D1 uncertainty. Probe still uses the closed-two-level scale. 132 cases captured. Default max pointwise absorption changes at most 0.0071 m^-1 for named Rb D1, 12.52 for Rb D2, 17.17 for Cs D1 and 49.69 for Cs D2. All pump-off sampled absorption arrays and recaptured FWM baseline bit-identical. Both AutoOD anchors tested. Source https://steck.us/alkalidata/."
     },
     {
+      "id": "od-sas-legacy-velocity-choice-retirement",
+      "area": "OD / SAS",
+      "title": "Retire the public OD/SAS weak-probe grid selector",
+      "origin": "2026-11-24 user decision",
+      "user_request": "Exact를 쓸 수 있는 조건에서는 레거시 속도 격자 선택지를 퇴역시킨다. 레거시 격자만 있는 경로는 Exact를 적용할 수 있으면 전환한다.",
+      "status": "done",
+      "priority": "P2",
+      "implementation_2026_11_24": "⟦AI⟧ OD/SAS의 선모양 제어를 숨겼다. 새 세션은 Automatic으로 적격 Rb D1/D2의 펌프 꺼짐 Exact와 펌프 켜짐 Exact 배경 + SAS 보정을 사용한다. 예전 모델 ID와 저장된 선모양은 당시 계산 재현용으로 읽는다. 독립 단일선 OD에서 고정 프로브의 정상상태 복소 감수율을 Faddeeva로 적분하며 Ne 폭·이동과 기존 감쇠율 규약을 보존한다. 30개 비교 조건 중 투과율 변화 최대 5.587%p (150 °C, 무버퍼, 10 mm, −1048.13 MHz, 11.47% → 5.88%).",
+      "audit_other_selectors_2026_11_24": "⟦AI⟧ Legacy broadening은 고정 Ne 폭·무이동 모델이며 Measured Ne reference와 계수·이동·적용 범위가 다르다. Magneto의 Magnetic-field scan은 B장 스캔이고 Budker는 광주파수 스캔이다. Λ Scalar와 Joint Maxwell은 교차각 근사와 연립 적분이다. FWM 과거 affine replay는 이미 UI에서 퇴역했고, phase/dipole fixture 및 SAS Generic은 내부 또는 구형 기록 재현 경로다. 활성 FWM의 수치 격자와 Exact SAS의 펌프 보정 격자는 서로 다른 물리 계산의 적분이다.",
+      "validation_2026_11_24": "⟦AI⟧ OD/SAS·Λ·저장 설정·피팅·비교 UI 검사 310개 통과. OD/SAS 대표 10개와 Λ/초미세 OD의 Doppler on/off, 단일선 OD의 Doppler off 결과가 이전과 바이트 단위로 일치했다. 단일선의 두 충돌 모드에서 정상상태 OBE를 독립 적분해 복소 응답을 확인했다. 최대 변화 지점의 투과율 5.884%도 독립 적분에서 재현했다.",
+      "source_documents": [
+        "gabes/schemes/sas.py",
+        "gabes/schemes/absorption.py",
+        "tests/test_defaults_store.py",
+        "tests/test_absorption.py"
+      ],
+      "last_reviewed_at": "2026-11-24"
+    },
+    {
+      "id": "od-sas-exact-maxwell-remaining-cell-regimes",
+      "area": "OD / SAS",
+      "title": "Extend Exact Maxwell backgrounds to the remaining grid-based OD/SAS regimes",
+      "origin": "2026-11-24 user decision",
+      "user_request": "버퍼 가스와 코팅 셀처럼 Exact를 쓸 수 없는 조건은 후속 패치로 기록하고 현행 계산을 유지한다.",
+      "status": "parked",
+      "priority": "P2",
+      "problem": "⟦AI⟧ 현재 Exact Maxwell 경로는 균일·비코팅·무버퍼 Rb D1/D2의 약한 프로브 및 적격 유한 프로브의 rate model로 제한된다. Ne 압력 또는 측정 충돌 모델, 파라핀 셀, 축방향 분할, Cs D1/D2, rate 모델 범위 밖의 유한 프로브 및 펌프와 유한 프로브의 결합은 기존 속도 적분을 사용한다. 내부 Generic은 이전 설정 재현용이다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 조건별로 현재 격자와 독립 수렴 기준을 확보한 후 Exact 열평균 배경과 속도 의존 인구 보정을 비교한다. Ne 폭과 부호 있는 이동, 코팅 저장고, 세그먼트 밀도·Zeeman 이동 및 펌프 고갈, Cs 계수의 불확도, 유한 프로브 전파의 적용 범위를 각각 검증한다.",
+        "⟦AI⟧ 흡수·분산·투과율, pump→0과 probe→0의 연속성, 취약 운전점의 적분 수렴 및 실행 비용을 비교한다. Exact 배경과 수치 보정의 범위를 표시하고 과거 결과 재현에 쓰이는 기존 모델 ID와 봉인 자료의 바이트를 보존한다."
+      ],
+      "source_documents": [
+        "gabes/schemes/sas.py",
+        "gabes/schemes/sas_axial.py",
+        "gabes/od_model.py",
+        "gabes/collisions.py"
+      ],
+      "last_reviewed_at": "2026-11-24"
+    },
+    {
       "id": "sas-subdoppler-readout-trust",
       "area": "schemes/sas.py + lineshape.py + observables.py",
       "title": "Make sub-Doppler linewidth and lock-slope readouts resolution-aware",
