@@ -9,7 +9,7 @@ from functools import lru_cache
 import numpy as np
 from scipy.optimize import least_squares
 
-from gabes import fwm_measured_gain as measured
+from gabes import fwm_experiment_gain, fwm_measured_gain as measured
 from gabes.schemes import fwm
 from gabes_lab.blocks import io, runner
 
@@ -19,7 +19,7 @@ def exact_gains(raw, delta_mhz):
     delta_mhz = np.asarray(delta_mhz)
     probe = raw["raman_center_minus_GHz"] + delta_mhz * 1e-3
     context = raw["stark_recompute_context"]
-    dense = fwm.compute_spectrum(**context, extra_probe_points_GHz=np.unique(probe))
+    dense = fwm.compute_spectrum(**context, _readout_probe_points_GHz=np.unique(probe))
     method = dense["response_estimator"]
     if (method["method"] != fwm.RESPONSE_POLE or method["interpolation"] != "none"
             or method["pole_guard_fallback_rows"]):
@@ -94,7 +94,7 @@ def main():
     nodes = measured.internal_delta_mhz_from_eom(source["eom_MHz"])
     with runner.start_run("fwm_lab_gain_refit", out=args.out, config=params) as run:
         raw = scheme.compute(params)
-        profile = dict(model_id="fwm_20261013_warp_affine_residual_v2",
+        profile = dict(model_id=fwm_experiment_gain.CURRENT_MODEL_ID,
                        source_workbook_sha256=measured.SOURCE_WORKBOOK_SHA256,
                        frozen_source_model=dict(raw["gain_source_model"]), arms={})
         training = dict(observation_eom_mhz=source["eom_MHz"].tolist(),

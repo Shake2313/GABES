@@ -37,13 +37,12 @@ The gain toggle corrects peak position, width and both arm gains using the 23
 measured points. It continues the current model outside the measured interval
 and after changing operating conditions; extrapolation is labelled.
 Both probe and conjugate gain curves are shown with calibration on or off.
-The lab coefficients were fitted to an archived 401-point Balanced spectrum
-with a 4σ Maxwell cutoff and earlier ⁸⁵Rb D1 constants. The same coefficients
-now act on the current source spectrum. At the nominal apparatus settings in
-Balanced with the exact Maxwell average, the largest deviations at the 23
-training points are 4.92% for probe and 3.87% for conjugate. The operating-point
-report displays these deviations as diagnostics. Exact agreement at the training
-points applies to the archived fit input.
+The active 10/13 lab profile (v3) uses the corrected per-manifold dipoles and
+the untruncated Ultra Maxwell solution at each arm's fitted detunings. All 23
+measured detector ratios per arm trained the correction. The operating-point
+report distinguishes directly solved training rows from native-grid interpolation.
+The v1/v2 profiles are retired. Older saved lab selections migrate to v3.
+The fit has no held-out gain or noise spectrum.
 The [FWM literature database](references/fwm_experiments/README.md) records the
 published operating conditions and their sources.
 For the new multi-paper model, enable **Empirical gain calibration**, then select
@@ -87,10 +86,10 @@ In **FWM → Squeezing → DEFAULTS**, choose **Kim & Marino 2018 — singly res
 or **Kim & Marino 2018 — singly resonant conjugate**. Both generate twin beams in a
 12 mm ⁸⁵Rb D1 cell at 89 °C. The selected beam is resonant with ⁸⁷Rb D1.
 
-| Resonant beam and ⁸⁷Rb transition | Pump Δ from ⁸⁵Rb F=2→F′=3 | Measured intensity-difference noise at 750 kHz | After electronic-noise subtraction |
-|---|---:|---:|---:|
-| Probe, F=2→F′=2 | −1.04858 GHz | −5.4 dB | −6.3 dB |
-| Conjugate, F=1→F′=1 | −1.13258 GHz | −5.0 dB | −6.2 dB |
+| Resonant beam and ⁸⁷Rb transition | Pump Δ from ⁸⁵Rb F=2→F′=3 | Measured probe output / probe input | Measured intensity-difference noise at 750 kHz | After electronic-noise subtraction |
+|---|---:|---:|---:|---:|
+| Probe, F=2→F′=2 | −1.04858 GHz | 5.6 | −5.4 dB | −6.3 dB |
+| Conjugate, F=1→F′=1 | −1.13258 GHz | 3.8 | −5.0 dB | −6.2 dB |
 
 The paper references the pump to F′=2 (−687 and −771 MHz). Its pump–probe
 spacing gives δ=+16 MHz in the paper and δ=−16 MHz on the GABES seeded branch.
@@ -101,6 +100,7 @@ transmission after the window. With 95% photodiode QE the detection efficiency
 is 89.832%. The uncalibrated Jasperse readout includes optical losses and has
 no analysis-frequency or detector-electronics response.
 [Kim & Marino, §2.1 and Figs. 3–4](https://doi.org/10.1364/OE.26.033366)
+· [Kim, doctoral dissertation](https://shareok.org/items/78a450bd-1efd-4c60-83a5-b621db6dc9c2)
 · [GABES literature record](references/fwm_experiments/papers/kim_2018_oe.json).
 
 ## Schemes (current)
@@ -121,8 +121,8 @@ frequency and transmission calibration. Λ offers a joint Maxwell reference
 for angled beams. OD/SAS, Λ and Magneto expose a [measured Ne optical
 reference](docs/optical_collisions.md). Magneto also offers a [quenching
 finite cylinder relaxation estimate](docs/buffer_cell_relaxation.md).
-FWM **Exact source coordinates** uses a dense source for focused intensity
-difference readouts within its documented scope. The finite-seed angular
+All seeded FWM tiers use the selected source coordinates for focused
+intensity-difference and quadrature readouts with raw or laboratory-calibrated gains. The finite-seed angular
 Doppler extra view evaluates the minus branch over a bounded scan. Both are
 numerical reference modes with separate experimental applicability.
 
@@ -567,14 +567,15 @@ displays the same retirement notice. Replay remains available at the
 The development method, data and labelled fixtures remain in
 [the historical development log](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_gain_hotfix/DEVLOG.md).
 
-With **2026-10-13 lab** selected, the **Empirical gain calibration** toggle applies a frozen frequency shift/width
+With **2026-10-13 lab (corrected atomic model)** selected, the **Empirical gain calibration** toggle applies a frozen frequency shift/width
 and armwise gain correction to the current model. It remains active outside
 3022–3044 MHz and after changing temperature, powers, detuning or geometry;
 the readout identifies extrapolation and changed conditions. The corrected
 quantity is the measured pump-on / pump-off detector-reference ratio.
 The **DEFAULTS → 2026-10-13 experiment** preset enables this path.
 The old bounded measured-data interpolation remains a separate Advanced reference.
-See [calibration method and reproducible fit](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/analysis/fwm_experiment_20261022/README.md).
+The [fit pipeline](gabes_lab/pipelines/fwm_lab_gain_refit.py) generates the
+[active coefficients](gabes/data/fwm_lab_gain_refit_v3.json).
 See the [measured-reference review](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/gain_calibration_2026_10_16/README.md)
 and [Jasperse equation, noise and efficiency review](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/grand_challenge/jasperse_2026_10_16/README.md).
 
@@ -637,12 +638,12 @@ and [Jasperse equation, noise and efficiency review](https://github.com/Shake231
 
 ## Traps
 
-Current FWM note: the 4-level FWM model applies the real 85Rb D1 hyperfine
-`C_F^2` values `(10,35,35,28)/81` to Rabi couplings, polarization readout, and
-spontaneous-emission branching. The macroscopic structural factor is
-`fwm.physical_coupling_norm = 1/[2(2I+1)] = 1/12`; the trace-normalized density
-matrix supplies the actual pump-modified manifold population exactly once.
-Multiplying by an external equilibrium `p_F` would duplicate it. Density uses the
+The four-level ⁸⁵Rb D1 model averages each optical line's summed strength over
+the `2F+1` magnetic sublevels in its ground manifold. Both the light drive and
+the polarization use this per-atom dipole. The trace-one density matrix then
+supplies the actual pumped population of that manifold. Spontaneous branching
+uses the radiative line strengths. With the residual set to unity the zero-pump,
+weak-probe limit recovers the passive OD of each manifold. Density uses the
 pure-85Rb CRC fit (`hyperfine.number_density`), consistent with that path. The
 remaining seeded coupling is internally factorized (and hidden from the GABES UI) as
 `reference residual × additional mode-overlap penalty × additional polarization
@@ -656,15 +657,13 @@ The finite-reference-field atomic solve defaults to `N_F=3` and compares every
 reported complex susceptibility/transfer coefficient, gain, wrapped phase, and
 probe-gain optimum with `N_F=2` across the full displayed scan. A failed check is
 returned as `UNCONVERGED`; trace/positivity alone never certifies truncation.
-Separately, a slow reference for the standard (−) branch solves the self-consistent
-pump-only state in an explicitly gauge-equivalent static frame and evaluates the
-full infinitesimal 2×2 Nambu response on the trace-zero subspace at an independent
-analysis frequency. It is an audit path, not the production default: production
-still uses the finite-seed Floquet response. The inherited (+) branch fails the
-  physical static-pump gauge-parity check and is rejected by this reference instead
-  of being silently reinterpreted. An opt-in slow wrapper tensor-averages that
-  branch over independent `(v_z,v_x)` Maxwell velocities with the lab beat and RF
-  analysis frequency held fixed. At 121 °C and 0.32° it reproduces the analytic
+The pump-only reference solves a static pump state and evaluates the infinitesimal
+2×2 Nambu response on the trace-zero subspace at an independent analysis
+frequency. Both one-dimensional Raman branches use the signed pump–probe beat
+and agree with the static-pump reference. Production uses finite-seed Floquet
+response. The optional two-dimensional Raman-Doppler reference supports the
+(−) branch with independent `(v_z,v_x)` Maxwell velocities at fixed lab beat
+and RF analysis frequency. At 121 °C and 0.32° it reproduces the analytic
   1.380 MHz Raman rms width and passes the documented grid/cutoff gates. Production
   remains one-dimensional, and neither reference supplies microscopic Langevin
   diffusion.
@@ -673,9 +672,8 @@ Floquet scan remains a separate diagnostic.
 
 1. **FWM gain is exponentially sensitive at high density.** At paper optimum
    T=121 °C linear Maxwell-Bloch still over-amplifies. The `0.74` reference
-   residual and the three unit-default lab factors multiply the physical coupling
-   on top of `1/[2(2I+1)]`; change a lab factor only when a corresponding
-   effective-coupling measurement is available. `mode_overlap_penalty` is an
+   residual and three unit-default lab factors multiply the physical coupling.
+   Vary a lab factor when a corresponding effective-coupling measurement is available. `mode_overlap_penalty` is an
    additional unresolved transverse mode-matching penalty and is separate from
    Ultra's normalized axial crossing-angle profile. A post-hoc Manley–Rowe cap
    limits runaway power but is not a self-consistent depleted three-field solve.
@@ -685,16 +683,16 @@ Floquet scan remains a separate diagnostic.
    The Sim et al. 85Rb operating point uses the standard red-detuned seed on the
    (−) Raman branch. The production finite-seed path computes `branch=-1` and
    `branch=+1` independently; do not add their χ matrices into one 2×2 propagation
-   matrix. The pump-only weak-response reference is certified only for
-   `branch=-1`; `branch=+1` is explicitly unsupported until its inherited frame is
-   corrected. The old branch-summed model created artificial high-gain extrema
+   matrix. Both signed one-dimensional frames reproduce the static pump state.
+   The two-dimensional Doppler reference covers `branch=-1`. The old branch-summed model created artificial high-gain extrema
    (for example near +70 MHz two-photon detuning).
 3. **Rb is very absorbing — absorption schemes use short cells.** ls=1.0 is the
    true cross-section, so on-resonance OD saturates in a cm-scale cell; the
    OD/EIT/AT/CPT defaults use mm-scale cells / moderate T to keep features visible.
-4. **Twin-beam coincidence is the ideal (lossless) parametric estimate** from the
-   gain (n=G_s−1, g²_sc=2+1/n, R=g²_sc²/4>1), valid only as an ideal comparison;
-   distributed atomic Langevin noise is not modelled.
+4. **Twin-beam coincidences depend on the source and both channels.** Pass
+   detected photon-number moments for arm-resolved correlations. The explicit
+   ideal vacuum-input fixture gives n=G_s−1 and g²_sc=2+1/n for a lossless pair.
+   The seeded gain calculation by itself supplies no atomic-noise covariance.
 5. **OD is the pump-off limit of the Absorption (OD/SAS) scheme.** Pump power = 0
    → linear Doppler-broadened absorption; raising it burns the SAS sub-Doppler
    features on the *same* spectrum. For ⁸⁵Rb D1 the pump-off limit reproduces the

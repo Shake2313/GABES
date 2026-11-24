@@ -208,6 +208,11 @@ def render_param(container, scheme_name, sp, scheme_obj=None):
                                on_change=on_change, **choice_kwargs)
     if sp.choices is not None:
         options = list(sp.choices)
+        if has_state and current not in options and scheme_obj is not None:
+            # Apply the same retired-choice migration used by saved settings.
+            migrated = scheme_obj.normalize_params({sp.name: current}).get(sp.name)
+            if migrated in options:
+                st.session_state[key] = migrated
         _control_label(container, label, help_)
         choice_kwargs["label_visibility"] = "collapsed"
         if has_state:

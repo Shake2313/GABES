@@ -12,8 +12,8 @@ from .common import (
 )
 from ..base import ExtraView, ParamSpec, Preset, Scheme
 from ...fwm_gain_calibration import (
-    MODELS as GAIN_CALIBRATION_MODELS, MODEL_CHI, MODEL_LAB, MODEL_LAB_REFIT, MODEL_LITERATURE, MODEL_STARK,
-    MODEL_ZEEMAN, calibrate_spectrum as calibrate_experimental_gain,
+    MODELS as GAIN_CALIBRATION_MODELS, MODEL_CHI, MODEL_LAB_CURRENT, MODEL_LITERATURE, MODEL_STARK,
+    MODEL_ZEEMAN, calibrate_spectrum as calibrate_experimental_gain, normalize_model,
 )
 from .readout import (
     SQUEEZING_INTENSITY_DIFFERENCE,
@@ -64,17 +64,19 @@ class FWMScheme(Scheme):
 
     retired_squeezing_controls = frozenset(("velocity_measure", "noise_model"))
 
+    def normalize_params(self, params):
+        return dict(params, gain_calibration_model=normalize_model(
+            params.get("gain_calibration_model", MODEL_LAB_CURRENT)))
+
     def migrate_default_params(self, params):
         replay_flags = ("gain_closure_enabled", "legacy_gain_calibration_fixture")
         migrated = {k: v for k, v in params.items() if k not in self.retired_squeezing_controls}
-        # Saved settings without a model selector used the original lab fit.
-        migrated.setdefault("gain_calibration_model", MODEL_LAB)
         for name in replay_flags:
             if name in migrated and not isinstance(migrated[name], bool):
                 raise ValueError(f"{name} must be true or false.")
         fwm_gain_closure.reject_retired_replay(
             *(migrated.pop(name, False) for name in replay_flags))
-        return migrated
+        return self.normalize_params(migrated)
 
     def param_schema(self):
         seeded = {"mode": MODE_SEEDED}
@@ -169,14 +171,13 @@ class FWMScheme(Scheme):
                            "outside its data range and after changing operating conditions."),
             ParamSpec("exact_readout_coordinates", "Exact source coordinates", "Numerics", False,
                       control="checkbox", recompute=False, advanced=True, visible_if=seeded,
-                      help="Evaluate the atomic response at the requested detunings. Fast and Balanced "
-                           "do this automatically for focused intensity-difference readouts with "
-                           "uncalibrated gains or either 10/13 gain calibration."),
+                      help="Evaluate the atomic response at the requested detunings. All tiers use these "
+                           "coordinates in both focused squeezing views with raw or 10/13 lab gains."),
             ParamSpec("gain_calibration_model", "Gain calibration model",
-                      "Detection & scaling", MODEL_LAB_REFIT,
+                      "Detection & scaling", MODEL_LAB_CURRENT,
                       choices=GAIN_CALIBRATION_MODELS, recompute=False,
                       visible_if=dict(seeded, experimental_gain_calibration=True),
-                      help="The 10/13 refit uses exact source coordinates. The original lab fit is available for replay. "
+                      help="The 10/13 lab fit uses exact source coordinates from the corrected atomic model. "
                            "Literature options correct gains or complex susceptibility; "
                            "pump/Stark also recomputes the atomic response before propagation. "
                            "Zeeman pump uses a cached 24-state response with optical pumping, "
@@ -229,8 +230,8 @@ class FWMScheme(Scheme):
                       visible_if=seeded, advanced=True, hidden=True,
                       advanced_group="Seeded coupling factorization",
                       help="Backward-compatible dimensionless residual. The physical "
-                           "macroscopic normalization — Rb85 D1 hyperfine Clebsch-Gordan "
-                           "strengths × 1/[2(2I+1)] — is computed from first principles. "
+                           "dipole on each Rb85 D1 line uses its summed strength divided "
+                           "by the number of ground magnetic sublevels. "
                            "The trace-normalized rho_ss supplies the manifold population "
                            "exactly once. The inherited 0.74 residual has not been "
                            "refitted after the normalization and Maxwell-convention "
@@ -391,7 +392,7 @@ class FWMScheme(Scheme):
             seed_input_assumption=fwm_measured_gain.SEED_INPUT_ASSUMPTION,
         )
         practical = dict(values, experimental_gain_calibration=True,
-                         gain_calibration_model=MODEL_LAB_REFIT,
+                         gain_calibration_model=MODEL_LAB_CURRENT,
                          jasperse_loss_pct=0.0)
         # Kim & Marino §2.1: paper δ is the pump–probe spacing minus the
         # ground splitting. The seeded branch uses the opposite sign.
@@ -430,7 +431,7 @@ class FWMScheme(Scheme):
                     seed_classical_rin_scaled=0.0,
                     measured_gain_calibration=False, seed_input_assumption="",
                     experimental_gain_calibration=False,
-                    gain_calibration_model=MODEL_LAB_REFIT,
+                    gain_calibration_model=MODEL_LAB_CURRENT,
                     jasperse_loss_pct=0.0,
                     loss_pct=SEEDED_POST_CELL_LOSS_PCT,
                     transit_rate_khz=100.0,
@@ -657,7 +658,7 @@ class FWMScheme(Scheme):
             raw, enabled=params.get("measured_gain_calibration", False),
             seed_input_assumption=params.get("seed_input_assumption", ""),
             selected_delta_mhz=tpd)
-        gain_model = params.get("gain_calibration_model", MODEL_LAB)
+        gain_model = normalize_model(params.get("gain_calibration_model", MODEL_LAB_CURRENT))
         literature_gain = gain_model in (MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
         chi_gain = gain_model in (MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
         stark_gain = gain_model == MODEL_STARK
@@ -696,7 +697,9 @@ class FWMScheme(Scheme):
         if measured_reference["requested"]:
             noise_delta += "; measured gain interpolation does not recalibrate squeezing"
 
-        phase_scan = (experimental_quadrature_phase_scan(experimental_noise, gain_axis, tpd)
+        if selected["readout_certification_scope"] == "FLOQUET_UNCONVERGED":
+            noise_delta += "; Floquet convergence failed"
+        phase_scan = (experimental_quadrature_phase_scan(*selected["phase_readout_input"], tpd)
                       if phase_view else None)
         fig = None
         if include_figures and phase_view:
@@ -855,13 +858,11 @@ class FWMScheme(Scheme):
                 if point["context_changed"]:
                     status_label += " · changed conditions"
                 if experimental_gain["source_model_differences"]:
-                    status_label += (" · different source settings" if gain_model == MODEL_LAB_REFIT
-                                     else " · updated source model")
+                    status_label += " · different source settings"
                 gain_help = (
                     "Empirically corrected pump-on output / pump-off seed reference. "
-                    + ("The refit uses the Ultra model at exact source coordinates. "
-                       if gain_model == MODEL_LAB_REFIT else "The frozen fit used an older atomic model. ")
-                    + "The correction continues beyond the 10/13 measured interval.")
+                    "The fit uses the corrected Ultra model at exact source coordinates. "
+                    "The correction continues beyond the 10/13 measured interval.")
             for index, key, arm in ((1, "G_s", "probe"), (2, "G_c", "conjugate")):
                 metrics[index] = _power_gain_metric(
                     (f"Zeeman pump + χ {arm} gain" if zeeman_gain else
@@ -889,6 +890,12 @@ class FWMScheme(Scheme):
                     "| Continuation | Applied across changed conditions; training-domain extrapolation is identified |\n"
                     "| Noise scope | Grouped gain validation does not validate a noise covariance or squeezing prediction |\n"
                 )
+                normalization = experimental_gain.get("dipole_normalization")
+                if normalization:
+                    applied = normalization["applied"] or "unknown"
+                    measured_rows += (
+                        f"| Dipole normalization (training / applied) | {normalization['training']} / {applied} |\n"
+                        f"| Archived grouped validation (training normalization) | {experimental_gain['archived_validation_status']} |\n")
                 if chi_gain:
                     measured_rows += (
                         f"| χ off-diagonal scale κ | {point['offdiagonal_scale']:.6g} |\n"
@@ -935,16 +942,8 @@ class FWMScheme(Scheme):
                     f"| Calibrated probe / conjugate gain | {point['G_s']:.6g} / {point['G_c']:.6g} |\n"
                     "| Calibrated gain basis | Pump-on arm output / measured pump-off seed output |\n"
                     "| Continuation | Applied outside measurement support and across changed operating conditions |\n"
-                )
-                if gain_model == MODEL_LAB_REFIT:
-                    measured_rows += (
-                        "| Fit source | Ultra, untruncated Maxwell, exact arm-specific coordinates |\n"
-                        "| Fit scope | All 23 points trained the empirical residual |\n")
-                elif experimental_gain["source_model_differences"]:
-                    measured_rows += (
-                        "| Source model | Updated atomic model with the frozen fit coefficients |\n"
-                        "| Fit scope | Exact agreement at the 23 training points applies to the frozen source arrays |\n"
-                    )
+                    "| Fit source | Corrected Ultra model, untruncated Maxwell, exact arm-specific coordinates |\n"
+                    "| Fit scope | All 23 points trained the empirical residual |\n")
                 deviation = experimental_gain["nominal_node_deviation"]
                 if deviation is not None:
                     errors = deviation["max_relative_error"]
@@ -1131,7 +1130,8 @@ class FWMScheme(Scheme):
                 "Exact Maxwell at sampled coordinates in the tested operating cases.")
         readout_audit = "".join(
             f"| {label} | {entry['solved_probe_points']} solved, "
-            f"{entry.get('pole_guard_fallback_rows', 0)} guard fallbacks |\n"
+            f"{entry.get('pole_guard_fallback_rows', 0)} guard fallbacks, "
+            f"Floquet {entry['floquet_status']} |\n"
             for label, key in (("Calibrated curve and training", "mapped_curve_and_training"),
                                ("Selected detuning", "selected_readout"))
             if (entry := source_provenance.get(key)) is not None)
@@ -1144,7 +1144,7 @@ class FWMScheme(Scheme):
             f"{'supported' if claim_gate.get('quantitative_gain_supported') else 'UNSUPPORTED'} |\n"
             f"| Physical squeezing claim | "
             f"{'supported' if claim_gate.get('physical_squeezing_prediction') else 'UNAVAILABLE'} |\n"
-            f"| Coupling norm 1/[2(2I+1)] (rho_ss supplies population) | "
+            f"| Maxwell coupling factor (manifold populations from the atomic state) | "
             f"{raw.get('coupling_norm', float('nan')):.4f} |\n"
             f"| Canonical-mode status | {raw.get('canonical_mode_status', 'unavailable')} |\n"
             f"| Probe / conjugate effective area | "
@@ -1756,7 +1756,7 @@ class FWMScheme(Scheme):
         def _render_full(full, params=None):
             import matplotlib.pyplot as plt
             params = params or {}
-            gain_model = params.get("gain_calibration_model", MODEL_LAB)
+            gain_model = normalize_model(params.get("gain_calibration_model", MODEL_LAB_CURRENT))
             literature_gain = gain_model in (MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
             chi_gain = gain_model in (MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN)
             stark_gain = gain_model == MODEL_STARK

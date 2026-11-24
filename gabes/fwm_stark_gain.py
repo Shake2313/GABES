@@ -17,7 +17,7 @@ import numpy as np
 from . import fwm_chi_gain as chi
 from .fwm_calibration_common import (
     cached_profile_loader, calibration_axis, literature_domain, literature_features,
-    sample_model_gain,
+    LITERATURE_TRAINING_DIPOLES, reduced_literature_validation, sample_model_gain,
 )
 
 _axis = calibration_axis
@@ -34,7 +34,7 @@ _record = cached_profile_loader(lambda: PROFILE_PATH)
 
 def profile():
     record = copy.deepcopy(_record())
-    record.update(model_id=MODEL_ID,
+    record.update(model_id=MODEL_ID, training_dipole_normalization=LITERATURE_TRAINING_DIPOLES,
         method="Pump Hamiltonian self-energy, recomputed susceptibility and segmented propagation",
         formula="H'=H+(1-s)*S0*|g2><g2|; chi_offdiag'=kappa*chi_offdiag; chi_diag'=d*chi_diag",
         noise_covariance_calibrated=False, susceptibility_identified=False)
@@ -113,11 +113,10 @@ def evaluate(raw, delta_mhz, *, enabled=True):
         "PUMP_STARK_CHI_CALIBRATION; CONDITION_EXTRAPOLATION")
     if not enabled:
         status = np.full(delta.shape, "DISABLED", object)
-    passed = record.get("predictive_gate_passed", False)
     return dict(applied=bool(enabled), G_s=gs, G_c=gc, internal_delta_mhz=delta.copy(),
         model_id=MODEL_ID, display_name="Multi-paper pump/Stark + chi", profile=record,
-        gain_quantity=record["gain_quantity"], validation_status=record["validation_status"],
-        validation_label="Repeated grouped prediction passed" if passed else "Experimental · grouped prediction not established",
+        gain_quantity=record["gain_quantity"],
+        **reduced_literature_validation(response, record, "Repeated grouped prediction passed"),
         within_training_domain=bool(np.all(within)), point_within_training_domain=within,
         within_measured_support=np.zeros(delta.shape, bool), context_changed=bool(changed),
         changed_context_inputs=changed, point_status=status, frequency_support_mhz=None,
@@ -161,6 +160,7 @@ def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
             internal_delta_mhz=float(selected_delta_mhz), available=True, applied=bool(enabled),
             status=str(point["point_status"]), within_training_domain=point["within_training_domain"],
             within_measured_support=False, context_changed=point["context_changed"],
+            dipole_normalization=point["dipole_normalization"], validation_status=point["validation_status"],
             offdiagonal_scale=point["offdiagonal_scale"],
             diagonal_susceptibility_scale=point["diagonal_susceptibility_scale"],
             pump_stark_fraction=point["pump_stark_fraction"])

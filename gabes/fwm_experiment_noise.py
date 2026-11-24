@@ -188,19 +188,29 @@ def experimental_jasperse_readout(raw, params, *, gains=None):
     ``gains`` may supply the empirical gain-calibrated spectrum.  In that case
     its pump-off-reference units are adopted as effective source-gain units;
     this declared phenomenological identification is not an atomic covariance
-    measurement.  Both reservoir contributions are always included.
+    measurement. Both reservoir contributions are included. The fitted and
+    input G_s/G_c fields are power ratios relative to the input probe.
+    Quantum transfer coefficients and detected gains use photon flux.
     """
     source = raw if gains is None else gains
     gp, gc = np.broadcast_arrays(np.asarray(source["G_s"], dtype=float),
                                  np.asarray(source["G_c"], dtype=float))
-    effective = effective_parameters(
-        gp, gc, common_loss_pct=params.get("jasperse_loss_pct", 0.0))
-    eta = _external_efficiency(raw, params)
+    omega_probe = np.broadcast_to(raw.get("omega_probe_rad_s", constants.OMEGA_D1), gp.shape)
+    # Old spectra and ideal equal-frequency fixtures have no second carrier.
+    omega_conjugate = np.broadcast_to(raw.get("omega_conjugate_rad_s", omega_probe), gp.shape)
+    if not np.all(np.isfinite(omega_conjugate) & (omega_conjugate > 0.0)):
+        raise ValueError("conjugate angular frequency must be finite and positive")
     seed = seed_noise_components(
         np.broadcast_to(raw.get("input_seed_power_W", float(params.get("probe_uw", 8.0)) * 1e-6),
                         gp.shape),
-        np.broadcast_to(raw.get("omega_probe_rad_s", constants.OMEGA_D1), gp.shape),
+        omega_probe,
         classical_rin_per_Hz=float(params.get("seed_classical_rin_scaled", 0.0)) * 1e-14)
+    # One detected photon contributes one photocount regardless of its energy.
+    # The measured power gains use the input probe as the denominator for both arms.
+    photon_to_power = omega_conjugate / omega_probe
+    effective = effective_parameters(
+        gp, gc / photon_to_power, common_loss_pct=params.get("jasperse_loss_pct", 0.0))
+    eta = _external_efficiency(raw, params)
     result = jasperse_distributed_noise(
         effective["effective_squeeze"], effective["probe_transmission"],
         effective["conjugate_transmission"], seed_fano=seed["seed_fano"],
@@ -211,14 +221,19 @@ def experimental_jasperse_readout(raw, params, *, gains=None):
     nf = np.where(bright, result["NF"], np.nan)
     db = np.where(bright, result["squeezing_degree_dB"], np.nan)
     fit_gs = np.abs(result["transfer"][..., 0, 0]) ** 2
-    fit_gc = np.abs(result["transfer"][..., 1, 0]) ** 2
+    fit_gc_flux = np.abs(result["transfer"][..., 1, 0]) ** 2
+    fit_gc = fit_gc_flux * photon_to_power
     residual = np.maximum(np.abs(fit_gs - gp) / np.maximum(gp, 1e-12),
                           np.abs(fit_gc - gc) / np.maximum(gc, 1e-12))
     status = np.where(bright, "EFFECTIVE_JASPERSE_ESTIMATE", "NO_DETECTED_BRIGHT_OUTPUT")
     status = np.where(bright & effective["inference_approximate"],
                       "EFFECTIVE_JASPERSE_GAIN_APPROXIMATION", status)
-    return dict(result, **effective, NF=nf, NF_dB=db, seed_noise=seed,
+    return dict(result, **effective, NF=nf, NF_dB=db, squeezing_degree_dB=db, seed_noise=seed,
                 eta_after_cell_QE=eta, model_id=MODEL_ID, status=status,
+                conjugate_photon_flux_gain=fit_gc_flux,
+                input_conjugate_photon_flux_gain=gc / photon_to_power,
+                photon_flux_basis=("resolved optical carriers" if "omega_conjugate_rad_s" in raw
+                                   else "equal-frequency assumption for missing conjugate carrier"),
                 fit_relative_residual=residual, G_s=fit_gs, G_c=fit_gc,
                 input_G_s=gp.copy(), input_G_c=gc.copy(),
                 empirical_gain_calibration_applied=bool(source.get("applied", False)),

@@ -72,17 +72,17 @@ def atomic_boundary(monkeypatch):
 
 def test_zeeman_selector_is_opt_in_with_stable_native_and_lab_defaults(case, atomic_boundary):
     scheme, _, _ = case
-    assert calibration.MODELS == (calibration.MODEL_LAB_REFIT, calibration.MODEL_LITERATURE,
-        calibration.MODEL_CHI, calibration.MODEL_STARK, calibration.MODEL_ZEEMAN, calibration.MODEL_LAB)
+    assert calibration.MODELS == (calibration.MODEL_LAB_CURRENT, calibration.MODEL_LITERATURE,
+        calibration.MODEL_CHI, calibration.MODEL_STARK, calibration.MODEL_ZEEMAN)
     assert calibration._module(calibration.MODEL_ZEEMAN) is zeeman
     assert calibration.profile(model=calibration.MODEL_ZEEMAN)["model_id"] == zeeman.MODEL_ID
     control = next(s for s in scheme.param_schema() if s.name == "gain_calibration_model")
     assert control.choices == calibration.MODELS and not control.recompute
     assert "cached 24-state response" in control.help
-    assert control.default == scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert control.default == scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
     assert "gain_calibration_model" not in scheme.recompute_keys()
     assert not scheme.defaults()["experimental_gain_calibration"]
-    assert next(p for p in scheme.presets() if p.name == "2026-10-13 experiment").values["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert next(p for p in scheme.presets() if p.name == "2026-10-13 experiment").values["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
 
 
 def test_zeeman_off_is_exact_and_avoids_atomic_response(case, atomic_boundary):

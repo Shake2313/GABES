@@ -368,7 +368,7 @@ def to_gabes_params(chain, settings, geometry, *, base=None, quantize=True,
         overrides["probe_uw"] = overrides["seed_wanted_sideband_uw"]
     if "loss_pct" in overrides and "after_cell_eff_pct" not in overrides:
         overrides["after_cell_eff_pct"] = 100.0 - float(overrides["loss_pct"])
-    params.update(overrides)
+    params = fwm.FWMScheme().normalize_params({**params, **overrides})
     for key in fwm.FWMScheme.retired_squeezing_controls:
         params.pop(key, None)
     params["loss_pct"] = 100.0 - float(params["after_cell_eff_pct"])

@@ -34,11 +34,11 @@ def nominal_raw():
 def test_nominal_model_calibration_recovers_raw_measurements_and_moves_peaks(nominal_raw):
     observed = measured.observations()
     nodes = measured.internal_delta_mhz_from_eom(observed["eom_MHz"])
-    result = practical.evaluate(nominal_raw, nodes)
+    result = practical.evaluate(nominal_raw, nodes, model_id=practical.LEGACY_MODEL_ID)
     for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
         np.testing.assert_allclose(result[key], observed[arm+"_ratio"], rtol=2e-13, atol=1e-13)
     dense = np.linspace(-12., 18., 3001)
-    corrected = practical.evaluate(nominal_raw, dense)
+    corrected = practical.evaluate(nominal_raw, dense, model_id=practical.LEGACY_MODEL_ID)
     assert np.argmax(nominal_raw["G_s"]) == np.argmax(nominal_raw["G_c"])
     for key in ("G_s", "G_c"):
         peak = dense[np.argmax(corrected[key])]
@@ -50,7 +50,8 @@ def test_nominal_model_calibration_recovers_raw_measurements_and_moves_peaks(nom
 
 def test_affine_fit_and_frozen_coefficients_have_reproducible_source_metadata():
     record = json.loads(RECORD.read_text(encoding="utf-8"))
-    profile = practical.profile()
+    profile = practical.profile(model_id=practical.LEGACY_MODEL_ID)
+    assert profile["retired"]
     assert profile["measurement_date"] == "2026-10-13"
     assert profile["source_workbook_sha256"] == measured.SOURCE_WORKBOOK_SHA256
     assert not profile["independent_validation"]
@@ -68,7 +69,7 @@ def test_affine_fit_and_frozen_coefficients_have_reproducible_source_metadata():
             np.testing.assert_allclose(value, record["arms"][arm][key], rtol=1e-13, atol=1e-13)
 
 
-@pytest.mark.parametrize("model_id", [practical.MODEL_ID, practical.REFIT_MODEL_ID])
+@pytest.mark.parametrize("model_id", [practical.LEGACY_MODEL_ID, practical.REFIT_MODEL_ID, practical.CURRENT_MODEL_ID])
 def test_wide_frequency_continuation_uses_current_model_not_a_clamped_gain(nominal_raw, model_id):
     delta = np.array([-1e6, -550., -100., -25., 25., 100., 550., 1e6])
     first = practical.evaluate(nominal_raw, delta, model_id=model_id)
@@ -174,16 +175,14 @@ def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_dev
     calibration = selected["experimental_gain_calibration"]
     assert calibration["applied"] and not calibration["context_changed"]
     assert calibration["source_model"]["velocity_measure"] == "exact"
-    assert {"velocity_measure", "linewidth_hz", "rb85_mass_kg", "d1_excited_splitting_hz"}.issubset(
-        calibration["source_model_differences"])
+    assert calibration["source_model"]["dipole_normalization"] == "uniform-manifold-rms"
     assert calibration["source_model"]["scan_points"] > raw["probe_axis_GHz"].size
-    assert set(calibration["source_model_differences"]) == (
-        set(nominal["source_model_differences"]) | {"scan_points"})
+    assert calibration["source_model_differences"] == nominal["source_model_differences"] == []
+    assert calibration["profile"]["model_id"] == practical.CURRENT_MODEL_ID
     assert calibration["profile"]["model_id"] == practical.MODEL_ID
     assert not calibration["profile"]["independent_validation"]
 
-    # v1's native-grid diagnostic stays comparable to the original fit;
-    # the app evaluates the same coefficients at directly solved coordinates.
+    # The live source is sampled both on the native grid and at each fitted arm coordinate.
     native_diagnostic = calibration["nominal_node_deviation"]
     exact_diagnostic = calibration["exact_nominal_node_deviation"]
     assert native_diagnostic["point_count"] == exact_diagnostic["point_count"] == 23
@@ -195,19 +194,16 @@ def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_dev
     dense = fwm.compute_spectrum(**ultra["stark_recompute_context"],
                                  extra_probe_points_GHz=np.unique(np.r_[*coordinates.values()]))
     live_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
-    frozen_axis = nominal_raw["probe_axis_GHz"] * 1e3
     for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
         positions = nominal["source_delta_mhz"][arm]
         live_sample = np.exp(PchipInterpolator(live_axis, np.log(raw[key]))(positions))
-        frozen_sample = np.exp(PchipInterpolator(frozen_axis, np.log(nominal_raw[key]))(positions))
+        coefficient = np.exp(calibration["profile"]["arms"][arm]["log_total_coefficient_at_nodes"])
         observed_ratio = observed[f"{arm}_ratio"]
-        np.testing.assert_allclose(nominal[key] / observed_ratio, live_sample / frozen_sample,
-                                   rtol=2e-13)
+        np.testing.assert_allclose(nominal[key], live_sample * coefficient, rtol=2e-13)
         assert native_diagnostic["max_relative_error"][arm] == pytest.approx(
             np.max(np.abs(nominal[key] / observed_ratio - 1)))
         rows = np.searchsorted(dense["probe_axis_GHz"], coordinates[arm])
         np.testing.assert_array_equal(dense["probe_axis_GHz"][rows], coordinates[arm])
-        coefficient = np.exp(calibration["profile"]["arms"][arm]["log_total_coefficient_at_nodes"])
         exact_corrected = dense[key][rows] * coefficient
         assert exact_diagnostic["max_relative_error"][arm] == pytest.approx(
             np.max(np.abs(exact_corrected / observed_ratio - 1)))
@@ -223,15 +219,31 @@ def test_live_atomic_solver_uses_frozen_correction_and_reports_training_node_dev
     assert np.all(np.isfinite(changed["G_c"]))
 
 
-def test_refit_recovers_all_measured_points_on_direct_ultra_source_rows():
+@pytest.mark.parametrize("control,changed", [
+    ("transit_reset_rate_rad_s", 2*np.pi*1e6), ("line_strength_residual", 0.9),
+    ("mode_overlap_penalty", 0.8), ("polarization_penalty", 0.8), ("zeeman_participation_penalty", 0.8),
+])
+def test_changed_atomic_control_labels_calibration_extrapolation(nominal_raw, control, changed):
+    raw = dict(nominal_raw, **{control: changed})
+    result = practical.calibrate_spectrum(raw, enabled=True, selected_delta_mhz=0.)
+    assert result["applied"] and result["selected_point"]["available"]
+    assert result["changed_context_inputs"] == [control]
+    assert result["selected_point"]["context_changed"]
+    assert result["nominal_node_deviation"] is None
+
+
+@pytest.mark.parametrize("model_id,historical", [(practical.REFIT_MODEL_ID, True),
+                                                (practical.CURRENT_MODEL_ID, False)])
+def test_refit_recovers_all_measured_points_on_direct_ultra_source_rows(model_id, historical):
     from gabes.schemes import fwm
 
     scheme = fwm.FWMScheme()
     preset = next(p.values for p in scheme.presets() if p.name == "2026-10-13 experiment")
-    raw = scheme.compute(dict(preset, resolution=fwm.FIDELITY_ULTRA, velocity_measure="exact"))
+    raw = scheme.compute(dict(preset, resolution=fwm.FIDELITY_ULTRA, velocity_measure="exact",
+                              legacy_coupling_fixture=historical))
     obs = measured.observations()
     nodes = measured.internal_delta_mhz_from_eom(obs["eom_MHz"])
-    arms = practical.profile(model_id=practical.REFIT_MODEL_ID)["arms"]
+    arms = practical.profile(model_id=model_id)["arms"]
     coordinates = {
         arm: raw["raman_center_minus_GHz"] + 1e-3 * (
             fit["source_center_delta_mhz"] + fit["frequency_scale"] * (nodes-fit["measured_peak_delta_mhz"]))
@@ -240,7 +252,8 @@ def test_refit_recovers_all_measured_points_on_direct_ultra_source_rows():
     dense = fwm.compute_spectrum(**raw["stark_recompute_context"],
                                  extra_probe_points_GHz=np.unique(np.r_[*coordinates.values()]))
     assert dense["response_estimator"]["pole_guard_fallback_rows"] == 0
-    evaluated = practical.evaluate(dense, nodes, model_id=practical.REFIT_MODEL_ID)
+    evaluated = practical.evaluate(dense, nodes, model_id=model_id)
+    assert evaluated["profile"]["retired"] == historical
     assert not evaluated["source_model_differences"]
     for arm, key in (("probe", "G_s"), ("conjugate", "G_c")):
         rows = np.searchsorted(dense["probe_axis_GHz"], coordinates[arm])

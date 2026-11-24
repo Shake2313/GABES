@@ -13,6 +13,32 @@ from . import hyperfine
 
 
 FEATURE_LIMIT = 3.0
+LITERATURE_TRAINING_DIPOLES = "summed-hyperfine-over-12"
+
+
+def reduced_literature_validation(raw, record, passed_label):
+    """Scope grouped gain diagnostics to the reduced atomic source used in training."""
+    ledger = raw.get("coupling_normalization_ledger") or {}
+    applied = ((raw.get("gain_source_model") or {}).get("dipole_normalization")
+               or ledger.get("dipole_normalization"))
+    if applied is None and (raw.get("legacy_coupling_fixture") or raw.get("legacy_mean_field_fixture")
+                            or ledger.get("dipole_strength_source") == "sqrt(3 C_F^2) in drive and readout"):
+        applied = LITERATURE_TRAINING_DIPOLES
+    training = record.get("training_dipole_normalization", LITERATURE_TRAINING_DIPOLES)
+    archived = record.get("validation_status", "NOT_EVALUATED")
+    if applied == training:
+        status = archived
+        label = (passed_label if record.get("predictive_gate_passed") else
+                 "Experimental · grouped prediction not established")
+    elif applied is None:
+        status = "SOURCE_DIPOLE_NORMALIZATION_UNKNOWN"
+        label = "Experimental · grouped prediction not established for an unreported dipole normalization"
+    else:
+        status = "NOT_REVALIDATED_FOR_CHANGED_DIPOLE_NORMALIZATION"
+        label = "Experimental · grouped prediction not established for the changed dipole normalization"
+    return {"validation_status": status, "validation_label": label,
+            "archived_validation_status": archived,
+            "dipole_normalization": {"training": training, "applied": applied}}
 
 
 def cached_profile_loader(path: Callable[[], Path]):

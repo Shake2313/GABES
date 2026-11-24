@@ -1,11 +1,11 @@
 """FWM gain calibration, noise and selected-point readout."""
 from .. import fwm
 from ...fwm_gain_calibration import (
-    MODEL_LAB, MODEL_LAB_REFIT, calibrate_spectrum as calibrate_experimental_gain, evaluate as
+    MODEL_LAB_CURRENT, normalize_model, calibrate_spectrum as calibrate_experimental_gain, evaluate as
     evaluate_experimental_gain,
 )
 from .common import (
-    FIDELITY_BALANCED, FIDELITY_FAST, NOISE_CONSTANT, NOISE_GAIN_PROPORTIONAL,
+    FIDELITY_BALANCED, FIDELITY_FAST, FIDELITY_ULTRA, NOISE_CONSTANT, NOISE_GAIN_PROPORTIONAL,
     PUMP_OVERLAP_EXCLUSION_MHZ, QE_DETECTOR,
     RESPONSE_GRID, RESPONSE_POLE, SEEDED_POST_CELL_LOSS_PCT,
 )
@@ -222,7 +222,7 @@ def _focused_readout_reference(encoded_context, extra_probe_points, *, additiona
     return fwm.compute_spectrum(**context, extra_probe_points_GHz=extra_probe_points)
 
 
-def _readout_extra_coordinates(raw, tpd, gain_axis, lab_model, *, lab_calibration):
+def _readout_extra_coordinates(raw, tpd, gain_axis, *, lab_calibration):
     native = np.asarray(raw["probe_axis_GHz"])
     center = raw["raman_center_minus_GHz"]
 
@@ -233,9 +233,7 @@ def _readout_extra_coordinates(raw, tpd, gain_axis, lab_model, *, lab_calibratio
 
     extra = in_span([tpd] if tpd is not None else [])
     if lab_calibration:
-        model_id = (fwm_experiment_gain.REFIT_MODEL_ID if lab_model == MODEL_LAB_REFIT
-                    else fwm_experiment_gain.MODEL_ID)
-        warp = fwm_experiment_gain.source_detunings(gain_axis, model_id=model_id)
+        warp = fwm_experiment_gain.source_detunings(gain_axis, model_id=fwm_experiment_gain.CURRENT_MODEL_ID)
         extra = np.concatenate((extra, *(in_span(delta) for delta in warp.values())))
     return np.setdiff1d(extra, native)
 
@@ -265,7 +263,9 @@ def _merge_focused_readout_rows(raw, additions):
         "raman_center_minus_GHz", "raman_center_plus_GHz", "D_GHz", "branch",
         "response_estimator", "eta", "input_seed_power_W", "input_pump_power_W",
         "temperature_K", "w_pump_m", "w_probe_m", "cell_length_m", "pump_probe_angle_deg",
-        "legacy_mean_field_fixture", "gain_closure", "measured_gain_reference") if key in raw}
+        "legacy_mean_field_fixture", "gain_closure", "measured_gain_reference",
+        "transit_reset_rate_rad_s", "line_strength_residual", "mode_overlap_penalty",
+        "polarization_penalty", "zeeman_participation_penalty") if key in raw}
     source["probe_axis_GHz"] = axis[order]
     for key in ("G_s", "G_c", "G_s_smallsignal", "G_c_smallsignal", "gain_referred_noise_dB",
                 "T_canonical_small_signal", "conjugate_photon_flux_gain_smallsignal",
@@ -282,8 +282,7 @@ def _merge_focused_readout_rows(raw, additions):
     return source
 
 
-def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration,
-                            lab_model=MODEL_LAB, stable_gain_axis=None):
+def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration, stable_gain_axis=None):
     if not raw.get("focused_readout_reference"):
         return raw, "CACHED_GRID_INTERPOLATION"
     expected = raw.get("gain_budget", {}).get("displayed", {})
@@ -301,9 +300,9 @@ def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration,
     if stable_gain_axis is not None and estimator.get("interpolation") == "none":
         # Curve and training nodes stay cached while the selected detuning moves.
         curve = _readout_extra_coordinates(
-            raw, None, np.r_[stable_gain_axis, measured_nodes], lab_model,
+            raw, None, np.r_[stable_gain_axis, measured_nodes],
             lab_calibration=lab_calibration)
-        selected = _readout_extra_coordinates(raw, tpd, [tpd], lab_model,
+        selected = _readout_extra_coordinates(raw, tpd, [tpd],
                                               lab_calibration=lab_calibration)
         selected = np.setdiff1d(selected, curve)
         groups = [(name, coordinates) for name, coordinates in (
@@ -316,16 +315,17 @@ def _focused_readout_source(raw, tpd, gain_axis, *, lab_calibration,
                      for _, coordinates in groups]
         source = _merge_focused_readout_rows(raw, additions)
         source["readout_source_provenance"] = {
-            "native": dict(estimator),
+            "native": dict(estimator, floquet_status=raw["floquet_convergence"]["status"]),
             **{name: dict(spectrum["response_estimator"], requested_probe_points=int(coords.size),
-                          adjacent_orders=(spectrum["floquet_order"], spectrum["floquet_order"]-1))
+                          adjacent_orders=(spectrum["floquet_order"], spectrum["floquet_order"]-1),
+                          floquet_status=spectrum["floquet_convergence"]["status"])
                for (name, _), (spectrum, coords) in zip(groups, additions)},
         }
         fallback = any(item["response_estimator"]["method"] == RESPONSE_GRID
                        for item, _ in additions)
     else:
         extra = _readout_extra_coordinates(
-            raw, tpd, np.r_[gain_axis, measured_nodes], lab_model,
+            raw, tpd, np.r_[gain_axis, measured_nodes],
             lab_calibration=lab_calibration)
         if not extra.size and estimator.get("interpolation") == "none":
             return raw, "NATIVE_SOURCE_GRID"
@@ -350,9 +350,9 @@ def seeded_operating_readout(raw, params):
     """Resolve FWM gain and NF selections without figures or absorption solves."""
     tpd = params["tpd"]
     phase_view = params.get("squeezing_view") == SQUEEZING_QUADRATURE_PHASE
-    gain_model = params.get("gain_calibration_model", MODEL_LAB)
+    gain_model = normalize_model(params.get("gain_calibration_model", MODEL_LAB_CURRENT))
     gain_requested = params.get("experimental_gain_calibration", False)
-    lab_calibration = gain_requested and gain_model in (MODEL_LAB, MODEL_LAB_REFIT)
+    lab_calibration = gain_requested and gain_model == MODEL_LAB_CURRENT
     stable_gain_axis = (raw["probe_axis_GHz"] - raw["raman_center_minus_GHz"]) * 1e3
     if lab_calibration:
         support = sorted(fwm_measured_gain.internal_delta_mhz_from_eom(
@@ -360,13 +360,13 @@ def seeded_operating_readout(raw, params):
         stable_gain_axis = np.unique(np.r_[stable_gain_axis, np.linspace(*support, 221)])
     gain_axis = np.unique(np.r_[stable_gain_axis, tpd]) if gain_requested else stable_gain_axis
     automatic_coordinates = (
-        raw.get("model_fidelity") in (FIDELITY_FAST, FIDELITY_BALANCED)
-        and not phase_view and (not gain_requested or lab_calibration))
+        raw.get("model_fidelity") in (FIDELITY_FAST, FIDELITY_BALANCED, FIDELITY_ULTRA)
+        and (not gain_requested or lab_calibration))
     source = raw
     coordinate_status = "CACHED_GRID_INTERPOLATION"
     if automatic_coordinates or params.get("exact_readout_coordinates", False):
         source, coordinate_status = _focused_readout_source(
-            raw, tpd, gain_axis, lab_calibration=lab_calibration, lab_model=gain_model,
+            raw, tpd, gain_axis, lab_calibration=lab_calibration,
             stable_gain_axis=stable_gain_axis if automatic_coordinates else None)
     op = fwm.operating_point(source, tpd, branch=-1)
     native_indices = np.searchsorted(source["probe_axis_GHz"], raw["probe_axis_GHz"])
@@ -387,10 +387,9 @@ def seeded_operating_readout(raw, params):
         displayed_gain = evaluate_experimental_gain(
             source if lab_calibration else raw, gain_axis, enabled=True, model=gain_model)
         noise_raw = dict(raw, probe_axis_GHz=raw["raman_center_minus_GHz"]+gain_axis*1e-3)
-        omega = np.asarray(raw.get("omega_probe_rad_s", constants.OMEGA_D1))
-        if omega.ndim:
-            noise_raw["omega_probe_rad_s"] = np.interp(
-                noise_raw["probe_axis_GHz"], raw["probe_axis_GHz"], omega)
+        for key in ("omega_probe_rad_s", "omega_conjugate_rad_s"):
+            if key in raw and np.ndim(raw[key]):
+                noise_raw[key] = np.interp(noise_raw["probe_axis_GHz"], raw["probe_axis_GHz"], raw[key])
     displayed_gs = displayed_gain["G_s"] if gain_active else raw["G_s"]
     displayed_gc = displayed_gain["G_c"] if gain_active else raw["G_c"]
     displayed_point = experimental_gain["selected_point"] if gain_active else op
@@ -402,13 +401,18 @@ def seeded_operating_readout(raw, params):
         noise_raw, params, gains=displayed_gain if gain_active else None)
     experimental_noise["internal_delta_mhz"] = gain_axis
     noise_point = _experimental_noise_selected(experimental_noise, raw, tpd)
+    phase_noise, phase_axis = experimental_noise, gain_axis
     if not gain_active and source is not raw:
         selected_idx = np.searchsorted(source["probe_axis_GHz"], op["probe_GHz"])
         if (selected_idx < source["probe_axis_GHz"].size
                 and source["probe_axis_GHz"][selected_idx] == op["probe_GHz"]):
-            point_source = dict(source, omega_probe_rad_s=source["omega_probe_rad_s"][selected_idx])
+            point_source = dict(source)
+            for key in ("omega_probe_rad_s", "omega_conjugate_rad_s"):
+                if key in source and np.ndim(source[key]):
+                    point_source[key] = source[key][selected_idx]
             point_gain = {key: source[key][selected_idx] for key in ("G_s", "G_c")}
             point_noise = fwm.experimental_jasperse_readout(point_source, params, gains=point_gain)
+            phase_noise, phase_axis = point_noise, np.array([tpd])
             noise_point = {
                 "NF": float(point_noise["NF"]), "NF_dB": float(point_noise["NF_dB"]),
                 "available": bool(np.isfinite(point_noise["NF"])),
@@ -428,7 +432,19 @@ def seeded_operating_readout(raw, params):
     }
     if phase_view and not gain_axis[0]-1e-9 <= tpd <= gain_axis[-1]+1e-9:
         gain_point.update(G_s=float("nan"), G_c=float("nan"))
+    provenance = source.get("readout_source_provenance", {})
+    statuses = {entry["floquet_status"] for entry in provenance.values()}
+    if not statuses:
+        statuses = {source.get("floquet_convergence", {}).get("status", "NOT_EVALUATED")}
+    exact_coordinate = coordinate_status in {"NATIVE_SOURCE_GRID", "DENSE_POLE_READOUT_COORDINATES"}
+    certification = "UNCERTIFIED_CALIBRATION_OR_SOURCE"
+    if exact_coordinate and "UNCONVERGED" in statuses:
+        certification = "FLOQUET_UNCONVERGED"
+    elif exact_coordinate and statuses == {"CONVERGED"} and (not gain_active or lab_calibration):
+        certification = ("FOCUSED_EXACT_MAXWELL_TESTED_CASES" if automatic_coordinates
+                         else "LAB_AND_UNCALIBRATED_EXACT_COORDINATES")
     return {
+        "phase_readout_input": (phase_noise, phase_axis),
         "atomic_operating_point": op,
         "gain_operating_point": gain_point,
         "gain_curve": {
@@ -442,12 +458,7 @@ def seeded_operating_readout(raw, params):
         **({"readout_source_provenance": source.get(
                 "readout_source_provenance", {"native": dict(source["response_estimator"])})}
            if automatic_coordinates and "response_estimator" in source else {}),
-        "readout_certification_scope": (
-            ("FOCUSED_EXACT_MAXWELL_TESTED_CASES"
-             if automatic_coordinates else "LAB_AND_UNCALIBRATED_EXACT_COORDINATES")
-            if coordinate_status in {"NATIVE_SOURCE_GRID", "DENSE_POLE_READOUT_COORDINATES"}
-            and not phase_view and (not gain_active or lab_calibration)
-            else "UNCERTIFIED_CALIBRATION_OR_SOURCE"),
+        "readout_certification_scope": certification,
         "noise_operating_point": noise_point,
         "jasperse_readout": experimental_noise,
         "experimental_jasperse_readout": experimental_noise,

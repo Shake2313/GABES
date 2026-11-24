@@ -12,7 +12,7 @@ import numpy as np
 
 from .fwm_calibration_common import (
     FEATURE_LIMIT, cached_profile_loader, calibration_axis, literature_domain, literature_features,
-    sample_model_gain,
+    LITERATURE_TRAINING_DIPOLES, reduced_literature_validation, sample_model_gain,
 )
 
 _axis = calibration_axis
@@ -41,6 +41,7 @@ def profile():
     result.setdefault("method", "common latent-generation scale; original arm asymmetry retained")
     result.setdefault("formula", "r=asinh(sqrt(Gc)); R=Gs/(1+Gc); Gc'=sinh(a*r)^2; Gs'=R*(1+Gc')")
     result.setdefault("gain_quantity", "effective optical output/input gain; literature reference planes remain conditional")
+    result["training_dipole_normalization"] = LITERATURE_TRAINING_DIPOLES
     result["noise_covariance_calibrated"] = False
     result["susceptibility_identified"] = False
     return result
@@ -118,13 +119,11 @@ def evaluate(raw, delta_mhz, *, enabled=True):
     statuses = np.where(within, "LITERATURE_CALIBRATION", "LITERATURE_CALIBRATION; CONDITION_EXTRAPOLATION")
     if not enabled:
         statuses = np.full(delta.shape, "DISABLED", dtype=object)
-    passed = record.get("predictive_gate_passed", False)
     return {
         "applied": bool(enabled), "G_s": gs, "G_c": gc, "internal_delta_mhz": delta.copy(),
         "model_id": MODEL_ID, "display_name": "Multi-paper literature",
         "profile": record, "gain_quantity": record["gain_quantity"],
-        "validation_status": record.get("validation_status", "NOT_EVALUATED"),
-        "validation_label": ("Conditional grouped prediction passed" if passed else "Experimental · grouped prediction not established"),
+        **reduced_literature_validation(raw, record, "Conditional grouped prediction passed"),
         "within_training_domain": bool(np.all(within)), "point_within_training_domain": within,
         "within_measured_support": np.zeros(delta.shape, dtype=bool),
         "context_changed": bool(changed), "changed_context_inputs": changed,
@@ -160,6 +159,8 @@ def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
             "applied": bool(enabled), "status": str(selected["point_status"]),
             "within_training_domain": selected["within_training_domain"],
             "within_measured_support": False, "context_changed": selected["context_changed"],
+            "dipole_normalization": selected["dipole_normalization"],
+            "validation_status": selected["validation_status"],
             "generation_scale": selected["effective_generation_scale"],
             "pump_budget_capped": bool(selected["pump_budget_capped"]),
             "pump_budget_feasible": (None if selected["pump_budget_feasible"] is None

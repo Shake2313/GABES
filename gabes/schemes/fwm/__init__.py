@@ -40,7 +40,7 @@ from ...biphoton_evidence import biphoton_output_evidence
 from ...passive_readout import passive_l1_from_spectrum
 from ...jasperse import seed_noise_components
 from ...fwm_gain_calibration import (
-    MODEL_LAB, MODEL_LAB_REFIT, MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN, MODELS as
+    MODEL_LAB, MODEL_LAB_REFIT, MODEL_LAB_CURRENT, MODEL_LITERATURE, MODEL_CHI, MODEL_STARK, MODEL_ZEEMAN, MODELS as
     GAIN_CALIBRATION_MODELS, calibrate_spectrum as calibrate_experimental_gain, evaluate as
     evaluate_experimental_gain,
 )

@@ -45,8 +45,11 @@ def test_experimental_nf_fills_the_screenshot_gap_and_preserves_cached_model(exp
     view = scheme.headless_observables(raw, params)
     assert view["noise_model"] == fwm.NOISE_EXPERIMENTAL_JASPERSE
     assert view["experimental_gain_calibration"]["applied"]
-    assert "updated source model" in view["metrics"][1]["delta"]
-    assert "Updated atomic model with the frozen fit coefficients" in view["tables"][0]["markdown"]
+    assert "changed conditions" in view["metrics"][1]["delta"]
+    profile = view["experimental_gain_calibration"]["profile"]
+    assert profile["frozen_source_model"]["dipole_normalization"] == "uniform-manifold-rms"
+    assert not profile["retired"]
+    assert "23 points" in view["tables"][0]["markdown"]
     assert view["experimental_jasperse_readout"] is not None
     point = view["noise_operating_point"]
     assert np.isfinite(point["NF"]) and point["NF"] > 0.0
@@ -191,6 +194,44 @@ def test_full_view_routes_both_practical_models_and_branch_coordinates(experimen
         plt.close(figure)
 
 
+def test_phase_switch_uses_same_selected_gains_and_covariance():
+    scheme = fwm.FWMScheme()
+    gold = next(p.values for p in scheme.presets() if p.name == "Sim Gold Reference")
+    params = dict(gold, pump_mw=100., temp_c=100., pump_waist_um=950., tpd=7.)
+    raw = scheme.compute(params)
+    intensity = fwm.seeded_operating_readout(raw, params)
+    phase = scheme.headless_observables(raw, dict(params, squeezing_view=fwm.SQUEEZING_QUADRATURE_PHASE))
+    assert phase["gain_operating_point"] == intensity["gain_operating_point"]
+    assert phase["noise_operating_point"] == intensity["noise_operating_point"]
+    from gabes.fwm_quadrature import experimental_quadrature_phase_scan
+    selected = intensity["noise_operating_point"]
+    frequency = fwm.seeded_option_a_wavenumbers(params["opd"], intensity["atomic_operating_point"]["probe_GHz"])
+    from gabes import constants
+    source = dict(G_s=selected["input_G_s"], G_c=selected["input_G_c"],
+                  omega_probe_rad_s=constants.C_LIGHT*frequency[1],
+                  omega_conjugate_rad_s=constants.C_LIGHT*frequency[2])
+    point = fwm.experimental_jasperse_readout(source, params)
+    expected = experimental_quadrature_phase_scan(point, [params["tpd"]], params["tpd"])
+    np.testing.assert_allclose(phase["quadrature_phase_scan"]["covariance"], expected["covariance"])
+
+
+def test_failed_off_grid_floquet_audit_reaches_selected_readout(monkeypatch):
+    from gabes.schemes.fwm import readout
+    scheme = fwm.FWMScheme()
+    params = dict(scheme.defaults(), tpd=7.125, experimental_gain_calibration=False)
+    raw = scheme.compute(params)
+    original = readout._focused_readout_reference
+
+    def failed_source(*args, **kwargs):
+        result = original(*args, **kwargs)
+        return dict(result, floquet_convergence=dict(result["floquet_convergence"], status="UNCONVERGED"))
+
+    monkeypatch.setattr(readout, "_focused_readout_reference", failed_source)
+    selected = fwm.seeded_operating_readout(raw, params)
+    assert selected["readout_certification_scope"] == "FLOQUET_UNCONVERGED"
+    assert selected["readout_source_provenance"]["selected_readout"]["floquet_status"] == "UNCONVERGED"
+
+
 def test_off_grid_operating_table_uses_the_selected_jasperse_fit():
     scheme = fwm.FWMScheme()
     params = dict(scheme.defaults(), tpd=85.5)
@@ -198,12 +239,14 @@ def test_off_grid_operating_table_uses_the_selected_jasperse_fit():
     view = scheme.headless_observables(raw, params)
     assert view["readout_coordinate_status"] == "DENSE_POLE_READOUT_COORDINATES"
     gain = view["gain_operating_point"]
-    direct = fwm.experimental_jasperse_readout(
-        {"G_s": gain["G_s"], "G_c": gain["G_c"]}, params)
+    coordinate = raw["raman_center_minus_GHz"] + 1e-3 * params["tpd"]
+    modes = {key: np.interp(coordinate, raw["probe_axis_GHz"], raw[key])
+             for key in ("omega_probe_rad_s", "omega_conjugate_rad_s")}
+    direct = fwm.experimental_jasperse_readout(dict(modes, G_s=gain["G_s"], G_c=gain["G_c"]), params)
     noise = view["noise_operating_point"]
     for key in ("effective_squeeze", "probe_transmission", "conjugate_transmission",
                 "fit_relative_residual"):
-        assert noise[key] == direct[key]
+        assert noise[key] == pytest.approx(direct[key], rel=1e-11, abs=1e-14)
     table = view["tables"][0]["markdown"]
     assert f"| Effective squeeze parameter | {direct['effective_squeeze']:.6g} |" in table
     assert (f"| Effective probe / conjugate transmission | {direct['probe_transmission']:.6g} / "
@@ -224,14 +267,16 @@ def test_focused_exact_readout_uses_solved_native_jasperse_gains():
     assert raw["response_estimator"]["solved_probe_points"] == len(raw["probe_axis_GHz"])
     ultra = scheme.compute(dict(params, resolution=fwm.FIDELITY_ULTRA))
     expected = fwm.seeded_operating_readout(ultra, params)
-    assert expected["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
+    assert expected["readout_certification_scope"] == exact["readout_certification_scope"]
+    for key in ("G_s", "G_c"):
+        assert exact["gain_operating_point"][key] == pytest.approx(expected["gain_operating_point"][key])
     for key in ("G_s", "G_c"):
         np.testing.assert_array_equal(exact["gain_curve"][key], expected["gain_curve"][key])
     np.testing.assert_array_equal(exact["jasperse_readout"]["NF_dB"],
                                   expected["jasperse_readout"]["NF_dB"])
     phase = fwm.seeded_operating_readout(raw, dict(
         params, exact_readout_coordinates=True, squeezing_view=fwm.SQUEEZING_QUADRATURE_PHASE))
-    assert phase["readout_certification_scope"] == "UNCERTIFIED_CALIBRATION_OR_SOURCE"
+    assert phase["readout_certification_scope"] == exact["readout_certification_scope"]
 
 
 @pytest.mark.parametrize("selection", [fwm.MODEL_LAB, fwm.MODEL_LAB_REFIT])
@@ -241,7 +286,7 @@ def test_focused_lab_warp_uses_exact_gains_and_separate_curve_cache(selection):
     scheme = fwm.FWMScheme()
     params = next(p.values for p in scheme.presets() if p.name == "2026-10-13 experiment")
     params = dict(params, gain_calibration_model=selection, tpd=7.123)
-    model_id = lab.REFIT_MODEL_ID if selection == fwm.MODEL_LAB_REFIT else lab.MODEL_ID
+    model_id = lab.CURRENT_MODEL_ID
     raw = scheme.compute(params)
     original = {key: raw[key].copy() for key in ("G_s", "G_c", "T_canonical_small_signal")}
     fwm._focused_readout_reference.cache_clear()

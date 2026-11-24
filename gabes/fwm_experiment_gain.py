@@ -19,7 +19,7 @@ _axis = calibration_axis
 _sample_model = sample_model_gain
 
 
-MODEL_ID = "fwm_20261013_warp_affine_residual_v1"
+LEGACY_MODEL_ID = "fwm_20261013_warp_affine_residual_v1"
 # Frozen offline fit, reproduced by analysis/fwm_experiment_20261022/fit_gain_profile.py.
 # BEGIN FITTED COEFFICIENTS
 _ARMS = {'probe': {'model_peak_delta_mhz': 24.749999999999606,
@@ -89,6 +89,15 @@ _ARMS = {'probe': {'model_peak_delta_mhz': 24.749999999999606,
 _OBSERVATIONS = measured.observations()
 _NODES = measured.internal_delta_mhz_from_eom(_OBSERVATIONS["eom_MHz"])
 _NOMINAL = measured.nominal_context()
+# Solver controls held fixed in the 10/13 source calculations. Older
+# saved arrays predate these metadata fields and used the fixed defaults.
+_FIT_CONTROLS = {
+    "transit_reset_rate_rad_s": 2.0*np.pi*100e3,
+    "line_strength_residual": 0.74,
+    "mode_overlap_penalty": 1.0,
+    "polarization_penalty": 1.0,
+    "zeeman_participation_penalty": 1.0,
+}
 _GAIN_QUANTITY = "pump-on arm output / measured pump-off seed detector output"
 # The archived fit script builds the Balanced spectrum from the historical
 # solver. The exact measured-node identity is with the recorded input arrays.
@@ -107,22 +116,28 @@ _FROZEN_SOURCE_MODEL = {
 
 
 REFIT_MODEL_ID = "fwm_20261013_warp_affine_residual_v2"
+CURRENT_MODEL_ID = "fwm_20261013_warp_affine_residual_v3"
+MODEL_ID = CURRENT_MODEL_ID
+_current_record = cached_profile_loader(
+    lambda: Path(__file__).with_name("data") / "fwm_lab_gain_refit_v3.json")
 _refit_record = cached_profile_loader(
     lambda: Path(__file__).with_name("data") / "fwm_lab_gain_refit_v2.json")
 
 
 def _arm_coefficients(model_id):
-    if model_id == MODEL_ID:
+    if model_id == LEGACY_MODEL_ID:
         return _ARMS
+    if model_id == CURRENT_MODEL_ID:
+        return _current_record()["arms"]
     if model_id == REFIT_MODEL_ID:
         return _refit_record()["arms"]
     raise ValueError(f"Unknown lab gain calibration version: {model_id!r}")
 
 
-def profile(*, model_id=MODEL_ID):
+def profile(*, model_id=CURRENT_MODEL_ID):
     """Fresh calibration metadata; empirical fit, not independent validation."""
     arms = _arm_coefficients(model_id)
-    refit = model_id == REFIT_MODEL_ID
+    refit = model_id in (REFIT_MODEL_ID, CURRENT_MODEL_ID)
     result = {
         "model_id": model_id,
         "measurement_date": "2026-10-13",
@@ -149,13 +164,20 @@ def profile(*, model_id=MODEL_ID):
         "arms": copy.deepcopy(arms),
     }
     if refit:
+        current = model_id == CURRENT_MODEL_ID
+        record = _current_record() if current else _refit_record()
         result.pop("calibration_record_commit")
         result.update(
-            calibration_record="analysis/fast_tier/fwm_lab_gain_refit_2026_11_18/fit/profile.json",
-            frozen_source_model=dict(_refit_record()["frozen_source_model"]),
-            source_coordinates="exact arm-specific detunings in the current Ultra pole solution",
+            calibration_record=("gabes/data/fwm_lab_gain_refit_v3.json" if current else
+                                "analysis/fast_tier/fwm_lab_gain_refit_2026_11_18/fit/profile.json"),
+            frozen_source_model=dict(record["frozen_source_model"]),
+            source_coordinates="exact arm-specific detunings in the recorded Ultra pole solution",
             node_agreement="23 development points at exact source coordinates on the pinned Ultra model",
         )
+    result["retired"] = model_id != CURRENT_MODEL_ID
+    if result["retired"]:
+        result["frozen_source_model"]["dipole_normalization"] = "summed-hyperfine-over-12"
+    result["nominal_context"].update(_FIT_CONTROLS)
     return result
 
 
@@ -175,10 +197,13 @@ def _context_changes(raw):
             matches = False
         if not matches:
             changes.append(raw_key)
+    for key, nominal in _FIT_CONTROLS.items():
+        if key in raw and not np.isclose(raw[key], nominal, rtol=1e-6, atol=1e-12):
+            changes.append(key)
     return changes
 
 
-def source_detunings(delta_mhz, *, enabled=True, model_id=MODEL_ID):
+def source_detunings(delta_mhz, *, enabled=True, model_id=CURRENT_MODEL_ID):
     """Return the atomic detunings sampled for each lab calibration arm."""
     delta = np.asarray(delta_mhz, dtype=float)
     return {
@@ -189,7 +214,7 @@ def source_detunings(delta_mhz, *, enabled=True, model_id=MODEL_ID):
     }
 
 
-def evaluate(raw, delta_mhz, *, enabled=True, model_id=MODEL_ID):
+def evaluate(raw, delta_mhz, *, enabled=True, model_id=CURRENT_MODEL_ID):
     """Evaluate corrected gains at arbitrary internal detunings, including tails.
 
     Detector/noise sliders are absent from this API. Its frozen correction acts
@@ -207,7 +232,7 @@ def evaluate(raw, delta_mhz, *, enabled=True, model_id=MODEL_ID):
     source_model_differences = None if source_model is None else [
         key for key, frozen_value in calibration_profile["frozen_source_model"].items()
         if key in source_model and source_model[key] != frozen_value
-        and not (model_id == REFIT_MODEL_ID and key == "scan_points"
+        and not (model_id in (REFIT_MODEL_ID, CURRENT_MODEL_ID) and key == "scan_points"
                  and source_model[key] >= frozen_value)
     ]
     result = {
@@ -242,7 +267,7 @@ def evaluate(raw, delta_mhz, *, enabled=True, model_id=MODEL_ID):
     return result
 
 
-def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None, model_id=MODEL_ID):
+def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None, model_id=CURRENT_MODEL_ID):
     """Return a nonmutating calibrated view on the cached spectrum's own axis."""
     axis = _axis(raw)
     result = evaluate(raw, axis, enabled=enabled, model_id=model_id)

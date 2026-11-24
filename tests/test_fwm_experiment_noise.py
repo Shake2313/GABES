@@ -198,3 +198,19 @@ def test_bounded_loss_fallback_matches_the_same_forward_distributed_medium():
 def test_invalid_effective_inputs_raise(probe, conjugate, loss):
     with pytest.raises(ValueError):
         effective_parameters(probe, conjugate, common_loss_pct=loss)
+
+
+def test_resolved_carriers_convert_power_gains_to_jasperse_photon_gains():
+    G = np.array([10., 10_000.])
+    omega_p = 2 * np.pi * np.array([377.1e12, 377.1001e12])
+    omega_c = omega_p + 2 * np.pi * 6.1e9
+    ratio = omega_c / omega_p
+    raw = dict(G_s=G, G_c=(G-1.)*ratio,
+               omega_probe_rad_s=omega_p, omega_conjugate_rad_s=omega_c)
+    readout = experimental_jasperse_readout(raw, {})
+    np.testing.assert_allclose(readout["input_conjugate_photon_flux_gain"], G-1.)
+    np.testing.assert_allclose(readout["detected_conjugate_gain"], G-1.)
+    np.testing.assert_allclose(readout["G_c"], raw["G_c"])
+    np.testing.assert_allclose(readout["NF"], 1. / (2.*G-1.), rtol=5e-7)
+    assert np.all(readout["probe_transmission"] == 1.)
+    assert np.all(readout["conjugate_transmission"] == 1.)

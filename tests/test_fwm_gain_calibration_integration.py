@@ -74,23 +74,45 @@ def test_model_control_is_readout_only_and_lab_preset_is_stable():
     scheme = fwm.FWMScheme()
     specs = {s.name: s for s in scheme.param_schema()}
     control = specs["gain_calibration_model"]
-    assert control.default == calibration.MODEL_LAB_REFIT
+    assert control.default == calibration.MODEL_LAB_CURRENT
     assert control.choices == calibration.MODELS
     assert not control.recompute
     assert "gain_calibration_model" not in scheme.recompute_keys()
     presets = {p.name: p.values for p in scheme.presets()}
-    assert presets["2026-10-13 experiment"]["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert presets["2026-10-13 experiment"]["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
     assert presets["2026-10-13 experiment"]["experimental_gain_calibration"]
     assert not presets["Sim Gold Reference"]["experimental_gain_calibration"]
 
 
-def test_default_dispatch_is_the_original_lab_model(case):
+@pytest.mark.parametrize("selector", [None, "2026-10-13 lab", "2026-10-13 lab (exact-source refit)",
+                                      calibration.MODEL_LAB_CURRENT])
+def test_live_lab_selectors_use_the_corrected_model(case, selector):
     _, _, raw = case
-    first = calibration.evaluate(raw, [-100., -3.2, 200.])
-    expected = lab.evaluate(raw, [-100., -3.2, 200.])
+    options = {} if selector is None else {"model": selector}
+    expected = lab.evaluate(raw, [-100., -3.2, 200.], model_id=lab.CURRENT_MODEL_ID)
+    actual = calibration.evaluate(raw, [-100., -3.2, 200.], **options)
     for key in ("G_s", "G_c"):
-        np.testing.assert_array_equal(first[key], expected[key])
-    assert calibration.profile()["model_id"] == lab.MODEL_ID
+        np.testing.assert_array_equal(actual[key], expected[key])
+    profile = calibration.profile(**options)
+    assert profile["model_id"] == lab.CURRENT_MODEL_ID
+    assert profile["calibration_model"] == calibration.MODEL_LAB_CURRENT
+    for result in (actual, calibration.calibrate_spectrum(raw, **options)):
+        assert result["profile"]["model_id"] == lab.CURRENT_MODEL_ID
+        assert result["calibration_model"] == calibration.MODEL_LAB_CURRENT
+
+
+def test_sabes_imports_saved_fwm_selection_using_the_current_lab_profile():
+    from sabes import bridge
+    from tests.test_fwm_measured_gain_integration import reference_raw
+
+    result = bridge.run(solve=False, gain_calibration_model="2026-10-13 lab (exact-source refit)",
+                        experimental_gain_calibration=True)
+    assert result.params["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
+    selected = bridge.noise_observables(reference_raw(), result.params)["experimental_gain_calibration"]
+    assert selected["profile"]["model_id"] == lab.CURRENT_MODEL_ID
+
+
+def test_unknown_calibration_model_is_rejected():
     with pytest.raises(ValueError, match="Unknown"):
         calibration.profile(model="not a calibration model")
 
@@ -246,6 +268,9 @@ def test_actual_literature_runtime_focus_domain_cursor_and_json(case):
         exported = json.loads(json.dumps(payload, allow_nan=False))["view"]["experimental_gain_calibration"]
         assert exported["profile"]["validation_status"] == record["validation_status"]
         assert exported["profile"]["coefficients"] == record["coefficients"]
+        assert exported["dipole_normalization"] == {
+            "training": "summed-hyperfine-over-12", "applied": "uniform-manifold-rms"}
+        assert "summed-hyperfine-over-12 / uniform-manifold-rms" in view["tables"][0]["markdown"]
         assert not exported["profile"]["noise_covariance_calibrated"]
         assert exported["selected_point"]["within_training_domain"]
         assert not exported["within_training_domain"]
@@ -284,7 +309,8 @@ def test_actual_literature_runtime_full_scan_metadata_and_noise(case):
             for key in ("G_s", "G_c"):
                 np.testing.assert_array_equal(stored[branch][key], direct[key])
             np.testing.assert_array_equal(figure.axes[0].lines[index].get_ydata(), direct["G_s"])
-            assert stored[branch]["validation_status"] == "GROUPED_PREDICTION_NOT_ESTABLISHED"
+            assert stored[branch]["validation_status"] == "NOT_REVALIDATED_FOR_CHANGED_DIPOLE_NORMALIZATION"
+            assert stored[branch]["archived_validation_status"] == "GROUPED_PREDICTION_NOT_ESTABLISHED"
             assert not stored[branch]["profile"]["noise_covariance_calibrated"]
             assert not stored[branch]["within_training_domain"]
             np.testing.assert_array_equal(stored[branch]["point_status"], direct["point_status"])
@@ -295,6 +321,30 @@ def test_actual_literature_runtime_full_scan_metadata_and_noise(case):
         assert np.any(stored["minus"]["point_status"] == "LITERATURE_CALIBRATION")
     finally:
         plt.close(figure)
+
+
+@pytest.mark.parametrize("model", (calibration.MODEL_LITERATURE, calibration.MODEL_CHI, calibration.MODEL_STARK))
+def test_grouped_gain_diagnostics_follow_the_actual_atomic_response(case, model, monkeypatch):
+    scheme, params, raw = case
+    module = calibration._module(model)
+    archived = module.profile()["validation_status"]
+    legacy_id = "summed-hyperfine-over-12"
+    rms_id = "uniform-manifold-rms"
+    for source_id, expected_status in ((rms_id, "NOT_REVALIDATED_FOR_CHANGED_DIPOLE_NORMALIZATION"),
+                                       (legacy_id, archived), (None, "SOURCE_DIPOLE_NORMALIZATION_UNKNOWN")):
+        # Hold numerical gains fixed to isolate the provenance logic.
+        source = dict(raw, gain_source_model={"dipole_normalization": source_id},
+                      coupling_normalization_ledger={})
+        native = source
+        if model == calibration.MODEL_STARK:
+            # The applied normalization must come from the recomputed response.
+            native = dict(raw, gain_source_model={"dipole_normalization": "incoming-spectrum"})
+            monkeypatch.setattr(module, "corrected_response", lambda *args: source)
+        result = module.calibrate_spectrum(native, enabled=True, selected_delta_mhz=params["tpd"])
+        assert result["applied"] and np.isfinite(result["selected_point"]["G_s"])
+        assert result["dipole_normalization"] == {"training": legacy_id, "applied": source_id}
+        assert result["archived_validation_status"] == archived
+        assert result["validation_status"] == result["selected_point"]["validation_status"] == expected_status
 
 
 def test_generic_rail_model_selection_and_lab_preset_reset(literature_boundary):
@@ -317,30 +367,41 @@ def test_generic_rail_model_selection_and_lab_preset_reset(literature_boundary):
         "params=render_rail(st,scheme,specs,skip=[s for s in specs if s.name in ('mode','squeezing_view')])\n"
         "st.session_state['view']=scheme.headless_observables(reference_raw(params),params)\n",
         default_timeout=30,
-    ).run()
+    )
+    app.session_state["fwm__gain_calibration_model"] = "2026-10-13 lab (exact-source refit)"
+    app.run()
     assert not app.exception
     assert "fwm__gain_calibration_model" not in [s.key for s in app.selectbox]
+    app.checkbox(key="fwm__experimental_gain_calibration").check().run()
+    assert not app.exception
+    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_CURRENT
+    assert app.session_state["view"]["experimental_gain_calibration"]["profile"]["model_id"] == lab.CURRENT_MODEL_ID
     app.selectbox(key="fwm___named_default").select("builtin:0").run()
     assert not app.exception
-    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_REFIT
+    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_CURRENT
     app.selectbox(key="fwm__gain_calibration_model").select(calibration.MODEL_LITERATURE).run()
     assert not app.exception
     assert app.session_state["view"]["experimental_gain_calibration"]["model_id"] == "test_literature"
     app.selectbox(key="fwm___named_default").select("builtin:1").run()
     app.selectbox(key="fwm___named_default").select("builtin:0").run()
     assert not app.exception
-    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_REFIT
+    assert app.selectbox(key="fwm__gain_calibration_model").value == calibration.MODEL_LAB_CURRENT
 
 
-def test_old_saved_lab_settings_and_missing_selector_keep_original_fit():
+@pytest.mark.parametrize("selector", [None, "2026-10-13 lab", "2026-10-13 lab (exact-source refit)"])
+@pytest.mark.parametrize("enabled", [False, True])
+def test_saved_lab_settings_migrate_the_selector_and_preserve_other_controls(selector, enabled):
     from gabes_ui.defaults_store import create_default, parse_default
 
     scheme = fwm.FWMScheme()
-    defaults = scheme.defaults()
-    saved = create_default(scheme, "Original lab", dict(
-        defaults, experimental_gain_calibration=True, gain_calibration_model=calibration.MODEL_LAB))
-    assert parse_default(scheme, saved)["params"]["gain_calibration_model"] == calibration.MODEL_LAB
-    del saved["params"]["gain_calibration_model"]
-    assert parse_default(scheme, saved)["params"]["gain_calibration_model"] == calibration.MODEL_LAB
-    assert defaults["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
-    assert calibration.profile(model=calibration.MODEL_LAB_REFIT)["model_id"] == lab.REFIT_MODEL_ID
+    params = dict(scheme.defaults(), experimental_gain_calibration=enabled, tpd=-16.0)
+    record = create_default(scheme, "Old lab settings", params)
+    if selector is None:
+        del record["params"]["gain_calibration_model"]
+    else:
+        record["params"]["gain_calibration_model"] = selector
+    restored = parse_default(scheme, record)["params"]
+    assert restored == params
+    assert restored["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
+    assert calibration.profile(model=restored["gain_calibration_model"])["model_id"] == lab.CURRENT_MODEL_ID
+    assert calibration.MODEL_LAB_REFIT == calibration.MODEL_LAB_CURRENT

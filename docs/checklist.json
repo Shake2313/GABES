@@ -1307,6 +1307,21 @@
       "status": "done"
     },
     {
+      "id": "biphoton-regime-and-drive-units",
+      "last_reviewed_at": "2026-11-24",
+      "area": "gabes/schemes/fwm/biphoton.py and scheme.py",
+      "title": "Use consistent units for the biphoton group-delay regime and coupling control",
+      "origin": "ai_review",
+      "priority": "P2",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ Separate from seeded FWM: the displayed regime compares dimensionless 2 gamma_g OD Gamma_e/Omega_c^2 with a Rabi period in seconds. For 87Rb telecom at 30 C, 1 mm and coupling control 50, the phase-derivative delay is 0.457 ps versus the 11.8 ns Rabi period. The current classification is reversed. The coupling control also describes an amplitude multiplier but uses a square-root power-to-Rabi conversion. Reconcile the control units and use a time in seconds for regime classification.",
+      "acceptance_criteria": [
+        "Check the group delay against the phase derivative of the same longitudinal transfer and compare both times in seconds.",
+        "Make the displayed coupling multiplier agree with the field amplitude or power convention in the source and rate calculations."
+      ]
+    },
+    {
       "id": "biphoton-source-trust-boundary",
       "area": "gabes/schemes/fwm.py + gabes/observables.py + README.md",
       "title": "Make the spontaneous-biphoton model's evidence boundary explicit",
@@ -2708,6 +2723,7 @@
     },
     {
       "id": "fwm-balanced-readout-covariance-correction",
+      "implementation_2026_11_24": "⟦AI⟧ Constrained to product detected-number moments: coincidence_stats accepts TwinBeamMoments and treats the two detected means, variances and covariance explicitly. Seed excess uses input PSD/SNL minus one and propagates through the detected arms; an independent coherent background with fraction f of total detected SNL gives (1-f)R_twin+f. Two mean arm gains alone do not supply a measured covariance. RF sidebands and held-out spectra retain their independent gates.",
       "area": "gabes/observables.py + tests/test_fwm_generic.py + tests/test_sabes_bridge.py + tests/test_balanced_readout.py + tests/test_coincidence.py",
       "title": "Use the exact covariance for unequal-loss balanced readout",
       "problem": "⟦AI⟧ General balanced-readout weighting and arm-resolved statistics require an explicit source/channel model; two mean gains do not uniquely determine covariance or a universal optimal weight. Practical Experimental Jasperse supplies a declared effective distributed-noise closure, which does not finish the generic covariance/weighting or microscopic certification scope.",
@@ -2730,7 +2746,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "done",
       "depends_on": [
         "fwm-gain-only-trust-boundary"
       ],
@@ -2747,7 +2763,7 @@
         "At the explicitly ideal bright-seed fixture G=15 and eta=.8694, w=1 gives -7.943104 dB, w_DC=15/14 cancels the mean current difference, and w_opt=sqrt(15/14) gives -8.368562 dB for the separately weighted observable. The SQL denominator includes w^2; neither the DC weight nor this ideal optimum is universal for an open atomic source.",
         "Define seed excess noise as input PSD/SNL-1 at the selected RF frequency. Additive electronics and background terms name their normalization plane; mixing an independent coherent fraction f of total detected SNL uses R_mix=(1-f)R_twin+f with R_twin normalized to the twin-beam SNL before that background is added."
       ],
-      "last_reviewed_at": "2026-11-23",
+      "last_reviewed_at": "2026-11-24",
       "daily_review_2026_10_19": {
         "origin": "ai_recheck",
         "status": "triaged",
@@ -2813,6 +2829,7 @@
     },
     {
       "id": "fwm-option-a-and-loss-ledger",
+      "implementation_2026_11_24": "⟦AI⟧ The signed pump-minus-probe Floquet gauge on both 1-D branches preserves the pump-only state as the seed is scanned. At identical dipole normalization the minus branch used by both Kim presets is unchanged. Vacuum geometric phase mismatch and diagonal dispersion still enter once. Exact focused intensity and phase readouts share gains and covariance at the selected coordinate; the ancillary Floquet comparison follows that numerical source. The self-consistent longitudinal pump-depletion and experimental validation gates remain open.",
       "area": "gabes/observables.py + gabes/schemes/fwm.py + analysis/squeezing/analytic_reconstruction",
       "title": "Reconcile Option-A propagation, phase mismatch, and distributed-loss accounting",
       "problem": "The physical nonlegacy path now uses bare frequency-specific wavevectors plus vacuum/geometric mismatch, and diagonal susceptibility loss is not reapplied as post-cell efficiency. Remaining work is the self-consistency and convergence of segmented pump depletion/overlap and a microscopic distributed-noise ledger. Maxwell signs remain convention-sensitive and must stay pinned by passive and frame-equivalence fixtures.",
@@ -2834,7 +2851,7 @@
       ],
       "priority": "P1",
       "effort": "large",
-      "status": "ready",
+      "status": "in_progress",
       "acceptance_criteria": [
         "A passive single-mode susceptibility reproduces Beer-Lambert attenuation with the declared chi convention, and zero density or zero susceptibility gives T=I; these fixtures fix all Maxwell signs before baselines are changed.",
         "The physical Option-A path uses vacuum carrier wavevectors and geometric phase mismatch only; Re chi appears once in diagonal propagation and is not inserted again through dressed k.",
@@ -2848,7 +2865,7 @@
         "Compare seed-power saturation and both output powers on predeclared measurement conditions. Until those data arrive, a self-consistent numerical solve remains a physical-model prediction with external validation pending.",
         "Changing pump/probe waists must update the declared overlap and transport model consistently; a fixed 2pi*100 kHz transit rate is an explicit conditional input, not an automatically valid geometric tolerance. Any geometry-derived transit/collision law needs its own source, uncertainty and limit checks."
       ],
-      "last_reviewed_at": "2026-10-23",
+      "last_reviewed_at": "2026-11-24",
       "daily_review_2026_10_19": {
         "origin": "ai_recheck",
         "status": "triaged",
@@ -3458,6 +3475,7 @@
     },
     {
       "id": "fwm-coupling-normalization-audit",
+      "implementation_2026_11_24": "⟦AI⟧ Production drives and polarization now share uniform-manifold RMS dipoles. The thermal trace-one state supplies p_F once. Unity-residual pump-off, infinitesimal-probe alpha agrees with per-manifold OD for all four 85Rb D1 transitions. The earlier calculation produced alpha ratios 5/12 and 7/12. The historical summed-dipole source remains explicitly identifiable. At the current Sim Gold preset (-8 MHz, 121 C, 600 mW pump), switching only from historical to corrected dipoles takes raw G_s from 395.00 to 5871.52: stronger passive-limit agreement has not validated high-density nonlinear gain. Participation, radial projection and the inherited residual are still experiment-dependent.",
       "area": "gabes/schemes/fwm.py + gabes/observables.py + gabes/hyperfine.py + sabes/calibration_sim2025.json",
       "title": "Enforce a one-use coupling, population, and calibration ledger",
       "problem": "⟦AI⟧ Population normalization is already corrected and the pump-only reference remains trace one. Independent provenance/uncertainty/identifiability for the inherited 0.74 residual, penalties, kappa and transit floor remains open for raw microscopic gain claims; practical empirical gain estimates are permitted and are tracked separately.",
@@ -3481,7 +3499,7 @@
       ],
       "priority": "P1",
       "effort": "medium",
-      "status": "ready",
+      "status": "in_progress",
       "related_completed_items": [
         "fwm-line-strength-factorization"
       ],
@@ -3495,7 +3513,7 @@
         "⟦AI⟧ Reproducible frozen-coefficient fit/holdout evaluation records both gains, OPD/TPD and temperature/pump/seed slopes, fitted companions, excluded observables and domain. Practical estimates/extrapolations may operate before new sweeps arrive; independent validation remains pending through sabes-calibration-campaign and missing measurements are never invented.",
         "Separate parameter identifiability from numerical convergence. Report covariance/profile-likelihood or identifiable products for CG/polarization, overlap, residual coupling and transit; fitting several compensating penalties to one gain/noise trace cannot establish their individual physical values."
       ],
-      "last_reviewed_at": "2026-10-23",
+      "last_reviewed_at": "2026-11-24",
       "depends_on": [
         "fwm-reference-parameter-provenance",
         "sabes-calibration-trust-schema"
@@ -4897,6 +4915,7 @@
     },
     {
       "id": "fwm-tpd-gain-physical-replacement",
+      "implementation_2026_11_24": "⟦AI⟧ Kim & Marino 2018, uncalibrated, delta -16 MHz and 8 uW seed assumed, probe-resonant then conjugate-resonant: measured probe output/input 5.6 and 3.8. With uniform-manifold dipoles the computed probe gains are 1.029918 and 1.025171 (previously 0.974970 and 0.991466), conjugate gains 0.072736 and 0.043750. At eta=0.89832 the effective static Jasperse estimates are -0.548 and -0.332 dB. Direct 750 kHz measurements were -5.4 and -5.0 dB. On the native 2.75 MHz mesh in [-300,+100] MHz the smallest effective NF occurs at -165 MHz (-4.650 dB) and -148.5 MHz (-5.206 dB), far from the prescribed -16 MHz. No fitting to Kim or finite-RF validation. The 10/13 lab fit uses a separately measured detector-plane reference.",
       "area": "gabes/schemes/fwm.py + gabes/fwm_gain_closure.py + finite-seed spatial/velocity propagation",
       "title": "Validate microscopic FWM gain independently of practical calibration",
       "problem": "⟦AI⟧ Historical ten-point hotfix failures and raw atomic gain/peak discrepancies remain independent microscopic-model questions. The 10/22 practical implementation now supplies source-linked empirical gain/peak/width calibration with active extrapolation and Experimental Jasperse NF; that requested tool is complete and is not blocked by this GC/research task.",
@@ -5020,7 +5039,7 @@
         }
       ],
       "review_note": "⟦AI⟧ Practical Jasperse plus empirical gain calibration is complete as a declared experimental model; held-out accuracy and raw microscopic gain remain open. Preserve old failed fits, the 10/16 bounded-reference completion, canonical transfer and sealed GC evidence. Do not treat no-fit GC acceptance as a ban on practical affine/residual calibration.",
-      "last_reviewed_at": "2026-10-23",
+      "last_reviewed_at": "2026-11-24",
       "current_calibration_status": {
         "origin": "human_request_with_ai_implementation_review",
         "record": "REQ-2026-10-22-FWM-GC-SEPARATION",
@@ -6811,6 +6830,9 @@
     },
     {
       "id": "fwm-lab-gain-calibration-refit",
+      "last_reviewed_at": "2026-11-24",
+      "user_decision_2026_11_24": "새 원자 모델에서 새로 보정을 만들고, 기존 보정은 퇴역. 이 작업은 나중에 해도 괜찮으니 작업 끝난 후 후순위로 진행해주세요.",
+      "implementation_2026_11_24": "⟦AI⟧ Active 10/13 calibration v3 fits the original 23 detector-plane measurements in each arm against the corrected RMS-dipole Ultra source. Every fitted coordinate passes the adjacent-order comparison without pole-guard fallback. Old v1 and v2 lab selector values migrate to v3. Source-bound fitting records and explicit versioned tests preserve historical reproducibility. Kim data were excluded. At the Kim settings the extrapolated detector-reference probe ratios are 0.004854 and 0.004864 with calibration on. The presets use uncalibrated atomic gain by default. Independent held-out spectra and finite-RF noise validation remain open.",
       "area": "gabes/schemes/fwm/ + gabes/fwm_calibration_common.py + lab calibration profile",
       "title": "Refit the lab FWM gain calibration on the current reference model",
       "origin": "human_request",

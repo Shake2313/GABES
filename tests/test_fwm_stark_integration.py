@@ -69,9 +69,9 @@ def test_stark_choice_is_opt_in_lazy_and_lab_default_is_preserved(case, response
     assert calibration._module(calibration.MODEL_STARK) is stark
     assert calibration.profile(model=calibration.MODEL_STARK)["model_id"] == stark.MODEL_ID
     assert control.choices == calibration.MODELS and not control.recompute
-    assert control.default == scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert control.default == scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
     assert "gain_calibration_model" not in scheme.recompute_keys()
-    assert next(p for p in scheme.presets() if p.name == "2026-10-13 experiment").values["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert next(p for p in scheme.presets() if p.name == "2026-10-13 experiment").values["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
 
 
 def test_stark_off_is_exact_without_recompute_context(case, response_boundary):
@@ -237,6 +237,6 @@ def test_generic_rail_selects_stark_and_returns_to_the_lab_model(case):
     assert result["model_id"] == stark.MODEL_ID
     assert result["pump_stark_response"]["fraction"] == stark.profile()["pump_stark_fraction"]
     assert app.session_state["view"]["metrics"][1]["label"] == "Stark + χ probe gain"
-    app.selectbox(key="fwm__gain_calibration_model").select(calibration.MODEL_LAB).run()
+    app.selectbox(key="fwm__gain_calibration_model").select(calibration.MODEL_LAB_CURRENT).run()
     assert not app.exception
-    assert app.session_state["view"]["experimental_gain_calibration"]["calibration_model"] == calibration.MODEL_LAB
+    assert app.session_state["view"]["experimental_gain_calibration"]["calibration_model"] == calibration.MODEL_LAB_CURRENT

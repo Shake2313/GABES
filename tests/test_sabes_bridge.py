@@ -100,12 +100,18 @@ def test_native_geometry_differs_only_through_qe_and_waists():
     assert native.params["pump_waist_um"] == pytest.approx(540.0, abs=1.0)
     assert native.params["probe_waist_um"] == pytest.approx(324.0, abs=1.0)
 
-    # Putting only the QE back recovers most of the gap, because eta sets the
-    # floor 10 log10(1 - eta) that every result is measured against.
     qe_only = bridge.run(qe_pct=fwm.FWMScheme().defaults()["qe_pct"])
     reference = bridge.run(**_reference_overrides())
-    assert abs(qe_only.gain_referred_noise_db - reference.gain_referred_noise_db) < \
-        abs(native.gain_referred_noise_db - reference.gain_referred_noise_db)
+    assert {key for key in native.params if native.params[key] != qe_only.params[key]} == {"qe_pct"}
+    assert {key for key in qe_only.params if qe_only.params[key] != reference.params[key]} == {
+        "pump_waist_um", "probe_waist_um"}
+    # Symmetric detector loss gives NF(eta) = 1 + eta * (NF_cell - 1).
+    # At fixed geometry QE leaves both atomic gains unchanged.
+    np.testing.assert_allclose(qe_only.gains, native.gains, rtol=1e-12)
+    expected_nf = 1.0 + (qe_only.eta / native.eta) * (native.noise_factor - 1.0)
+    assert qe_only.noise_factor == pytest.approx(expected_nf, rel=1e-9)
+    assert qe_only.eta == reference.eta
+    assert not np.allclose(qe_only.gains, reference.gains)
 
 
 def test_two_photon_detuning_needs_no_calibration_coefficient():
@@ -318,24 +324,33 @@ def test_hard_focus_onto_the_diode_breaks_the_linearity_limit(detector_ultra_sch
     assert any("linearity limit" in w for w in result.warnings)
 
 
-def test_a_longer_focal_length_relieves_the_density_limit(detector_ultra_scheme):
-    # The corrected, still-uncalibrated absolute model predicts much more power
-    # than the paper; 600 mm is the first standard-scale choice below the limit.
-    gentle = DetectionSettings(probe_lens_focal_mm=600.0,
-                               conjugate_lens_focal_mm=600.0)
-    result = bridge.run(detection=gentle, resolution=fwm.FIDELITY_ULTRA,
-                        scheme=detector_ultra_scheme)
-    assert result.readout.arms[0].power_density_w_per_cm2 < 4.0
-    assert not any("linearity limit" in w for w in result.warnings)
-    # And the spot still fits the S3883 active area comfortably.
-    active = 0.5 * default_calibration().value("pd_active_diameter_mm") * 1e-3
-    assert result.readout.arms[0].spot_radius_m < active
+@pytest.mark.parametrize("optics", [
+    DetectionSettings(probe_lens_focal_mm=600.0, conjugate_lens_focal_mm=600.0),
+    DetectionSettings(pd_defocus_mm=40.0),
+], ids=("longer-focal-length", "defocus"))
+def test_larger_detector_spot_reduces_density_at_fixed_power(detector_ultra_scheme, optics):
+    nominal = bridge.run(resolution=fwm.FIDELITY_ULTRA, scheme=detector_ultra_scheme)
+    wider = bridge.run(detection=optics, resolution=fwm.FIDELITY_ULTRA, scheme=detector_ultra_scheme)
+    calibration = default_calibration()
+    limit = calibration.value("pd_max_power_density_w_per_cm2")
+    active_radius = 0.5e-3 * calibration.value("pd_active_diameter_mm")
+    for before, after in zip(nominal.readout.arms, wider.readout.arms):
+        assert before.spot_radius_m < after.spot_radius_m < active_radius
+        assert after.power_w == pytest.approx(before.power_w)
+        expected_density = 2 * before.power_w / (math.pi * after.spot_radius_m**2) / 1e4
+        assert after.power_density_w_per_cm2 == pytest.approx(expected_density)
+        assert after.power_density_w_per_cm2 < before.power_density_w_per_cm2
+        warned = any(w.startswith(after.name + ":") and "linearity limit" in w for w in wider.warnings)
+        assert warned == (expected_density > limit)
 
-
-def test_defocus_also_relieves_the_density_limit(detector_ultra_scheme):
-    result = bridge.run(detection=DetectionSettings(pd_defocus_mm=40.0),
-                        resolution=fwm.FIDELITY_ULTRA, scheme=detector_ultra_scheme)
-    assert result.readout.arms[0].power_density_w_per_cm2 < 4.0
+    # Isolate the optics with prescribed gains at which enlarging the spot
+    # actually crosses the detector threshold on both arms.
+    gains = (14.0, 13.0)
+    hard = detection.readout(nominal.geometry, nominal.chain, gains, nominal.settings)
+    soft = detection.readout(wider.geometry, wider.chain, gains, wider.settings, optics)
+    for before, after in zip(hard.arms, soft.arms):
+        assert after.power_density_w_per_cm2 < limit < before.power_density_w_per_cm2
+    assert not any("linearity limit" in w for w in soft.warnings)
 
 
 def test_focal_length_helper_hits_the_requested_density():

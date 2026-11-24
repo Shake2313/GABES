@@ -27,17 +27,17 @@ def case():
 
 def test_chi_selection_is_readout_only_and_lab_defaults_survive():
     scheme = fwm.FWMScheme()
-    assert calibration.MODELS == (calibration.MODEL_LAB_REFIT, calibration.MODEL_LITERATURE,
+    assert calibration.MODELS == (calibration.MODEL_LAB_CURRENT, calibration.MODEL_LITERATURE,
                                   calibration.MODEL_CHI, calibration.MODEL_STARK,
-                                  calibration.MODEL_ZEEMAN, calibration.MODEL_LAB)
+                                  calibration.MODEL_ZEEMAN)
     control = next(spec for spec in scheme.param_schema() if spec.name == "gain_calibration_model")
     assert control.choices == calibration.MODELS
     assert not control.recompute
-    assert control.default == calibration.MODEL_LAB_REFIT
-    assert scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert control.default == calibration.MODEL_LAB_CURRENT
+    assert scheme.defaults()["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
     assert "gain_calibration_model" not in scheme.recompute_keys()
     preset = next(preset for preset in scheme.presets() if preset.name == "2026-10-13 experiment")
-    assert preset.values["gain_calibration_model"] == calibration.MODEL_LAB_REFIT
+    assert preset.values["gain_calibration_model"] == calibration.MODEL_LAB_CURRENT
     assert calibration.profile(model=calibration.MODEL_CHI)["model_id"] == chi.MODEL_ID
 
 
@@ -182,7 +182,7 @@ def test_generic_rail_uses_actual_chi_model(case):
     assert not app.exception
     selector = app.selectbox(key="fwm__gain_calibration_model")
     assert selector.options == list(calibration.MODELS)
-    assert selector.value == calibration.MODEL_LAB
+    assert selector.value == calibration.MODEL_LAB_CURRENT
     selector.select(calibration.MODEL_CHI).run()
     assert not app.exception
     assert app.session_state["view"]["experimental_gain_calibration"]["model_id"] == chi.MODEL_ID
