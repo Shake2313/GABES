@@ -588,9 +588,11 @@ and [Jasperse equation, noise and efficiency review](https://github.com/Shake231
   **Generic diamond SFWM**. Their stored API keys remain
   `cascade_rb87_telecom`, `cascade_cs_btw`, and `diamond_generic`.
 - The default Biphoton sidebar is intentionally lab-facing: temperature, pump and
-  coupling drive, pump detuning, two-photon detuning, collection geometry, filter
-  bandwidth, and coincidence window. Detector calibration, manual wavelengths,
-  source-model comparison, and numerical diagnostics live under Advanced.
+  coupling power scale, pump detuning, two-photon detuning, collection geometry,
+  filter bandwidth, and coincidence window. The coupling scale is relative to
+  the reference power. At 4× power, the coupling Rabi frequency doubles.
+  Detector calibration, manual wavelengths, source-model comparison, and
+  numerical diagnostics live under Advanced.
 - Biphoton readout: `g²_SI(τ)`, intrinsic source FWHM, timing-response-broadened
   detected FWHM, pair-rate estimate, singles, true and accidental coincidences,
   CAR, heralding estimates, and an assumed thermal-arm Cauchy-Schwarz comparison.
@@ -629,11 +631,14 @@ and [Jasperse equation, noise and efficiency review](https://github.com/Shake231
   A failed check withholds affected numeric heroes. Seeded-FWM validation does
   not validate spontaneous-source rate, waveform or correlation statistics.
   The Rb/Cs absolute pair rate stays **reference-anchored** and currently
-  scales with pump power, coupling drive, vector phase matching, and the square
-  root of the density ratio; OD/cell length do not directly scale the rate. An OD
-  waveform-reshaping path (Du/Chen ρ̄, group-delay/precursor) is implemented but
-  **off by default** (`biphoton_od_reshaping`) since the lumped model overestimates
-  it at high OD. Full quantum-Langevin noise is still future work
+  scales with pump power, the square root of the coupling power scale, vector
+  phase matching, and the square root of the density ratio. OD/cell length do
+  not directly scale the rate. The model compares the phase-slope delay of the
+  longitudinal transfer at zero sideband detuning with the coupling Rabi
+  period to label the regime. The same transfer is used for optional waveform
+  reshaping (`biphoton_od_reshaping`), which is **off by default** because the
+  lumped Du/Chen model overestimates broadening at high OD. Full quantum-Langevin
+  noise is still future work
   (`docs/checklist.json`).
 
 ## Traps

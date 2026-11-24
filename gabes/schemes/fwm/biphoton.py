@@ -244,6 +244,18 @@ def _default_biphoton_geometry(params):
     )
 
 
+def _longitudinal_transfer(omega, v_grid, weights, residual_k, two_det,
+                           Oc, Gamma_e, gamma_g, od_phys):
+    """Doppler-averaged longitudinal factor Φ(δ) for δ in rad/s."""
+    d = omega[:, None]
+    twoden = Oc**2 - 4.0 * (d + 1j * gamma_g) * (
+        d + two_det - residual_k * v_grid + 0.5j * Gamma_e)
+    rho = (0.5 * od_phys * Gamma_e) * ((d + 1j * gamma_g) / twoden * weights).sum(axis=1)
+    rho = (np.clip(rho.real, -PRED_RHO_CLIP, PRED_RHO_CLIP)
+           + 1j * np.clip(rho.imag, 0.0, PRED_RHO_CLIP))
+    return _sinc_complex(rho) * np.exp(1j * rho)
+
+
 class GenericFWMSolver:
     """Reference-calibrated v3 engine for generic SFWM biphoton estimates."""
 
@@ -251,19 +263,19 @@ class GenericFWMSolver:
         self.topology = topology
 
     def _fields_from_params(self, params):
-        pump_rabi = params.get("pump_biphoton_uw", self.topology.default_pump_uw)
-        coupling_rabi = params.get("coupling_mw", self.topology.default_coupling_mw)
+        pump_power = params.get("pump_biphoton_uw", self.topology.default_pump_uw)
+        coupling_power = params.get("coupling_mw", self.topology.default_coupling_mw)
         out = []
         for field in self.topology.fields:
             rabi = field.rabi_mhz
             detuning = field.detuning_mhz
             if field.role == "pump":
                 rabi = beam.anchored_rabi_mhz(
-                    2.0, pump_rabi, self.topology.default_pump_uw)
+                    2.0, pump_power, self.topology.default_pump_uw)
                 detuning = params.get("pump_detuning_mhz", 0.0)
             elif field.role == "coupling":
                 rabi = beam.anchored_rabi_mhz(
-                    12.0, coupling_rabi, self.topology.default_coupling_mw)
+                    12.0, coupling_power, self.topology.default_coupling_mw)
                 detuning = params.get("coupling_detuning_mhz", 0.0)
             out.append(_field_with(
                 field,
@@ -304,15 +316,8 @@ class GenericFWMSolver:
         nfft = 4 * n
         K = np.fft.fft(np.asarray(kappa_tau), n=nfft)
         omega = 2.0 * np.pi * np.fft.fftfreq(nfft, dt)        # δ axis [rad/s]
-        d = omega[:, None]
-        v = v_grid[None, :]
-        w = weights[None, :]
-        twoden = Oc**2 - 4.0 * (d + 1j * gamma_g) * (
-            d + two_det - residual_k * v + 0.5j * Gamma_e)
-        rho = (0.5 * od_phys * Gamma_e) * ((d + 1j * gamma_g) / twoden * w).sum(axis=1)
-        rho = (np.clip(rho.real, -PRED_RHO_CLIP, PRED_RHO_CLIP)
-               + 1j * np.clip(rho.imag, 0.0, PRED_RHO_CLIP))
-        phi = _sinc_complex(rho) * np.exp(1j * rho)
+        phi = _longitudinal_transfer(omega, v_grid, weights, residual_k, two_det,
+                                     Oc, Gamma_e, gamma_g, od_phys)
         return np.fft.ifft(K * phi, n=nfft)[:n]
 
     def _predictive_waveform(self, params, fields, v_grid, weights, pump, coupling,
@@ -382,9 +387,14 @@ class GenericFWMSolver:
         # Source spectral width from the waveform itself (predictive).
         bandwidth_mhz = _bandwidth_from_waveform_mhz(tau_s, psi_tau)
 
-        # Du regime split: group-delay time τ_g≈(2γ/Ω_c²)·OD·Γ vs Rabi time 2π/Ω_c.
-        tau_group = (2.0 * gamma_g / max(Oc**2, 1e-30)) * od_phys * Gamma_e
-        tau_rabi = 2.0 * np.pi / max(Oc, 1e-30)
+        # The phase slope at zero sideband detuning gives the delay in seconds.
+        # Use the conjugate product to take the phase difference across a wrap.
+        step = 1e-3 * min(gamma_g, Oc)
+        phi_minus, phi_plus = _longitudinal_transfer(
+            np.array([-step, step]), v_grid, weights, residual_k, two_det,
+            Oc, Gamma_e, gamma_g, od_phys)
+        tau_group = np.angle(phi_plus * phi_minus.conjugate()) / (2.0 * step)
+        tau_rabi = 2.0 * np.pi / Oc
         regime = "group-delay" if tau_group > tau_rabi else "damped-Rabi"
 
         source_v = amp_v   # velocity-class source for the existing diagnostic plot
@@ -527,15 +537,16 @@ class GenericFWMSolver:
             od_estimate = np.nan
 
         # Absolute pair rate is reference-anchored. Its current scalar law uses
-        # pump power, coupling drive, vector phase matching and sqrt(N/N_ref);
+        # pump power, sqrt(coupling power), vector phase matching and sqrt(N/N_ref);
         # OD/cell length shape the waveform path but do not directly scale this
         # rate. The lumped model does not pin the collection coefficient, so the
         # magnitude remains anchored like the squeezing `line_strength` residual.
         pump_mw = params.get("pump_biphoton_uw", self.topology.default_pump_uw) * 1e-3
-        coupling_scale = max(params.get("coupling_mw", self.topology.default_coupling_mw),
-                             0.0) / max(self.topology.default_coupling_mw, 1e-12)
+        coupling_power_scale = max(
+            params.get("coupling_mw", self.topology.default_coupling_mw), 0.0
+        ) / max(self.topology.default_coupling_mw, 1e-12)
         pair_rate = (self.topology.pair_rate_cps_per_mw * pump_mw
-                     * math.sqrt(max(coupling_scale, 0.0)) * pm_weight
+                     * math.sqrt(coupling_power_scale) * pm_weight
                      * math.sqrt(max(density, 1e-30) / max(default_density, 1e-30)))
 
         model = params.get("biphoton_model", BIPHOTON_PREDICTIVE)

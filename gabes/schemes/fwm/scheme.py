@@ -275,10 +275,10 @@ class FWMScheme(Scheme):
                       advanced=True),
             ParamSpec("pump_biphoton_uw", "Pump power", "Fields", 10.0,
                       0.1, 200.0, 0.1, "µW", visible_if=biphoton),
-            ParamSpec("coupling_mw", "Coupling strength", "Fields", 1.0,
+            ParamSpec("coupling_mw", "Coupling power scale", "Fields", 1.0,
                       0.01, 50.0, 0.01, "×", visible_if=biphoton,
-                      help="Relative drive amplitude; this is a scale factor, not "
-                           "an absolute power."),
+                      help="Multiplier of the reference coupling power. "
+                           "At 4× power the coupling Rabi frequency doubles."),
             ParamSpec("pump_detuning_mhz", "Pump detuning", "Detunings", 0.0,
                       -2000.0, 2000.0, 10.0, "MHz", visible_if=biphoton),
             ParamSpec("two_photon_detuning_mhz", "Two-photon detuning", "Detunings", 0.0,
@@ -1356,8 +1356,9 @@ class FWMScheme(Scheme):
                                  "width unconverged")
             status = dict(
                 label="Model status", value=status_value,
-                help="Calculates the Doppler waveform and vector phase matching; "
-                     "the pair-rate scale remains reference-anchored.")
+                help="The regime compares the longitudinal transfer's phase-slope delay "
+                     "with the coupling Rabi period. The pair-rate scale remains "
+                     "reference-anchored.")
         else:
             g2_help = ("Peak normalized signal–idler correlation from the stored "
                        "reference calibration.")

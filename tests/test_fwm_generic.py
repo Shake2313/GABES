@@ -269,7 +269,7 @@ def test_rb87_telecom_preset_smoke():
     assert 0.0 < pstats["fwhm_ns"] < 50.0
     assert pstats["fwhm_ns"] == pstats["detected_fwhm_ns"]
     assert pstats["source_fwhm_ns"] < pstats["detected_fwhm_ns"]
-    assert praw["regime"] in ("group-delay", "damped-Rabi")
+    assert praw["regime"] == "damped-Rabi"
     pview = scheme.headless_observables(praw, pred)
     rate_metric = next(m for m in pview["metrics"] if m["label"] == "Pair rate")
     assert "Reference-anchored" in rate_metric["help"]
@@ -288,6 +288,26 @@ def test_rb87_telecom_preset_smoke():
         if table["title"] == "Detection estimates")
     assert "| Intrinsic biphoton width | unconverged |" in unconverged_detection
     assert "| Detected biphoton width | unconverged |" in unconverged_detection
+
+
+@pytest.mark.parametrize("temperature, cell_length, power_scale, expected", [
+    (30.0, 1.0, 50.0, "damped-Rabi"),
+    (110.0, 35.0, 4.0, "group-delay"),
+])
+def test_telecom_regime_compares_longitudinal_delay_with_rabi_period(
+        temperature, cell_length, power_scale, expected):
+    scheme = fwm.FWMScheme()
+    params = _recommended_params(
+        topology=fwm.TOPOLOGY_RB87_TELECOM,
+        biphoton_model=fwm.BIPHOTON_PREDICTIVE,
+        biphoton_temp_c=temperature, biphoton_cell_mm=cell_length,
+        coupling_mw=power_scale,
+    )
+    raw = scheme.compute(params)
+    view = scheme.headless_observables(raw, params)
+    status = next(metric for metric in view["metrics"] if metric["label"] == "Model status")
+    assert raw["regime"] == expected
+    assert status["value"] == f"Reduced model · {expected}"
 
 
 def test_cs_btw_channels_have_different_widths():
@@ -333,6 +353,21 @@ def test_predictive_coupling_rabi_broadens_two_photon_resonance():
     assert np.isfinite(weak["source_bandwidth_mhz"])
     assert np.isfinite(strong["source_bandwidth_mhz"])
     assert weak["source_bandwidth_mhz"] != strong["source_bandwidth_mhz"]
+
+
+def test_biphoton_coupling_control_scales_reference_power():
+    scheme = fwm.FWMScheme()
+    base = _recommended_params(topology=fwm.TOPOLOGY_RB87_TELECOM,
+                               biphoton_model=fwm.BIPHOTON_CALIBRATED)
+    control = next(spec for spec in scheme.param_schema() if spec.name == "coupling_mw")
+    assert control.label == "Coupling power scale"
+    weak = scheme.compute(dict(base, coupling_mw=1.0))
+    strong = scheme.compute(dict(base, coupling_mw=4.0))
+    weak_rabi = next(field.rabi_mhz for field in weak["fields"] if field.role == "coupling")
+    strong_rabi = next(field.rabi_mhz for field in strong["fields"] if field.role == "coupling")
+    assert weak_rabi == pytest.approx(12.0)
+    assert strong_rabi == pytest.approx(24.0)
+    assert strong["pair_rate_cps"] == pytest.approx(2.0 * weak["pair_rate_cps"])
 
 
 def test_biphoton_ui_render_modes():

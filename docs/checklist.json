@@ -1314,12 +1314,13 @@
       "origin": "ai_review",
       "priority": "P2",
       "effort": "small",
-      "status": "ready",
+      "status": "done",
       "problem": "⟦AI⟧ Separate from seeded FWM: the displayed regime compares dimensionless 2 gamma_g OD Gamma_e/Omega_c^2 with a Rabi period in seconds. For 87Rb telecom at 30 C, 1 mm and coupling control 50, the phase-derivative delay is 0.457 ps versus the 11.8 ns Rabi period. The current classification is reversed. The coupling control also describes an amplitude multiplier but uses a square-root power-to-Rabi conversion. Reconcile the control units and use a time in seconds for regime classification.",
       "acceptance_criteria": [
         "Check the group delay against the phase derivative of the same longitudinal transfer and compare both times in seconds.",
         "Make the displayed coupling multiplier agree with the field amplitude or power convention in the source and rate calculations."
-      ]
+      ],
+      "implementation_2026_11_24": "⟦AI⟧ The reduced-model label compares the signed phase slope of the same Doppler-averaged longitudinal transfer at zero sideband detuning with 2 pi / Omega_c, both in seconds. The 30 C telecom example now reports damped-Rabi. A 110 C, 35 mm, 4x example reports group-delay (97.6 ns versus 41.7 ns). The Coupling power scale uses the existing coupling_mw settings key. A factor of four doubles the coupling Rabi frequency and the scalar pair-rate factor at fixed other settings."
     },
     {
       "id": "biphoton-source-trust-boundary",
