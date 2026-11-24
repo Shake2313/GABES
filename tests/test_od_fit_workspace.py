@@ -167,7 +167,8 @@ def test_fit_picker_filters_unavailable_estimates_as_conditions_change(workspace
 @pytest.mark.parametrize("at_bound", [False, True], ids=["joint-fit", "power-upper-bound"])
 def test_probe_intensity_and_custom_mixture_apply_only_after_identifiable_fit(workspace, monkeypatch, at_bound):
     from gabes import od_spectrum_fit as od
-    from gabes.schemes.sas import SASScheme, RATE_MODEL
+    # The default set (d20_d2sb) fits with its rate model.
+    from gabes.schemes.sas import SASScheme, RATE_MODEL_V2 as RATE_MODEL
     from gabes_ui.export import build_export_payload
 
     # Keep both cases on the actual worker and bounded least-squares path.
@@ -517,7 +518,7 @@ def test_legacy_replay_fits_recorded_model_and_converts_native_centroid_once(wor
     assert displayed["model"]["display_reference_offset_hz"] == pytest.approx(78_095_000)
     assert displayed["model"]["experiment_frequency_reference"]["isotope"] == "Rb85"
     assert displayed["model"]["model_id"] == exports[-1]["raw"]["probe_model"] == model_id
-    assert app.session_state["sas__od_model"] == "d20"
+    assert app.session_state["sas__od_model"] == "d20_d2sb"
     assert "physical_od_fit" not in displayed
 
     app.multiselect(key="sas_od_fit_free").set_value(["temp_c"])
@@ -551,7 +552,7 @@ def test_recorded_two_level_model_remains_an_overlay(workspace):
     assert comparison["model"]["model_id"] == exports[-1]["raw"]["probe_model"] == model_id
     assert "physical_od_fit" not in comparison
     assert any("magnetic-sublevel" in note.value for note in app.caption)
-    assert app.session_state["sas__od_model"] == "d20"
+    assert app.session_state["sas__od_model"] == "d20_d2sb"
 
 
 def test_autood_source_metadata_does_not_override_the_active_gabes_model(workspace):
@@ -570,7 +571,7 @@ def test_autood_source_metadata_does_not_override_the_active_gabes_model(workspa
     assert not app.error and not app.exception
     payload = exports[-1]["comparison_payload"]
     assert payload["input_metadata"]["model"] == "weak_probe_legacy"
-    assert payload["model"]["model_id"] == "od_weak_exact_voigt_transit_v1"
+    assert payload["model"]["model_id"] == "od_weak_exact_voigt_transit_v2"
     assert "experiment_frequency_reference" not in payload["model"]
 
 
@@ -588,13 +589,13 @@ def test_unusable_recorded_model_can_be_replaced_on_the_same_route(workspace, mo
     app.run()
     assert not app.exception and app.error
     assert not any(output.get("comparison_payload") for output in exports)
-    assert app.session_state["sas__od_model"] == "d20"
+    assert app.session_state["sas__od_model"] == "d20_d2sb"
 
     uploads[:] = [_upload(plain)]
     app.run()
     assert not app.error and not app.exception
     model = exports[-1]["comparison_payload"]["model"]
-    expected = "od_finite_rb_mf_rate_v1" if power else "od_weak_exact_voigt_transit_v1"
+    expected = "od_finite_rb_mf_rate_v2" if power else "od_weak_exact_voigt_transit_v2"
     assert model["model_id"] == expected
 
 

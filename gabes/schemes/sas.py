@@ -73,7 +73,7 @@ OD_MODELS_D20 = "d20"
 # carry a _v2 suffix; every older set and ID keeps BETA_SELF on D2 and replays.
 OD_MODELS_D2SB = "d20_d2sb"
 OD_MODEL_SETS = (OD_MODELS_PRE_D20, OD_MODELS_D20, OD_MODELS_D2SB)
-OD_MODELS_DEFAULT = OD_MODELS_D20   # ParamSpec default; also an explicit None
+OD_MODELS_DEFAULT = OD_MODELS_D2SB  # ParamSpec default; also an explicit None
 LEGACY_MODEL = "weak_probe_legacy"
 EXACT_MODEL = "weak_probe_exact_maxwell_voigt"
 TRANSIT_WEAK_MODEL = "od_weak_exact_voigt_transit_v1"
@@ -209,8 +209,7 @@ def _od_model_setting(params):
 
     A missing key is pre-D20, so parameter dictionaries written before the
     setting existed replay unchanged. ``None`` is an unset session value and
-    takes the current default, like a fresh session. The Legacy velocity grid
-    reproduces the historical spectrum, so d20_d2sb with that request is d20.
+    takes the current default, like a fresh session.
     """
     if OD_MODEL_KEY not in params:
         return OD_MODELS_PRE_D20, None
@@ -218,8 +217,6 @@ def _od_model_setting(params):
     if value is None:
         value = OD_MODELS_DEFAULT
     if isinstance(value, str) and value in OD_MODEL_SETS:
-        if value == OD_MODELS_D2SB and params.get("weak_probe_profile") == LEGACY_WEAK_PROBE:
-            return OD_MODELS_D20, None
         return value, None
     if isinstance(value, str) and value in _EXPLICIT_OD_MODELS:
         return _EXPLICIT_OD_MODELS[value], value
@@ -228,7 +225,10 @@ def _od_model_setting(params):
 
 
 def per_line_self_broadening(params):
-    """Whether these SAS parameters take the measured Rb D2 self-broadening (set d20_d2sb)."""
+    """Whether the finite-probe reference takes the measured Rb D2 self-broadening.
+
+    It follows the set (d20_d2sb), like the v2 finite-probe models it is compared with.
+    """
     return _od_model_setting(params)[0] == OD_MODELS_D2SB
 
 
@@ -411,7 +411,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "17"           # D20 model set by default (transit width, sublevel rate model)
+    cache_version = "18"           # d20_d2sb by default (D20 set + measured Rb D2 self-broadening)
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -599,13 +599,12 @@ class SASScheme(Scheme):
                       401, 4001, 100, "", advanced=True),
             ParamSpec(OD_MODEL_KEY, "OD model", "Numerics", OD_MODELS_DEFAULT,
                       choices=OD_MODEL_CHOICES, advanced=True, hidden=True,
-                      help="d20 (default) is the current model set; pre_d20 keeps the "
-                           "models used before the OD-fit port and replays older saved "
-                           "settings. d20 adds "
-                           "the transit width to the Exact profiles (pumped too) and uses "
-                           "the magnetic-sublevel rate model for a finite Rb probe. "
-                           "d20_d2sb is d20 with the measured Rb D2 self-broadening "
-                           "coefficient (1.10×10⁻⁷ Hz cm³) in place of the D1 value. An "
+                      help="d20_d2sb (default) is the current model set. It is d20 with "
+                           "the measured Rb D2 self-broadening coefficient (1.10×10⁻⁷ Hz cm³) "
+                           "in place of the D1 value. d20 adds the transit width to the "
+                           "Exact profiles (pumped too) and uses the magnetic-sublevel rate "
+                           "model for a finite Rb probe; pre_d20 keeps the models used before "
+                           "the OD-fit port. Both replay older saved settings. An "
                            "explicit model ID fixes the pump-off solve."),
         ]
 
@@ -889,7 +888,11 @@ class SASScheme(Scheme):
         use_rate = pump_free_model in RATE_MODELS
         transit_weak = pump_free_model in TRANSIT_WEAK_MODELS
         pumped_transit = pumped_maxwell and model_set != OD_MODELS_PRE_D20
-        per_line = model_set == OD_MODELS_D2SB   # measured Rb D2 self-broadening
+        # The measured Rb D2 self-broadening applies on the paths that record a
+        # _v2 ID. Legacy-grid paths (requested, or outside the Exact scope) keep
+        # the historical width, so their recorded IDs replay unchanged.
+        per_line = model_set == OD_MODELS_D2SB and (
+            use_rate or transit_weak or pumped_transit or probe_peak_intensity > 0.0)
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
         collision_reports = {}

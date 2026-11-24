@@ -171,7 +171,9 @@ wave mixing, Bell-Bloom magnetometry, Na D-lines (SAS species data); time-domain
   - `species.py` — alkali D-line data (⁸⁵Rb/⁸⁷Rb/¹³³Cs hyperfine A/B constants,
     line-centre frequencies, masses, linewidths, abundances, g_J/g_I; Steck),
     line strengths, Casimir hyperfine energies, Landé g_F, and the single source of the vapor
-    pressure, densities (CRC; legacy Steck × abundance) and self-broadening β;
+    pressure, densities (CRC; legacy Steck × abundance) and self-broadening β
+    (the Rb D1 measurement; the default OD/SAS set `d20_d2sb` takes the
+    measured Rb D2 coefficient on its `_v2` model paths);
     plus the SAS hyperfine-manifold builder `build_manifold(iso, line)`
     (CG-branched decay + transit-time relaxation) and the Zeeman-resolved
     `level_structure(isotope, line)` (signed dipoles C_q, Σ_q C_q†C_q = I) that

@@ -55,13 +55,18 @@ def test_the_new_set_records_v2_model_ids(changes, model):
 def test_pumped_and_legacy_requests():
     raw = SASScheme().compute(_sas_params(pump_power_mw=0.5))
     assert raw["probe_model"] == PUMPED_TRANSIT_MODEL_V2
-    # The Legacy grid replays the historical spectrum: the set falls back to d20.
+    # Legacy-grid paths keep the historical width, so their recorded IDs replay:
+    # an explicit Legacy request, and an inactive Exact request with the pump on.
     legacy = _sas_params(weak_probe_profile=LEGACY_WEAK_PROBE)
-    assert _od_model_setting(legacy) == (OD_MODELS_D20, None)
+    assert _od_model_setting(legacy) == (OD_MODELS_D2SB, None)
     old = SASScheme().compute({**legacy, OD_MODEL_KEY: OD_MODELS_D20})
     new = SASScheme().compute(legacy)
     assert new["probe_model"] == old["probe_model"] == "weak_probe_legacy"
     assert np.array_equal(new["alpha_unit"], old["alpha_unit"])
+    pumped = dict(legacy, pump_power_mw=0.5)
+    inactive = SASScheme().compute(dict(pumped, weak_probe_profile="Exact Maxwell Voigt"))
+    assert inactive["weak_probe_profile"]["status"] == "inactive"
+    assert np.array_equal(inactive["alpha_unit"], SASScheme().compute(pumped)["alpha_unit"])
 
 
 @pytest.mark.parametrize("line", ["D1", "D2"])

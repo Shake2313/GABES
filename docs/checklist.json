@@ -1543,7 +1543,7 @@
         "https://doi.org/10.1088/0953-4075/44/19/195006",
         "https://doi.org/10.1103/PhysRevA.73.062504"
       ],
-      "status": "in_progress",
+      "status": "done",
       "priority": "P2",
       "effort": "medium",
       "depends_on": [],
@@ -1570,6 +1570,7 @@
         "⟦AI⟧ 다른 세션이 작업 중인 FWM 파일(gabes/schemes/fwm/scheme.py, tests/test_fwm_measured_gain_integration.py, 로컬 커밋 b44dbc7)이 착지한 뒤에 FWM에 닿는 변경을 시작한다.",
         "⟦AI⟧ Cs의 opt-in 기준 경로(cs_reference)와 2026-11-16 결정은 그대로 둔다."
       ],
+      "implementation_2026_11_24": "⟦AI⟧ 3956706 added the set d20_d2sb with od_weak_exact_voigt_transit_v2, od_finite_rb_mf_rate_v2, finite_power_2level_gaussian_propagation_v2 and sas_pumped_exact_voigt_transit_v2 as an opt-in; the next commit makes it the default (SAS cache_version 18). The measured D2 coefficient applies on the paths that record a _v2 ID and in the finite-probe reference. Legacy-grid paths keep 0.69 in every set so their recorded IDs replay: an explicit Legacy request, configurations outside the Exact scope (buffer gas, coating, measured collisions) and the segmented cell. Snapshot (runs/rb_d2_self_broadening): all 250 pre_d20/d20 entries bit-identical; under d20_d2sb D1 and every Legacy-grid entry identical; D2 max |dT| 8.2e-4 (weak, 90 C, 12.5 mm), 2.7e-3 (rate, 100 uW), 0.070 (weak, 150 C). The AutoOD engine pin and manual Sec. 2.2 are with the product Codex chat; the archive gitlink with the archive chat.",
       "last_reviewed_at": "2026-11-24"
     },
     {

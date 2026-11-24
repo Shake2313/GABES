@@ -686,8 +686,8 @@ def test_default_weak_probe_uses_exact_maxwell_voigt(line, medium, monkeypatch):
         raw = SAS.compute(settings)
         for key in ("scan", "alpha_unit", "chi_real_unit"):
             np.testing.assert_array_equal(raw[key], exact[key])
-        # D20 default (M2b): Automatic and Exact both apply the transit Voigt.
-        assert raw["probe_model"] == "od_weak_exact_voigt_transit_v1"
+        # Default set d20_d2sb: Automatic and Exact both apply the transit Voigt.
+        assert raw["probe_model"] == "od_weak_exact_voigt_transit_v2"
         profile = raw["weak_probe_profile"]
         assert profile["requested"] == AUTO_WEAK_PROBE
         assert profile["applied"] == EXACT_WEAK_PROBE
