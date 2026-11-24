@@ -51,6 +51,18 @@ def test_oe_eq3_and_classical_seed_limit():
                                3 / (2 * gain - 1), rtol=1e-10)
 
 
+def test_high_gain_projection_preserves_the_squeezed_difference():
+    squeeze = np.array([7., 10., 15.])
+    seed_fano = 1.7
+    eta = 0.86
+    source = jasperse_distributed_noise(squeeze, seed_fano=seed_fano)
+    detected = jasperse_distributed_noise(squeeze, seed_fano=seed_fano,
+                                          probe_efficiency=eta, conjugate_efficiency=eta)
+    exact = seed_fano / np.cosh(2.0 * squeeze)
+    np.testing.assert_allclose(source["NF"], exact, rtol=3e-14, atol=0.0)
+    np.testing.assert_allclose(detected["NF"], 1.0 - eta + eta * exact, rtol=3e-14)
+
+
 def test_oe_eq5_unequal_external_losses():
     gain = np.array([1.1, 2., 10., 100.])[:, None]
     eta_p = np.array([.8, .9, .7])
@@ -133,3 +145,9 @@ def test_no_mixing_coherent_seed_and_no_bright_detection():
 def test_reference_rejects_undefined_or_nonpassive_inputs(kwargs):
     with pytest.raises(ValueError):
         jasperse_distributed_noise(**({"squeeze_parameter": 1.} | kwargs))
+
+
+def test_input_seed_excess_uses_incident_snl():
+    seed = seed_noise_components(8e-6, 2 * np.pi * 377.1e12, classical_rin_per_Hz=1e-13)
+    total = seed["classical_power_psd_W2_per_Hz"] + seed["shot_power_psd_W2_per_Hz"]
+    assert seed["input_excess_over_shot"] == pytest.approx(total / seed["shot_power_psd_W2_per_Hz"] - 1)

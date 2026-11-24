@@ -5,7 +5,7 @@ transfer matrix, and explicitly labelled gain-referred noise fixtures.  It does
 not derive the microscopic Langevin diffusion needed for a physical FWM
 squeezing spectrum.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -237,9 +237,12 @@ def pump_depletion_saturation(
     return G_s_sat, G_c_sat
 
 
-def coincidence_stats(G_s, G_c, *, ideal_canonical=False):
+def coincidence_stats(G_s=None, G_c=None, *, ideal_canonical=False, moments=None):
     """
-    Equal-time twin-beam (signal/conjugate) photon statistics for the FWM
+    With moments=TwinBeamMoments, use the detected photon counts, their variances
+    and covariance for arm-resolved correlations after the specified channels.
+
+    With gain inputs, equal-time twin-beam (signal/conjugate) photon statistics for the FWM
     parametric process, in the **ideal (lossless) parametric** limit set by the
     gains G_s, G_c — consistent with how `intensity_difference_squeezing_dB`
     idealises the twin beams (propagation loss is not modelled with quantum
@@ -260,6 +263,16 @@ def coincidence_stats(G_s, G_c, *, ideal_canonical=False):
     an explicit lossless-TMSV fixture assumption; inconsistent gains are rejected.
     It supplies an ideal comparison claim only, never experimental validation.
     """
+    if moments is not None:
+        if G_s is not None or G_c is not None or ideal_canonical:
+            raise ValueError("Choose detected moments or gain inputs for coincidence statistics")
+        if not isinstance(moments, TwinBeamMoments):
+            raise TypeError("moments must be TwinBeamMoments")
+        result = twin_beam_correlations(moments)
+        return dict(result, n_s=np.asarray(moments.mean_s), n_c=np.asarray(moments.mean_c),
+                    populated_arms=(np.asarray(moments.mean_s) > 0) & (np.asarray(moments.mean_c) > 0))
+    if G_s is None or G_c is None:
+        raise ValueError("Supply both power gains or a typed set of detected moments")
     G_s = np.asarray(G_s, dtype=float)
     G_c = np.asarray(G_c, dtype=float)
     if ideal_canonical and (not np.all(np.isfinite(G_s))
@@ -602,6 +615,7 @@ class TwinBeamMoments:
     source: str
     environment: str
     covariance_origin: str
+    bright_seed_limit: bool = False
 
     def __post_init__(self):
         if self.covariance_origin not in _COVARIANCE_ORIGINS:
@@ -672,7 +686,7 @@ def ideal_twin_beam_moments(gain, eta_s=1.0, eta_c=1.0, *, seed_photons=0.0,
         var_s=np.asarray(var_s), var_c=np.asarray(var_c), cov=np.asarray(cov),
         source=source,
         environment="pure_loss_vacuum" if pure else "thermal_attenuation",
-        covariance_origin=COVARIANCE_IDEAL_CANONICAL)
+        covariance_origin=COVARIANCE_IDEAL_CANONICAL, bright_seed_limit=bright_seed_limit)
 
 
 def optimal_difference_weight(moments):
@@ -734,10 +748,14 @@ def twin_beam_correlations(moments):
     measured or microscopically propagated covariance supports a physical
     nonclassicality claim; the ideal fixture supports an ideal claim only.
     """
+    if moments.bright_seed_limit:
+        raise ValueError("Coincidence correlations require absolute photon-count moments, "
+                         "not coefficients per bright-seed photon")
+    ms, mc = np.asarray(moments.mean_s, float), np.asarray(moments.mean_c, float)
     with np.errstate(divide="ignore", invalid="ignore"):
-        g2_ss = 1.0 + (moments.var_s - moments.mean_s) / moments.mean_s ** 2
-        g2_cc = 1.0 + (moments.var_c - moments.mean_c) / moments.mean_c ** 2
-        g2_sc = 1.0 + moments.cov / (moments.mean_s * moments.mean_c)
+        g2_ss = np.where(ms > 0, 1.0 + (moments.var_s - ms) / ms**2, np.nan)
+        g2_cc = np.where(mc > 0, 1.0 + (moments.var_c - mc) / mc**2, np.nan)
+        g2_sc = np.where((ms > 0) & (mc > 0), 1.0 + moments.cov / (ms * mc), np.nan)
         ratio = g2_sc ** 2 / (g2_ss * g2_cc)
     origin = moments.covariance_origin
     violated = np.asarray(ratio > 1.0)
@@ -754,7 +772,7 @@ def twin_beam_correlations(moments):
 def balanced_twin_beam_noise(
         G_s, G_c, eta_s=1.0, eta_c=1.0, *, reference_weight=1.0,
         source_noise=None, covariance=None,
-        seed_excess_noise=0.0, reference_excess_noise=0.0):
+        seed_excess_noise=0.0, reference_excess_noise=0.0, coherent_background_fraction=0.0):
     """
     Twin-beam intensity-difference noise with explicit arm efficiencies.
 
@@ -788,6 +806,14 @@ def balanced_twin_beam_noise(
     difference. Unequal efficiencies or a weight other than 1 then need the
     effective closure declared explicitly (``covariance="effective"``).
 
+    At the analysis frequency, seed_excess_noise is the incident seed's classical
+    excess PSD in units of its own shot PSD (total input PSD/SNL - 1). It propagates
+    as common intensity fluctuations of the two amplified fields. An independent
+    coherent background contributes coherent_background_fraction of the total
+    detected, weighted shot noise. reference_excess_noise is an additional
+    electronics/background PSD divided by that total detected shot noise.
+    A source_noise input should exclude any separately specified seed noise.
+
     For eta_s == eta_c == eta, w == 1 and source_noise is None both closures
     reduce exactly to `intensity_difference_squeezing_dB(..., eta)` in linear
     units at G_s − G_c = 1.
@@ -796,8 +822,14 @@ def balanced_twin_beam_noise(
     G_c = np.asarray(G_c, dtype=float)
     eta_s = np.clip(np.asarray(eta_s, dtype=float), 0.0, 1.0)
     eta_c = np.clip(np.asarray(eta_c, dtype=float), 0.0, 1.0)
-    tech = (max(float(seed_excess_noise), 0.0)
-            + max(float(reference_excess_noise), 0.0))
+    seed = np.asarray(seed_excess_noise, dtype=float)
+    electronics = np.asarray(reference_excess_noise, dtype=float)
+    background = np.asarray(coherent_background_fraction, dtype=float)
+    if np.any(~np.isfinite(seed) | (seed < 0) | ~np.isfinite(electronics) | (electronics < 0)):
+        raise ValueError("Excess noise PSDs must be finite and nonnegative")
+    if np.any(~np.isfinite(background) | (background < 0) | (background > 1)):
+        raise ValueError("The coherent background fraction must be in [0, 1]")
+
     if covariance == "microscopic":
         raise CovarianceUnavailable(
             "No microscopically propagated twin-beam covariance is available; "
@@ -811,12 +843,35 @@ def balanced_twin_beam_noise(
                 or not np.allclose(G_s - G_c, 1.0, rtol=1e-9, atol=1e-12)):
             raise ValueError("Ideal canonical fixture requires G_s>=1, G_c>=0 and G_s-G_c=1")
         moments = ideal_twin_beam_moments(G_s, eta_s, eta_c, bright_seed_limit=True)
-        return np.maximum(difference_noise(moments, reference_weight) + tech, 1e-30)
-    if covariance not in (None, "effective"):
+    elif covariance in (None, "effective"):
+        moments = _effective_balanced_moments(G_s, G_c, eta_s, eta_c, reference_weight,
+                                              source_noise, covariance)
+        if (not np.any(seed) and isinstance(reference_weight, str)
+                and reference_weight.lower() in ("optimal", "opt")):
+            # For the Poisson-arm effective closure this is also a minimizer
+            # when the covariance is zero and all positive weights are equivalent.
+            reference_weight = "shot"
+    else:
         raise ValueError("covariance must be None, 'effective', 'ideal_canonical' or 'microscopic'")
 
-    mean_s = eta_s * G_s
-    mean_c = eta_c * G_c
+    ms, mc = moments.mean_s, moments.mean_c
+    weight_moments = moments
+    if np.any(seed) and isinstance(reference_weight, str) and reference_weight.lower() in ("opt", "optimal"):
+        # For optimization the input fluctuations are a rank-one addition
+        # to the arm covariance, proportional to (ms, mc) (ms, mc)^T.
+        weight_moments = replace(moments, var_s=moments.var_s + seed * ms**2,
+                                 var_c=moments.var_c + seed * mc**2,
+                                 cov=moments.cov + seed * ms * mc)
+    w = _difference_weight(reference_weight, ms, mc, weight_moments)
+    twin_noise = difference_noise(moments, w)
+    # Project that rank-one term before squaring, so even very large common
+    # input RIN cancels at the DC-balanced weight without numerical subtraction.
+    if np.any(seed):
+        twin_noise = twin_noise + seed * (ms - w * mc)**2 / np.maximum(ms + w*w*mc, 1e-30)
+    return np.maximum((1.0 - background) * twin_noise + background + electronics, 1e-30)
+
+
+def _effective_balanced_moments(G_s, G_c, eta_s, eta_c, reference_weight, source_noise, covariance):
     if source_noise is None:
         # Source intensity-difference covariance consistent with the conserved
         # (N_s − N_c) result: at w=1, eta_s=eta_c this gives exactly
@@ -837,29 +892,23 @@ def balanced_twin_beam_noise(
         S0 = np.clip(np.asarray(source_noise, dtype=float), 0.0, None)
         cov0 = 0.5 * (G_s + G_c) * (1.0 - S0)
         cov0 = np.clip(cov0, 0.0, np.sqrt(np.maximum(G_s * G_c, 0.0)))
-    cov = eta_s * eta_c * cov0
-
-    if isinstance(reference_weight, str) and reference_weight.lower() in ("optimal", "opt"):
-        # Poissonian arms give V_c m_s = V_s m_c, so the covariance optimum of
-        # this closure is exactly the square-root weight.
-        reference_weight = "shot"
-    w = _difference_weight(reference_weight, mean_s, mean_c)
-
-    var = mean_s + w * w * mean_c - 2.0 * w * cov
-    shot = mean_s + w * w * mean_c
-    return np.maximum(var / np.maximum(shot, 1e-30) + tech, 1e-30)
+    mean_s, mean_c = eta_s * G_s, eta_c * G_c
+    return TwinBeamMoments(mean_s, mean_c, mean_s, mean_c, eta_s * eta_c * cov0,
+                           "bright_seed_poisson_arm_closure", "external_pure_loss",
+                           COVARIANCE_EFFECTIVE, bright_seed_limit=True)
 
 
 def balanced_twin_beam_squeezing_dB(
         G_s, G_c, eta_s=1.0, eta_c=1.0, *, reference_weight=1.0,
         source_noise=None, covariance=None,
-        seed_excess_noise=0.0, reference_excess_noise=0.0):
+        seed_excess_noise=0.0, reference_excess_noise=0.0, coherent_background_fraction=0.0):
     """dB wrapper for `balanced_twin_beam_noise`."""
     S = balanced_twin_beam_noise(
         G_s, G_c, eta_s, eta_c, reference_weight=reference_weight,
         source_noise=source_noise, covariance=covariance,
         seed_excess_noise=seed_excess_noise,
-        reference_excess_noise=reference_excess_noise)
+        reference_excess_noise=reference_excess_noise,
+        coherent_background_fraction=coherent_background_fraction)
     return 10.0 * np.log10(S)
 
 
@@ -867,7 +916,7 @@ def segmented_loss_noise_squeezing_dB(
         G_s, G_c, eta, *, in_cell_loss_frac=0.0,
         seed_excess_noise=0.0, pump_scatter_noise=0.0,
         eom_residual_noise=0.0):
-    """Legacy gain-referred loss/noise fixture, not a microscopic prediction."""
+    """Legacy gain-referred fixture. All three excess PSD terms use detected SNL."""
     S_ideal = ideal_twin_beam_noise(G_s, G_c)
     tau_cell = 1.0 - np.clip(float(in_cell_loss_frac), 0.0, 1.0)
     S_cell = tau_cell * S_ideal + (1.0 - tau_cell)

@@ -38,6 +38,7 @@ def seed_noise_components(power_W, omega_rad_s, *, classical_rin_per_Hz=0.0):
         "seed_omega_rad_s": omega,
         "classical_rin_per_Hz": classical,
         "shot_rin_per_Hz": shot_rin,
+        "input_excess_over_shot": classical / shot_rin,
         "seed_fano": 1.0 + classical / shot_rin,
         "classical_power_psd_W2_per_Hz": classical * power ** 2,
         "shot_power_psd_W2_per_Hz": optical_shot_power_psd(power, omega),
@@ -57,6 +58,8 @@ def jasperse_distributed_noise(
     exactly; probe and conjugate losses may differ. ``Ta,Tb`` are intensity
     transmissions with mixing removed. Efficiencies describe *external*
     downstream loss only. The seed is bright, the conjugate input vacuum.
+    Detected gains count output photons per input seed photon. NF is the
+    intensity-difference PSD divided by the detected two-arm shot PSD.
 
     This is not a bath inferred from an arbitrary susceptibility/transfer M,
     and not a microscopic atomic Langevin or finite-RF prediction. It does
@@ -87,7 +90,8 @@ def jasperse_distributed_noise(
     generator[..., 0, 1] = generator[..., 1, 0] = squeeze
     eigenvalues, vectors = np.linalg.eigh(generator)
     transpose = np.swapaxes(vectors, -1, -2)
-    transfer = (vectors * np.exp(eigenvalues)[..., None, :]) @ transpose
+    amplification = np.exp(eigenvalues)
+    transfer = (vectors * amplification[..., None, :]) @ transpose
     injection = np.zeros_like(generator)
     injection[..., 0, 0] = -np.log(ta)
     injection[..., 1, 1] = -np.log(tb)
@@ -95,21 +99,41 @@ def jasperse_distributed_noise(
     # Integral exp(t*(lambda_i+lambda_j)) dt, including its removable zero.
     integral = np.ones_like(summed)
     np.divide(np.expm1(summed), summed, out=integral, where=summed != 0.0)
-    reservoir = vectors @ ((transpose @ injection @ vectors) * integral) @ transpose
+    reservoir_eigen = (transpose @ injection @ vectors) * integral
+    reservoir = vectors @ reservoir_eigen @ transpose
     input_covariance = np.zeros_like(generator)
     input_covariance[..., 0, 0] = fano
     input_covariance[..., 1, 1] = 1.0
     covariance = (transfer @ input_covariance
                   @ np.swapaxes(transfer, -1, -2) + reservoir)
-    attenuation = np.stack((np.sqrt(eta_p), np.sqrt(eta_c)), axis=-1)
-    mean = transfer[..., :, 0] * attenuation
-    detected_covariance = covariance * attenuation[..., :, None] * attenuation[..., None, :]
-    detected_covariance[..., 0, 0] += 1.0 - eta_p
-    detected_covariance[..., 1, 1] += 1.0 - eta_c
-    difference = mean * np.array([1.0, -1.0])
-    numerator = np.einsum("...i,...ij,...j->...", difference,
-                          detected_covariance, difference)
-    total = np.sum(mean ** 2, axis=-1)
+    efficiency = np.stack((eta_p, eta_c), axis=-1)
+    detected_gain = transfer[..., :, 0] ** 2 * efficiency
+
+    # Project each input/reservoir before squaring. Subtracting arm-space
+    # covariances loses the squeezed variance against terms of order gain**2.
+    # V.T diag(eta_p, -eta_c) V is the signed detection weight in the
+    # generator eigenbasis. Its diagonal uses the generator tilt directly,
+    # retaining small imbalances for almost identical internal losses.
+    diagonal_gap = generator[..., 0, 0] - generator[..., 1, 1]
+    span = np.hypot(diagonal_gap, 2.0 * squeeze)
+    tilt = np.array(vectors[..., 0, 1]**2 - vectors[..., 1, 1]**2)
+    np.divide(diagonal_gap, span, out=tilt, where=span > 0.0)
+    avg = 0.5 * (eta_p + eta_c)
+    diff = 0.5 * (eta_p - eta_c)
+    signed_weight = np.empty_like(generator)
+    signed_weight[..., 0, 0] = diff - avg * tilt
+    signed_weight[..., 1, 1] = diff + avg * tilt
+    signed_weight[..., 0, 1] = signed_weight[..., 1, 0] = (
+        2.0 * avg * vectors[..., 0, 0] * vectors[..., 0, 1])
+    output_direction = np.einsum("...ij,...j->...i", signed_weight,
+                                 amplification * vectors[..., 0, :])
+    input_direction = np.einsum("...ij,...j->...i", vectors, amplification * output_direction)
+    input_variance = fano * input_direction[..., 0]**2 + input_direction[..., 1]**2
+    reservoir_variance = np.einsum("...i,...ij,...j->...", output_direction,
+                                   reservoir_eigen, output_direction)
+    loss_vacuum = np.sum(detected_gain * (1.0 - efficiency), axis=-1)
+    total = np.sum(detected_gain, axis=-1)
+    numerator = input_variance + reservoir_variance + loss_vacuum
     with np.errstate(invalid="ignore", divide="ignore"):
         nf = np.where(total > 0.0, numerator / total, np.nan)
         db = np.where(nf > 0.0, 10.0 * np.log10(nf), np.nan)
@@ -119,8 +143,8 @@ def jasperse_distributed_noise(
         "transfer": transfer,
         "quadrature_covariance": covariance,
         "reservoir_quadrature_covariance": reservoir,
-        "detected_probe_gain": mean[..., 0] ** 2,
-        "detected_conjugate_gain": mean[..., 1] ** 2,
+        "detected_probe_gain": detected_gain[..., 0],
+        "detected_conjugate_gain": detected_gain[..., 1],
         "scope": (
             "Jasperse uniform real phase-matched distributed gain/loss reference; "
             "bright seed, vacuum conjugate/reservoirs, static linearization; "

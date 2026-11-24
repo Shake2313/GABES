@@ -667,7 +667,7 @@ def sec_stray():
     for tech in (0.0, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0):
         S = float(observables.balanced_twin_beam_noise(
             G, Gc, ETA, ETA, reference_weight="dc",
-            source_noise=S_ideal, covariance="effective", seed_excess_noise=tech))
+            source_noise=S_ideal, covariance="effective", reference_excess_noise=tech))
         tech_rows.append(dict(excess_noise_shot_units=tech,
                               S=S, xi_dB=10 * math.log10(S),
                               above_sql=bool(S > 1.0)))

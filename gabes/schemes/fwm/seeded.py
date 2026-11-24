@@ -96,12 +96,12 @@ def seeded_balanced_gain_noise_dB(
         G_s, G_c, eta_s, eta_c, *, seed_excess_noise=0.0, detected_excess_noise=None):
     """Gain diagnostic with explicit arm efficiencies and noise reference plane.
 
-    The engine passes source-referred scatter; historical scanner remaps pass a
-    detected additive term and their own effective arm efficiencies.
+    Both legacy excess-noise keywords add PSD relative to the detected shot
+    noise. The engine uses this convention for its pump-scatter diagnostic.
     """
     noise = observables.balanced_twin_beam_noise(
         G_s, G_c, eta_s, eta_c, reference_weight="dc",
-        seed_excess_noise=seed_excess_noise)
+        reference_excess_noise=seed_excess_noise)
     if detected_excess_noise is not None:
         noise = noise + detected_excess_noise
     return 10.0 * np.log10(np.maximum(noise, 1e-30))
@@ -523,7 +523,7 @@ def compute_spectrum(D_GHz, *,
             if phase_detail == PHASE_ULTRA and score_noise_enabled:
                 noise = observables.balanced_twin_beam_noise(
                     G_s_rows, G_c_rows, score_eta, score_eta, reference_weight="dc",
-                    seed_excess_noise=score_scatter)
+                    reference_excess_noise=score_scatter)
                 return G_s_rows, 10.0 * np.log10(np.maximum(noise, 1e-30))
             return G_s_rows, observables.gain_referred_noise_dB(
                 G_s_rows, G_c_rows, score_eta)

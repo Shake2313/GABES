@@ -62,3 +62,25 @@ def test_canonical_gain_relation_does_not_silently_opt_in():
     result = observables.coincidence_stats(np.array([2.0]), np.array([1.0]))
     assert result["ideal_nonclassicality"] is None
     assert not result["evidence"]["ideal_fixture_opt_in"]
+
+
+def test_detected_moments_drive_counts_and_arm_correlations():
+    vacuum = observables.ideal_twin_beam_moments(4., .4, .8)
+    stats = observables.coincidence_stats(moments=vacuum)
+    assert stats["n_s"] == pytest.approx(1.2)
+    assert stats["n_c"] == pytest.approx(2.4)
+    assert stats["g2_ss"] == pytest.approx(2.)
+    assert stats["g2_sc"] == pytest.approx(2 + 1/3)
+    seeded = observables.ideal_twin_beam_moments(
+        4., .4, .8, seed_photons=3., env_photons_c=.2)
+    result = observables.coincidence_stats(moments=seeded)
+    assert result["g2_ss"] < 2 and result["g2_cc"] < 2
+    assert result["evidence"]["environment"] == "thermal_attenuation"
+    assert result["physical_nonclassicality"] is None
+    dark = observables.coincidence_stats(moments=observables.ideal_twin_beam_moments(4., 0., .8))
+    assert not dark["populated_arms"] and np.isnan(dark["g2_sc"])
+    with pytest.raises(ValueError, match="absolute photon-count"):
+        observables.coincidence_stats(moments=observables.ideal_twin_beam_moments(
+            4., bright_seed_limit=True))
+    with pytest.raises(ValueError, match="moments or gain"):
+        observables.coincidence_stats(4., 3., moments=vacuum)

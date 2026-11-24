@@ -219,3 +219,34 @@ def test_closure_requests_are_explicit():
     w = mean_s / mean_c
     expected = (mean_s + w * w * mean_c - 2 * w * cov) / (mean_s + w * w * mean_c)
     assert declared == pytest.approx(expected, rel=1e-15)
+
+
+@pytest.mark.parametrize("closure", ["ideal_canonical", "effective"])
+def test_seed_excess_at_input_and_background_at_detector(closure):
+    G, eta_s, eta_c, w = 5., .4, .75, .8
+    seed_excess, background, electronics = 2.5, .3, .15
+    kwargs = dict(eta_s=eta_s, eta_c=eta_c, reference_weight=w, covariance=closure)
+    ms, mc = eta_s * G, eta_c * (G - 1)
+    shot = ms + w**2 * mc
+    twin = observables.balanced_twin_beam_noise(G, G - 1, **kwargs)
+    seed_contribution = seed_excess * (ms - w * mc)**2 / shot
+    result = observables.balanced_twin_beam_noise(
+        G, G - 1, seed_excess_noise=seed_excess, coherent_background_fraction=background,
+        reference_excess_noise=electronics, **kwargs)
+    assert result == pytest.approx((1 - background) * (twin + seed_contribution)
+                                   + background + electronics)
+    kwargs["reference_weight"] = "dc"
+    dc = observables.balanced_twin_beam_noise(G, G - 1, **kwargs)
+    assert observables.balanced_twin_beam_noise(
+        G, G - 1, seed_excess_noise=1e16, **kwargs) == pytest.approx(dc)
+    assert observables.balanced_twin_beam_noise(
+        G, G - 1, coherent_background_fraction=1., **kwargs) == 1.
+
+
+def test_optimal_weight_accounts_for_technical_seed_noise():
+    kwargs = dict(eta_s=.8, eta_c=.4, seed_excess_noise=10., covariance="ideal_canonical")
+    w = np.linspace(.01, 6., 5001)
+    curve = observables.balanced_twin_beam_noise(3., 2., reference_weight=w, **kwargs)
+    optimal = observables.balanced_twin_beam_noise(3., 2., reference_weight="optimal", **kwargs)
+    assert optimal <= curve.min()
+    assert optimal == pytest.approx(curve.min(), rel=1e-5)
