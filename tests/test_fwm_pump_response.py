@@ -34,14 +34,16 @@ def _fixture():
 
 @pytest.mark.parametrize("historical", [False, True], ids=["current", "historical"])
 def test_static_pump_state_matches_independent_svd_null_vector(monkeypatch, historical):
+    scale_kwargs = {}
     if historical:
         _historical_atomic_data(monkeypatch)
+        scale_kwargs["transition_scales"] = fwm.LEGACY_TRANSITION_DIPOLE_SCALE
     pump, atom, delta, deff = _fixture()
     reference = fwm.pump_only_weak_response_reference(
-        pump, pump, delta, deff, atom=atom)
+        pump, pump, delta, deff, atom=atom, **scale_kwargs)
     rho = reference.pump_state[0]
     L = core.build_liouvillian(
-        fwm.pump_hamiltonian_at_Deff_zero(pump, pump), atom)
+        fwm.pump_hamiltonian_at_Deff_zero(pump, pump, **scale_kwargs), atom)
     L = L - deff[0] * atom.S_v
 
     _u, _s, vh = np.linalg.svd(L)
@@ -96,48 +98,59 @@ def test_pump_reference_default_atom_matches_production_dissipator():
         rtol=2e-13, atol=2e-23)
 
 
+@pytest.mark.parametrize("branch", [-1, +1])
 @pytest.mark.parametrize("n_f", [1, 3])
-def test_static_pump_frame_is_unitarily_equal_to_minus_branch_floquet(n_f):
+def test_static_pump_frame_is_unitarily_equal_to_seeded_floquet(n_f, branch):
     pump, atom, _delta, _deff = _fixture()
     delta_axis = 2.0 * np.pi * np.array([-40e6, -8e6, 0.0, 25e6])
     deff = 2.0 * np.pi * np.array([0.75e9, 0.9e9, 1.05e9])
     static = fwm.pump_only_weak_response_reference(
         pump, pump, delta_axis[:1], deff, atom=atom).pump_state
-    expected = fwm.pump_frame_to_seeded_harmonics(static, n_f=n_f, branch=-1)
+    expected = fwm.pump_frame_to_seeded_harmonics(static, n_f=n_f, branch=branch)
     if n_f > 1:
         np.testing.assert_allclose(expected[:, :n_f - 1], 0.0, atol=0.0)
         np.testing.assert_allclose(expected[:, n_f + 2:], 0.0, atol=0.0)
 
-    Cp, Cm = fwm.sideband_template(pump, pump, 0.0, branch=-1)
+    Cp, Cm = fwm.sideband_template(pump, pump, 0.0, branch=branch)
     for delta in delta_axis:
         L0 = core.build_liouvillian(
             fwm.static_hamiltonian_at_Deff_zero(
-                pump, pump, 0.0, delta, branch=-1), atom)
+                pump, pump, 0.0, delta, branch=branch), atom)
         actual = core.floquet_solve_truncated(
-            L0, Cp, Cm, fwm.seeded_sideband_beat(delta, -1), deff,
+            L0, Cp, Cm, fwm.seeded_floquet_frequency(delta, branch), deff,
             atom.S_v, fwm.N_LEVELS, n_f, return_harmonics=True)
         np.testing.assert_allclose(actual, expected, rtol=2e-11, atol=2e-13)
 
 
-def test_plus_branch_reference_fails_closed_until_frame_is_corrected():
-    pump, atom, delta, deff = _fixture()
-    with pytest.raises(NotImplementedError, match="plus-branch"):
-        fwm.pump_only_weak_response_reference(
-            pump, pump, delta, deff, atom=atom, branch=+1)
-    with pytest.raises(NotImplementedError, match="plus-branch"):
-        fwm.pump_frame_to_seeded_harmonics(
-            np.eye(fwm.N_LEVELS) / fwm.N_LEVELS, n_f=3, branch=+1)
+@pytest.mark.parametrize("pump_power_w", [0.0, 0.6], ids=["passive", "pumped"])
+def test_same_frequency_response_is_independent_of_the_seeded_branch(pump_power_w):
+    # Relabel the same two beams: +probe is -conjugate, +conjugate is -probe.
+    # Swap the finite drive amplitudes too, so each physical mode keeps its power.
+    pump = fwm.rabi_freq(pump_power_w, fwm.W_PUMP)
+    atom = fwm.collisional_atom(394.15)
+    low_seed = fwm.rabi_freq(8e-6, fwm.W_PROBE)
+    high_seed = 0.65 * low_seed
+    delta = 2.0 * np.pi * np.array([-16e6, 0.0, 12e6])
+    deff = 2.0 * np.pi * np.array([-1.06e9, 0.9e9])
+    minus = fwm.chi_matrix_table(pump, pump, low_seed, high_seed,
+                                 delta, deff, -1, atom=atom, n_f=3)
+    plus = fwm.chi_matrix_table(pump, pump, high_seed, low_seed,
+                                -delta, deff, +1, atom=atom, n_f=3)
+    for minus_channel, plus_channel in zip(minus, reversed(plus)):
+        np.testing.assert_allclose(minus_channel, plus_channel, rtol=2e-11, atol=2e-23)
 
 
 @pytest.mark.parametrize("historical", [False, True], ids=["current", "historical"])
 def test_weak_nambu_response_golden_residual_and_frequency_separation(monkeypatch, historical):
+    scale_kwargs = {}
     if historical:
         _historical_atomic_data(monkeypatch)
+        scale_kwargs["transition_scales"] = fwm.LEGACY_TRANSITION_DIPOLE_SCALE
     pump, atom, delta, deff = _fixture()
     analysis = 2.0 * np.pi * np.array([0.0, 0.1e6, 4.0e6])
     reference = fwm.pump_only_weak_response_reference(
         pump, pump, delta, deff, atom=atom,
-        analysis_frequency_axis_rad_s=analysis)
+        analysis_frequency_axis_rad_s=analysis, **scale_kwargs)
     expected_relative = -fwm.OMEGA_HF + delta[None, :] + analysis[:, None]
     np.testing.assert_allclose(reference.relative_frequency_rad_s,
                                expected_relative, rtol=0.0, atol=0.0)
@@ -155,13 +168,14 @@ def test_weak_nambu_response_golden_residual_and_frequency_separation(monkeypatc
     assert reference.provenance["analysis_frequency"].startswith("independent")
 
 
-def test_finite_seed_converges_quadratically_to_pump_reference():
+@pytest.mark.parametrize("branch", [-1, +1])
+def test_finite_seed_converges_quadratically_to_pump_reference(branch):
     pump, atom, _delta, _deff = _fixture()
     base_seed = fwm.rabi_freq(8e-6, fwm.W_PROBE)
     delta = 2.0 * np.pi * np.array([-30e6, -8e6, 0.0, 12e6, 40e6])
     deff = 2.0 * np.pi * np.array([0.75e9, 0.9e9, 1.05e9])
     reference = fwm.pump_only_weak_response_reference(
-        pump, pump, delta, deff, atom=atom)
+        pump, pump, delta, deff, atom=atom, branch=branch)
     target = (reference.chi_ss[0], reference.chi_cs[0],
               reference.chi_sc[0], reference.chi_cc[0])
     scale = max(float(np.max(np.abs(value))) for value in target)
@@ -171,7 +185,7 @@ def test_finite_seed_converges_quadratically_to_pump_reference():
     for fraction in fractions:
         finite = fwm.chi_matrix_table(
             pump, pump, base_seed * fraction, base_seed * fraction,
-            delta, deff, -1, atom=atom, n_f=3)
+            delta, deff, branch, atom=atom, n_f=3)
         errors.append(max(float(np.max(np.abs(a - b)))
                           for a, b in zip(finite, target)) / scale)
     slopes = np.diff(np.log(errors)) / np.diff(np.log(fractions))
@@ -180,10 +194,11 @@ def test_finite_seed_converges_quadratically_to_pump_reference():
 
     finite_nf1 = fwm.chi_matrix_table(
         pump, pump, base_seed * fractions[-1], base_seed * fractions[-1],
-        delta, deff, -1, atom=atom, n_f=1)
+        delta, deff, branch, atom=atom, n_f=1)
     nf1_error = max(float(np.max(np.abs(a - b)))
                     for a, b in zip(finite_nf1, target)) / scale
-    assert nf1_error > 4e-3
+    # At the weakest drive the missing harmonics still dominate the seed error.
+    assert nf1_error > 100 * errors[-1]
 
 
 def test_dc_response_uses_full_stationary_projection_and_matches_derivative():
@@ -248,14 +263,15 @@ def test_trace_zero_response_accepts_one_frequency_per_liouvillian_batch():
     np.testing.assert_allclose(batched, separate, rtol=1e-14, atol=1e-15)
 
 
-def test_pole_sum_matches_direct_resolvent_and_excludes_stationary_visibility():
+@pytest.mark.parametrize("branch", [-1, +1])
+def test_pole_sum_matches_direct_resolvent_and_excludes_stationary_visibility(branch):
     pump, atom, delta, deff = _fixture()
     for analysis in 2.0 * np.pi * np.array([0.0, 0.1e6, 4.0e6]):
         direct = fwm.pump_only_weak_response_reference(
-            pump, pump, delta, deff, atom=atom,
+            pump, pump, delta, deff, atom=atom, branch=branch,
             analysis_frequency_axis_rad_s=[analysis])
         poles = fwm.pump_only_pole_residue_reference(
-            pump, pump, delta[0], deff[0], atom=atom,
+            pump, pump, delta[0], deff[0], atom=atom, branch=branch,
             analysis_frequency_rad_s=analysis)
         np.testing.assert_allclose(
             poles["response"], direct.chi_matrix[0, 0, 0],

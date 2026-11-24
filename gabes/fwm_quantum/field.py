@@ -27,7 +27,7 @@ class ReducedFieldPair:
 def reduced_readout_operators(transition_scales=None):
     """O=(probe lowering on g2, conjugate raising on g1); no private reference import."""
     ops = np.zeros((2, 4, 4), complex)
-    scales = (fwm.TRANSITION_DIPOLE_SCALE if transition_scales is None
+    scales = (fwm.LEGACY_TRANSITION_DIPOLE_SCALE if transition_scales is None
               else validated_transition_scales(transition_scales))
     for excited in fwm.EXCITED_STATES:
         ops[0, fwm.G2, excited] = scales[fwm.G2, excited]

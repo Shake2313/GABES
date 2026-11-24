@@ -21,7 +21,7 @@ def _local_settings(delta_mhz=23.7, velocity=0.0, seed_power=None):
         two_photon_detuning_rad_s=delta_mhz*2*np.pi*1e6,
         optical_omega_rad_s=c.C_LIGHT*np.array([ks[0], kc[0]]),
         uniform_area_m2=observables.gaussian_mode_area(330e-6),
-        weak_line_strength=.74/12, mean_order=3, response_order=3,
+        weak_line_strength=.74*fwm.physical_coupling_norm(-1), mean_order=3, response_order=3,
         phase_samples=32)
 
 
@@ -53,15 +53,19 @@ def test_connected_covariance_source_matches_independent_jump_diffusion(delta, v
     assert direct["atomic_diagnostics"]["source_covariance_harmonic_order"] == 6
 
 
-def test_zero_seed_net_drift_matches_independent_susceptibility_response():
+@pytest.mark.parametrize("legacy", (False, True))
+def test_zero_seed_net_drift_matches_independent_susceptibility_response(legacy):
     kwargs = _local_settings(seed_power=0.)
+    kwargs["weak_line_strength"] = .74*fwm.physical_coupling_norm(-1, legacy=legacy)
+    kwargs["legacy_coupling_fixture"] = legacy
+    scales = fwm.LEGACY_TRANSITION_DIPOLE_SCALE if legacy else fwm.TRANSITION_DIPOLE_SCALE
     with core.blas_single_thread():
         result = local_dressed_absorption(**kwargs, method="connected-qrt")
         response = fwm.pump_only_weak_response_reference(
             kwargs["pump_rabi_rad_s"], kwargs["pump_rabi_rad_s"],
             [kwargs["two_photon_detuning_rad_s"]],
             [kwargs["one_photon_detuning_rad_s"]],
-            atom=fwm.collisional_atom(kwargs["T"]))
+            atom=fwm.collisional_atom(kwargs["T"]), transition_scales=scales)
     chi = response.chi_matrix[0, 0, 0]
     expected = observables._gain_matrix_from_chi(
         [chi[0, 0]], [chi[0, 1]], [chi[1, 0].conjugate()], [chi[1, 1].conjugate()],
@@ -96,7 +100,7 @@ def test_finite_seed_harmonic_refinement_at_narrow_raman_pole():
 def test_selected_maxwell_absorption_is_bounded_with_reported_quadrature_error():
     kwargs = dict(D_GHz=1., T=386.15, P_pump=.2948,
         P_probe=3.06e-6/(20.3063457/26), w_pump=530e-6, w_probe=330e-6,
-        delta_mhz=23.7, L=.0125, weak_line_strength=.74/12)
+        delta_mhz=23.7, L=.0125, weak_line_strength=.74*fwm.physical_coupling_norm(-1))
     result = selected_dressed_cell_absorption(**kwargs)
     for arm in ("probe", "conjugate"):
         values = result[arm]
@@ -115,7 +119,7 @@ def test_selected_maxwell_absorption_is_bounded_with_reported_quadrature_error()
 def test_pump_and_seed_off_is_the_jasperse_pure_loss_limit():
     result = selected_dressed_cell_absorption(D_GHz=1., T=386.15,
         P_pump=0., P_probe=0., w_pump=530e-6, w_probe=330e-6,
-        delta_mhz=23.7, L=.0125, weak_line_strength=.74/12)
+        delta_mhz=23.7, L=.0125, weak_line_strength=.74*fwm.physical_coupling_norm(-1))
     for arm in ("probe", "conjugate"):
         assert result[arm]["alpha_em_per_m"] == pytest.approx(0., abs=1e-12)
         assert result[arm]["in_cell_absorption_transmission"] == pytest.approx(
@@ -127,6 +131,6 @@ def test_pump_and_seed_off_is_the_jasperse_pure_loss_limit():
 def test_selected_invalid_or_unsupported_inputs_rejected(overrides):
     kwargs = dict(D_GHz=1., T=386.15, P_pump=.2948, P_probe=3e-6,
         w_pump=530e-6, w_probe=330e-6, delta_mhz=23.7, L=.0125,
-        weak_line_strength=.74/12)
+        weak_line_strength=.74*fwm.physical_coupling_norm(-1))
     with pytest.raises((ValueError, NotImplementedError)):
         selected_dressed_cell_absorption(**dict(kwargs, **overrides))

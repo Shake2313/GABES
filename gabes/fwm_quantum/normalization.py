@@ -63,13 +63,13 @@ class ReducedDipoles:
 def reduced_dipoles(convention):
     """Named, fixed reductions; no adjustable efficiency or noise scale."""
     if convention == "legacy-reciprocal":
-        return ReducedDipoles(c.DIPOLE_D1/np.sqrt(12), fwm.TRANSITION_DIPOLE_SCALE,
+        return ReducedDipoles(c.DIPOLE_D1/np.sqrt(12), fwm.LEGACY_TRANSITION_DIPOLE_SCALE,
             convention, "historical weak-field dipoles reused for pump; not a Zeeman reduction")
     if convention == "uniform-zeeman-rms":
         scales = np.zeros((4, 4))
         for g, Fg in fwm.GROUND_F.items():
             for e, Fe in fwm.EXCITED_F.items():
-                scales[g, e] = np.sqrt(species.line_strength(Fg, Fe, 2.5, .5, .5)/3)
+                scales[g, e] = np.sqrt(hyperfine.uniform_manifold_dipole_fraction(Fg, Fe))
         return ReducedDipoles(d1_dipole_from_decay(c.GAMMA, c.NU_D1_85RB), scales,
             convention, "uniform sublevels within each F, weak absorption RMS; positive four-level amplitudes are a conditional nonlinear surrogate")
     raise ValueError("unknown reduced dipole convention")

@@ -51,7 +51,7 @@ from ...dressed_cell_absorption import selected_dressed_cell_absorption
 from ..base import ExtraView, ParamSpec, Preset, Scheme
 from .common import (
     ATOM, G1, G2, E2, E3, GROUND_STATES, EXCITED_STATES, N_LEVELS, GROUND_F, EXCITED_F,
-    TRANSITION_DIPOLE_SCALE, _g, _e, physical_coupling_ledger, physical_coupling_norm,
+    TRANSITION_DIPOLE_SCALE, LEGACY_TRANSITION_DIPOLE_SCALE, _g, _e, physical_coupling_ledger, physical_coupling_norm,
     SeededCouplingFactors, PumpWeakResponseReference, NoncollinearPumpWeakResponseReference,
     L_CELL, W_PUMP, W_PROBE, P_PUMP, P_PROBE, T_CELL, QE_DETECTOR, SEEDED_POST_CELL_LOSS_PCT,
     SEEDED_DETECTION_EFFICIENCY_PCT, RESPONSIVITY_AW, LOSS_FRAC, ETA_TOTAL, PROBE_WAVELENGTH_NM,
@@ -68,7 +68,7 @@ from .common import (
     HARDENED_PUMP_SCATTER_KAPPA, assess_floquet_scan_convergence,
     pump_weak_response_reference_provenance, noncollinear_doppler_reference_provenance,
     seeded_atomic_solver_provenance, seeded_parameter_provenance, seeded_validation_claim_gate,
-    seeded_sideband_beat, NM, MHZ_ANG, MODE_SEEDED, MODE_SEEDED_LEGACY, MODE_BIPHOTON, MODE_LABELS,
+    seeded_sideband_beat, seeded_floquet_frequency, NM, MHZ_ANG, MODE_SEEDED, MODE_SEEDED_LEGACY, MODE_BIPHOTON, MODE_LABELS,
     NOISE_CONSTANT, NOISE_GAIN_PROPORTIONAL, NOISE_MODE_LABELS, BIPHOTON_PREDICTIVE,
     BIPHOTON_CALIBRATED, BIPHOTON_MODELS, BIPHOTON_MODEL_LABELS, GROUND_DEPHASING_FRAC,
     PRED_RHO_CLIP, PRED_V_OVERSAMPLE, PRED_V_FWHM_TOL, PRED_V_MAX_REFINE, PRED_V_MAX_POINTS,

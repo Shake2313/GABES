@@ -143,11 +143,13 @@ def _temperature_tables(T_K, delta_axis, vstep=VELOCITY_STEP,
         if RESPONSE_METHOD != fwm.RESPONSE_GRID:
             rows = fwm.chi_pole_rows(
                 Op, Op, Os, Os, delta_axis, BRANCH, atom=atom_T,
+                transition_scales=fwm.LEGACY_TRANSITION_DIPOLE_SCALE,
                 guard_delta_eff=float(np.median(master_delta_eff)))
             if rows is not None:
                 return rows, v_grid, weights, master_delta_eff
         tables = fwm.chi_matrix_table(
-            Op, Op, Os, Os, delta_axis, master_delta_eff, BRANCH, atom=atom_T)
+            Op, Op, Os, Os, delta_axis, master_delta_eff, BRANCH, atom=atom_T,
+            transition_scales=fwm.LEGACY_TRANSITION_DIPOLE_SCALE)
     return tables, v_grid, weights, master_delta_eff
 
 
@@ -175,7 +177,7 @@ def _best_from_tables(tables, master_delta_eff, v_grid, weights, delta_axis,
     N_atoms = hyperfine.number_density(T_K)
     G_s, G_c, _, _ = fwm.seeded_linear_gain(
         chi, fwm.K_VEC, fwm.K_VEC, fwm.L_CELL, N_atoms,
-        LINE_STRENGTH * fwm.physical_coupling_norm(BRANCH))
+        LINE_STRENGTH * fwm.physical_coupling_norm(BRANCH, legacy=True))
     G_s_smallsignal = G_s
     G_s, G_c = observables.pump_depletion_saturation(
         G_s, G_c, P_PUMP, P_SEED)

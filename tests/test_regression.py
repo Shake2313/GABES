@@ -197,7 +197,7 @@ def test_fwm_uses_rb85_d1_hyperfine_strengths():
     }
     for (g, e), key in mapping.items():
         expected = 3.0 * hyperfine.CF2[key]
-        assert np.isclose(fwm.TRANSITION_DIPOLE_SCALE[g, e] ** 2, expected)
+        assert np.isclose(fwm.LEGACY_TRANSITION_DIPOLE_SCALE[g, e] ** 2, expected)
 
     decay = {(e, g): rate for e, g, rate in fwm.ATOM.decay}
     for e, fe in ((fwm.E2, 2), (fwm.E3, 3)):

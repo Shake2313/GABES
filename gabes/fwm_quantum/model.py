@@ -28,11 +28,9 @@ def reduced_pump_system(pump_rabi_rad_s, effective_one_photon_detuning_rad_s, *,
         transit_rate_s_inverse, [5/12, 7/12, 0, 0],
         source="explicitly supplied Markov thermal replacement rate")
     reservoirs = ExplicitReservoirs(4, radiative.channels+reset)
-    h = fwm.pump_hamiltonian_at_Deff_zero(pump, pump)
-    if transition_scales is not None:
-        scales = validated_transition_scales(transition_scales)
-        h[:2, 2:] = pump*scales[:2, 2:]/2
-        h[2:, :2] = h[:2, 2:].conj().T
+    scales = (fwm.LEGACY_TRANSITION_DIPOLE_SCALE if transition_scales is None
+              else validated_transition_scales(transition_scales))
+    h = fwm.pump_hamiltonian_at_Deff_zero(pump, pump, transition_scales=scales)
     h = h-detuning*np.diag([0., 0., 1., 1.])
     return h, reservoirs
 

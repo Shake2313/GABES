@@ -193,7 +193,7 @@ def test_finite_seed_angular_poles_match_independent_tensor_at_heldout_point():
     reference, pump, seed = _finite_reference(delta_mhz)
     atom = fwm.collisional_atom(T_LITERATURE)
     vx, wx = doppler.maxwell_legendre_grid(T_LITERATURE, order=32, cutoff_sigma=5.5)
-    vz, wz = doppler.maxwell_legendre_grid(T_LITERATURE, order=96, cutoff_sigma=5.5)
+    vz, wz = doppler.maxwell_legendre_grid(T_LITERATURE, order=160, cutoff_sigma=5.5)
     delta = 2 * np.pi * delta_mhz * 1e6
     deff, effective_delta = doppler.noncollinear_atomic_detunings_rad_s(
         2 * np.pi * D_GHZ * 1e9, delta, vx[None, :], vz[:, None],
@@ -228,7 +228,8 @@ def test_finite_seed_angular_poles_match_independent_tensor_at_heldout_point():
 
 def test_finite_seed_recovers_weak_tensor_and_collinear_limit():
     reference, _, _ = _finite_reference(DELTA_MHZ, seed_power=8e-14)
-    weak = _reference(order=24)
+    # Resolve the narrow longitudinal optical feature in the weak-response tensor.
+    weak = _reference(order=256, cutoff=6.0)
     np.testing.assert_allclose(np.asarray(reference["responses"][3]).ravel(),
                                [weak.chi_ss.item(), weak.chi_cs.item(),
                                 weak.chi_sc.item(), weak.chi_cc.item()], rtol=1.5e-5)
@@ -245,7 +246,9 @@ def test_finite_seed_recovers_weak_tensor_and_collinear_limit():
     expected = []
     for system, strength in forms.values():
         expected.extend(system.residues(delta).gaussian_mean(one_photon, sigma)[0] / strength)
-    np.testing.assert_allclose(np.asarray(equal_k["responses"][3]).ravel(), expected, rtol=2e-11)
+    # Independent shift-invert and collinear decompositions differ by ~2.5e-11
+    # relative at this operating point with the uniform-manifold dipoles.
+    np.testing.assert_allclose(np.asarray(equal_k["responses"][3]).ravel(), expected, rtol=5e-11)
     assert not np.array_equal(np.asarray(collinear["responses"][3]), equal_k["responses"][3])
 
 

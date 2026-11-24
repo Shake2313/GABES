@@ -77,7 +77,9 @@ def tiny_pump_off_spectra():
         modern = fwm.compute_spectrum(0.0, **settings)
         historical = fwm.compute_spectrum(
             0.0, legacy_mean_field_fixture=True, **settings)
-    return modern, historical, atomic_results
+        coupling_replay = fwm.compute_spectrum(
+            0.0, legacy_coupling_fixture=True, **settings)
+    return modern, historical, (coupling_replay, atomic_results)
 
 
 def test_tiny_compute_preserves_real_pump_off_absorption_and_labels_old_floor(
@@ -96,12 +98,20 @@ def test_tiny_compute_preserves_real_pump_off_absorption_and_labels_old_floor(
     assert "HISTORICAL_MEAN_FIELD_FIXTURE" in historical["claim_gate"]["badges"]
 
 
-def test_fixture_flag_changes_carriers_and_readout_without_shifting_atomic_response(
+def test_coupling_only_replay_restores_atomic_response_with_current_carriers_and_no_floor(
         tiny_pump_off_spectra):
-    modern, historical, atomic_results = tiny_pump_off_spectra
-    assert len(atomic_results) == 2
-    for present, old in zip(*atomic_results):
-        np.testing.assert_array_equal(present, old)
+    modern, historical, (coupling_replay, atomic_results) = tiny_pump_off_spectra
+    current_chi, old_chi, replay_chi = atomic_results
+    assert not np.array_equal(current_chi[0], old_chi[0])
+    for replay, old in zip(replay_chi, old_chi):
+        np.testing.assert_array_equal(replay, old)
+    assert modern["gain_source_model"]["dipole_normalization"] == "uniform-manifold-rms"
+    for raw in (historical, coupling_replay):
+        assert raw["gain_source_model"]["dipole_normalization"] == "summed-hyperfine-over-12"
+    for key in ("omega_probe_rad_s", "omega_conjugate_rad_s"):
+        np.testing.assert_array_equal(coupling_replay[key], modern[key])
+    assert np.all(coupling_replay["G_s"] < 1)
+    assert np.all(historical["G_s"] == 1)
     np.testing.assert_array_equal(modern["probe_axis_GHz"], historical["probe_axis_GHz"])
     for raw in (modern, historical):
         np.testing.assert_allclose(

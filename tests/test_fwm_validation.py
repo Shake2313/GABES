@@ -74,6 +74,35 @@ def test_operating_point_accepts_primary_diagnostic_without_legacy_key():
     assert point["physical_squeezing_dB"] is None
 
 
+def test_operating_point_uses_only_sampled_coordinates_of_its_branch():
+    pump = 0.0
+    x = np.array([-0.04, -0.02, 0.02, 0.04])
+    gains = np.array([1.0, 2.0, 3.0, 4.0])
+    raw = dict(D_GHz=pump, branch=-1, probe_axis_GHz=x, G_s=gains, G_c=gains,
+               raman_center_minus_GHz=fwm.branch_center_GHz(pump, -1),
+               raman_center_plus_GHz=fwm.branch_center_GHz(pump, +1),
+               S_dB=gains, G_s_smallsignal=gains, delta_k_z=gains, delta_k_z_vacuum=gains,
+               gain_budget={stage: {"G_s": gains} for stage in
+                            ("small_signal", "pre_cap", "final_cap", "displayed")})
+
+    def point_at(probe, branch=-1):
+        delta_mhz = 1e3 * (probe - fwm.branch_center_GHz(pump, branch))
+        return fwm.operating_point(raw, delta_mhz, branch=branch)
+
+    assert point_at(-0.03)["G_s"] == pytest.approx(1.5)
+    assert point_at(0.03)["gain_budget"]["displayed"]["G_s"] == pytest.approx(3.5)
+    # Left/right outside span, removed pump, unsampled gap and other branch.
+    for probe, branch in ((-0.05, -1), (0.05, -1), (0.0, -1), (0.01, -1), (-0.03, +1)):
+        point = point_at(probe, branch)
+        assert point["probe_GHz"] == pytest.approx(probe)
+        for key in ("G_s", "G_c", "S_dB", "gain_referred_noise_dB", "G_s_smallsignal",
+                    "delta_k_z", "delta_k_z_vacuum"):
+            assert np.isnan(point[key])
+        assert all(np.isnan(stage["G_s"]) for stage in point["gain_budget"].values())
+    with pytest.raises(ValueError, match="branch"):
+        fwm.operating_point(raw, 0.0, branch=0)
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_seeded_gain_budget_preserves_passive_absorption_and_labels_legacy_floor(legacy):
     center = fwm.branch_center_GHz(0.9, -1)
@@ -180,8 +209,8 @@ def test_solver_and_parameter_provenance_do_not_claim_a_fit():
     assert solver["pump_only_reference_solver_id"] == pump_reference["solver_id"]
     assert solver["noncollinear_doppler_reference_available"]
     assert not solver["rate_sylvester_approximation"]
-    assert pump_reference["supported_branches"] == (-1,)
-    assert +1 in pump_reference["unsupported_branches"]
+    assert pump_reference["supported_branches"] == (-1, +1)
+    assert pump_reference["unsupported_branches"] == {}
     assert pump_reference["reference_fields"] == "none"
     assert not pump_reference["production_default"]
     assert pump_reference["quantum_noise"] == "not implemented"

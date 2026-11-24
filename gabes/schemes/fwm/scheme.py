@@ -39,7 +39,7 @@ class FWMScheme(Scheme):
     name = "fwm"
     cluster = "D — Wave mixing"
     title = "Four-wave mixing (Squeezing / Biphoton)"
-    cache_version = "fwm-experimental-jasperse-gain-v32-fixed-models"
+    cache_version = "fwm-v33-normalized-dipoles-and-selected-covariance"
     defaults_version = "fwm-experimental-jasperse-v4"
     cache_observables = True
     supports_headless_observables = True
@@ -618,6 +618,7 @@ class FWMScheme(Scheme):
             gain_closure_enabled=params.get("gain_closure_enabled", False),
             legacy_gain_calibration_fixture=params.get("legacy_gain_calibration_fixture", False),
             legacy_mean_field_fixture=params.get("legacy_mean_field_fixture", False),
+            legacy_coupling_fixture=params.get("legacy_coupling_fixture", False),
             floquet_order=params.get("floquet_order", SEEDED_FLOQUET_ORDER),
             enforce_floquet_convergence=True,
             response_method=res["response_method"],
@@ -1734,6 +1735,7 @@ class FWMScheme(Scheme):
                 legacy_gain_calibration_fixture=params.get("legacy_gain_calibration_fixture", False),
                 legacy_mean_field_fixture=params.get(
                     "legacy_mean_field_fixture", False),
+                legacy_coupling_fixture=params.get("legacy_coupling_fixture", False),
                 velocity_step=fidelity_settings["velocity_step"],
                 velocity_cutoff=fidelity_settings["velocity_cutoff"],
                 velocity_measure="exact",
@@ -1868,6 +1870,7 @@ class FWMScheme(Scheme):
                 "pump_probe_angle_deg": params.get("seeded_angle_deg"),
                 "branch": DEFAULT_BRANCH,
                 "legacy_mean_field_fixture": params.get("legacy_mean_field_fixture", False),
+                "legacy_coupling_fixture": params.get("legacy_coupling_fixture", False),
                 "gain_closure": {"historical_fixture_requested": params.get(
                     "legacy_gain_calibration_fixture", False)},
             }

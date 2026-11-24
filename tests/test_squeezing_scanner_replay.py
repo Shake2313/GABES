@@ -57,6 +57,23 @@ def test_delta_t_replays_temperature_table_and_defaults_to_engine(monkeypatch):
     assert abs(actual_engine[0] - expected_replay[0]) > 1e-6
 
 
+@pytest.mark.parametrize("method", [fwm.RESPONSE_POLE, fwm.RESPONSE_GRID])
+def test_delta_t_historical_replay_preserves_optical_normalization(monkeypatch, method):
+    # Pre-manifold-RMS scan from 3956706, on a small sampled velocity grid.
+    monkeypatch.setattr(delta, "DELTA_GHZ", np.array([-0.7]))
+    monkeypatch.setattr(delta, "RESPONSE_METHOD", method)
+    delta_axis = 2.0 * np.pi * np.array([-8.0, -2.0, 3.0]) * 1e6
+    tables, velocities, weights, master = delta._temperature_tables(
+        337.0, delta_axis, 120.0, 2.0)
+    assert isinstance(tables, fwm.ChiPoleRows) == (method == fwm.RESPONSE_POLE)
+    result = delta._best_from_tables(
+        tables, master, velocities, weights, delta_axis, -0.7, 337.0)
+    np.testing.assert_allclose(
+        [result["G_s"], result["G_c"], result["S_dB"], result["delta_mhz"]],
+        [0.12410238212874558, 0.008022560040066098, -6.5903227392967505, -8.0],
+        rtol=1e-9, atol=1e-12)
+
+
 @pytest.mark.parametrize("historical_replay", [True, False])
 def test_frontier_uses_engine_noise_and_replays_original_grid(frontier, historical_replay):
     d, temperature, window, qe = 0.9, 394.15, 0.7, 0.86

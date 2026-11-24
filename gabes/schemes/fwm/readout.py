@@ -168,7 +168,9 @@ def _seeded_absorption_readout(raw, probe_GHz):
             L=raw["cell_length_m"], weak_line_strength=raw["effective_line_strength"],
             transit_rate=raw.get("transit_reset_rate_rad_s", constants.GAMMA_GG),
             velocity_cutoff=raw.get("velocity_cutoff_sigma", 4.0),
-            branch=raw.get("branch", -1))
+            branch=raw.get("branch", -1),
+            legacy_coupling_fixture=raw.get("legacy_coupling_fixture", True),
+            legacy_mean_field_fixture=raw.get("legacy_mean_field_fixture", False))
     except (ValueError, NotImplementedError, np.linalg.LinAlgError) as error:
         return {"status": "UNAVAILABLE_ABSORPTION_VALIDATION", "reason": str(error)}
 

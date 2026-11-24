@@ -1,6 +1,6 @@
 """FWM model constants, settings, atomic definitions and claim metadata."""
 from ...constants import OMEGA_HF
-from ... import atoms, constants, core, detection, hyperfine, species
+from ... import atoms, beam, constants, core, detection, hyperfine, species
 from dataclasses import dataclass
 import numpy as np
 
@@ -15,47 +15,57 @@ EXCITED_STATES = (E2, E3)
 N_LEVELS = ATOM.n_levels
 GROUND_F = {G1: 2, G2: 3}
 EXCITED_F = {E2: 2, E3: 3}
+# The reference Rabi frequency uses I_sat. Express both the driving and
+# radiating dipoles in units of the dipole implied by that same field scale.
+RABI_DIPOLE_C_M = (constants.HBAR * beam.two_level_rabi(1.0, constants.GAMMA, constants.I_SAT)
+                   / beam.field_amplitude(1.0))
+RABI_DIPOLE_RATIO = RABI_DIPOLE_C_M / constants.DIPOLE_D1
+MANIFOLD_RMS = "uniform-manifold-rms"
+LEGACY_SUMMED = "summed-hyperfine-over-12"
 TRANSITION_DIPOLE_SCALE = np.zeros((N_LEVELS, N_LEVELS), dtype=float)
+LEGACY_TRANSITION_DIPOLE_SCALE = np.zeros_like(TRANSITION_DIPOLE_SCALE)
 for _g in GROUND_STATES:
     for _e in EXCITED_STATES:
-        TRANSITION_DIPOLE_SCALE[_g, _e] = np.sqrt(
-            3.0 * hyperfine.CF2[(GROUND_F[_g], EXCITED_F[_e])])
+        _line = (GROUND_F[_g], EXCITED_F[_e])
+        TRANSITION_DIPOLE_SCALE[_g, _e] = (
+            np.sqrt(hyperfine.uniform_manifold_dipole_fraction(*_line)) / RABI_DIPOLE_RATIO)
+        LEGACY_TRANSITION_DIPOLE_SCALE[_g, _e] = np.sqrt(3.0 * hyperfine.CF2[_line])
+TRANSITION_DIPOLE_SCALE.setflags(write=False)
+LEGACY_TRANSITION_DIPOLE_SCALE.setflags(write=False)
 
 
-def physical_coupling_ledger(branch):
-    """One-use ledger for the reduced four-level susceptibility scale.
+def physical_coupling_ledger(branch, *, legacy=False):
+    """Dipole and population factors for the four-level mean-field response.
 
-    ``rho_ss`` is trace normalized over the two representative hyperfine
-    manifolds, so its ground-state diagonal already supplies the pump-modified
-    manifold population. Multiplying by the equilibrium ``p_F`` again would
-    duplicate that population. The remaining structural factor is the
-    ``1/[2(2I+1)] = 1/12`` sublevel average used by the AutoOD reference.
-
-    The microscopic drive and polarization readout each contain
-    ``sqrt(3 C_F^2)``; their product supplies ``3 C_F^2`` exactly once. Isotope
-    abundance is absent here because ``hyperfine.number_density`` already
-    returns the pure-85Rb cell density. Residual experimental factors are
-    applied separately by ``SeededCouplingFactors``.
+    For uniformly populated m_F within F, the RMS squared dipole in units
+    of d_J^2 is 3 C_F^2/(2F+1). The trace-normalized state supplies the
+    total population of F. In a thermal gas their product is 3 C_F^2/12,
+    the line area used by the passive OD model. The positive RMS amplitudes
+    specify a reduced nonlinear model, without resolving Zeeman interference.
     """
     if branch not in BRANCHES:
         raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
     probe_F = GROUND_F[G2] if branch == -1 else GROUND_F[G1]
     return {
+        "dipole_normalization": LEGACY_SUMMED if legacy else MANIFOLD_RMS,
         "probe_ground_F": probe_F,
         "atomic_density_source": "pure-85Rb total density",
         "isotope_factor_applied_here": 1.0,
         "manifold_population_source": "trace-normalized rho_ss",
         "equilibrium_manifold_population_reference": hyperfine.GROUND_POP[probe_F],
         "external_manifold_population_factor": 1.0,
-        "ground_sublevel_average": 1.0 / hyperfine.N_GROUND_SUBLEVELS,
-        "dipole_strength_source": "sqrt(3 C_F^2) in drive and readout",
-        "macroscopic_coupling_norm": 1.0 / hyperfine.N_GROUND_SUBLEVELS,
+        "ground_sublevel_average": (1.0 / hyperfine.N_GROUND_SUBLEVELS if legacy
+                                    else 1.0 / (2 * probe_F + 1)),
+        "dipole_strength_source": ("historical summed 3 C_F^2" if legacy else
+                                  "RMS dipole within each F in drive and polarization"),
+        "macroscopic_coupling_norm": (1.0 / hyperfine.N_GROUND_SUBLEVELS if legacy
+                                      else RABI_DIPOLE_RATIO**2),
     }
 
 
-def physical_coupling_norm(branch):
+def physical_coupling_norm(branch, *, legacy=False):
     """Macroscopic factor from :func:`physical_coupling_ledger`."""
-    return physical_coupling_ledger(branch)["macroscopic_coupling_norm"]
+    return physical_coupling_ledger(branch, legacy=legacy)["macroscopic_coupling_norm"]
 
 
 @dataclass(frozen=True)
@@ -448,7 +458,8 @@ def pump_weak_response_reference_provenance():
         "solver_id": "static_pump_trace_zero_nambu_reference",
         "state_equation": "self-consistent trace-one 4-level pump Liouvillian",
         "rotating_frame": (
-            "U=exp(+i*Omega_beat*t*|g2><g2|), default minus Raman branch"),
+            "U=exp(+i*(omega_pump-omega_probe)*t*P), P projects onto the "
+            "probe ground state (g2 on minus, g1 on plus)"),
         "frame_equivalence": (
             "unitarily equivalent to the pump-only finite-Floquet state; "
             "executable gauge-parity fixture required"),
@@ -457,11 +468,8 @@ def pump_weak_response_reference_provenance():
         "dc_solver": "trace-constrained stationary-subspace projection",
         "analysis_frequency": "independent angular-frequency input",
         "reference_fields": "none",
-        "supported_branches": (-1,),
-        "unsupported_branches": {
-            +1: (
-                "the inherited plus-branch finite-seed frame is not gauge-"
-                "equivalent to the physical static pump frame")},
+        "supported_branches": (-1, +1),
+        "unsupported_branches": {},
         "production_default": False,
         "doppler_geometry": "longitudinal one-dimensional reference only",
         "quantum_noise": "not implemented",
@@ -627,6 +635,11 @@ def seeded_sideband_beat(delta, branch):
     if branch not in BRANCHES:
         raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
     return OMEGA_HF + branch * delta
+
+
+def seeded_floquet_frequency(delta, branch):
+    """Signed Fourier frequency (pump minus probe) for the seeded-frame Hamiltonian."""
+    return -branch * seeded_sideband_beat(delta, branch)
 
 
 # =========================================================

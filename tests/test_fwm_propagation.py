@@ -142,10 +142,9 @@ def test_coupling_ledger_matches_declared_auto_od_structure():
 
         assert ledger["manifold_population_source"] == "trace-normalized rho_ss"
         assert ledger["external_manifold_population_factor"] == 1.0
-        assert ledger["macroscopic_coupling_norm"] == (
-            1.0 / hyperfine.N_GROUND_SUBLEVELS)
-        assert fwm.physical_coupling_norm(branch) == (
-            1.0 / hyperfine.N_GROUND_SUBLEVELS)
+        assert ledger["dipole_normalization"] == "uniform-manifold-rms"
+        assert fwm.physical_coupling_norm(branch) == ledger["macroscopic_coupling_norm"]
+        assert fwm.physical_coupling_norm(branch, legacy=True) == 1/12
 
         for excited in fwm.EXCITED_STATES:
             transition_factor = fwm.TRANSITION_DIPOLE_SCALE[ground, excited]**2
@@ -154,7 +153,6 @@ def test_coupling_ledger_matches_declared_auto_od_structure():
                 * ledger["macroscopic_coupling_norm"])
             auto_od_strength = (
                 3.0 * hyperfine.CF2[(ground_F, fwm.EXCITED_F[excited])]
-                * hyperfine.GROUND_POP[ground_F]
                 / hyperfine.N_GROUND_SUBLEVELS)
             np.testing.assert_allclose(reduced_strength, auto_od_strength,
                                        rtol=1e-15, atol=1e-15)

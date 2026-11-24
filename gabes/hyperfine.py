@@ -38,6 +38,11 @@ CF2 = {
     (3, 3): 28.0 / 81.0,
 }
 
+def uniform_manifold_dipole_fraction(Fg, Fe):
+    """Squared D1 RMS dipole per atom in Fg, in units of the D1 dipole squared."""
+    return species.line_strength(Fg, Fe, 2.5, 0.5, 0.5) / 3.0
+
+
 # ---- Ground-state population weights  p_F = (2F+1) / Σ(2F+1) ----
 # Σ over F ∈ {2,3} = 5 + 7 = 12  (= 2(2I+1), I = 5/2).
 GROUND_POP = {2: 5.0 / 12.0, 3: 7.0 / 12.0}

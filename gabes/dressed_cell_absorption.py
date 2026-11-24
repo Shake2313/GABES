@@ -197,11 +197,11 @@ def local_dressed_absorption(*, T, pump_rabi_rad_s, probe_rabi_rad_s,
                             weak_line_strength, number_density_m3=None,
                             transit_rate=None, conjugate_rabi_rad_s=0.0,
                             mean_order=3, response_order=3, phase_samples=96,
-                            method="ordered-diffusion"):
+                            method="ordered-diffusion", legacy_coupling_fixture=False):
     """Calculate both-arm absorption/emission in one prescribed finite-seed state.
 
     Pump/probe/conjugate Rabi frequencies are explicit local classical inputs,
-    allowing exact reproduction of the current legacy drive normalization.
+    using the production reduced dipoles unless historical replay is selected.
     ``weak_line_strength`` is the same macroscopic factor multiplying d_D1^2
     in production susceptibility propagation, including its current angular
     normalization.  It is not fitted or inferred from a measured transmission.
@@ -236,15 +236,17 @@ def local_dressed_absorption(*, T, pump_rabi_rad_s, probe_rabi_rad_s,
         raise ValueError("phase_samples must resolve the mean-state harmonics")
     reservoirs, reservoir_info = production_collisional_reservoirs(
         T, density=density, transit_rate=transit_rate)
-    h0 = fwm.pump_hamiltonian_at_Deff_zero(rabis[0], rabis[0])
+    scales = (fwm.LEGACY_TRANSITION_DIPOLE_SCALE if legacy_coupling_fixture
+              else fwm.TRANSITION_DIPOLE_SCALE)
+    h0 = fwm.pump_hamiltonian_at_Deff_zero(rabis[0], rabis[0], scales)
     h0 -= detunings[0]*np.diag([0., 0., 1., 1.])
     beat = -fwm.OMEGA_HF+detunings[1]
     if beat == 0.0:
         raise ValueError("nonzero minus-branch pump/seed beat required")
     lowering = np.zeros((2, 4, 4), complex)
     for excited in fwm.EXCITED_STATES:
-        lowering[0, fwm.G2, excited] = fwm.TRANSITION_DIPOLE_SCALE[fwm.G2, excited]
-        lowering[1, fwm.G1, excited] = fwm.TRANSITION_DIPOLE_SCALE[fwm.G1, excited]
+        lowering[0, fwm.G2, excited] = scales[fwm.G2, excited]
+        lowering[1, fwm.G1, excited] = scales[fwm.G1, excited]
     harmonic = (rabis[1]*lowering[0].conj().T+rabis[2]*lowering[1])/2
     q = np.diag(observables.photon_flux_mode_matrix(*omega, area, area))
     coupling = constants.DIPOLE_D1*np.sqrt(strength)*q/(2*constants.HBAR)
@@ -320,7 +322,8 @@ def selected_dressed_cell_absorption(*, D_GHz, T, P_pump, P_probe,
                                     w_pump, w_probe, delta_mhz, L,
                                     weak_line_strength, transit_rate=None,
                                     velocity_cutoff=4.0, relative_tolerance=0.005,
-                                    branch=-1):
+                                    branch=-1, legacy_coupling_fixture=False,
+                                    legacy_mean_field_fixture=False):
     """Cached Doppler-averaged positive absorption at one selected detuning.
 
     ``P_probe`` is the prescribed local input seed, not the pump-off measured
@@ -353,13 +356,15 @@ def selected_dressed_cell_absorption(*, D_GHz, T, P_pump, P_probe,
         raise ValueError("invalid selected-point absorption powers, lengths, rate or tolerance")
     # Return a copy: downstream efficiency controls must not mutate cache facts.
     with core.blas_single_thread():
-        return copy.deepcopy(_cached_selected_absorption(*values))
+        return copy.deepcopy(_cached_selected_absorption(
+            *values, legacy_coupling_fixture or legacy_mean_field_fixture, legacy_mean_field_fixture))
 
 
 @functools.lru_cache(maxsize=32)
 def _cached_selected_absorption(D_GHz, T, P_pump, P_probe, w_pump, w_probe,
                                 delta_mhz, L, weak_line_strength, transit_rate,
-                                velocity_cutoff, relative_tolerance, branch):
+                                velocity_cutoff, relative_tolerance, branch,
+                                legacy_coupling_fixture, legacy_mean_field_fixture):
     from .schemes import fwm
 
     start = time.perf_counter()
@@ -371,14 +376,17 @@ def _cached_selected_absorption(D_GHz, T, P_pump, P_probe, w_pump, w_probe,
     pump_rabi = float(fwm.rabi_freq(P_pump, w_pump))
     seed_rabi = float(fwm.rabi_freq(P_probe, w_probe))
     probe_GHz = fwm.branch_center_GHz(D_GHz, branch)+delta_mhz*1e-3
-    _, ks, kc = fwm.seeded_option_a_wavenumbers(D_GHz, np.array([probe_GHz]))
+    _, ks, kc = fwm.seeded_option_a_wavenumbers(
+        D_GHz, np.array([probe_GHz]), legacy_centroid=legacy_mean_field_fixture)
     optical = constants.C_LIGHT*np.array([float(ks[0]), float(kc[0])])
     area = float(observables.gaussian_mode_area(w_probe))
     center = 2*np.pi*D_GHz*1e9
     sigma = float(constants.thermal_speed(T, constants.MASS_85RB))
     bound = velocity_cutoff*sigma
     excited = np.diag([0., 0., 1., 1.])
-    base = fwm.pump_hamiltonian_at_Deff_zero(pump_rabi, pump_rabi)
+    scales = (fwm.LEGACY_TRANSITION_DIPOLE_SCALE if legacy_coupling_fixture
+              else fwm.TRANSITION_DIPOLE_SCALE)
+    base = fwm.pump_hamiltonian_at_Deff_zero(pump_rabi, pump_rabi, scales)
     # Use the same inherited collinear velocity shift as the mean-field path.
     # Noncollinear atomic/Raman-Doppler corrections are not added implicitly.
     def eigenvalues(velocity):
@@ -399,7 +407,7 @@ def _cached_selected_absorption(D_GHz, T, P_pump, P_probe, w_pump, w_probe,
         two_photon_detuning_rad_s=delta, optical_omega_rad_s=optical,
         uniform_area_m2=area, weak_line_strength=weak_line_strength,
         number_density_m3=density, transit_rate=transit_rate,
-        phase_samples=32, method="connected-qrt")
+        phase_samples=32, method="connected-qrt", legacy_coupling_fixture=legacy_coupling_fixture)
     cache, maximum_kubo = {}, 0.0
     def evaluate(velocity, mean_order=3, response_order=3):
         nonlocal maximum_kubo

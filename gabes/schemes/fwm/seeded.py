@@ -2,6 +2,7 @@
 from .. import fwm
 from .common import (
     BRANCHES, DEFAULT_BRANCH, G1, G2, GROUND_F, HARDENED_PUMP_SCATTER_KAPPA, LOSS_FRAC, L_CELL,
+    LEGACY_TRANSITION_DIPOLE_SCALE,
     PHASE_BALANCED, PHASE_FINE, PHASE_LEGACY, PHASE_ULTRA, PUMP_OVERLAP_EXCLUSION_MHZ, P_PROBE,
     P_PUMP, QE_DETECTOR, RESONANCE_WINDOW_MHZ, RESPONSE_GRID, RESPONSE_METHODS,
     RESPONSE_POLE_ADAPTIVE, SCAN_COARSE_POINTS, SCAN_FINE_POINTS, SCAN_MAX_GHZ, SCAN_MIN_GHZ,
@@ -209,6 +210,7 @@ def compute_spectrum(D_GHz, *,
                      gain_closure_enabled=False,
                      legacy_gain_calibration_fixture=False,
                      legacy_mean_field_fixture=False,
+                     legacy_coupling_fixture=False,
                      measured_gain_calibration=False,
                      seed_input_assumption="",
                      excess_noise_model=None,
@@ -238,8 +240,9 @@ def compute_spectrum(D_GHz, *,
     optional measured pump-off-reference interpolation is returned under
     ``measured_gain_reference``. It
     never changes atomic gains, propagation, adaptive sampling, or noise NF.
-    ``legacy_mean_field_fixture=True`` additionally restores the old optical
+    ``legacy_mean_field_fixture=True`` additionally restores the historical dipoles, optical
     carrier origin and unity floor on absorbed probe gains for frozen fixtures.
+    Use only legacy_coupling_fixture to replay the historical dipoles with current carriers.
     Normal calls preserve absorption and use the transition-referenced carrier.
     Set ``velocity_measure="exact"`` for the untruncated Maxwell mean with
     the pole solver. Untiered callers default to their historical grid.
@@ -274,7 +277,9 @@ def compute_spectrum(D_GHz, *,
     # The reference residual and the three lab-facing relative factors sit on
     # top of the first-principles macroscopic normalization. ``coupling_ls`` is
     # what enters every χ_phys / gain call below.
-    coupling_ledger = physical_coupling_ledger(branch)
+    historical_coupling = legacy_coupling_fixture or legacy_mean_field_fixture
+    dipole_kwargs = {"transition_scales": LEGACY_TRANSITION_DIPOLE_SCALE} if historical_coupling else {}
+    coupling_ledger = physical_coupling_ledger(branch, legacy=historical_coupling)
     coupling_norm = coupling_ledger["macroscopic_coupling_norm"]
     coupling_ls = factors.combined_residual * coupling_norm
     gain_closure = fwm_gain_closure.provenance(
@@ -338,7 +343,7 @@ def compute_spectrum(D_GHz, *,
     atom_T = fwm.collisional_atom(T, N_atoms, transit_rate=transit_rate)
     transit_rate = atom_T.transit_reset_rate
     atom_T, pump_stark_response = fwm_stark_response.apply(
-        atom_T, pump_hamiltonian_at_Deff_zero(Op_A, Op_B), Delta,
+        atom_T, pump_hamiltonian_at_Deff_zero(Op_A, Op_B, **dipole_kwargs), Delta,
         fraction=pump_stark_fraction, pump_power_W=P_pump)
 
     probe_axis_GHz = fwm.probe_scan_axis_GHz(
@@ -399,7 +404,7 @@ def compute_spectrum(D_GHz, *,
     def averaged_response_at_order(order):
         tables = fwm.chi_matrix_table(
             Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis,
-            branch, atom=atom_T, n_f=order)
+            branch, atom=atom_T, n_f=order, **dipole_kwargs)
         return tuple(
             doppler.apply_doppler_average(table, idx_lo, frac, weights)
             for table in tables)
@@ -414,7 +419,7 @@ def compute_spectrum(D_GHz, *,
     if response_method != RESPONSE_GRID and not angular_transverse_order:
         pole_systems = fwm._seeded_pole_systems(
             Op_A, Op_B, Os_ref, Oc_ref, branch, atom_T, response_orders,
-            sparse_schur=_sparse_pole_schur)
+            sparse_schur=_sparse_pole_schur, **dipole_kwargs)
     angular_reference = None
     if angular_transverse_order:
         if not enforce_floquet_convergence or legacy_mean_field_fixture:
@@ -424,7 +429,7 @@ def compute_spectrum(D_GHz, *,
             T=T, pump_k_rad_m=k_pump_vac, probe_k_axis_rad_m=k_probe_vac,
             crossing_angle_rad=np.deg2rad(pump_probe_angle_deg), atom=atom_T,
             floquet_order=floquet_order, transverse_order=angular_transverse_order,
-            cutoff_sigma=angular_transverse_cutoff, branch=branch)
+            cutoff_sigma=angular_transverse_cutoff, branch=branch, **dipole_kwargs)
         chi_ss_avg, chi_cs_avg, chi_sc_avg, chi_cc_avg = angular_reference["responses"].pop(floquet_order)
         lower_order_response = angular_reference["responses"].pop(floquet_order - 1)
         del angular_reference["responses"]
@@ -531,14 +536,14 @@ def compute_spectrum(D_GHz, *,
         def guard_rows(rows, order):
             return fwm.chi_matrix_table(
                 Op_A, Op_B, Os_ref, Oc_ref, delta_axis[rows], np.array([Delta]),
-                branch, atom=atom_T, n_f=order)
+                branch, atom=atom_T, n_f=order, **dipole_kwargs)
 
         def grid_rows(rows, order):
             return tuple(
                 doppler.apply_doppler_average(table, idx_lo, frac, weights)
                 for table in fwm.chi_matrix_table(
                     Op_A, Op_B, Os_ref, Oc_ref, delta_axis[rows], Delta_eff_axis,
-                    branch, atom=atom_T, n_f=order))
+                    branch, atom=atom_T, n_f=order, **dipole_kwargs))
 
         high_response, lower_order_response, response_estimator = fwm._pole_scan_response(
             pole_systems, orders=response_orders, delta_axis=delta_axis,
@@ -843,6 +848,7 @@ def compute_spectrum(D_GHz, *,
         "omega_probe_rad_s": omega_probe,
         "omega_conjugate_rad_s": omega_conj,
         "legacy_mean_field_fixture": bool(legacy_mean_field_fixture),
+        "legacy_coupling_fixture": bool(historical_coupling),
         "optical_carrier_origin": (
             "historical fine-structure centroid" if legacy_mean_field_fixture
             else "85Rb D1 F=2 -> F'=3"),
@@ -889,6 +895,7 @@ def compute_spectrum(D_GHz, *,
         "floquet_convergence": floquet_convergence,
         "response_estimator": response_estimator,
         "gain_source_model": {
+            "dipole_normalization": coupling_ledger["dipole_normalization"],
             "response_method": response_estimator["method"],
             "scan_points": int(probe_axis_GHz.size),
             "velocity_measure": velocity_measure,
@@ -955,17 +962,36 @@ def compute_spectrum(D_GHz, *,
 
 def operating_point(spectrum, delta_mhz, branch=-1):
     """Read gains and the gain-referred diagnostic at a selected δ (MHz)."""
-    probe_GHz = (spectrum["raman_center_minus_GHz"] if branch == -1
-                 else spectrum["raman_center_plus_GHz"]) + delta_mhz * 1e-3
-    x = spectrum["probe_axis_GHz"]
+    if branch not in BRANCHES:
+        raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
+    center = spectrum["raman_center_minus_GHz" if branch == -1 else "raman_center_plus_GHz"]
+    probe_GHz = center + delta_mhz * 1e-3
+    pump_GHz = spectrum.get("D_GHz", center - branch * constants.NU_HF / 1e9)
+    x = np.asarray(spectrum["probe_axis_GHz"])
+    exclusion = PUMP_OVERLAP_EXCLUSION_MHZ * 1e-3
+    # Do not interpolate across the unsampled pump interval, even for a probe
+    # just outside it whose two neighboring samples straddle the pump.
+    if probe_GHz < pump_GHz:
+        segment = slice(None, np.searchsorted(x, pump_GHz - exclusion, side="left"))
+    else:
+        segment = slice(np.searchsorted(x, pump_GHz + exclusion, side="right"), None)
+    axis = x[segment]
+    branch_matches = spectrum.get("branch", branch) == branch
+    available = bool(branch_matches and axis.size and axis[0] <= probe_GHz <= axis[-1])
+
+    def interpolate(values):
+        if not available:
+            return float("nan")
+        return float(np.interp(probe_GHz, axis, np.asarray(values)[segment]))
+
     diagnostic = spectrum.get("gain_referred_noise_dB")
     if diagnostic is None:
         diagnostic = spectrum["S_dB"]
-    diagnostic_value = float(np.interp(probe_GHz, x, diagnostic))
+    diagnostic_value = interpolate(diagnostic)
     out = {
         "probe_GHz": probe_GHz,
-        "G_s": float(np.interp(probe_GHz, x, spectrum["G_s"])),
-        "G_c": float(np.interp(probe_GHz, x, spectrum["G_c"])),
+        "G_s": interpolate(spectrum["G_s"]),
+        "G_c": interpolate(spectrum["G_c"]),
         "gain_referred_noise_dB": diagnostic_value,
         "physical_squeezing_dB": None,
         "S_dB": diagnostic_value,  # compatibility alias; not physical squeezing
@@ -978,25 +1004,29 @@ def operating_point(spectrum, delta_mhz, branch=-1):
         ("commutator_defect_max_smallsignal", "commutator_defect_max_smallsignal"),
     ):
         if source in spectrum:
-            out[target] = float(np.interp(probe_GHz, x, spectrum[source]))
+            out[target] = interpolate(spectrum[source])
     budget = spectrum.get("gain_budget")
     if budget is not None:
         out["gain_budget"] = {
-            stage: {arm: float(np.interp(probe_GHz, x, gains))
+            stage: {arm: interpolate(gains)
                     for arm, gains in budget[stage].items()}
             for stage in ("small_signal", "pre_cap", "final_cap", "displayed")
         }
     if spectrum.get("delta_k_z") is not None:
-        out["delta_k_z"] = float(np.interp(probe_GHz, x, spectrum["delta_k_z"]))
+        out["delta_k_z"] = interpolate(spectrum["delta_k_z"])
     if spectrum.get("delta_k_z_vacuum") is not None:
-        out["delta_k_z_vacuum"] = float(np.interp(
-            probe_GHz, x, spectrum["delta_k_z_vacuum"]))
+        out["delta_k_z_vacuum"] = interpolate(spectrum["delta_k_z_vacuum"])
     measured = spectrum.get("measured_gain_reference", {})
     if measured.get("requested"):
-        out["measured_gain_reference"] = fwm._measured_gain_reference_readout(
+        point = fwm._measured_gain_reference_readout(
             spectrum, enabled=True,
             seed_input_assumption=measured.get("seed_input_assumption", ""),
             selected_delta_mhz=delta_mhz, requested_branch=branch)["selected_point"]
+        if not available:
+            point.update(available=False,
+                         status="OUTSIDE_SPECTRUM_SUPPORT" if branch_matches else "INELIGIBLE_CONTEXT",
+                         measured_gain_probe=float("nan"), measured_gain_conjugate=float("nan"))
+        out["measured_gain_reference"] = point
     return out
 
 
@@ -1012,7 +1042,8 @@ def full_spectrum(D_GHz, T_K, P_pump_mW, P_probe_uW, line_strength, loss_pct,
                    model_fidelity=None,
                    gain_closure_enabled=False,
                    legacy_gain_calibration_fixture=False,
-                    legacy_mean_field_fixture=False,
+                   legacy_mean_field_fixture=False,
+                   legacy_coupling_fixture=False,
                    measured_gain_calibration=False,
                    seed_input_assumption="",
                    velocity_step=4.0, velocity_cutoff=3.0,
@@ -1055,6 +1086,7 @@ def full_spectrum(D_GHz, T_K, P_pump_mW, P_probe_uW, line_strength, loss_pct,
         gain_closure_enabled=gain_closure_enabled,
         legacy_gain_calibration_fixture=legacy_gain_calibration_fixture,
         legacy_mean_field_fixture=legacy_mean_field_fixture,
+        legacy_coupling_fixture=legacy_coupling_fixture,
         measured_gain_calibration=measured_gain_calibration,
         seed_input_assumption=seed_input_assumption,
         transit_rate=transit_rate,

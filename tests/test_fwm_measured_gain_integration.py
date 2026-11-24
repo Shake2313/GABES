@@ -239,6 +239,23 @@ def test_plus_branch_operating_point_cannot_reuse_minus_seed_reference():
     assert np.isnan(point["measured_gain_reference"]["measured_gain_probe"])
 
 
+def test_operating_point_marks_measured_reference_unavailable_outside_the_solved_spectrum():
+    raw = reference_raw()
+    delta = float(measured.internal_delta_mhz_from_eom(3034))
+    # Restrict the solved scan while keeping the independent RF profile eligible.
+    raw["probe_axis_GHz"] = raw["probe_axis_GHz"][:1]
+    raw["measured_gain_reference"] = {"requested": True,
+                                      "seed_input_assumption": measured.SEED_INPUT_ASSUMPTION}
+    point = fwm.operating_point(raw, delta)
+    reference = point["measured_gain_reference"]
+    assert reference["within_support"]
+    assert reference["internal_delta_mhz"] == pytest.approx(delta)
+    assert not reference["available"]
+    assert reference["status"] == "OUTSIDE_SPECTRUM_SUPPORT"
+    assert np.isnan(reference["measured_gain_probe"])
+    assert np.isnan(reference["measured_gain_conjugate"])
+
+
 def test_direct_api_optional_reference_leaves_atomic_solution_and_noise_exact():
     context = measured.nominal_context()
     center = fwm.branch_center_GHz(context["D_GHz"], -1)

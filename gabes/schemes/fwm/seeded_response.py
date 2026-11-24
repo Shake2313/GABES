@@ -6,7 +6,7 @@ from .common import (
     RESPONSE_POLE_ADAPTIVE, SCAN_TOLERANCE_FLOOR_DB, SCAN_TOLERANCE_FLOOR_LOG10_GAIN,
     SCAN_TOLERANCE_RANGE_FRACTION, SEEDED_FLOQUET_ORDER, TRANSITION_DIPOLE_SCALE, T_CELL,
     noncollinear_doppler_reference_provenance, pump_weak_response_reference_provenance,
-    seeded_sideband_beat,
+    seeded_floquet_frequency, seeded_sideband_beat,
 )
 from ...constants import OMEGA_HF
 from ...core import (
@@ -21,53 +21,45 @@ import numpy as np
 # =========================================================
 # Hamiltonians
 # =========================================================
-def _add_static_drive(H, ground, omega):
+def _add_static_drive(H, ground, omega, transition_scales=TRANSITION_DIPOLE_SCALE):
     for excited in EXCITED_STATES:
-        omega_ge = omega * TRANSITION_DIPOLE_SCALE[ground, excited]
+        omega_ge = omega * transition_scales[ground, excited]
         H[ground, excited] += omega_ge / 2
         H[excited, ground] += omega_ge / 2
 
 
-def _add_sideband_drive(H, ground, omega):
+def _add_sideband_drive(H, ground, omega, transition_scales=TRANSITION_DIPOLE_SCALE):
     for excited in EXCITED_STATES:
-        H[excited, ground] += omega * TRANSITION_DIPOLE_SCALE[ground, excited] / 2
+        H[excited, ground] += omega * transition_scales[ground, excited] / 2
 
 
-def _polarization_coherence(rho, ground):
-    return sum(TRANSITION_DIPOLE_SCALE[ground, e] * rho[:, e, ground]
+def _polarization_coherence(rho, ground, transition_scales=TRANSITION_DIPOLE_SCALE):
+    return sum(transition_scales[ground, e] * rho[:, e, ground]
                for e in EXCITED_STATES)
 
 
-def pump_hamiltonian_at_Deff_zero(Op_A, Op_B):
+def pump_hamiltonian_at_Deff_zero(Op_A, Op_B, transition_scales=TRANSITION_DIPOLE_SCALE):
     """Static physical pump frame, before the longitudinal Doppler shift.
 
-    For the standard minus Raman branch, applying
-    ``U(t)=exp(+i*Omega_beat*t*|g2><g2|)`` to the seeded frame makes the second
-    pump leg static and changes its diagonal from ``delta`` to
-    ``delta + Omega_beat = OMEGA_HF``.  The resulting pump Hamiltonian is
-    independent of probe detuning, as a pump-only state must be.
+    Both ground legs see the same pump. Their splitting is OMEGA_HF,
+    independent of the frequency and labeling of the weak optical modes.
     """
     H = np.zeros((N_LEVELS, N_LEVELS), dtype=complex)
     H[G2, G2] = OMEGA_HF
     H[E2, E2] = -fwm.OMEGA_EXCITED_HF
     H[E3, E3] = 0.0
-    _add_static_drive(H, G1, Op_A)
-    _add_static_drive(H, G2, Op_B)
+    _add_static_drive(H, G1, Op_A, transition_scales)
+    _add_static_drive(H, G2, Op_B, transition_scales)
     return H
 
 
 def pump_frame_to_seeded_harmonics(pump_state, n_f=1, branch=-1):
     """Reconstruct seeded-frame pump harmonics from the static pump state.
 
-    This executable gauge map is currently certified only for the standard
-    minus Raman branch.  In that frame coherences with ``g2`` in the row occupy
-    harmonic ``-1`` and those with ``g2`` in the column occupy ``+1``; every
-    ``|n|>=2`` block is identically zero.
+    The probe ground state rotates at the signed pump-minus-probe frequency.
+    Its row coherences occupy harmonic -1, and its column coherences occupy +1.
     """
-    if branch != -1:
-        raise NotImplementedError(
-            "the inherited plus-branch seeded frame is not gauge-equivalent "
-            "to the physical static pump frame")
+    probe_ground, _ = _ground_legs(branch)
     n_f = int(n_f)
     if n_f < 1:
         raise ValueError("n_f must be at least 1")
@@ -79,9 +71,9 @@ def pump_frame_to_seeded_harmonics(pump_state, n_f=1, branch=-1):
         rho.shape[:-2] + (2 * n_f + 1, N_LEVELS, N_LEVELS), dtype=complex)
     for row in range(N_LEVELS):
         for column in range(N_LEVELS):
-            if row == G2 and column != G2:
+            if row == probe_ground and column != probe_ground:
                 harmonic = -1
-            elif row != G2 and column == G2:
+            elif row != probe_ground and column == probe_ground:
                 harmonic = +1
             else:
                 harmonic = 0
@@ -89,21 +81,25 @@ def pump_frame_to_seeded_harmonics(pump_state, n_f=1, branch=-1):
     return harmonics
 
 
-def _pump_nambu_operators(branch):
+def _ground_legs(branch):
+    """Ground states of the probe (rotating) and conjugate legs, respectively."""
+    if branch == -1:
+        return G2, G1
+    if branch == +1:
+        return G1, G2
+    raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
+
+
+def _pump_nambu_operators(branch, transition_scales=TRANSITION_DIPOLE_SCALE):
     """Return weak Nambu drive superoperators and polarization readouts."""
-    if branch != -1:
-        raise NotImplementedError(
-            "pump-only weak response is certified only for the standard minus "
-            "Raman branch; the inherited plus-branch frame fails gauge parity")
-    probe_ground = G2
-    conjugate_ground = G1
+    probe_ground, conjugate_ground = _ground_legs(branch)
 
     probe_raise = np.zeros((N_LEVELS, N_LEVELS), dtype=complex)
     conjugate_star_lower = np.zeros_like(probe_raise)
     readouts = np.zeros((2, N_LEVELS * N_LEVELS), dtype=complex)
     for excited in EXCITED_STATES:
-        probe_scale = TRANSITION_DIPOLE_SCALE[probe_ground, excited]
-        conjugate_scale = TRANSITION_DIPOLE_SCALE[conjugate_ground, excited]
+        probe_scale = transition_scales[probe_ground, excited]
+        conjugate_scale = transition_scales[conjugate_ground, excited]
         probe_raise[excited, probe_ground] = 0.5 * probe_scale
         conjugate_star_lower[conjugate_ground, excited] = 0.5 * conjugate_scale
         readouts[0, excited * N_LEVELS + probe_ground] = probe_scale
@@ -113,26 +109,25 @@ def _pump_nambu_operators(branch):
     return drives, readouts
 
 
-def _pump_reference_system(Op_A, Op_B, Delta_eff_axis, atom, branch):
+def _pump_reference_system(Op_A, Op_B, Delta_eff_axis, atom, branch, transition_scales):
     """Build the shared state/source/readout pieces for the slow reference."""
-    if branch != -1:
-        _pump_nambu_operators(branch)  # raises the documented frame error
     deff = np.asarray(Delta_eff_axis, dtype=float)
     if deff.ndim != 1 or deff.size < 1 or not np.isfinite(deff).all():
         raise ValueError("Delta_eff_axis must be a finite non-empty 1-D array")
-    H_pump = pump_hamiltonian_at_Deff_zero(Op_A, Op_B)
+    H_pump = pump_hamiltonian_at_Deff_zero(Op_A, Op_B, transition_scales)
     L0 = build_liouvillian(H_pump, atom)
     L_batch = L0[None, :, :] - deff[:, None, None] * atom.S_v[None, :, :]
     rho = steady_state_batched(L0, deff, atom.S_v, N_LEVELS)
     rho_vec = rho.reshape(deff.size, N_LEVELS * N_LEVELS)
-    drives, readouts = _pump_nambu_operators(branch)
+    drives, readouts = _pump_nambu_operators(branch, transition_scales)
     sources = np.einsum("rij,bj->bir", drives, rho_vec)
     return deff, L0, L_batch, rho, rho_vec, sources, readouts
 
 
 def pump_only_weak_response_reference(
         Op_A, Op_B, delta_axis, Delta_eff_axis, *, branch=-1, atom=None,
-        analysis_frequency_axis_rad_s=(0.0,), T=T_CELL):
+        analysis_frequency_axis_rad_s=(0.0,), T=T_CELL,
+        transition_scales=TRANSITION_DIPOLE_SCALE):
     """Solve the self-consistent pump state and infinitesimal 2x2 response.
 
     ``delta_axis`` is the optical two-photon detuning and
@@ -140,16 +135,14 @@ def pump_only_weak_response_reference(
     frequency.  They are never folded into one input.  In the static physical
     pump frame the Nambu sector frequency is
 
-    ``omega_relative = -OMEGA_HF + delta + Omega_SA``
+    ``omega_relative = branch*OMEGA_HF + delta + Omega_SA``
 
-    for the supported minus Raman branch.  If ``atom`` is omitted, the reference
+    for either Raman branch. If ``atom`` is omitted, the reference
     uses the same temperature-dependent collisional and thermal-transit-reset
     model as :func:`compute_spectrum`.  The DC singularity is handled by the
     trace-zero stationary-subspace projection in
     :func:`gabes.core.trace_zero_liouvillian_response`.
     """
-    if branch != -1:
-        _pump_nambu_operators(branch)  # raises with the explicit limitation
     delta = np.atleast_1d(np.asarray(delta_axis, dtype=float))
     analysis = np.atleast_1d(
         np.asarray(analysis_frequency_axis_rad_s, dtype=float))
@@ -163,8 +156,8 @@ def pump_only_weak_response_reference(
 
     (deff, _L0, L_batch, rho, rho_vec, sources, readouts) = (
         _pump_reference_system(
-            Op_A, Op_B, Delta_eff_axis, atom, branch))
-    relative = -OMEGA_HF + delta[None, :] + analysis[:, None]
+            Op_A, Op_B, Delta_eff_axis, atom, branch, transition_scales))
+    relative = -seeded_floquet_frequency(delta[None, :], branch) + analysis[:, None]
     chi = np.empty(
         (analysis.size, delta.size, deff.size, 2, 2), dtype=complex)
     max_response_trace = 0.0
@@ -237,7 +230,7 @@ def pump_only_weak_response_noncollinear_reference(
         T, pump_k_rad_m, probe_k_axis_rad_m, crossing_angle_rad,
         lab_optical_beat_axis_rad_s=None, branch=-1, atom=None,
         analysis_frequency_axis_rad_s=(0.0,), quadrature_order=24,
-        cutoff_sigma=5.0):
+        cutoff_sigma=5.0, transition_scales=TRANSITION_DIPOLE_SCALE):
     """Two-dimensional Maxwell reference with separated lab/atomic frequencies.
 
     The standard minus branch is evaluated in the certified static pump frame.
@@ -251,7 +244,7 @@ def pump_only_weak_response_noncollinear_reference(
     one-dimensional finite-seed gain path.
     """
     if branch != -1:
-        _pump_nambu_operators(branch)  # raises the certified frame limitation
+        raise NotImplementedError("noncollinear pump reference supports only the minus Raman branch")
     T = float(T)
     one_photon = float(one_photon_detuning_rad_s)
     pump_k = float(pump_k_rad_m)
@@ -303,7 +296,7 @@ def pump_only_weak_response_noncollinear_reference(
     wz = weights.copy()
     deff_z = one_photon - pump_k * vz
     (_deff, _L0, L_z, rho_z, rho_vec_z, sources_z, readouts) = (
-        _pump_reference_system(Op_A, Op_B, deff_z, atom, branch))
+        _pump_reference_system(Op_A, Op_B, deff_z, atom, branch, transition_scales))
 
     nz = vz.size
     nx = vx.size
@@ -418,7 +411,7 @@ def pump_only_weak_response_noncollinear_reference(
 
 def pump_only_pole_residue_reference(
         Op_A, Op_B, delta, Delta_eff, *, branch=-1, atom=None,
-        analysis_frequency_rad_s=0.0, T=T_CELL):
+        analysis_frequency_rad_s=0.0, T=T_CELL, transition_scales=TRANSITION_DIPOLE_SCALE):
     """One-velocity pole/residue audit of the pump-only Nambu response.
 
     Omitting ``atom`` selects the production collisional/transit-reset model at
@@ -428,8 +421,8 @@ def pump_only_pole_residue_reference(
         atom = fwm.collisional_atom(T)
     (deff, _L0, L_batch, rho, rho_vec, sources, readouts) = (
         _pump_reference_system(
-            Op_A, Op_B, np.asarray([Delta_eff], dtype=float), atom, branch))
-    carrier_relative = -OMEGA_HF + float(delta)
+            Op_A, Op_B, np.asarray([Delta_eff], dtype=float), atom, branch, transition_scales))
+    carrier_relative = -seeded_floquet_frequency(float(delta), branch)
     omega = carrier_relative + float(analysis_frequency_rad_s)
     result = liouvillian_pole_residue_response(
         L_batch[0], sources[0], readouts, omega)
@@ -447,38 +440,41 @@ def pump_only_pole_residue_reference(
     return result
 
 
-def static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os, delta, branch):
+def static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os, delta, branch, transition_scales=TRANSITION_DIPOLE_SCALE):
     """H₀ with Δ_eff = 0, so the only v / Δ_eff dependence is added later."""
     H0 = np.zeros((N_LEVELS, N_LEVELS), dtype=complex)
-    H0[G2, G2] = delta
     H0[E2, E2] = -fwm.OMEGA_EXCITED_HF
     H0[E3, E3] = 0.0
     if branch == -1:
-        _add_static_drive(H0, G1, Op_A)
-        _add_static_drive(H0, G2, Os)
+        H0[G2, G2] = delta
+        _add_static_drive(H0, G1, Op_A, transition_scales)
+        _add_static_drive(H0, G2, Os, transition_scales)
         return H0
     if branch == +1:
-        _add_static_drive(H0, G1, Os)
-        _add_static_drive(H0, G2, Op_B)
+        # Subtract the signed Floquet frequency from the rotating probe ground.
+        H0[G1, G1] = -seeded_floquet_frequency(delta, branch)
+        H0[G2, G2] = OMEGA_HF
+        _add_static_drive(H0, G1, Os, transition_scales)
+        _add_static_drive(H0, G2, Op_B, transition_scales)
         return H0
     raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
 
 
-def sideband_hamiltonian(Op_A, Op_B, Oc, branch):
+def sideband_hamiltonian(Op_A, Op_B, Oc, branch, transition_scales=TRANSITION_DIPOLE_SCALE):
     Hp = np.zeros((N_LEVELS, N_LEVELS), dtype=complex)
     if branch == -1:
-        _add_sideband_drive(Hp, G1, Oc)
-        _add_sideband_drive(Hp, G2, Op_B)
+        _add_sideband_drive(Hp, G1, Oc, transition_scales)
+        _add_sideband_drive(Hp, G2, Op_B, transition_scales)
         return Hp
     if branch == +1:
-        _add_sideband_drive(Hp, G1, Op_A)
-        _add_sideband_drive(Hp, G2, Oc)
+        _add_sideband_drive(Hp, G1, Op_A, transition_scales)
+        _add_sideband_drive(Hp, G2, Oc, transition_scales)
         return Hp
     raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
 
 
-def sideband_template(Op_A, Op_B, Oc, branch):
-    Hp = sideband_hamiltonian(Op_A, Op_B, Oc, branch)
+def sideband_template(Op_A, Op_B, Oc, branch, transition_scales=TRANSITION_DIPOLE_SCALE):
+    Hp = sideband_hamiltonian(Op_A, Op_B, Oc, branch, transition_scales)
     Cp = comm_super(Hp)
     Cm = comm_super(Hp.conj().T)
     return Cp, Cm
@@ -487,16 +483,16 @@ def sideband_template(Op_A, Op_B, Oc, branch):
 # =========================================================
 # χ-matrix table for one fixed atom/dissipator on (δ, Δ_eff)
 # =========================================================
-def _coherence_weights(ground):
+def _coherence_weights(ground, transition_scales=TRANSITION_DIPOLE_SCALE):
     """w such that Σ_k w[k]·vec(ρ)[k] = Σ_e scale[g,e]·ρ[e,g] (vec row-major)."""
     w = np.zeros(N_LEVELS * N_LEVELS, dtype=complex)
     for e in EXCITED_STATES:
-        w[e * N_LEVELS + ground] = TRANSITION_DIPOLE_SCALE[ground, e]
+        w[e * N_LEVELS + ground] = transition_scales[ground, e]
     return w
 
 
 def chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis, branch,
-                     atom=ATOM, n_f=1):
+                     atom=ATOM, n_f=1, transition_scales=TRANSITION_DIPOLE_SCALE):
     """
     Two finite-Floquet solves per probe-detuning point to extract
     (chi_ss, chi_cs, chi_sc, chi_cc) on a 2-D (delta, Delta_eff) grid.
@@ -514,35 +510,35 @@ def chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis, bra
     n_f = int(n_f)
     if n_f < 1:
         raise ValueError("n_f must be at least 1")
-    probe_ground = G2 if branch == -1 else G1
-    conj_ground = G1 if branch == -1 else G2
+    probe_ground, conj_ground = _ground_legs(branch)
     n_d = delta_axis.size
     n_de = Delta_eff_axis.size
 
-    Cp_no_c, Cm_no_c = sideband_template(Op_A, Op_B, 0.0, branch)      # solve 1
-    Cp_c, Cm_c = sideband_template(Op_A, Op_B, Oc_ref, branch)        # solve 2
+    Cp_no_c, Cm_no_c = sideband_template(Op_A, Op_B, 0.0, branch, transition_scales)      # solve 1
+    Cp_c, Cm_c = sideband_template(Op_A, Op_B, Oc_ref, branch, transition_scales)        # solve 2
 
     if kernels.available():
-        # H₀(δ) is affine in δ (only H₀[G2,G2] = δ), so L₀(δ) = L₀(0) + δ·C_δ.
-        E_g2 = np.zeros((N_LEVELS, N_LEVELS), dtype=complex)
-        E_g2[G2, G2] = 1.0
-        C_delta = comm_super(E_g2)
-        w_probe = _coherence_weights(probe_ground)
-        w_conj = _coherence_weights(conj_ground)
+        # Only the probe ground diagonal depends on the two-photon detuning.
+        E_probe = np.zeros((N_LEVELS, N_LEVELS), dtype=complex)
+        E_probe[probe_ground, probe_ground] = 1.0
+        C_delta = comm_super(E_probe)
+        omega_offset = seeded_floquet_frequency(0.0, branch)
+        w_probe = _coherence_weights(probe_ground, transition_scales)
+        w_conj = _coherence_weights(conj_ground, transition_scales)
         delta_axis = np.ascontiguousarray(delta_axis, dtype=float)
         deff_axis = np.ascontiguousarray(Delta_eff_axis, dtype=float)
 
         L0_1 = build_liouvillian(
-            fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os_ref, 0.0, branch), atom)
+            fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os_ref, 0.0, branch, transition_scales), atom)
         probe_a, conj_a = kernels.floquet_chi_grid(
             L0_1, C_delta, atom.S_v, Cp_no_c, Cm_no_c, delta_axis, deff_axis,
-            OMEGA_HF, float(branch), w_probe, w_conj, N_LEVELS, n_f)
+            omega_offset, -1.0, w_probe, w_conj, N_LEVELS, n_f)
 
         L0_2 = build_liouvillian(
-            fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, 0.0, 0.0, branch), atom)
+            fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, 0.0, 0.0, branch, transition_scales), atom)
         probe_b, conj_b = kernels.floquet_chi_grid(
             L0_2, C_delta, atom.S_v, Cp_c, Cm_c, delta_axis, deff_axis,
-            OMEGA_HF, float(branch), w_probe, w_conj, N_LEVELS, n_f)
+            omega_offset, -1.0, w_probe, w_conj, N_LEVELS, n_f)
 
         return probe_a / Os_ref, conj_a / Os_ref, probe_b / Oc_ref, conj_b / Oc_ref
 
@@ -552,27 +548,27 @@ def chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis, bra
     chi_cc = np.zeros((n_d, n_de), dtype=complex)
 
     for i, delta in enumerate(delta_axis):
-        Omega_beat = seeded_sideband_beat(delta, branch)
+        Omega_beat = seeded_floquet_frequency(delta, branch)
 
         # ---- Solve 1: probe drive only ----
-        H0_1 = fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os_ref, delta, branch)
+        H0_1 = fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os_ref, delta, branch, transition_scales)
         L0_1 = build_liouvillian(H0_1, atom)
         rho0_a, rhop_a = floquet_solve_truncated(
             L0_1, Cp_no_c, Cm_no_c, Omega_beat, Delta_eff_axis,
             atom.S_v, N_LEVELS, n_f)
-        probe_a = _polarization_coherence(rho0_a, probe_ground)
-        conj_a = _polarization_coherence(rhop_a, conj_ground)
+        probe_a = _polarization_coherence(rho0_a, probe_ground, transition_scales)
+        conj_a = _polarization_coherence(rhop_a, conj_ground, transition_scales)
         chi_ss[i] = probe_a / Os_ref
         chi_cs[i] = conj_a / Os_ref
 
         # ---- Solve 2: conjugate seed only ----
-        H0_2 = fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, 0.0, delta, branch)
+        H0_2 = fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, 0.0, delta, branch, transition_scales)
         L0_2 = build_liouvillian(H0_2, atom)
         rho0_b, rhop_b = floquet_solve_truncated(
             L0_2, Cp_c, Cm_c, Omega_beat, Delta_eff_axis,
             atom.S_v, N_LEVELS, n_f)
-        probe_b = _polarization_coherence(rho0_b, probe_ground)
-        conj_b = _polarization_coherence(rhop_b, conj_ground)
+        probe_b = _polarization_coherence(rho0_b, probe_ground, transition_scales)
+        conj_b = _polarization_coherence(rhop_b, conj_ground, transition_scales)
         chi_sc[i] = probe_b / Oc_ref
         chi_cc[i] = conj_b / Oc_ref
 
@@ -580,7 +576,8 @@ def chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, Delta_eff_axis, bra
 
 
 def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders, *,
-                         return_real_forms=False, sparse_schur=False):
+                         return_real_forms=False, sparse_schur=False,
+                         transition_scales=TRANSITION_DIPOLE_SCALE):
     """Real pole–residue systems for both finite seed configurations and orders.
 
     Returns ``{(seed, order): (AffineShiftSystem, reference Rabi frequency)}``
@@ -593,24 +590,24 @@ def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders, *,
     perm = _transpose_perm(n)
     U = hermitian_basis(n)
     Uh = U.conj().T
-    E_g2 = np.zeros((n, n), dtype=complex)
-    E_g2[G2, G2] = 1.0
-    C_delta = comm_super(E_g2)
-    probe_ground = G2 if branch == -1 else G1
-    conj_ground = G1 if branch == -1 else G2
-    w_probe = _coherence_weights(probe_ground) @ U
-    w_conj = _coherence_weights(conj_ground) @ U
+    probe_ground, conj_ground = _ground_legs(branch)
+    E_probe = np.zeros((n, n), dtype=complex)
+    E_probe[probe_ground, probe_ground] = 1.0
+    C_delta = comm_super(E_probe)
+    omega_offset = seeded_floquet_frequency(0.0, branch)
+    w_probe = _coherence_weights(probe_ground, transition_scales) @ U
+    w_conj = _coherence_weights(conj_ground, transition_scales) @ U
 
     def j_symmetric(X):
         return np.array_equal(X, X.conj()[perm][:, perm])
 
     seeds = {
         1: (build_liouvillian(
-                fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os_ref, 0.0, branch), atom),
-            sideband_template(Op_A, Op_B, 0.0, branch), Os_ref),
+                fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, Os_ref, 0.0, branch, transition_scales), atom),
+            sideband_template(Op_A, Op_B, 0.0, branch, transition_scales), Os_ref),
         2: (build_liouvillian(
-                fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, 0.0, 0.0, branch), atom),
-            sideband_template(Op_A, Op_B, Oc_ref, branch), Oc_ref),
+                fwm.static_hamiltonian_at_Deff_zero(Op_A, Op_B, 0.0, 0.0, branch, transition_scales), atom),
+            sideband_template(Op_A, Op_B, Oc_ref, branch, transition_scales), Oc_ref),
     }
     if not (j_symmetric(C_delta) and j_symmetric(atom.S_v)):
         return None
@@ -624,7 +621,7 @@ def _seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders, *,
         Cp_r = Uh @ Cp @ U
         for order in orders:
             form = pole_doppler.floquet_real_form(
-                L_r, Cd_r, Cp_r, S_r, order, OMEGA_HF, float(branch), n,
+                L_r, Cd_r, Cp_r, S_r, order, omega_offset, -1.0, n,
                 ((0, w_probe), (1, w_conj)))
             systems[(seed, order)] = (form if return_real_forms else
                                       pole_doppler.AffineShiftSystem(
@@ -657,7 +654,7 @@ def finite_seed_angular_reference(
         Op_A, Op_B, Os_ref, Oc_ref, lab_delta_axis_rad_s, one_photon_rad_s, *,
         T, pump_k_rad_m, probe_k_axis_rad_m, crossing_angle_rad, atom=None,
         floquet_order=SEEDED_FLOQUET_ORDER, transverse_order=18, cutoff_sigma=5.0,
-        branch=-1):
+        branch=-1, transition_scales=TRANSITION_DIPOLE_SCALE):
     """Bounded finite-seed minus-branch mean field with transverse Raman shift.
 
     Longitudinal averaging is analytic at each transverse quadrature node.
@@ -685,7 +682,7 @@ def finite_seed_angular_reference(
         atom = fwm.collisional_atom(T)
     orders = (floquet_order, floquet_order - 1)
     forms = fwm._seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, orders,
-                                return_real_forms=True)
+                                return_real_forms=True, transition_scales=transition_scales)
     if forms is None:
         raise ValueError("angular reference requires a Hermiticity-preserving seeded model")
     rows = _finite_seed_angular_rows(forms, delta, one_photon_rad_s, T, pump_k_rad_m,
@@ -910,7 +907,7 @@ class ChiPoleRows:
 
 
 def chi_pole_rows(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, branch, atom=ATOM, n_f=1,
-                  guard_delta_eff=None):
+                  guard_delta_eff=None, transition_scales=TRANSITION_DIPOLE_SCALE):
     """Pole–residue form of :func:`chi_matrix_table` for velocity sums.
 
     One eigendecomposition per probe detuning replaces one Floquet solve per
@@ -922,7 +919,8 @@ def chi_pole_rows(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, branch, atom=ATOM, n_f
     """
     n_f = int(n_f)
     delta_axis = np.ascontiguousarray(delta_axis, dtype=float)
-    systems = fwm._seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, (n_f,))
+    systems = fwm._seeded_pole_systems(Op_A, Op_B, Os_ref, Oc_ref, branch, atom, (n_f,),
+                                       transition_scales=transition_scales)
     if systems is None:
         return None
     keys = ((1, n_f), (2, n_f))
@@ -935,7 +933,7 @@ def chi_pole_rows(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, branch, atom=ATOM, n_f
         for value, table in zip(
                 rows.mean(node, np.ones(1)),
                 fwm.chi_matrix_table(Op_A, Op_B, Os_ref, Oc_ref, delta_axis, node, branch,
-                                 atom=atom, n_f=n_f)):
+                                     atom=atom, n_f=n_f, transition_scales=transition_scales)):
             reference = table[:, 0]
             relative = np.abs(value - reference) / np.maximum(
                 np.abs(reference), np.finfo(float).tiny)
