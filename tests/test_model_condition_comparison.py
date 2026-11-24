@@ -110,8 +110,8 @@ def test_explicit_exact_mixed_comparison_uses_same_legacy_grid_for_both_curves()
     conditions["pump_power_mw"] = 0.
     off_only, solves, current = _compare(**conditions, weak_probe_profile=profile)
     assert solves == []
-    # D20 default (M2b): an Exact request at zero pump is the transit Voigt.
-    assert off_only["series"][0]["probe_model"] == "od_weak_exact_voigt_transit_v1"
+    # Default set d20_d2sb: an Exact request at zero pump is the transit Voigt (_v2).
+    assert off_only["series"][0]["probe_model"] == "od_weak_exact_voigt_transit_v2"
     assert off_only["series"][0]["weak_probe_profile"]["requested"] == profile
     np.testing.assert_array_equal(off_only["series"][0]["transmission"],
                                   current["optical_readout"]["transmission"])
