@@ -81,6 +81,28 @@ and an explicit common cell-loss assumption. Older saved settings load with thes
 These practical approximations are separate from Grand Challenge acceptance.
 [Implementation, calibration and validation](https://github.com/Shake2313/GABES-archive/blob/pre-split-2026-11-09/docs/fwm_experiment_2026_10_22/README.md).
 
+## FWM squeezing defaults from Kim & Marino (2018)
+
+In **FWM → Squeezing → DEFAULTS**, choose **Kim & Marino 2018 — singly resonant probe**
+or **Kim & Marino 2018 — singly resonant conjugate**. Both generate twin beams in a
+12 mm ⁸⁵Rb D1 cell at 89 °C. The selected beam is resonant with ⁸⁷Rb D1.
+
+| Resonant beam and ⁸⁷Rb transition | Pump Δ from ⁸⁵Rb F=2→F′=3 | Measured intensity-difference noise at 750 kHz | After electronic-noise subtraction |
+|---|---:|---:|---:|
+| Probe, F=2→F′=2 | −1.04858 GHz | −5.4 dB | −6.3 dB |
+| Conjugate, F=1→F′=1 | −1.13258 GHz | −5.0 dB | −6.2 dB |
+
+The paper references the pump to F′=2 (−687 and −771 MHz). Its pump–probe
+spacing gives δ=+16 MHz in the paper and δ=−16 MHz on the GABES seeded branch.
+The 1 W pump and the seed cross at 0.45°, with 1/e² radii of 950 and 300 µm.
+The paper gives no seed power, so both presets assume an 8 µW shot-noise-limited seed.
+They use the midpoint of the 98–99% exit-window transmission and 96% optical
+transmission after the window. With 95% photodiode QE the detection efficiency
+is 89.832%. The uncalibrated Jasperse readout includes optical losses and has
+no analysis-frequency or detector-electronics response.
+[Kim & Marino, §2.1 and Figs. 3–4](https://doi.org/10.1364/OE.26.033366)
+· [GABES literature record](references/fwm_experiments/papers/kim_2018_oe.json).
+
 ## Schemes (current)
 
 | Cluster | Scheme | Output |

@@ -393,6 +393,14 @@ class FWMScheme(Scheme):
         practical = dict(values, experimental_gain_calibration=True,
                          gain_calibration_model=MODEL_LAB_REFIT,
                          jasperse_loss_pct=0.0)
+        # Kim & Marino §2.1: paper δ is the pump–probe spacing minus the
+        # ground splitting. The seeded branch uses the opposite sign.
+        kim = dict(gold, tpd=-16.0, temp_c=89.0, cell_mm=12.0, pump_mw=1000.0,
+                   pump_waist_um=950.0, probe_waist_um=300.0, seeded_angle_deg=0.45,
+                   probe_uw=8.0, seed_input_assumption=(
+                       "Kim & Marino do not report seed power. The preset assumes 8 µW."),
+                   # 98.5% exit-window transmission (midpoint) × 96% downstream optics.
+                   after_cell_eff_pct=94.56, loss_pct=5.44, qe_pct=95.0)
         return [
             Preset("2026-10-13 experiment", practical,
                    help="113 °C, nominal blue OPD ≈1 GHz, pump 294.804 mW. "
@@ -402,6 +410,11 @@ class FWMScheme(Scheme):
             Preset("Sim Gold Reference", gold,
                    help="Sim reference: 121 °C, OPD 0.9 GHz, pump 600 mW and seed 8 µW. "
                         "Resets empirical calibration and measured-reference provenance."),
+            # The literature record converts the two F′=2 detunings to F′=3.
+            Preset("Kim & Marino 2018 — singly resonant probe", dict(kim, opd=-1.04858),
+                   help="Probe on ⁸⁷Rb D1 F=2→F′=2. Pump 687 MHz red of ⁸⁵Rb F=2→F′=2."),
+            Preset("Kim & Marino 2018 — singly resonant conjugate", dict(kim, opd=-1.13258),
+                   help="Conjugate on ⁸⁷Rb D1 F=1→F′=1. Pump 771 MHz red of ⁸⁵Rb F=2→F′=2."),
         ]
 
     def recommended_defaults(self, params):
@@ -532,6 +545,10 @@ class FWMScheme(Scheme):
             "**References**\n"
             "- G. Sim, H. Kim, H. S. Moon, *Sci. Rep.* **15**, 7727 (2025) "
             "(seeded 85Rb D1 double-Lambda gain & squeezing, regression anchor).\n"
+            "- S. Kim and A. M. Marino, [*Opt. Express* **26**, 33366 (2018)]"
+            "(https://doi.org/10.1364/OE.26.033366), §2.1 and Figs. 3–4. "
+            "Both singly resonant presets assume an 8 µW seed (power unreported) "
+            "and 98.5% exit-window transmission (reported range 98–99%).\n"
             "- H. Kim, H. Jeong, H. S. Moon, [*Quantum Sci. Technol.* **9**, "
             "045006 (2024)](https://arxiv.org/abs/2402.06872) (Cs cascade BTW, Eq. 2).\n"
             "- H. Jeong, H. Kim, H. S. Moon, *Adv. Quantum Technol.* **7**, "

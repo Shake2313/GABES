@@ -70,7 +70,9 @@ def test_preset_explicit_proxy_and_default_off_preserve_full_view_identity():
     assert preset.values["tpd"] == pytest.approx(1.732439, abs=1e-9)
     assert scheme.extra_views()[0].key == "Full probe scan (−8 to 12 GHz, slow)"
     assert [p.name for p in scheme.presets()] == [
-        "2026-10-13 experiment", "Sim Gold Reference"]
+        "2026-10-13 experiment", "Sim Gold Reference",
+        "Kim & Marino 2018 — singly resonant probe",
+        "Kim & Marino 2018 — singly resonant conjugate"]
     assert all(view.key != "2026-10-13 measured gain comparison"
                for view in scheme.extra_views())
     assert scheme.internal_measured_gain_comparison().key == "2026-10-13 measured gain comparison"
@@ -84,6 +86,30 @@ def test_preset_explicit_proxy_and_default_off_preserve_full_view_identity():
     assert gold["seed_input_assumption"] == ""
     assert gold["opd"] == 0.9 and gold["temp_c"] == 121.0
     assert gold["pump_mw"] == 600.0 and gold["probe_uw"] == 8.0
+
+
+@pytest.mark.parametrize(("arm", "opd_ghz"), [
+    ("probe", -1.04858), ("conjugate", -1.13258),
+])
+def test_kim_singly_resonant_named_defaults(arm, opd_ghz):
+    from gabes_ui.defaults import builtin_defaults
+
+    scheme = fwm.FWMScheme()
+    name = f"Kim & Marino 2018 — singly resonant {arm}"
+    params = next(record["params"] for record in builtin_defaults(scheme).values()
+                  if record["name"] == name)
+    # The pump is red of F=2 -> F'=3. Increasing the pump-probe spacing
+    # (+16 MHz in the paper) decreases the seed frequency in GABES.
+    expected = {
+        "mode": fwm.MODE_SEEDED,
+        "squeezing_view": fwm.SQUEEZING_INTENSITY_DIFFERENCE,
+        "opd": opd_ghz, "tpd": -16.0, "temp_c": 89.0, "cell_mm": 12.0,
+        "pump_mw": 1000.0, "pump_waist_um": 950.0, "probe_waist_um": 300.0,
+        "seeded_angle_deg": 0.45, "probe_uw": 8.0,
+        "qe_pct": 95.0, "after_cell_eff_pct": 94.56, "loss_pct": 5.44,
+        "experimental_gain_calibration": False, "measured_gain_calibration": False,
+    }
+    assert {key: params[key] for key in expected} == expected
 
 
 def test_reference_selector_and_proxy_adoption_do_not_enter_cached_atomic_calls(monkeypatch):
