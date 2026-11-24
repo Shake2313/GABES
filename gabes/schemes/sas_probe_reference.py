@@ -82,6 +82,8 @@ def compute(params, isotope_densities, reference, temperature_k, probe_mw):
 
 def _compute(params, isotope_densities, reference, temperature_k, probe_mw, deadline):
     line = params["line"]
+    from .sas import per_line_self_broadening
+    per_line = per_line_self_broadening(params)
     probe_waist = _bounded_parameter(params, "probe_waist_mm", 0.1, 5.0)
     transit_khz = _bounded_parameter(params, "transit_khz", 5.0, 2000.0)
     strength = _bounded_parameter(params, "line_strength", 0.01, 2.0)
@@ -103,7 +105,8 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
         man = species.build_manifold(isotope, line, transit_rate=transit)
         offset = 2 * np.pi * (man.nu0 - nu_ref)
         sigma = man.k_vec * constants.thermal_speed(temperature_k, isotope.mass)
-        hwhm = (man.gamma + species.self_broadening(isotope, density)) / 2 + transit
+        hwhm = (man.gamma + species.self_broadening(
+            isotope, density, line, per_line=per_line)) / 2 + transit
         probe = ProjectedProbe(man, hwhm, transit)
         saturation = probe.peak_saturation(intensity)
         pumping_scale = max(pumping_scale, saturation * (man.gamma + transit) / transit)

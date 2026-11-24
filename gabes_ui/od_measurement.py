@@ -6,7 +6,7 @@ import streamlit as st
 
 from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
                             evaluate_od_display, od_fit_conditions, od_unavailable)
-from gabes.schemes.sas import TWO_LEVEL_MODEL
+from gabes.schemes.sas import TWO_LEVEL_MODELS
 from gabes_ui.controls import skey
 
 
@@ -34,7 +34,7 @@ def workspace_params(params, state, upload=None):
             reason = od_unavailable(conditions)
             if reason:
                 raise ODUnsupportedError(reason)
-        elif model_id == TWO_LEVEL_MODEL and conditions.probe_power_uw == 0:
+        elif model_id in TWO_LEVEL_MODELS and conditions.probe_power_uw == 0:
             raise ODUnsupportedError("The recorded finite-power two-level model needs positive probe power.")
     return derived
 
@@ -48,12 +48,12 @@ def _spectrum(conditions, scan_rad_s):
 
 def evaluate_workspace(params, raw):
     """Check explicit requests before allocating figures; permit the displayed scheme-only fallback."""
-    from gabes.schemes.sas import OD_MODELS_D20, OD_MODELS_PRE_D20
+    from gabes.schemes.sas import OD_MODEL_SETS
     requested = params.get(MODEL_KEY)
     if requested is not None and (not isinstance(requested, str) or not requested.strip()):
         raise ODUnsupportedError("Invalid OD model ID. Expected a non-blank string.")
-    # A model set ("pre_d20", "d20") chooses per regime; only an explicit ID is a request.
-    explicit = None if requested in (None, OD_MODELS_PRE_D20, OD_MODELS_D20) else requested
+    # A model set (pre_d20, d20, d20_d2sb) chooses per regime; only an explicit ID is a request.
+    explicit = None if requested in (None, *OD_MODEL_SETS) else requested
     scheme_id = raw.get("probe_model")
     try:
         conditions = ODConditions.from_params(params)

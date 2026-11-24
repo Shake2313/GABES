@@ -16,10 +16,10 @@ from . import core, species
 from ._arrays import readonly_float_array
 from .experimental_alignment import AxisAlignment, fit_signal_affine, frame_alignment, frame_signal_range
 from .experimental_csv import ExperimentalCSV
-from .od_model import ODConditions, evaluate_od_display, od_unavailable, rate_model_axis
+from .od_model import ODConditions, evaluate_od_display, is_rate_model, od_unavailable, rate_model_axis
 from .od_spectrum_fit import (
     BOUND_TOLERANCE, MAX_ABS_CORRELATION, MAX_CONDITION_NUMBER,
-    ODFitCancelled, ODFitProgress, RATE_MODEL, offered_fit_parameters,
+    ODFitCancelled, ODFitProgress, offered_fit_parameters,
 )
 from .schemes.sas import RB_COMPOSITION_CUSTOM, _isotope_composition
 
@@ -285,7 +285,7 @@ def fit_od_profile(trace: ExperimentalCSV, params, alignment: AxisAlignment, roi
     @lru_cache(maxsize=12)
     def model(trial_conditions):
         check_cancel()
-        if trial_conditions.model_id == RATE_MODEL:
+        if is_rate_model(trial_conditions.model_id):
             axis = rate_model_axis(trial_conditions)
         else:
             axis = np.linspace(*theory_range_ghz, 2001) * _RAD_PER_GHZ

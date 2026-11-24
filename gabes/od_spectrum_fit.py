@@ -11,7 +11,8 @@ from . import species
 from ._arrays import readonly_float_array
 from .experimental_alignment import AxisAlignment
 from .experimental_csv import ExperimentalCSV, transform_x
-from .od_model import MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, od_unavailable
+from .od_model import (MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, is_rate_model,
+                       od_unavailable)
 from .schemes.sas import RB_COMPOSITION_CUSTOM, _probe_power_mw, _weak_probe_profile
 from .vapor_cell import CellTemperatureState
 
@@ -83,7 +84,7 @@ def offered_fit_parameters(params, *, model_id=None):
         offered["rb85_fraction"] = CANDIDATE_PARAMETERS["rb85_fraction"]
     if params.get("line") == "D2":
         try:
-            rate = _fit_conditions(params, model_id).model_id == RATE_MODEL
+            rate = is_rate_model(_fit_conditions(params, model_id).model_id)
         except (ODUnsupportedError, ValueError, KeyError):
             rate = False
         if rate:
@@ -483,7 +484,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         raise ValueError("Choose distinct physical fit parameters from the supported list.")
     candidate_keys = tuple(key for key in free if key in CANDIDATE_PARAMETERS)
     if (set(candidate_keys) & set(_PROBE_PARAMETERS)
-            and _fit_conditions(params, model_id).model_id != RATE_MODEL):
+            and not is_rate_model(_fit_conditions(params, model_id).model_id)):
         raise ValueError("Probe power and beam radius can be fitted only with the "
                          "finite-probe magnetic-sublevel rate model.")
     if set(_PROBE_PARAMETERS) <= set(candidate_keys):

@@ -273,14 +273,29 @@ def rb85_steck_density(T):
     return RB85.abundance * _density_from_logP(logP, T)
 
 
-def self_broadening(iso, N):
+def self_broadening(iso, N, line=None, *, per_line=False):
     """Modelled collisional self-broadening β·N added to Γ_nat [rad/s].
+
+    ``per_line=False`` applies BETA_SELF, the Rb D1 measurement, to every Rb
+    line; every OD/SAS model ID before 2026-11-24 does this. ``per_line=True``
+    takes the D2 coefficient from collisions.SELF_BROADENING_COEFFICIENTS (user
+    decision 2026-11-24, checklist rb-d2-self-broadening-default-value) and
+    keeps BETA_SELF on D1. N is the density the caller passes (isotope density
+    in the OD/SAS paths).
 
     Cs contributes zero in this default model. Its line-specific, opt-in
     coefficient and uncertainty are available in collisions.self_broadening_reference.
     """
     if iso.name == CS133.name:
         return np.zeros_like(N, dtype=float)[()]
+    if per_line:
+        if line not in ("D1", "D2"):
+            raise ValueError("Per-line self-broadening needs line 'D1' or 'D2'.")
+        if line == "D2":
+            from .collisions import SELF_BROADENING_COEFFICIENTS
+
+            coefficient = SELF_BROADENING_COEFFICIENTS[(iso.name, line)].primary.value
+            return 2 * np.pi * coefficient * N
     return BETA_SELF * N
 
 

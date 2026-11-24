@@ -63,6 +63,9 @@ class ODModel:
     weak_probe_profile: str | None = None
     engine: str = "sas"               # sas | rate
     accuracy: str = ""                # documented accuracy, for readouts and exports
+    # Measured Rb D2 self-broadening instead of the D1 value on D2 (_v2 IDs,
+    # user decision 2026-11-24, checklist rb-d2-self-broadening-default-value).
+    per_line_self_broadening: bool = False
 
 
 MODELS = {model.model_id: model for model in (
@@ -79,7 +82,25 @@ MODELS = {model.model_id: model for model in (
     ODModel("od_finite_rb_mf_rate_v1",
             "Magnetic-sublevel rate model for a linearly polarized Rb probe, any probe power",
             "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY),
+    ODModel("od_weak_exact_voigt_transit_v2",
+            "Exact Maxwell Voigt with the transit HWHM and the measured Rb D2 "
+            "self-broadening, zero probe power",
+            "implemented", False, EXACT_WEAK_PROBE, per_line_self_broadening=True),
+    ODModel("finite_power_2level_gaussian_propagation_v2",
+            "Current SAS finite-probe path with the measured Rb D2 self-broadening; "
+            "needs a uniform scan axis", "scheme_only", True, per_line_self_broadening=True),
+    ODModel("od_finite_rb_mf_rate_v2",
+            "Magnetic-sublevel rate model for a linearly polarized Rb probe with the "
+            "measured Rb D2 self-broadening, any probe power",
+            "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY,
+            per_line_self_broadening=True),
 )}
+
+
+def is_rate_model(model_id):
+    """Whether ``model_id`` is a magnetic-sublevel rate model (any self-broadening)."""
+    model = MODELS.get(model_id)
+    return model is not None and model.engine == "rate"
 
 
 class ODUnsupportedError(ValueError):
@@ -144,7 +165,7 @@ class ODConditions:
     def from_params(cls, params, *, extra_homogeneous_fwhm_hz=0.0):
         """Read SAS parameters; pump settings are ignored, as in the OD-fit view.
 
-        ``od_model`` holds a model set ("pre_d20", "d20") or an explicit model
+        ``od_model`` holds a model set ("pre_d20", "d20", "d20_d2sb") or an explicit model
         ID; the SAS scheme resolves it, so the evaluator and the plot agree.
         Without the key the pre-D20 choice applies, so older settings replay,
         exactly as in the SAS solve; the defaults merged below must not add it.
@@ -356,6 +377,7 @@ def _rate_model_scan(conditions, points=2001):
     transit_rate = 2 * np.pi * params["transit_khz"] * 1e3
     peak_intensity = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
+    per_line = MODELS[conditions.model_id].per_line_self_broadening
     centers = []
     doppler_fwhm_max = 0.0
     broadened_fwhm_max = 0.0
@@ -368,7 +390,8 @@ def _rate_model_scan(conditions, points=2001):
             doppler_fwhm_max, np.sqrt(8 * np.log(2)) * manifold.k_vec * sigma_v)
         density = (species.number_density(isotope, temperature_k)
                    * fractions.get(isotope.name, 0.0))
-        gamma_effective = manifold.gamma + species.self_broadening(isotope, density)
+        gamma_effective = manifold.gamma + species.self_broadening(
+            isotope, density, line, per_line=per_line)
         saturation_intensity = probe_saturation.closed_two_level_saturation_intensity(
             manifold.nu0, manifold.gamma)
         saturation = probe_saturation.peak_saturation_parameter(
@@ -390,13 +413,15 @@ def _rate_model_optics(conditions):
     extra_hwhm = np.pi * conditions.extra_homogeneous_fwhm_hz
     peak = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
+    per_line = MODELS[conditions.model_id].per_line_self_broadening
     optics = []
     for isotope, fraction in isotope_fractions:
         density = fraction * species.number_density(isotope, temperature)
         manifold = species.build_manifold(isotope, line)
         offset = 2 * np.pi * (manifold.nu0 - reference.line(line)[1])
         sigma = manifold.k_vec * np.sqrt(constants.KB * temperature / isotope.mass)
-        gamma2 = 0.5 * (manifold.gamma + species.self_broadening(isotope, density)) + transit
+        gamma2 = 0.5 * (manifold.gamma + species.self_broadening(
+            isotope, density, line, per_line=per_line)) + transit
         if extra_hwhm:
             gamma2 += extra_hwhm
         optics.append((manifold, density, offset, sigma, gamma2))

@@ -119,6 +119,8 @@ def _propagate(count, length, temp, gradient, field, field_span, params,
     pump_rows = [pump.copy()]
     most_negative_pump_alpha = 0.0
     line = params["line"]
+    from .sas import per_line_self_broadening   # sas imports this module
+    per_line = per_line_self_broadening(params)
     waist = float(params["waist_mm"])
     transit = 2.0 * np.pi * float(params["transit_khz"]) * 1e3
     neon = constants.neon_buffer_broadening(params.get("ne_pressure_torr", 0.))
@@ -138,7 +140,8 @@ def _propagate(count, length, temp, gradient, field, field_span, params,
                     offset=2.0*np.pi*(manifold.nu0 - nu_reference),
                     Op=species.pump_rabi_from_power(node_power, waist, manifold.gamma,
                                                    iso=isotope, line=line),
-                    gamma_eff=manifold.gamma + species.self_broadening(isotope, density) + neon,
+                    gamma_eff=(manifold.gamma + neon + species.self_broadening(
+                        isotope, density, line, per_line=per_line)),
                     field_ut=field_profile[index]), scan, tk,
                     axial_optics=True, pump_attenuation=deplete)
             values.append(local)

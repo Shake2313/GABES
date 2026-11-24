@@ -68,6 +68,11 @@ PROJECTED_PROBE_VIEW = "Finite-probe pumping reference"
 OD_MODEL_KEY = "od_model"
 OD_MODELS_PRE_D20 = "pre_d20"
 OD_MODELS_D20 = "d20"
+# d20 with the measured Rb D2 self-broadening coefficient (user decision
+# 2026-11-24, checklist rb-d2-self-broadening-default-value). Its model IDs
+# carry a _v2 suffix; every older set and ID keeps BETA_SELF on D2 and replays.
+OD_MODELS_D2SB = "d20_d2sb"
+OD_MODEL_SETS = (OD_MODELS_PRE_D20, OD_MODELS_D20, OD_MODELS_D2SB)
 OD_MODELS_DEFAULT = OD_MODELS_D20   # ParamSpec default; also an explicit None
 LEGACY_MODEL = "weak_probe_legacy"
 EXACT_MODEL = "weak_probe_exact_maxwell_voigt"
@@ -76,12 +81,21 @@ TWO_LEVEL_MODEL = "finite_power_2level_gaussian_propagation"
 RATE_MODEL = "od_finite_rb_mf_rate_v1"
 PUMPED_MODEL = "weak_probe_maxwell_pumped_correction"
 PUMPED_TRANSIT_MODEL = "sas_pumped_exact_voigt_transit_v1"
+TRANSIT_WEAK_MODEL_V2 = "od_weak_exact_voigt_transit_v2"
+TWO_LEVEL_MODEL_V2 = "finite_power_2level_gaussian_propagation_v2"
+RATE_MODEL_V2 = "od_finite_rb_mf_rate_v2"
+PUMPED_TRANSIT_MODEL_V2 = "sas_pumped_exact_voigt_transit_v2"
+TRANSIT_WEAK_MODELS = (TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V2)
+TWO_LEVEL_MODELS = (TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2)
+RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2)
 _EXPLICIT_OD_MODELS = {
     LEGACY_MODEL: OD_MODELS_PRE_D20, EXACT_MODEL: OD_MODELS_PRE_D20,
     TWO_LEVEL_MODEL: OD_MODELS_PRE_D20,
     TRANSIT_WEAK_MODEL: OD_MODELS_D20, RATE_MODEL: OD_MODELS_D20,
+    TRANSIT_WEAK_MODEL_V2: OD_MODELS_D2SB, TWO_LEVEL_MODEL_V2: OD_MODELS_D2SB,
+    RATE_MODEL_V2: OD_MODELS_D2SB,
 }
-OD_MODEL_CHOICES = (OD_MODELS_PRE_D20, OD_MODELS_D20, *_EXPLICIT_OD_MODELS)
+OD_MODEL_CHOICES = (*OD_MODEL_SETS, *_EXPLICIT_OD_MODELS)
 # Atom / Isotope rows of the species knob (rendered as two selectors).
 ATOM_MENU = (
     ("Rb", "Natural", "Rb (natural)", {"rb_composition": RB_COMPOSITION_NATURAL}),
@@ -195,19 +209,27 @@ def _od_model_setting(params):
 
     A missing key is pre-D20, so parameter dictionaries written before the
     setting existed replay unchanged. ``None`` is an unset session value and
-    takes the current default, like a fresh session.
+    takes the current default, like a fresh session. The Legacy velocity grid
+    reproduces the historical spectrum, so d20_d2sb with that request is d20.
     """
     if OD_MODEL_KEY not in params:
         return OD_MODELS_PRE_D20, None
     value = params[OD_MODEL_KEY]
     if value is None:
-        return OD_MODELS_DEFAULT, None
-    if isinstance(value, str) and value in (OD_MODELS_PRE_D20, OD_MODELS_D20):
+        value = OD_MODELS_DEFAULT
+    if isinstance(value, str) and value in OD_MODEL_SETS:
+        if value == OD_MODELS_D2SB and params.get("weak_probe_profile") == LEGACY_WEAK_PROBE:
+            return OD_MODELS_D20, None
         return value, None
     if isinstance(value, str) and value in _EXPLICIT_OD_MODELS:
         return _EXPLICIT_OD_MODELS[value], value
     raise ODModelSettingError(
         f"Invalid OD model ID {value!r}. Choose one of: {', '.join(OD_MODEL_CHOICES)}.")
+
+
+def per_line_self_broadening(params):
+    """Whether these SAS parameters take the measured Rb D2 self-broadening (set d20_d2sb)."""
+    return _od_model_setting(params)[0] == OD_MODELS_D2SB
 
 
 def _rate_scope_reason(params):
@@ -229,27 +251,28 @@ def _pump_free_model_id(params):
     model_set, explicit = _od_model_setting(params)
     if explicit is not None:
         return explicit
+    v2 = model_set == OD_MODELS_D2SB
     if _probe_power_mw(params) > 0.0:
-        if model_set == OD_MODELS_D20 and _rate_scope_reason(params) is None:
-            return RATE_MODEL
-        return TWO_LEVEL_MODEL
+        if model_set != OD_MODELS_PRE_D20 and _rate_scope_reason(params) is None:
+            return RATE_MODEL_V2 if v2 else RATE_MODEL
+        return TWO_LEVEL_MODEL_V2 if v2 else TWO_LEVEL_MODEL
     model = _weak_probe_model_id(_weak_probe_profile(dict(params, pump_power_mw=0.0)))
-    if model_set == OD_MODELS_D20 and model == EXACT_MODEL:
-        return TRANSIT_WEAK_MODEL
+    if model_set != OD_MODELS_PRE_D20 and model == EXACT_MODEL:
+        return TRANSIT_WEAK_MODEL_V2 if v2 else TRANSIT_WEAK_MODEL
     return model
 
 
 def _pump_free_model_reason(params, model):
     """Why ``model`` cannot run the pump-off solve of these parameters, or None."""
     probe = _probe_power_mw(params)
-    if model in (LEGACY_MODEL, EXACT_MODEL, TRANSIT_WEAK_MODEL):
+    if model in (LEGACY_MODEL, EXACT_MODEL, *TRANSIT_WEAK_MODELS):
         if probe > 0.0:
             return "This weak-probe model needs zero probe power."
         if model != LEGACY_MODEL and not _exact_voigt_eligible(params):
             return ("The Exact Maxwell Voigt models need uniform, uncoated Rb D1/D2 "
                     "without buffer gas and with Legacy broadening.")
         return None
-    if model == RATE_MODEL:
+    if model in RATE_MODELS:
         return _rate_scope_reason(params)
     return None
 
@@ -580,7 +603,9 @@ class SASScheme(Scheme):
                            "models used before the OD-fit port and replays older saved "
                            "settings. d20 adds "
                            "the transit width to the Exact profiles (pumped too) and uses "
-                           "the magnetic-sublevel rate model for a finite Rb probe. An "
+                           "the magnetic-sublevel rate model for a finite Rb probe. "
+                           "d20_d2sb is d20 with the measured Rb D2 self-broadening "
+                           "coefficient (1.10×10⁻⁷ Hz cm³) in place of the D1 value. An "
                            "explicit model ID fixes the pump-off solve."),
         ]
 
@@ -853,7 +878,7 @@ class SASScheme(Scheme):
             if reason := _pump_free_model_reason(params, pump_free_model):
                 # A valid model outside its scope is an input error the app shows.
                 raise ODModelSettingError(reason)
-            if explicit_model in (LEGACY_MODEL, EXACT_MODEL, TRANSIT_WEAK_MODEL):
+            if explicit_model in (LEGACY_MODEL, EXACT_MODEL, *TRANSIT_WEAK_MODELS):
                 # An explicit weak-probe model fixes its velocity measure.
                 params = dict(params, weak_probe_profile=(
                     LEGACY_WEAK_PROBE if explicit_model == LEGACY_MODEL else EXACT_WEAK_PROBE))
@@ -861,9 +886,10 @@ class SASScheme(Scheme):
         applied_profile = weak_profile["applied"] if weak_profile is not None else None
         exact_weak_probe = applied_profile == EXACT_WEAK_PROBE
         pumped_maxwell = applied_profile == PUMPED_MAXWELL
-        use_rate = pump_free_model == RATE_MODEL
-        transit_weak = pump_free_model == TRANSIT_WEAK_MODEL
-        pumped_transit = pumped_maxwell and model_set == OD_MODELS_D20
+        use_rate = pump_free_model in RATE_MODELS
+        transit_weak = pump_free_model in TRANSIT_WEAK_MODELS
+        pumped_transit = pumped_maxwell and model_set != OD_MODELS_PRE_D20
+        per_line = model_set == OD_MODELS_D2SB   # measured Rb D2 self-broadening
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
         collision_reports = {}
@@ -897,7 +923,8 @@ class SASScheme(Scheme):
                 gamma_eff = man.gamma + self_fwhm + buffer_gamma
                 pump_atom = pump_atom.with_optical_dephasing(self_fwhm / 2)
             else:
-                gamma_eff = man.gamma + species.self_broadening(iso, N) + buffer_gamma
+                gamma_eff = (man.gamma + species.self_broadening(iso, N, line, per_line=per_line)
+                             + buffer_gamma)
             if extra_fwhm:
                 gamma_eff += 2.0 * np.pi * extra_fwhm
             saturation_intensity = (
@@ -1050,10 +1077,12 @@ class SASScheme(Scheme):
                     density_temp_c=T_density - 273.15,
                     doppler_temp_c=T_doppler - 273.15,
                     doppler_temp_tied=tied,
-                    probe_model=(RATE_MODEL if use_rate
-                                 else TWO_LEVEL_MODEL if probe_peak_intensity > 0.0
-                                 else TRANSIT_WEAK_MODEL if transit_weak
-                                 else PUMPED_TRANSIT_MODEL if pumped_transit
+                    probe_model=(pump_free_model if use_rate
+                                 else (TWO_LEVEL_MODEL_V2 if per_line else TWO_LEVEL_MODEL)
+                                 if probe_peak_intensity > 0.0
+                                 else pump_free_model if transit_weak
+                                 else (PUMPED_TRANSIT_MODEL_V2 if per_line else PUMPED_TRANSIT_MODEL)
+                                 if pumped_transit
                                  else _weak_probe_model_id(weak_profile)),
                     od_model_set=model_set,
                     probe_radial_order=96 if use_rate else probe_saturation.RADIAL_QUADRATURE_ORDER,
@@ -1359,7 +1388,7 @@ class SASScheme(Scheme):
 
     def _obs_species(self, raw, params, alpha, chi_real, L, include_figures=True):
         x = raw["scan"] / (2 * np.pi) / 1e9                  # GHz (relative)
-        finite_probe = raw.get("probe_model") in (TWO_LEVEL_MODEL, RATE_MODEL)
+        finite_probe = raw.get("probe_model") in (*TWO_LEVEL_MODELS, *RATE_MODELS)
         optical_readout = _optical_readout(
             x, "GHz", alpha, L, params, raw, effective=finite_probe)
         T_trans = optical_readout["transmission"]
@@ -1529,7 +1558,7 @@ class SASScheme(Scheme):
         if profile is not None:
             optical_readout["weak_probe_profile"] = profile
             metrics.append(_weak_probe_profile_metric(profile))
-        if raw.get("probe_model") == RATE_MODEL:
+        if raw.get("probe_model") in RATE_MODELS:
             from ..od_model import RATE_MODEL_ACCURACY
             tables.append({
                 "title": "Finite-probe model",
@@ -2103,11 +2132,11 @@ def _dispersion_metrics(chi_real, k_vec, L):
 
 def _probe_saturation_metrics(raw, params, length_m):
     """Finite-power model provenance and its strongest local saturation scale."""
-    if raw.get("probe_model") == RATE_MODEL:
+    if raw.get("probe_model") in RATE_MODELS:
         from ..od_model import RATE_MODEL_ACCURACY
         return [dict(label="Probe model", value="Magnetic-sublevel rate", kind="status",
                      help=RATE_MODEL_ACCURACY)]
-    if raw.get("probe_model") != TWO_LEVEL_MODEL:
+    if raw.get("probe_model") not in TWO_LEVEL_MODELS:
         return []
     saturation = float(raw["probe_saturation_max"])
     intensity = float(raw["probe_peak_intensity"])
