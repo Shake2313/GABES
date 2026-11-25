@@ -223,3 +223,20 @@ def test_temperature_confounded_with_frequency_endpoint_blocks_apply():
     assert result.rmse < 1e-8 and not result.identifiable
     assert any(left == "axis_right_ghz" and right == "temp_c" and abs(rho) > .98
                for left, right, rho in result.correlated_pairs)
+
+
+def test_measurement_past_the_displayed_axis_is_still_covered():
+    """A calibrated trace that ends 30 MHz past the plotted theory axis fits cleanly.
+
+    The fitter widens its window and model axis only as far as the search box
+    needs; the plotted axis itself and fits inside it are unchanged.
+    """
+    conditions = medium(temp_c=40.)
+    axis = rate_model_axis(conditions) / GHZ
+    native = np.linspace(axis[0] - 0.02, axis[-1] + 0.03, 1201)
+    trace = measurement(native, weak_curve(conditions, native))
+    alignment = AxisAlignment(scale=1.0, shift=0.0, reverse=False)
+    result = fit_od_profile(trace, conditions.to_params(), alignment, native[[0, -1]],
+                            theory_range_ghz=(float(axis[0]), float(axis[-1])))
+    assert result.rmse < 1e-4
+    np.testing.assert_allclose(result.alignment.transform_x(native)[[0, -1]], native[[0, -1]], atol=2e-4)

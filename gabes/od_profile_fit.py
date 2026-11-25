@@ -240,6 +240,22 @@ def _diagnostics(fields, solution, zero_power_column, relative_linear):
     return identifiable, condition, tuple(pairs), warnings
 
 
+def _cover_axis(axis_rad, lo_ghz, hi_ghz):
+    """Append nodes at the axis spacing until [lo_ghz, hi_ghz] is covered.
+
+    Every model here is evaluated pointwise in frequency, so the original nodes
+    keep their values; an axis that already covers the interval is returned as is.
+    """
+    step = axis_rad[1] - axis_rad[0]
+    lo, hi = lo_ghz * _RAD_PER_GHZ, hi_ghz * _RAD_PER_GHZ
+    below = int(np.ceil((axis_rad[0] - lo) / step)) if lo < axis_rad[0] else 0
+    above = int(np.ceil((hi - axis_rad[-1]) / step)) if hi > axis_rad[-1] else 0
+    if not below and not above:
+        return axis_rad
+    return np.r_[axis_rad[0] - step * np.arange(below, 0, -1), axis_rad,
+                 axis_rad[-1] + step * np.arange(1, above + 1)]
+
+
 def fit_od_profile(trace: ExperimentalCSV, params, alignment: AxisAlignment, roi, bounds=None, *,
                    group="full", model_id=None, theory_range_ghz, invert=False,
                    cancelled=None, progress=None):
@@ -260,11 +276,18 @@ def fit_od_profile(trace: ExperimentalCSV, params, alignment: AxisAlignment, roi
     if float(params.get("pump_power_mw", 0.)) != 0:
         raise ValueError("Choose the pump-off OD view for a profile fit.")
     _physical_limits(conditions, bounds, group)
-    windows = profile_group_windows(conditions.to_params(), theory_range_ghz)
+    first, last = _roi_indices(trace, roi)
+    # The search box below may map the selected samples past the displayed theory
+    # axis; widen the theory range (and model axis) just enough to cover it.
+    mapped_all = alignment.transform_x(trace.detuning)[first:last]
+    span = (float(np.min(mapped_all)), float(np.max(mapped_all)))
+    reach = 0.23 * (span[1] - span[0])
+    cover_ghz = (min(float(theory_range_ghz[0]), span[0] - reach),
+                 max(float(theory_range_ghz[1]), span[1] + reach))
+    windows = profile_group_windows(conditions.to_params(), cover_ghz)
     if group not in windows:
         raise ValueError("Select a transition group present on the theory axis.")
     window = np.array(windows[group])
-    first, last = _roi_indices(trace, roi)
     measured = trace.transmission[first:last]
     if np.ptp(measured) <= 1e-12:
         raise ValueError("The selected native interval has no measurable contrast.")
@@ -289,6 +312,7 @@ def fit_od_profile(trace: ExperimentalCSV, params, alignment: AxisAlignment, roi
             axis = rate_model_axis(trial_conditions)
         else:
             axis = np.linspace(*theory_range_ghz, 2001) * _RAD_PER_GHZ
+        axis = _cover_axis(axis, *cover_ghz)
         transmission = evaluate_od_display(trial_conditions, axis).transmission
         return axis / _RAD_PER_GHZ, transmission
 
