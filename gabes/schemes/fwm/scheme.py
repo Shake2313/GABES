@@ -32,6 +32,7 @@ from ...biphoton_evidence import biphoton_output_evidence
 from .seeded import branch_center_GHz
 from ... import detection, fwm_gain_closure, fwm_measured_gain, observables
 from ...fwm_quadrature import experimental_quadrature_phase_scan
+from ...transit import rate_from_hz_over_2pi, rate_from_khz_over_2pi
 import numpy as np
 
 
@@ -624,8 +625,8 @@ class FWMScheme(Scheme):
             enforce_floquet_convergence=True,
             response_method=res["response_method"],
             _sparse_pole_schur=fidelity in (FIDELITY_FAST, FIDELITY_BALANCED),
-            transit_rate=(2.0 * np.pi
-                          * (params.get("transit_rate_khz", 100.0) * 1e3)),
+            # Hz first: this path historically rounds 2π·(x·1e3), not (2π·x)·1e3.
+            transit_rate=rate_from_hz_over_2pi(params.get("transit_rate_khz", 100.0) * 1e3),
             eom_residual_carrier_power=(
                 params.get("eom_residual_carrier_uw", 0.0) * 1e-6),
             eom_other_sidebands_power=(
@@ -1741,8 +1742,7 @@ class FWMScheme(Scheme):
                 velocity_cutoff=fidelity_settings["velocity_cutoff"],
                 velocity_measure="exact",
                 response_method=fidelity_settings["response_method"],
-                transit_rate=(2.0 * np.pi
-                              * params.get("transit_rate_khz", 100.0) * 1e3),
+                transit_rate=rate_from_khz_over_2pi(params.get("transit_rate_khz", 100.0)),
                 eom_residual_carrier_power=(
                     params.get("eom_residual_carrier_uw", 0.0) * 1e-6),
                 eom_other_sidebands_power=(

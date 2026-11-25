@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 
 from . import constants, doppler, fwm_chi_gain as propagation, fwm_zeeman_response as atom
+from .transit import rate_from_khz_over_2pi
 from . import hyperfine, observables
 from .fwm_calibration_common import (
     cached_profile_loader, calibration_axis, literature_domain, literature_features,
@@ -62,7 +63,7 @@ def context_from_params(params):
         branch=branch, raman_center_minus_GHz=fwm.branch_center_GHz(settings["opd"], -1),
         raman_center_plus_GHz=fwm.branch_center_GHz(settings["opd"], 1),
         combined_line_strength_residual=float(residual), phase_detail=detail,
-        transit_reset_rate_rad_s=2*np.pi*settings.get("transit_rate_khz", 100.)*1e3)
+        transit_reset_rate_rad_s=rate_from_khz_over_2pi(settings.get("transit_rate_khz", 100.)))
 
 
 def atomic_inputs(raw, velocity_step, velocity_cutoff):
