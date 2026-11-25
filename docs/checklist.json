@@ -6985,6 +6985,32 @@
       "scope_update_2026_11_20": "⟦AI⟧ 단일 선형 편광·영자장·펌프 없는 Rb OD의 자기 부분준위 점유율은 od-sas-autood-csv-web-workspace에서 통합하도록 지정됐다. 여기에는 분포형 통과시간과 그 밖의 적용 범위 확장만 남긴다. 기존 유한 프로브 참조 보기의 검증 기록은 od-sas-finite-probe-hyperfine-pumping에 있다."
     },
     {
+      "id": "shared-transit-time-model",
+      "area": "gabes transit geometry + scheme adapters + AutoOD engine pin",
+      "title": "⟦AI⟧ 통과시간 공통 API와 기존 스킴 결과 보존",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "effort": "large",
+      "status": "ready",
+      "problem": "⟦AI⟧ OD/SAS, AutoOD, FWM, Λ, Rydberg, Magneto, PSR에서 유사한 이름의 값이 kHz(율/2π) 또는 s⁻¹로 입력되며 열적 교체, 순수 감쇠, 밝은/어두운 영역 교환에 각각 다르게 적용된다. 2026-11-24 ⁸⁵Rb D₁ 포화 비교는 OD의 교체시간 민감도를 보여줬다.",
+      "source_documents": [
+        "docs/transit_time.md",
+        "https://app.notion.com/p/4226cba14fee8170b728e3b469800d43"
+      ],
+      "related_items": [
+        "od-sas-finite-probe-zeeman-and-transit-refinement",
+        "od-sas-autood-csv-web-workspace",
+        "geometry-aware-buffer-relaxation-budget",
+        "magneto-dynamics-semantics"
+      ],
+      "acceptance_criteria": [
+        "⟦AI⟧ 현재 동작 공통화에서 등록 스킴 6개, 별칭·참조, AutoOD의 기존 원시 출력·표시·모델 ID·저장 데이터 재현을 확인한다. 기존 값의 단위와 이완 연산자 의미를 고정한다.",
+        "⟦AI⟧ 단위와 Gaussian 기하를 GABES에서 공유하고 기존 reset/교환/확산 구현을 재사용한다. 채널이 없는 경로의 적용 범위를 표기하고, 한 물리 채널을 중복 적용하지 않는다.",
+        "⟦AI⟧ 기본·재계산 슬라이더 양 끝·기존 저장 설정과 모든 관련 추가 보기에서 원시 배열과 표시 판독 스냅샷을 대조한다. 공통 엔진 변경 후 범위에 맞는 회귀를 수행한다."
+      ],
+      "follow_up": "⟦AI⟧ 물리 개선과 AutoOD 배포는 docs/transit_time.md의 B·C 단계. 독립 실측과 사용자 결정에 따라 새 모델과 기본값 전환을 별도로 기록한다. 기존 분포형 OD 작업은 od-sas-finite-probe-zeeman-and-transit-refinement에서 관리한다."
+    },
+    {
       "id": "od-sas-finite-pump-finite-probe-joint-model",
       "area": "OD/SAS pump and probe model",
       "title": "Joint finite-pump and finite-probe OD/SAS reference",
