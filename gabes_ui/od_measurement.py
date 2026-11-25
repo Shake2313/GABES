@@ -222,30 +222,6 @@ def _select_scope_channel(panel, name, detected, content, previous):
     return projected
 
 
-def restore_detector_law(name, upload, calibration_options):
-    """Restore the declared detector law from a comparison file's native channel."""
-    import math
-    from gabes.experimental_csv import CALIBRATION_ABSOLUTE_DARK_REFERENCE, CALIBRATION_ABSOLUTE_GAIN_OFFSET
-    mode = upload.metadata.get("experiment_calibration_mode")
-    if mode not in (CALIBRATION_ABSOLUTE_DARK_REFERENCE, CALIBRATION_ABSOLUTE_GAIN_OFFSET):
-        return
-    try:
-        gain = float(upload.metadata["experiment_calibration_gain"])
-        offset = float(upload.metadata["experiment_calibration_offset"])
-        if not math.isfinite(gain) or not gain or not math.isfinite(offset) or not math.isfinite(offset + gain):
-            raise ValueError
-    except (ValueError, TypeError, OverflowError, KeyError) as exc:
-        raise ValueError("Invalid detector calibration in the comparison file.") from exc
-    label = next(label for label, value in calibration_options.items() if value == mode)
-    st.session_state[skey(name, "_csv_calibration_mode")] = label
-    if mode == CALIBRATION_ABSOLUTE_GAIN_OFFSET:
-        pair = {"_csv_detector_gain": gain, "_csv_detector_offset": offset}
-    else:
-        pair = {"_csv_dark_signal": offset, "_csv_reference_signal": offset + gain}
-    for key, value in pair.items():
-        st.session_state[skey(name, key)] = value
-
-
 def plot_metadata(params, actual_model):
     from gabes import species
     from gabes.od_model import frequency_reference

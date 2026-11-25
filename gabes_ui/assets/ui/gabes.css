@@ -833,3 +833,33 @@ button[data-testid="stBaseButton-tertiary"]:hover {
   background: var(--g-surface, #fff);
   font-variant-numeric: tabular-nums;
 }
+
+/* In the OD precision editor, keep a graph beside the instrument controls.
+   The outer columns stack on phones; labeled rows inside the rail stay together. */
+.st-key-sas_precise_controls [data-testid="stVerticalBlock"] {
+  gap: .35rem;
+}
+.st-key-sas_precise_controls [data-testid="stNumberInput"] input {
+  padding-inline: .4rem;
+  font-variant-numeric: tabular-nums;
+}
+.st-key-sas_precise_controls [data-testid="stNumberInput"] button {
+  display: none;
+}
+.st-key-sas_precise_controls [data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap;
+  gap: .4rem;
+}
+.st-key-sas_precise_controls [data-testid="stColumn"] {
+  min-width: 0;
+}
+.st-key-sas_precise_alignment_rows [data-testid="stSliderTickBar"],
+.st-key-sas_precise_alignment_rows [data-testid="stSliderThumbValue"] {
+  visibility: hidden;
+}
+@media (min-width: 800px) {
+  .st-key-sas_precise_controls {
+    border-inline-start: 1px solid var(--g-line);
+    padding-inline-start: .85rem;
+  }
+}

@@ -845,7 +845,7 @@ def test_profile_workflow_refines_relative_detector_and_preserves_native_data(wo
     app.run()
     assert not app.exception and not app.error
     app.button(key="sas_open_precise").click().run()
-    app.multiselect(key="sas_profile_vary").set_value(["temp_c"]).run()
+    app.checkbox(key="sas_profile_vary_temp_c").check().run()
     app.number_input(key="sas_profile_delta_temp_c").set_value(3.).run()
     app.slider(key="sas_profile_roi").set_range(15, 480).run()
     app.checkbox(key="sas___csv_auto_correct").uncheck().run()
@@ -865,7 +865,7 @@ def test_profile_workflow_refines_relative_detector_and_preserves_native_data(wo
     app.button(key="sas_open_precise").click().run()
     assert app.slider(key="sas_profile_roi").value == (15, 480)
     assert app.number_input(key="sas_profile_delta_temp_c").value == 3.
-    assert "frame" not in app.session_state["sas_profile_options"]
+    assert app.button(key="sas_profile_unframe").disabled
     _run_profile_to_completion(app)
     result = app.session_state["sas_profile_result"][1]
     app.button(key="sas_profile_apply").click().run()
@@ -889,11 +889,11 @@ def test_profile_group_uses_manual_seed_and_resets_for_new_measurement(workspace
     group_indices = tuple(app.slider(key="sas_profile_roi").value)
     assert group_indices != (0, 500)
     app.button(key="sas_profile_frame").click().run()
-    assert "frame" in app.session_state["sas_profile_options"]
+    assert not app.button(key="sas_profile_unframe").disabled
     assert app.button(key="sas_profile_frame").label == "Fast fitting"
     assert app.session_state["sas_csv_alignment"].shift == 0.
     app.button(key="sas_profile_unframe").click().run()
-    assert "frame" not in app.session_state["sas_profile_options"]
+    assert app.button(key="sas_profile_unframe").disabled
     app.number_input(key="sas___csv_x_shift").set_value(.012)
     app.button(key="sas___csv_apply").click().run()
     assert tuple(app.slider(key="sas_profile_roi").value) == group_indices
@@ -970,3 +970,54 @@ def test_profile_refuses_incompatible_recorded_frequency_line(workspace):
     assert any("recorded measurement origin differs" in message.value for message in app.warning)
     assert not any(widget.key == "sas_profile_run" for widget in app.button)
     assert not any(widget.key == "sas_profile_apply" for widget in app.button)
+
+
+def test_dialog_calibration_conditions_and_reverse_apply_together(workspace):
+    app, exports, _, uploads = workspace
+    uploads[0] = _upload(uploads[0].getvalue())  # Treat the pairs as raw, relative detector readings.
+    app.run()
+    app.button(key="sas_open_precise").click().run()
+    app.number_input(key="sas_precise_base_probe_waist_mm").set_value(2.8).run()
+    app.number_input(key="sas___csv_x_shift").set_value(.1357913579).run()
+    app.checkbox(key="sas_precise_reverse").check().run()
+    app.radio(key="sas_precise_detector_law").set_value("absolute_dark_reference").run()
+    app.number_input(key="sas_precise_detector_reference_signal").set_value(0.).run()
+    assert not app.exception
+    assert app.button(key="sas___csv_apply").disabled
+    assert app.slider(key="sas_precise_slider_shift")
+    assert app.get("arrow_vega_lite_chart")
+    app.number_input(key="sas_precise_detector_reference_signal").set_value(2.).run()
+    assert not app.button(key="sas___csv_apply").disabled
+    assert app.slider(key="sas_precise_slider_signal_scale").disabled
+    assert exports[-1]["comparison_payload"]["calibration_mode"] == "relative_extrema"
+    app.button(key="sas___csv_apply").click().run()
+    assert not app.exception and not app.error
+    data = exports[-1]["comparison_payload"]
+    assert data["calibration_mode"] == "absolute_dark_reference"
+    assert data["calibration_inputs"]["reference_signal"] == 2.
+    assert data["alignment"]["shift"] == pytest.approx(.1357913579)
+    assert data["alignment"]["reverse"] and app.checkbox(key="sas___csv_reverse").value
+    assert app.session_state["sas__probe_waist_mm"] == 1.4
+    assert app.session_state["sas__pump_power_mw"] == 1.5
+
+
+def test_dialog_restores_declared_frequency_origin_when_the_transition_is_corrected(workspace):
+    from gabes import species
+    from gabes.schemes.sas import EXACT_MODEL
+
+    app, exports, _, uploads = workspace
+    rows = np.loadtxt(uploads[0].getvalue().decode().splitlines()[1:], delimiter=",")
+    uploads[:] = [_upload(_legacy_comparison(EXACT_MODEL, rows[:, 0], rows[:, 1]))]
+    app.session_state["sas__species"] = species.RB87.label
+    app.session_state["sas__line"] = "D1"
+    app.run()
+    app.button(key="sas_open_precise").click().run()
+    assert app.button(key="sas___csv_apply").disabled
+    app.selectbox(key="sas_precise_base_line").set_value("D2").run()
+    assert not app.exception and not app.error
+    assert app.number_input(key="sas___csv_x_shift").value == pytest.approx(-.078095)
+    app.number_input(key="sas___csv_x_shift").set_value(-.08).run()
+    app.button(key="sas___csv_apply").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state["sas__line"] == "D2"
+    assert exports[-1]["comparison_payload"]["alignment"]["shift"] == pytest.approx(-.08)

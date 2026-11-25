@@ -287,10 +287,14 @@ and **Invert X-axis** act on the display. **Back to initial** restores the
 initial alignment for the open file.
 
 - **Precise fitting** opens a dialog. **Fast fitting** in the dialog seeds the
-  fit from the selected samples. The profile fit estimates the frequency scale and shift jointly
-  with optional model conditions. Choose a full spectrum or Rb ground-state
-  group, select the measured samples and set a search interval for each free
-  condition. The sample selection stays fixed as the frequency axis moves.
+  fit from the selected samples. Select the measured region in the preview on
+  the left. On the right, choose the transition and ground-state group and
+  enter each free condition’s starting value and ± tolerance. Beam diameter
+  means twice the 1/e² intensity radius. Move the X/Y scale and shift sliders
+  or type the exact values beside them. **Apply alignment** transfers the
+  manual adjustment to the workspace. **Close** discards unapplied edits.
+  The profile fit estimates the frequency scale and shift jointly with the
+  chosen conditions. The sample selection stays fixed as the frequency axis moves.
   For relative signals the fit also estimates detector gain and offset.
   For calibrated transmission the measured Y values stay fixed.
   **Preview profile fit** shows the result before **Apply profile fit** updates

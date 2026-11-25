@@ -8,7 +8,7 @@ import streamlit as st
 
 from gabes.experimental_alignment import AxisAlignment, frame_alignment
 from gabes.experimental_csv import (CALIBRATION_ABSOLUTE_DARK_REFERENCE,
-                                    CALIBRATION_ABSOLUTE_GAIN_OFFSET, CALIBRATION_RELATIVE_EXTREMA)
+                                    CALIBRATION_ABSOLUTE_GAIN_OFFSET)
 from gabes_ui.controls import skey
 
 _FILE = skey("sas", "_csv_retained_file")
@@ -34,7 +34,8 @@ def _dismiss_precise():
     from gabes_ui.plotcard import cancel_od_fit
 
     cancel_od_fit()
-    st.session_state.pop("sas_precise_open", None)
+    if st.session_state.pop("sas_precise_open", None):
+        _clear_precise_draft()
     st.session_state.pop("sas_od_pending_fit_conditions", None)
     st.session_state.pop("sas_profile_result", None)
     st.session_state.get("sas_profile_options", {}).pop("frame", None)
@@ -121,96 +122,126 @@ def _set_alignment(alignment, *, invert=False):
     st.session_state.pop("sas_od_physical_fit", None)
 
 
-def _manual_alignment(alignment):
-    keys = {name: skey("sas", key) for name, key in (
-        ("scale", "_csv_x_scale"), ("shift", "_csv_x_shift"),
-        ("signal_scale", "_csv_y_scale"), ("signal_offset", "_csv_y_offset"))}
-    changed = st.session_state.get("sas_csv_manual_base") != alignment
-    for name, key in keys.items():
-        if changed or key not in st.session_state:
-            st.session_state[key] = float(getattr(alignment, name))
-    st.session_state.sas_csv_manual_base = alignment
-    return keys
+def _clear_precise_draft():
+    from gabes_ui.od_fit_alignment import clear_draft
+    from gabes_ui.od_profile_fit import clear_spectrum_draft
+
+    clear_draft()
+    clear_spectrum_draft()
+    st.session_state.pop("sas_precise_base", None)
+    st.session_state.pop("sas_precise_display_origin_ghz", None)
 
 
-def _advanced_settings(upload, trace, alignment):
-    from gabes_ui import od_measurement as inputs
+def _trace_alignment_editor(panel, trace, window, indices, tx, ty, initial):
+    from gabes.od_measurement import quick_profile_alignment
+    from gabes_ui.od_fit_alignment import draft_alignment, render_alignment_controls, set_draft_alignment
 
-    box = st.expander("Detector calibration and manual alignment")
-    state = st.session_state
-    if _interpretation(upload)[0] == "relative":
-        options = {"Relative normalized transmission (extrema-scaled)": CALIBRATION_RELATIVE_EXTREMA,
-                   "Absolute transmission (dark/reference)": CALIBRATION_ABSOLUTE_DARK_REFERENCE,
-                   "Absolute transmission (gain/offset)": CALIBRATION_ABSOLUTE_GAIN_OFFSET}
-        mode_key = skey("sas", "_csv_calibration_mode")
-        if mode_key not in state:
-            saved = state.get("sas_csv_detector")
-            if saved:
-                mode = saved["calibration_mode"]
-                state[mode_key] = next(label for label, value in options.items() if value == mode)
-                for parameter, key in (("dark_signal", "_csv_dark_signal"), ("reference_signal", "_csv_reference_signal"),
-                                       ("gain", "_csv_detector_gain"), ("offset", "_csv_detector_offset")):
-                    if parameter in saved:
-                        state[skey("sas", key)] = saved[parameter]
-            else:
-                inputs.restore_detector_law("sas", upload, options)
-        choice = box.selectbox("Transmission calibration", tuple(options), key=mode_key)
-        mode = options[choice]
-        detector = dict(calibration_mode=mode)
-        if mode == CALIBRATION_ABSOLUTE_DARK_REFERENCE:
-            detector["dark_signal"] = box.number_input("Dark signal", value=0., key=skey("sas", "_csv_dark_signal"))
-            detector["reference_signal"] = box.number_input("Reference signal (T = 1)", value=1., key=skey("sas", "_csv_reference_signal"))
-        elif mode == CALIBRATION_ABSOLUTE_GAIN_OFFSET:
-            detector["gain"] = box.number_input("Detector gain", value=1., key=skey("sas", "_csv_detector_gain"))
-            detector["offset"] = box.number_input("Detector offset", value=0., key=skey("sas", "_csv_detector_offset"))
-        if box.button("Apply detector calibration", key="sas_apply_detector"):
-            try:
-                inputs.load_trace(upload, mode="relative", x_unit=_interpretation(upload)[1],
-                                  denoise=state[_NOISE], **detector)
-            except ValueError as exc:
-                box.error(str(exc))
-            else:
-                state.sas_csv_detector = detector
-                _set_alignment(replace(alignment, signal_scale=1., signal_offset=0.))
-                st.rerun()
-
-    keys = _manual_alignment(alignment)
-    with box.form("sas_manual_alignment"):
-        scale = st.number_input("X scale", key=keys["scale"], min_value=0., format="%.8g")
-        shift = st.number_input("X shift (GHz)", key=keys["shift"], format="%.8g")
-        gain = st.number_input("Y scale", key=keys["signal_scale"], min_value=0., format="%.8g",
-                               disabled=trace.is_absolute_transmission)
-        offset = st.number_input("Y offset", key=keys["signal_offset"], format="%.8g",
-                                 disabled=trace.is_absolute_transmission)
-        if st.form_submit_button("Apply alignment", key=skey("sas", "_csv_apply")):
-            try:
-                _set_alignment(replace(alignment, scale=scale, shift=shift, signal_scale=gain, signal_offset=offset))
-            except ValueError as exc:
-                st.error(str(exc))
-            else:
-                st.rerun()
+    sliders = panel.container()
+    actions = panel.container(horizontal=True, gap="small")
+    draft = draft_alignment(initial)
+    if trace.is_absolute_transmission:
+        draft = replace(draft, signal_scale=1., signal_offset=0.)
+    if actions.button("Fast fitting", key="sas_profile_frame", disabled=ty is None or indices[1] - indices[0] < 11,
+                      help="Match the selected measurement to the model in this spectral region."):
+        try:
+            result = quick_profile_alignment(trace, tx, ty, indices=indices, window=window, current=draft)
+        except ValueError as exc:
+            panel.warning(str(exc))
+        else:
+            set_draft_alignment(result.alignment)
+            if not result.matched:
+                panel.info("No clear shape match. The preview uses the selected frequency span.")
+    actions.button("Use current alignment", key="sas_profile_unframe", disabled=draft_alignment(initial) == initial,
+                   help="Restore the alignment applied to the main spectrum.",
+                   on_click=set_draft_alignment, args=(initial,))
+    visible = np.asarray(ty)[(tx >= window[0]) & (tx <= window[1])] if ty is not None else np.empty(0)
+    return render_alignment_controls(sliders, initial, span_x=window[1] - window[0],
+                                     span_y=float(np.ptp(visible)) if visible.size else 1.,
+                                     absolute=trace.is_absolute_transmission)
 
 
 @st.dialog("Precise fitting", width="large", on_dismiss=_dismiss_precise)
 def _precise_dialog(upload, params, trace, alignment, source, context, tx, ty, origin_issue):
+    from gabes_ui.od_fit_alignment import draft_alignment, render_detector_calibration, set_draft_alignment
+    from gabes_ui.od_measurement import native_reference_shift
     from gabes_ui.od_profile_fit import render_profile_fit
     from gabes_ui.plotcard import _render_fit_progress, _render_physical_od_fit
 
-    if not st.session_state.get("sas_precise_open"):
+    state = st.session_state
+    if not state.get("sas_precise_open"):
         st.rerun()
-    _advanced_settings(upload, trace, alignment)
-    if origin_issue:
-        st.warning(origin_issue)
-    else:
-        try:
-            render_profile_fit(st.container(), upload, params, trace, alignment, False, source, context, tx, ty,
-                               _set_alignment, _render_fit_progress)
-            if trace.is_absolute_transmission:
-                pending = st.session_state.pop("sas_od_pending_fit_conditions", None)
-                _render_physical_od_fit(st, trace, alignment, params, context, upload=upload,
-                                        pending_conditions=pending)
-        except ValueError as exc:
-            st.warning(str(exc))
+    base = (source, params, alignment, context[-1])
+    if state.get("sas_precise_base") != base:
+        _clear_precise_draft()
+        state.sas_precise_base = base
+
+    with st.container(key="sas_precise_layout"):
+        preview, sidebar = st.columns([1.4, 1], gap="medium")
+        left = preview.container(key="sas_precise_preview")
+        right = sidebar.container(key="sas_precise_controls")
+        controls = right.container()
+        detector_box = right.container()
+    mode, unit = _interpretation(upload)
+    working_trace, detector = render_detector_calibration(detector_box, upload, trace, mode=mode,
+                                                         unit=unit, denoise=state[_NOISE])
+    detector_issue = None
+    if working_trace is None:
+        detector_issue = "The preview uses the applied detector calibration until the new values are valid."
+        working_trace = trace
+        detector = state.get("sas_csv_detector", {})
+    working_context = (*context[:-1], tuple(sorted(detector.items())))
+
+    def commit(value, *, params, close=False):
+        shift, _ = native_reference_shift(upload, params) if unit != "arbitrary" else (0., None)
+        # The new alignment already uses the selected line's display origin.
+        state.sas_csv_source = source, unit, shift
+        for name in ("line", "temp_c", "cell_mm", "probe_power_uw", "probe_waist_mm", "rb85_fraction"):
+            if params[name] != base[1][name]:
+                state[skey("sas", name)] = params[name]
+        state.sas_csv_detector = detector
+        state.sas_csv_pending_reverse = value.reverse
+        _set_alignment(value)
+        if close:
+            _dismiss_precise()
+        st.rerun(scope="app")
+
+    def apply_profile(value, *, params, invert=False):
+        commit(value, params=params, close=True)
+
+    def render_alignment(panel, measured, window, indices, preview_x, preview_y):
+        preview_line = state.get("sas_precise_base_line", params["line"])
+        preview_shift, _ = (native_reference_shift(upload, {**params, "line": preview_line})
+                            if unit != "arbitrary" else (0., None))
+        previous_shift = state.get("sas_precise_display_origin_ghz", context[4])
+        if preview_shift != previous_shift:
+            draft = draft_alignment(alignment)
+            set_draft_alignment(replace(draft, shift=draft.shift + preview_shift - previous_shift))
+        state.sas_precise_display_origin_ghz = preview_shift
+        initial = replace(alignment, shift=alignment.shift + preview_shift - context[4])
+        return _trace_alignment_editor(panel, measured, window, indices, preview_x, preview_y, initial)
+
+    try:
+        draft, preview_params, valid = render_profile_fit(
+            left, upload, params, working_trace, draft_alignment(alignment), False, source, working_context, tx, ty,
+            apply_profile, _render_fit_progress, controls=controls, render_alignment=render_alignment,
+            origin_issue=origin_issue, detector_issue=detector_issue)
+        updated = preview_params != params
+        label = "Apply alignment and conditions" if updated else "Apply alignment"
+        if right.button(label, key=skey("sas", "_csv_apply"), disabled=not valid):
+            commit(draft, params=preview_params)
+        pending = state.pop("sas_od_pending_fit_conditions", None)
+        applied = valid and not updated and draft == alignment and working_context == context
+        if working_trace.is_absolute_transmission and applied:
+            _render_physical_od_fit(left, trace, alignment, params, context, upload=upload,
+                                    pending_conditions=pending)
+        else:
+            from gabes_ui.od_fit_job import SESSION_KEY as OD_FIT_JOB
+            if job := state.pop(OD_FIT_JOB, None):
+                job.cancel()
+            if working_trace.is_absolute_transmission and valid:
+                left.caption("Apply the current alignment and conditions before fitting calibrated OD parameters.")
+    except ValueError as exc:
+        left.warning(str(exc))
     st.button("Close", key="sas_close_precise", on_click=_dismiss_precise)
 
 
@@ -257,6 +288,8 @@ def render_fit_panel(panel, *, params=None, view=None):
     flag = str(upload.metadata.get("experiment_denoised", True)).lower() not in ("0", "false")
     check = panel.container(horizontal=True, gap="small")
     noise = check.checkbox("Automatic noise correction", value=flag, key=_NOISE)
+    if "sas_csv_pending_reverse" in st.session_state:
+        st.session_state[_REVERSE] = st.session_state.pop("sas_csv_pending_reverse")
     reverse = check.checkbox("Invert X-axis", key=_REVERSE)
     try:
         trace = inputs.load_trace(upload, mode=mode, x_unit=unit, denoise=noise,
