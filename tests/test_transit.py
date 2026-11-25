@@ -23,3 +23,22 @@ def test_rydberg_rate_preserves_the_most_probable_speed_convention():
     temp, diameter, mass = 310., 0.5e-3, constants.MASS_85RB
     expected = 0.6 * math.sqrt(2. * constants.KB * temp / mass) / diameter
     assert transit.most_probable_transit_rate_s(temp, diameter, mass, factor=.6) == expected
+
+
+def test_gaussian_rate_matches_beam_chord_and_thermal_scaling():
+    waist, temp, mass = 530e-6, 372.15, species.RB85.mass
+    rate = transit.gaussian_transit_rate_s(waist, temp, mass)
+    # Rayleigh transverse speed and mean chord through the half-intensity disk.
+    v_perp = math.sqrt(math.pi * constants.KB * temp / (2. * mass))
+    chord = math.pi / 4. * waist * math.sqrt(2. * math.log(2.))
+    assert rate == pytest.approx(v_perp / chord, rel=1e-14)
+    assert 1e6 / rate == pytest.approx(2.04853, rel=1e-5)
+    assert transit.gaussian_transit_rate_s(waist * 2, temp * 4, mass) == pytest.approx(rate)
+    assert transit.gaussian_transit_rate_s(waist, temp, species.RB87.mass) == pytest.approx(
+        rate * math.sqrt(mass / species.RB87.mass))
+
+
+@pytest.mark.parametrize(("waist", "temp", "mass"), [(0., 372., 1.), (1., -1., 1.), (1., 1., math.nan)])
+def test_invalid_geometry_is_reported(waist, temp, mass):
+    with pytest.raises(ValueError, match="finite and positive"):
+        transit.gaussian_transit_rate_s(waist, temp, mass)
