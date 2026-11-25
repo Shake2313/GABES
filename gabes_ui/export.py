@@ -271,6 +271,8 @@ def build_export_payload(*, scheme, raw, params, view, plot_payloads,
             "noise_model": view.get("noise_model"),
             "measured_gain_reference": to_json_primitive(view.get("measured_gain_reference")),
             "dressed_cell_absorption": to_json_primitive(view.get("dressed_cell_absorption")),
+            **({"seeded_normalization_audit": to_json_primitive(view["seeded_normalization_audit"])}
+               if "seeded_normalization_audit" in view else {}),
             "hero_count": view.get("hero_count", None),
             "tables": to_json_primitive(view.get("tables", [])),
             "figure_views": [

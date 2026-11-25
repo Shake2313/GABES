@@ -117,6 +117,20 @@ def test_seeded_coupling_factorization_preserves_legacy_api_bitwise():
     assert scaled["combined_line_strength_residual"] == expected_residual
     assert scaled["effective_line_strength"] == (
         expected_residual * scaled["coupling_norm"])
+    parameter_ledger = scaled["parameter_provenance"]
+    assert parameter_ledger["mode_overlap_penalty"]["value"] == 0.9
+    assert parameter_ledger["polarization_penalty"]["value"] == 0.75
+    assert parameter_ledger["zeeman_participation_penalty"]["value"] == 0.6
+    assert all(entry["uncertainty_interval"] is None for entry in parameter_ledger.values())
+
+    override = fwm.compute_spectrum(0.9, **common, qe=0.8, loss_frac=0.5,
+                                    detection_efficiency=0.45)
+    detection_ledger = override["coupling_normalization_ledger"]["detection"]
+    assert detection_ledger["effective_arm_efficiencies"] == (0.45, 0.45)
+    assert detection_ledger["quantum_efficiency_applied_in_product"] is None
+    assert detection_ledger["optical_transmission_applied_in_product"] is None
+    np.testing.assert_array_equal(override["G_s"], legacy["G_s"])
+    np.testing.assert_array_equal(override["G_c"], legacy["G_c"])
 
 
 def test_seeded_coupling_factors_multiply_without_hidden_rescaling():

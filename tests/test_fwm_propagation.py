@@ -143,8 +143,13 @@ def test_coupling_ledger_matches_declared_auto_od_structure():
         assert ledger["manifold_population_source"] == "trace-normalized rho_ss"
         assert ledger["external_manifold_population_factor"] == 1.0
         assert ledger["dipole_normalization"] == "uniform-manifold-rms"
+        assert not ledger["natural_abundance_applied"]
         assert fwm.physical_coupling_norm(branch) == ledger["macroscopic_coupling_norm"]
         assert fwm.physical_coupling_norm(branch, legacy=True) == 1/12
+        for excited_F in fwm.EXCITED_F.values():
+            radiative_branches = [line["spontaneous_branching_fraction"]
+                                  for line in ledger["transitions"] if line["excited_F"] == excited_F]
+            np.testing.assert_allclose(sum(radiative_branches), 1.)
 
         for excited in fwm.EXCITED_STATES:
             transition_factor = fwm.TRANSITION_DIPOLE_SCALE[ground, excited]**2
@@ -155,6 +160,11 @@ def test_coupling_ledger_matches_declared_auto_od_structure():
                 3.0 * hyperfine.CF2[(ground_F, fwm.EXCITED_F[excited])]
                 / hyperfine.N_GROUND_SUBLEVELS)
             np.testing.assert_allclose(reduced_strength, auto_od_strength,
+                                       rtol=1e-15, atol=1e-15)
+            row = next(line for line in ledger["transitions"]
+                       if line["ground_F"] == ground_F and line["excited_F"] == fwm.EXCITED_F[excited])
+            assert row["drive_dipole_in_rabi_units"] == row["polarization_dipole_in_rabi_units"]
+            np.testing.assert_allclose(row["passive_strength_over_dJ_squared"], auto_od_strength,
                                        rtol=1e-15, atol=1e-15)
 
 

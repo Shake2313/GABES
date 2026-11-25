@@ -84,6 +84,10 @@ def test_readout_only_controls_reuse_inference_and_preserve_input():
     np.testing.assert_array_equal(changed["effective_squeeze"], baseline["effective_squeeze"])
     assert not np.array_equal(changed["NF"], baseline["NF"])
     assert changed["eta_after_cell_QE"] == pytest.approx(.72)
+    ledger = changed["detection_efficiency_ledger"]
+    assert ledger["effective_arm_efficiencies"] == pytest.approx((.72, .72))
+    assert ledger["optical_transmission_applied_in_product"] == .8
+    assert ledger["quantum_efficiency_applied_in_product"] == .9
     for key in ("G_s", "G_c"):
         np.testing.assert_array_equal(raw[key], saved[key])
 
@@ -125,6 +129,9 @@ def test_scalar_seed_inputs_expand_to_the_spectrum_for_sidebar_interpolation():
 def test_direct_efficiency_alias_preserves_explicit_legacy_overrides(settings, eta):
     result = experimental_jasperse_readout({"G_s": np.array([2.]), "G_c": np.array([1.])}, settings)
     assert result["eta_after_cell_QE"] == pytest.approx(eta)
+    ledger = result["detection_efficiency_ledger"]
+    assert ledger["effective_arm_efficiencies"] == pytest.approx((eta, eta))
+    assert (ledger["quantum_efficiency_applied_in_product"] is None) == (eta == .8)
 
 
 def test_near_unity_probe_and_extreme_conjugate_tails_remain_finite():

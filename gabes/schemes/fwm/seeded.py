@@ -290,6 +290,14 @@ def compute_spectrum(D_GHz, *,
            else float(detection_efficiency))
     if not 0.0 <= eta <= 1.0:
         raise ValueError("detection efficiency must be between 0 and 1")
+    coupling_ledger["detection"] = {
+        "location": "after cell in the low-level gain-referred diagnostic only",
+        "mode": "post_cell_transmission_times_QE" if detection_efficiency is None else "total_efficiency_override",
+        "effective_arm_efficiencies": (float(eta), float(eta)),
+        "optical_transmission_applied_in_product": (float(1-loss_frac)
+                                                     if detection_efficiency is None else None),
+        "quantum_efficiency_applied_in_product": (float(qe) if detection_efficiency is None else None),
+    }
 
     eom_residual_carrier_power = float(eom_residual_carrier_power)
     eom_other_sidebands_power = float(eom_other_sidebands_power)
@@ -753,6 +761,8 @@ def compute_spectrum(D_GHz, *,
         line_strength=line_strength,
         transit_rate=transit_rate,
         pump_scatter_kappa=pump_scatter_kappa_used,
+        coupling_factors=factors,
+        pump_scatter_applied=hardened_noise is not None,
     )
     claim_gate = seeded_validation_claim_gate(
         canonical_mode_status=canonical_mode_status,

@@ -162,24 +162,24 @@ def effective_parameters(probe_gain, conjugate_gain, *, common_loss_pct=0.0):
     }
 
 
-def _external_efficiency(raw, params):
+def _external_efficiency_inputs(raw, params):
     if "after_cell_eff_pct" in params:
         after = float(params["after_cell_eff_pct"]) / 100.0
         qe = float(params.get("qe_pct", 92.0)) / 100.0
         if not 0.0 <= after <= 1.0 or not 0.0 <= qe <= 1.0:
             raise ValueError("after-cell transmission and QE must be in [0,100]%")
-        return after * qe
+        return after * qe, after, qe, "post_cell_transmission_times_QE"
     loss = float(params.get("loss_pct", 5.5))
     qe_pct = float(params.get("qe_pct", 92.0))
     legacy = (1.0 - loss / 100.0) * qe_pct / 100.0
     direct = params.get("detection_eff_pct")
     legacy_changed = (not np.isclose(loss, 5.5, rtol=0.0, atol=1e-12)
                       or not np.isclose(qe_pct, 92.0, rtol=0.0, atol=1e-12))
-    if direct is not None:
-        return legacy if legacy_changed else float(direct) / 100.0
-    if "loss_pct" in params or "qe_pct" in params:
-        return legacy
-    return float(raw.get("eta", 1.0))
+    if direct is not None and not legacy_changed:
+        return float(direct) / 100.0, None, None, "total_efficiency_override"
+    if direct is not None or "loss_pct" in params or "qe_pct" in params:
+        return legacy, 1.0-loss/100.0, qe_pct/100.0, "post_cell_transmission_times_QE"
+    return float(raw.get("eta", 1.0)), None, None, "raw_external_efficiency"
 
 
 def experimental_jasperse_readout(raw, params, *, gains=None):
@@ -210,7 +210,7 @@ def experimental_jasperse_readout(raw, params, *, gains=None):
     photon_to_power = omega_conjugate / omega_probe
     effective = effective_parameters(
         gp, gc / photon_to_power, common_loss_pct=params.get("jasperse_loss_pct", 0.0))
-    eta = _external_efficiency(raw, params)
+    eta, optical_transmission, qe, efficiency_mode = _external_efficiency_inputs(raw, params)
     result = jasperse_distributed_noise(
         effective["effective_squeeze"], effective["probe_transmission"],
         effective["conjugate_transmission"], seed_fano=seed["seed_fano"],
@@ -230,6 +230,13 @@ def experimental_jasperse_readout(raw, params, *, gains=None):
                       "EFFECTIVE_JASPERSE_GAIN_APPROXIMATION", status)
     return dict(result, **effective, NF=nf, NF_dB=db, squeezing_degree_dB=db, seed_noise=seed,
                 eta_after_cell_QE=eta, model_id=MODEL_ID, status=status,
+                detection_efficiency_ledger={
+                    "location": "one thinning operation per arm after the distributed cell channel",
+                    "mode": efficiency_mode,
+                    "effective_arm_efficiencies": (eta, eta),
+                    "optical_transmission_applied_in_product": optical_transmission,
+                    "quantum_efficiency_applied_in_product": qe,
+                },
                 conjugate_photon_flux_gain=fit_gc_flux,
                 input_conjugate_photon_flux_gain=gc / photon_to_power,
                 photon_flux_basis=("resolved optical carriers" if "omega_conjugate_rad_s" in raw

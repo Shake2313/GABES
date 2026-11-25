@@ -46,11 +46,32 @@ def physical_coupling_ledger(branch, *, legacy=False):
     if branch not in BRANCHES:
         raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
     probe_F = GROUND_F[G2] if branch == -1 else GROUND_F[G1]
+    scales = LEGACY_TRANSITION_DIPOLE_SCALE if legacy else TRANSITION_DIPOLE_SCALE
+    maxwell_norm = physical_coupling_norm(branch, legacy=legacy)
+    branches = species.hyperfine_decay(species.RB85, "D1")
+    decay = {(e, g): rate for e, g, rate in branches}
+    total_decay = {e: sum(rate for e0, _, rate in branches if e0 == e)
+                   for e in EXCITED_STATES}
+    transitions = tuple({
+        "ground_F": fg,
+        "excited_F": fe,
+        "summed_single_polarization_strength_over_dJ_squared": 3.0*hyperfine.CF2[fg, fe],
+        "drive_dipole_in_rabi_units": float(scales[g, e]),
+        "polarization_dipole_in_rabi_units": float(scales[g, e]),
+        "passive_strength_over_dJ_squared": float(scales[g, e]**2*maxwell_norm
+                                                  *hyperfine.GROUND_POP[fg]),
+        "spontaneous_branching_fraction": decay[e, g]/total_decay[e],
+    } for g, fg in GROUND_F.items() for e, fe in EXCITED_F.items())
     return {
         "dipole_normalization": LEGACY_SUMMED if legacy else MANIFOLD_RMS,
         "probe_ground_F": probe_F,
         "atomic_density_source": "pure-85Rb total density",
         "isotope_factor_applied_here": 1.0,
+        "natural_abundance_applied": False,
+        "natural_abundance_for_comparison_only": species.RB85.abundance,
+        "explicit_zeeman_cg_applied": False,
+        "stored_fine_structure_dipole_C_m": constants.DIPOLE_D1,
+        "drive_reference_dipole_C_m": RABI_DIPOLE_C_M,
         "manifold_population_source": "trace-normalized rho_ss",
         "equilibrium_manifold_population_reference": hyperfine.GROUND_POP[probe_F],
         "external_manifold_population_factor": 1.0,
@@ -58,14 +79,24 @@ def physical_coupling_ledger(branch, *, legacy=False):
                                     else 1.0 / (2 * probe_F + 1)),
         "dipole_strength_source": ("historical summed 3 C_F^2" if legacy else
                                   "RMS dipole within each F in drive and polarization"),
-        "macroscopic_coupling_norm": (1.0 / hyperfine.N_GROUND_SUBLEVELS if legacy
-                                      else RABI_DIPOLE_RATIO**2),
+        "macroscopic_coupling_norm": maxwell_norm,
+        "transitions": transitions,
+        "application": {
+            "hyperfine_line_strength": "inside each drive and its reciprocal polarization; no further line-strength factor",
+            "p_F": "inside the trace-one optical state or transit replacement population only",
+            "spontaneous_branching": "normalized radiative rates in the dissipator",
+            "cell_absorption": "diagonal Maxwell drift; independent of downstream detection efficiency",
+        },
+        "trace_one_reference_tests": (
+            "tests/test_fwm_pump_response.py", "tests/test_fwm_passive_normalization.py"),
     }
 
 
 def physical_coupling_norm(branch, *, legacy=False):
-    """Macroscopic factor from :func:`physical_coupling_ledger`."""
-    return physical_coupling_ledger(branch, legacy=legacy)["macroscopic_coupling_norm"]
+    """Macroscopic dipole conversion shared by the solver and audit."""
+    if branch not in BRANCHES:
+        raise ValueError(f"branch must be one of {BRANCHES}, got {branch}")
+    return 1.0/hyperfine.N_GROUND_SUBLEVELS if legacy else RABI_DIPOLE_RATIO**2
 
 
 @dataclass(frozen=True)
@@ -530,15 +561,20 @@ def seeded_atomic_solver_provenance(*, floquet_order=SEEDED_FLOQUET_ORDER,
 
 
 def seeded_parameter_provenance(*, line_strength, transit_rate,
-                                pump_scatter_kappa=HARDENED_PUMP_SCATTER_KAPPA):
+                                pump_scatter_kappa=HARDENED_PUMP_SCATTER_KAPPA,
+                                coupling_factors=None, pump_scatter_applied=False):
     """Provenance ledger; sweep ranges are illustrative, not uncertainties."""
-    return {
+    factors = SeededCouplingFactors(line_strength) if coupling_factors is None else coupling_factors
+    result = {
         "ell_s": {
             "value": float(line_strength),
             "source": "inherited historical residual",
             "calibration_status": "not refitted after normalization/sign corrections",
             "illustrative_sweep": (0.666, 0.74, 0.814),
             "range_kind": "illustrative sensitivity sweep; not an uncertainty interval",
+            "uncertainty_interval": None,
+            "application": "scalar in macroscopic response",
+            "identifiability": "only the product with the three penalties enters the mean-field gain",
         },
         "kappa": {
             "value": float(pump_scatter_kappa),
@@ -546,6 +582,10 @@ def seeded_parameter_provenance(*, line_strength, transit_rate,
             "calibration_status": "unvalidated and not fitted",
             "illustrative_sweep": (0.0, 0.1, 0.2),
             "range_kind": "illustrative sensitivity sweep; not an uncertainty interval",
+            "uncertainty_interval": None,
+            "application": "additive detected PSD / SNL diagnostic",
+            "applied": bool(pump_scatter_applied),
+            "identifiability": "requires independent pump scatter and detector noise data; gain does not constrain it",
         },
         "gamma_transit": {
             "value_rad_s": float(transit_rate),
@@ -554,8 +594,21 @@ def seeded_parameter_provenance(*, line_strength, transit_rate,
             "calibration_status": "independent fit unavailable",
             "illustrative_sweep_hz": (90e3, 100e3, 110e3),
             "range_kind": "illustrative sensitivity sweep; not an uncertainty interval",
+            "uncertainty_interval": None,
+            "application": "trace-preserving thermal reset once in the medium",
+            "identifiability": "requires independent Raman/transit measurements across beam sizes and temperatures",
         },
     }
+    for name in ("mode_overlap_penalty", "polarization_penalty", "zeeman_participation_penalty"):
+        result[name] = {
+            "value": float(getattr(factors, name)),
+            "source": "additional effective coupling reduction; unity reference",
+            "uncertainty_interval": None,
+            "identifiability": "degenerate with the other coupling factors from gain alone",
+        }
+    for entry in result.values():
+        entry.update(calibration_observables=None, held_out_validation_observables=None)
+    return result
 
 
 def seeded_validation_claim_gate(*, canonical_mode_status,

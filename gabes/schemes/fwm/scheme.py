@@ -1205,6 +1205,11 @@ class FWMScheme(Scheme):
             "readout_certification_scope": selected["readout_certification_scope"],
             **({"readout_source_provenance": source_provenance} if source_provenance else {}),
             "dressed_cell_absorption": cell_absorption,
+            "seeded_normalization_audit": {
+                "medium": raw.get("coupling_normalization_ledger"),
+                "phenomenological_parameters": raw.get("parameter_provenance"),
+                "reported_detection": experimental_noise.get("detection_efficiency_ledger"),
+            },
             "sidebar_readouts": sidebar_readouts,
             "measured_gain_reference": measured_reference,
             "tables": [

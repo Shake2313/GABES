@@ -115,6 +115,11 @@ def test_focused_plot_marker_headless_and_strict_export_agree(experimental_case,
         assert decoded["view"]["experimental_gain_calibration"]["applied"] is calibrated
         assert decoded["view"]["experimental_jasperse_readout"] is not None
         assert decoded["view"]["noise_operating_point"]["NF"] == pytest.approx(point["NF"])
+        ledger = decoded["view"]["seeded_normalization_audit"]
+        assert ledger["medium"]["external_manifold_population_factor"] == 1.0
+        eta = rendered["experimental_jasperse_readout"]["eta_after_cell_QE"]
+        assert ledger["reported_detection"]["effective_arm_efficiencies"] == [eta, eta]
+        assert ledger["phenomenological_parameters"]["ell_s"]["uncertainty_interval"] is None
     finally:
         plt.close(rendered["figure"])
 
