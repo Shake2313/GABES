@@ -850,9 +850,30 @@ Maxwell average; it does not yet propagate the full microscopic covariance.
   vacuum/geometric mismatch, 64-segment propagation, Gaussian overlap and
   approximate segment-wise pump-budget depletion.
 - The separate pump-only reference includes a converged two-dimensional
-  non-collinear Maxwell average. Promotion into the finite-seed production scan,
-  beam-divergence averaging, and segmentwise pump-state recomputation remain future
-  work.
+  non-collinear Maxwell average. Promotion into the production scan and
+  beam-divergence averaging remain open.
+- The opt-in [three-carrier longitudinal reference](gabes/schemes/fwm/longitudinal.py)
+  solves the finite-seed Floquet state of the pump, probe, and conjugate at
+  each axial stage. The same fixed Gaussian profiles enter the atomic drives
+  and the reciprocal Maxwell projection. The bare geometric mismatch enters
+  once, with the accumulated material phases carried by the complex envelopes.
+  The input residual scales all three Maxwell sources in this reference.
+  Its use for the pump polarization is a model assumption.
+  The photon budget records spontaneous emission and removal of excited atoms
+  by transit reset. The ordered atomic source ledger uses the same jump channels
+  and transverse profiles as the mean. Optical covariance and detector spectra
+  require a field response calculation.
+
+  ```bash
+  python -m gabes_lab.pipelines.squeezing.compare_longitudinal_fwm kim-probe
+  python -m gabes_lab.pipelines.squeezing.compare_longitudinal_fwm gold --point-audit --pump-controls
+  ```
+
+  The longitudinal refinement tests output powers and complex envelopes
+  at fixed transverse, velocity, and Floquet settings. Vary
+  `--transverse-order`, `--velocity-step`, and `--floquet-order` separately
+  to assess those discretizations. The production scan still uses its
+  existing reduced propagation model.
 - The diagonal Maxwell drift carries mean-field attenuation. Microscopic
   distributed atomic covariance remains unavailable.
   Pump scatter is an optional phenomenological diagnostic. EOM configuration
