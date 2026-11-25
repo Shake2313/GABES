@@ -47,6 +47,7 @@ from .. import core
 from ..lineshape import (MIN_SUBDOPPLER_SAMPLES_PER_FWHM, subdoppler_feature,
                          subdoppler_refinement)
 from ..optical_pumping import steady_populations as _pump_pops
+from ..transit import rate_from_khz_over_2pi
 from ..report import derived_table
 from ..rydberg_experiment import effective_atom_number
 from .base import ExtraView, ParamSpec, Scheme
@@ -848,7 +849,7 @@ class SASScheme(Scheme):
         comps, iso_ref, composition, rb85_fraction, composition_matched = (
             _isotope_composition(params))
         T_density, T_doppler, tied = _temperatures(params)
-        gt = 2 * np.pi * params["transit_khz"] * 1e3
+        gt = rate_from_khz_over_2pi(params["transit_khz"])
         power, waist = params["pump_power_mw"], params["waist_mm"]
         probe_supported = (
             params["species"] in species.SPECIES_ORDER

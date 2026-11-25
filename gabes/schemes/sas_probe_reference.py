@@ -6,6 +6,7 @@ from scipy.interpolate import CubicSpline
 
 from .. import constants, observables, probe_saturation, species
 from ..core import blas_single_thread
+from ..transit import rate_from_khz_over_2pi
 from ..optical_pumping import ProjectedProbe
 
 
@@ -92,7 +93,7 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
     if int(count) != count:
         raise ValueError("Scan points must be an integer.")
     intensity = probe_saturation.gaussian_peak_intensity(probe_mw, probe_waist)
-    transit = 2 * np.pi * transit_khz * 1e3
+    transit = rate_from_khz_over_2pi(transit_khz)
     nu_ref = reference.line(line)[1]
 
     components = []

@@ -5,6 +5,7 @@ import functools
 import numpy as np
 
 from .. import constants, observables, species, vapor_cell
+from ..transit import rate_from_khz_over_2pi
 from ..lineshape import subdoppler_feature
 
 class AxialInputError(ValueError):
@@ -120,7 +121,7 @@ def _propagate(count, length, temp, gradient, field, field_span, params,
     most_negative_pump_alpha = 0.0
     line = params["line"]
     waist = float(params["waist_mm"])
-    transit = 2.0 * np.pi * float(params["transit_khz"]) * 1e3
+    transit = rate_from_khz_over_2pi(float(params["transit_khz"]))
     neon = constants.neon_buffer_broadening(params.get("ne_pressure_torr", 0.))
     nu_reference = reference.line(line)[1]
     prepared = [(isotope, species.build_manifold(isotope, line, transit_rate=transit))

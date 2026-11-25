@@ -28,6 +28,7 @@ import math
 import numpy as np
 
 from . import constants, core, linear_hyperfine, observables, probe_saturation, species
+from .transit import rate_from_khz_over_2pi
 from ._arrays import readonly_float_array
 from .optical_frequency import reference_offset_hz
 from .optical_pumping import MAGNETIC_PI, ProjectedProbe
@@ -374,7 +375,7 @@ def _rate_model_scan(conditions, points=2001):
     line = params["line"]
     temperature_k = params["temp_c"] + 273.15
     reference_hz = reference.line(line)[1]
-    transit_rate = 2 * np.pi * params["transit_khz"] * 1e3
+    transit_rate = rate_from_khz_over_2pi(params["transit_khz"])
     peak_intensity = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
     per_line = MODELS[conditions.model_id].per_line_self_broadening
@@ -409,7 +410,7 @@ def _rate_model_optics(conditions):
     isotope_fractions, reference, *_ = _isotope_composition(params)
     line = params["line"]
     temperature = params["temp_c"] + 273.15
-    transit = 2 * np.pi * params["transit_khz"] * 1e3
+    transit = rate_from_khz_over_2pi(params["transit_khz"])
     extra_hwhm = np.pi * conditions.extra_homogeneous_fwhm_hz
     peak = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
