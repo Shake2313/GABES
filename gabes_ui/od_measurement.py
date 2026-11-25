@@ -4,19 +4,44 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import streamlit as st
 
-from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
+from gabes.od_model import (GAUSSIAN_TRANSIT_MODELS, MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
                             evaluate_od_display, od_fit_conditions, od_unavailable)
 from gabes.schemes.sas import TWO_LEVEL_MODELS
 from gabes_ui.controls import skey
 
 
 def recorded_model_id(upload):
-    """Only GABES comparison envelopes declare a replayable pump-free ID."""
+    """Read a GABES model ID or the validated, versioned AutoOD transit record."""
     metadata = upload.metadata if upload is not None else {}
     # AutoOD column values, including any user-supplied headers, are strings.
     if metadata.get("generated_by") == "GABES" and metadata.get("format_version") in (1, 2):
         return metadata["model_id"]
+    if metadata.get("autood_version") and isinstance(metadata.get("transit"), dict):
+        return metadata["transit"]["model_id"]
     return None
+
+
+def geometry_replay_params(upload):
+    """Recover the physical inputs explicitly recorded with a Gaussian-transit worksheet."""
+    model_id = recorded_model_id(upload)
+    if model_id not in GAUSSIAN_TRANSIT_MODELS:
+        return None
+    try:
+        conditions = ODConditions(**upload.metadata["conditions"])
+        if conditions.model_id != model_id or od_unavailable(conditions):
+            raise ValueError("recorded model and cell conditions must agree")
+        params = conditions.to_params()
+        if conditions.extra_homogeneous_fwhm_hz:
+            raise ValueError("the workspace cannot replay an additional fitted linewidth")
+    except (TypeError, ValueError, KeyError) as exc:
+        raise ValueError(f"Invalid Gaussian-transit comparison conditions: {exc}") from exc
+    # The measured file temporarily supplies these model controls. The pump
+    # settings and the user's scan and display controls remain independently editable.
+    keys = ("species", "line", "temp_c", "cell_mm", "constrain_doppler_temp", "doppler_temp_c",
+            "rb_composition", "rb85_fraction", "probe_power_uw", "probe_waist_mm", "line_strength",
+            "ne_pressure_torr", "paraffin_coated", "optical_collision_model", "cell_propagation",
+            "od_transit_model")
+    return {key: params[key] for key in keys}
 
 
 def workspace_params(params, state, upload=None):
@@ -240,6 +265,8 @@ def plot_metadata(params, actual_model):
                     conditions=asdict(conditions),
                     axis_reference=axis, contract_reference=asdict(contract),
                     display_reference_offset_hz=display_reference_offset_hz(conditions))
+    if conditions.model_id in GAUSSIAN_TRANSIT_MODELS:
+        metadata["transit"] = conditions.transit_metadata()
     if accuracy := MODELS[metadata["model_id"]].accuracy:
         metadata["model_accuracy"] = accuracy
     return metadata

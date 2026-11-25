@@ -13,7 +13,9 @@ from .experimental_alignment import AxisAlignment
 from .experimental_csv import ExperimentalCSV, transform_x
 from .od_model import (MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, is_rate_model,
                        od_unavailable)
-from .schemes.sas import RB_COMPOSITION_CUSTOM, _probe_power_mw, _weak_probe_profile
+from .schemes.sas import (
+    GAUSSIAN_TRANSIT_MODELS, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
+)
 from .vapor_cell import CellTemperatureState
 
 RATE_MODEL = "od_finite_rb_mf_rate_v1"
@@ -61,7 +63,9 @@ VALIDATED_SCOPE = {
 }
 
 
-def _candidate_scope(key, params):
+def _candidate_scope(key, params, model_id):
+    if model_id in GAUSSIAN_TRANSIT_MODELS:
+        return "Experimental Gaussian transit. Parameter identifiability has not been validated."
     if key == "probe_power_uw" and params.get("line") != "D2":
         return ("Not validated: on D1 the probe power and temperature were "
                 "indistinguishable (|ρ| 0.987–0.9996). Scripts only.")
@@ -79,16 +83,18 @@ def offered_fit_parameters(params, *, model_id=None):
     ``VALIDATED_SCOPE`` holds the evidence for each added entry.
     """
     offered = dict(PARAMETERS)
+    try:
+        model = _fit_conditions(params, model_id).model_id
+    except (ODUnsupportedError, ValueError, KeyError):
+        model = None
+    # The identifiability study used a fixed transit rate and fixed beam radius.
+    if model in GAUSSIAN_TRANSIT_MODELS:
+        return offered
     if (params.get("species") == "Rb (natural)"
             and params.get("rb_composition") == RB_COMPOSITION_CUSTOM):
         offered["rb85_fraction"] = CANDIDATE_PARAMETERS["rb85_fraction"]
-    if params.get("line") == "D2":
-        try:
-            rate = is_rate_model(_fit_conditions(params, model_id).model_id)
-        except (ODUnsupportedError, ValueError, KeyError):
-            rate = False
-        if rate:
-            offered["probe_power_uw"] = CANDIDATE_PARAMETERS["probe_power_uw"]
+    if params.get("line") == "D2" and is_rate_model(model):
+        offered["probe_power_uw"] = CANDIDATE_PARAMETERS["probe_power_uw"]
     return offered
 
 
@@ -307,6 +313,13 @@ def od_fit_unavailable(params, *, model_id=None):
     """
     if params.get("species") not in species.SPECIES_ORDER:
         return "Choose a resolved Rb or Cs medium."
+    if model_id is None:
+        try:
+            requested = _od_model_setting(params)[1]
+        except ValueError as error:
+            return str(error)
+        if requested in GAUSSIAN_TRANSIT_MODELS:
+            model_id = requested
     finite = model_id is not None and MODELS.get(model_id) is not None and MODELS[model_id].finite_power
     if float(params.get("pump_power_mw", 0.0)) != 0.0 or (_probe_power_mw(params) != 0.0 and not finite):
         return "Set pump and probe power to zero for weak-probe OD fitting."
@@ -488,6 +501,8 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         raise ValueError("Probe power and beam radius can be fitted only with the "
                          "finite-probe magnetic-sublevel rate model.")
     if set(_PROBE_PARAMETERS) <= set(candidate_keys):
+        if _fit_conditions(params, model_id).model_id in GAUSSIAN_TRANSIT_MODELS:
+            raise ValueError("Hold the measured beam radius or power fixed for a Gaussian transit fit.")
         raise ValueError("The probe enters this model only through its peak intensity "
                          "2P/(πw²). Fit the power or the beam radius, with the other fixed.")
     if "rb85_fraction" in candidate_keys and (
@@ -651,7 +666,10 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     if candidate_keys:
         result["candidate_parameters"] = dict(
             keys=list(candidate_keys),
-            scope={key: _candidate_scope(key, params) for key in candidate_keys})
+            scope={key: _candidate_scope(key, params, applied_model) for key in candidate_keys})
+    if applied_model in GAUSSIAN_TRANSIT_MODELS:
+        fitted_params = dict(params, **dict(zip(free, values)))
+        result["transit"] = _fit_conditions(fitted_params, applied_model).transit_metadata()
     probe_free = [i for i, key in enumerate(free) if key in _PROBE_PARAMETERS]
     if probe_free:
         i = probe_free[0]
@@ -668,6 +686,9 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
             definition="I0 = 2P/(pi w^2), w the 1/e^2 radius; the only probe quantity "
                        "this model constrains, conditional on the fixed "
                        + ("beam radius" if free[i] == "probe_power_uw" else "probe power"))
+        if applied_model in GAUSSIAN_TRANSIT_MODELS:
+            result["probe_peak_intensity"]["definition"] = (
+                "I0 = 2P/(pi w^2), w the 1/e^2 radius; w also sets the thermal replacement rate.")
     if profile is not None:
         result["weak_probe_profile"] = profile
     if markers is not None:

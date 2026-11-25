@@ -21,6 +21,25 @@ def has_csv():
     return _FILE in st.session_state or _SCOPE in st.session_state
 
 
+def sync_recorded_geometry():
+    """Apply recorded conditions once, before widgets mount; restore the preset at file close."""
+    state = st.session_state
+    if "sas_pending_transit_conditions" not in state:
+        return
+    params = state.pop("sas_pending_transit_conditions")
+    for key, old_value in state.pop("sas_prior_transit_conditions", {}).items():
+        state[key] = old_value
+    if params:
+        from gabes import schemes
+        defaults = schemes.get("sas").defaults()
+        old = {}
+        for name, value in params.items():
+            key = skey("sas", name)
+            old[key] = state.get(key, defaults[name])
+            state[key] = value
+        state["sas_prior_transit_conditions"] = old
+
+
 def current_upload():
     selected = st.session_state.get(_FILE)
     if selected and isinstance(selected[1], bytes):
@@ -43,6 +62,7 @@ def _dismiss_precise():
 
 def close_csv():
     _dismiss_precise()
+    st.session_state["sas_pending_transit_conditions"] = None
     for key in list(st.session_state):
         if key.startswith(("sas_profile_", "sas_csv_", "sas_od_fit_", "sas___csv_")) or key in (
                 "sas_od_physical_fit", "sas_od_apply_notice", "sas_od_export_context", "sas_channel_open"):
@@ -54,8 +74,10 @@ def install_csv(filename, content):
     from gabes_ui import od_measurement as inputs
 
     parsed = inputs._project(content)
-    close_csv()
     unresolved = isinstance(parsed, inputs._UnresolvedScope)
+    recorded = None if unresolved else inputs.geometry_replay_params(parsed)
+    close_csv()
+    st.session_state["sas_pending_transit_conditions"] = recorded
     if unresolved or parsed.scope is not None:
         st.session_state[_SCOPE] = filename, content
     if not unresolved:

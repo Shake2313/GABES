@@ -476,3 +476,22 @@ def test_autood_invalid_metadata_never_overrides_web_interpretation(extra):
     writer.writerow([0, 1, 0, 1, "0.2.2", "source", "relative", "MHz", json.dumps(extra)])
     with pytest.raises(ExperimentalCSVError, match="Invalid"):
         prepare_measurement_upload(output.getvalue().encode("utf-8"))
+
+
+def test_gabes_roundtrip_checks_geometry_record_against_conditions():
+    from dataclasses import asdict
+    from gabes.od_model import GAUSSIAN_TRANSIT_MODEL, ODConditions
+
+    c = ODConditions("Rb (natural)", "D2", 50., 12.5, GAUSSIAN_TRANSIT_MODEL)
+    meta = dict(META, model_id=c.model_id, conditions=asdict(c), transit=c.transit_metadata())
+    x, y = [-1., 0., 1.], [.99, .7, .99]
+    upload = prepare_measurement_upload(paired_csv(x, y))
+    trace = load_measurement(upload, mode="fraction", x_unit="GHz")
+    def reopen():
+        data = export_comparison_csv(upload, trace, x, y, metadata=meta, mode="fraction", x_unit="GHz")
+        return prepare_measurement_upload(data)
+
+    assert reopen().metadata["transit"] == c.transit_metadata()
+    meta["transit"]["rate_s_inverse"]["Rb85"] *= 2.
+    with pytest.raises(ExperimentalCSVError, match="Invalid GABES transit"):
+        reopen()

@@ -6991,8 +6991,9 @@
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
       "effort": "large",
-      "status": "ready",
+      "status": "done",
       "problem": "⟦AI⟧ OD/SAS, AutoOD, FWM, Λ, Rydberg, Magneto, PSR에서 유사한 이름의 값이 kHz(율/2π) 또는 s⁻¹로 입력되며 열적 교체, 순수 감쇠, 밝은/어두운 영역 교환에 각각 다르게 적용된다. 2026-11-24 ⁸⁵Rb D₁ 포화 비교는 OD의 교체시간 민감도를 보여줬다.",
+      "completed_2026_11_25": "⟦AI⟧ A 단계에서 6개 등록 스킴·참조 경로의 기존 물리 출력을 보존했다. B 단계의 균일·무코팅·무완충 Rb 펌프 없는 OD는 Gaussian 교체율을 선택형으로 제공한다. 과거 및 현행 D₂ 자체 충돌폭 관례를 별도 모델 ID로 구분한다. 기본은 고정 교체율이다. 독립 반경 실측·전체 궤적/전파 검증은 후속 항목에 유지한다.",
       "source_documents": [
         "docs/transit_time.md",
         "https://app.notion.com/p/4226cba14fee8170b728e3b469800d43"

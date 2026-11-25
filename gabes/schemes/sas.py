@@ -88,13 +88,19 @@ RATE_MODEL_V2 = "od_finite_rb_mf_rate_v2"
 PUMPED_TRANSIT_MODEL_V2 = "sas_pumped_exact_voigt_transit_v2"
 TRANSIT_WEAK_MODELS = (TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V2)
 TWO_LEVEL_MODELS = (TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2)
-RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2)
+GAUSSIAN_TRANSIT_MODEL = "od_finite_rb_mf_gaussian_transit_v1"
+GAUSSIAN_TRANSIT_D20_MODEL = "od_finite_rb_mf_gaussian_transit_d20_v1"
+GAUSSIAN_TRANSIT_MODELS = (GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL)
+OD_TRANSIT_KEY = "od_transit_model"
+GAUSSIAN_TRANSIT = "gaussian_fwhm"
+RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, *GAUSSIAN_TRANSIT_MODELS)
 _EXPLICIT_OD_MODELS = {
     LEGACY_MODEL: OD_MODELS_PRE_D20, EXACT_MODEL: OD_MODELS_PRE_D20,
     TWO_LEVEL_MODEL: OD_MODELS_PRE_D20,
     TRANSIT_WEAK_MODEL: OD_MODELS_D20, RATE_MODEL: OD_MODELS_D20,
     TRANSIT_WEAK_MODEL_V2: OD_MODELS_D2SB, TWO_LEVEL_MODEL_V2: OD_MODELS_D2SB,
-    RATE_MODEL_V2: OD_MODELS_D2SB,
+    RATE_MODEL_V2: OD_MODELS_D2SB, GAUSSIAN_TRANSIT_MODEL: OD_MODELS_D2SB,
+    GAUSSIAN_TRANSIT_D20_MODEL: OD_MODELS_D20,
 }
 OD_MODEL_CHOICES = (*OD_MODEL_SETS, *_EXPLICIT_OD_MODELS)
 # Atom / Isotope rows of the species knob (rendered as two selectors).
@@ -212,12 +218,17 @@ def _od_model_setting(params):
     setting existed replay unchanged. ``None`` is an unset session value and
     takes the current default, like a fresh session.
     """
-    if OD_MODEL_KEY not in params:
-        return OD_MODELS_PRE_D20, None
-    value = params[OD_MODEL_KEY]
+    value = params.get(OD_MODEL_KEY, OD_MODELS_PRE_D20)
     if value is None:
         value = OD_MODELS_DEFAULT
     if isinstance(value, str) and value in OD_MODEL_SETS:
+        transit = params.get(OD_TRANSIT_KEY, "fixed")
+        if transit == GAUSSIAN_TRANSIT:
+            if value == OD_MODELS_D2SB:
+                return value, GAUSSIAN_TRANSIT_MODEL
+            return OD_MODELS_D20, GAUSSIAN_TRANSIT_D20_MODEL
+        if transit != "fixed":
+            raise ODModelSettingError(f"Unknown pump-off OD transit model {transit!r}.")
         return value, None
     if isinstance(value, str) and value in _EXPLICIT_OD_MODELS:
         return _EXPLICIT_OD_MODELS[value], value
@@ -233,11 +244,13 @@ def per_line_self_broadening(params):
     return _od_model_setting(params)[0] == OD_MODELS_D2SB
 
 
-def _rate_scope_reason(params):
+def _rate_scope_reason(params, *, geometry=False):
     """Why the magnetic-sublevel rate model cannot describe these parameters, or None."""
     if params.get("species") not in _RB_MEDIA or params.get("line") not in ("D1", "D2"):
         return "The magnetic-sublevel rate model covers rubidium D1 and D2 only."
-    if not bool(params.get("constrain_doppler_temp", True)):
+    if geometry and _pump_is_driven(params.get("pump_power_mw", 0.0)):
+        return "Gaussian transit applies to pump-off OD only. Select Fixed rate to simulate pumped SAS."
+    if not geometry and not bool(params.get("constrain_doppler_temp", True)):
         return "The magnetic-sublevel rate model needs the Doppler temperature tied to the cell."
     if (float(params.get("ne_pressure_torr", 0.0)) != 0.0 or params.get("paraffin_coated", False)
             or _measured_collision_mode(params)):
@@ -274,7 +287,7 @@ def _pump_free_model_reason(params, model):
                     "without buffer gas and with Legacy broadening.")
         return None
     if model in RATE_MODELS:
-        return _rate_scope_reason(params)
+        return _rate_scope_reason(params, geometry=model in GAUSSIAN_TRANSIT_MODELS)
     return None
 
 
@@ -541,11 +554,19 @@ class SASScheme(Scheme):
                            "the 1 mm waist used here. The model holds this waist "
                            "constant through the cell and assumes full output-beam "
                            "collection; check the Rayleigh range for small waists."),
+            ParamSpec(OD_TRANSIT_KEY, "Pump-off OD transit", "Atomic", "fixed",
+                      choices=("fixed", GAUSSIAN_TRANSIT),
+                      choice_labels={"fixed": "Fixed rate", GAUSSIAN_TRANSIT: "Gaussian beam (experimental)"},
+                      advanced=True,
+                      help="For one linearly polarized probe in uniform, uncoated, buffer-free Rb, "
+                           "estimate the replacement rate from the probe radius and kinetic temperature. "
+                           "Recorded explicit OD model IDs take precedence."),
             ParamSpec("transit_khz", "Transit relaxation γ_t/2π", "Atomic", 100.0,
                       5.0, 2000.0, 5.0, "kHz", advanced=True,
                       help="Atoms leaving/entering the beam relax toward the thermal "
                       "ground state — regularises hyperfine pumping. Smaller γ_t → "
-                      "stronger inverted crossovers."),
+                      "stronger inverted crossovers. The experimental Gaussian OD model derives "
+                      "this rate from beam radius and kinetic temperature instead."),
             ParamSpec("line_strength", "Line-strength factor", "Detection & scaling", 1.0,
                       0.01, 2.0, 0.01, "", advanced=True, recompute=False,
                       help="Scale the optical readout, including absorption used in propagation. "
@@ -768,11 +789,17 @@ class SASScheme(Scheme):
             keys = tuple(key for key in keys if key != "weak_probe_profile")
         if OD_MODEL_KEY not in params:
             keys = tuple(key for key in keys if key != OD_MODEL_KEY)
+        if params.get(OD_TRANSIT_KEY, "fixed") == "fixed":
+            keys = tuple(key for key in keys if key != OD_TRANSIT_KEY)
         if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
             return keys + ("cell_mm", "line_strength")
         return tuple(key for key in keys if not key.startswith("axial_"))
 
     def compute(self, params):
+        if _od_model_setting(params)[1] in GAUSSIAN_TRANSIT_MODELS:
+            reason = _rate_scope_reason(params, geometry=True)
+            if reason:
+                raise ODModelSettingError(reason)
         segmented = params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED
         if segmented and _measured_collision_mode(params):
             raise sas_axial.AxialInputError(
@@ -899,9 +926,14 @@ class SASScheme(Scheme):
 
         built, omega_all = [], []
         dopp_fwhm, gamma_max, gamma_scan_max = 0.0, 0.0, 0.0
+        geometry_rates = None
+        if pump_free_model in GAUSSIAN_TRANSIT_MODELS:
+            from ..od_model import ODConditions
+            geometry_rates = ODConditions.from_params(params).transit_rates_s()
         for iso, weight in comps:
+            transit = gt if geometry_rates is None else geometry_rates[iso.name]
             man = species.build_manifold(
-                iso, line, transit_rate=0.0 if paraffin_memory else gt)
+                iso, line, transit_rate=0.0 if paraffin_memory else transit)
             offset = 2 * np.pi * (man.nu0 - nu_ref)
             sigma_v = constants.thermal_speed(T_doppler, iso.mass)
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
@@ -937,7 +969,7 @@ class SASScheme(Scheme):
             gamma_scan_max = max(
                 gamma_scan_max, gamma_eff * np.sqrt(1.0 + probe_s0))
             built.append(dict(man=man, offset=offset, N=N, Op=Op, iso=iso,
-                              pump_atom=pump_atom, gamma_eff=gamma_eff, transit_rate=gt,
+                              pump_atom=pump_atom, gamma_eff=gamma_eff, transit_rate=transit,
                               paraffin_memory=paraffin_memory,
                               pumped_maxwell=pumped_maxwell,
                               probe_transit_hwhm=gt if pumped_transit else 0.0,
@@ -1116,6 +1148,8 @@ class SASScheme(Scheme):
                         if paraffin_coated else None),
                     paraffin_t1_s=(PARAFFIN_REFERENCE_T1_S
                                    if paraffin_coated else None))
+        if geometry_rates is not None:
+            result["transit_rates_s"] = geometry_rates
         if weak_profile is not None:
             result["weak_probe_profile"] = weak_profile
         if reference:
@@ -1389,9 +1423,13 @@ class SASScheme(Scheme):
     def _obs_species(self, raw, params, alpha, chi_real, L, include_figures=True):
         x = raw["scan"] / (2 * np.pi) / 1e9                  # GHz (relative)
         finite_probe = raw.get("probe_model") in (*TWO_LEVEL_MODELS, *RATE_MODELS)
+        if "transit_rates_s" in raw:
+            finite_probe = raw["probe_power_mw"] > 0
         optical_readout = _optical_readout(
             x, "GHz", alpha, L, params, raw, effective=finite_probe)
         T_trans = optical_readout["transmission"]
+        if "transit_rates_s" in raw:
+            optical_readout["transit_rates_s"] = raw["transit_rates_s"]
         if "optical_collisions" in raw:
             optical_readout["optical_collisions"] = raw["optical_collisions"]
             optical_readout["self_broadening_reference"] = raw.get("self_broadening_reference", {})
@@ -1559,15 +1597,17 @@ class SASScheme(Scheme):
             optical_readout["weak_probe_profile"] = profile
             metrics.append(_weak_probe_profile_metric(profile))
         if raw.get("probe_model") in RATE_MODELS:
-            from ..od_model import RATE_MODEL_ACCURACY
+            from ..od_model import MODELS
+            accuracy = MODELS[raw["probe_model"]].accuracy
+            model_id = raw["probe_model"] if "transit_rates_s" in raw else RATE_MODEL
             tables.append({
                 "title": "Finite-probe model",
                 "markdown": (
                     "Magnetic-sublevel rate model for a linearly polarized probe at zero "
-                    "field (`od_finite_rb_mf_rate_v1`): π links between (F, |m|) "
+                    f"field (`{model_id}`): π links between (F, |m|) "
                     "populations, spontaneous decay with all polarizations, transit "
                     "reset, self-consistent longitudinal depletion and full Gaussian "
-                    f"power averaging. {RATE_MODEL_ACCURACY} The beam waist is held "
+                    f"power averaging. {accuracy} The beam waist is held "
                     "constant through the cell and the detector collects the full output "
                     "beam. Dispersion is unavailable for the nonlinear response."
                 ),
@@ -2132,6 +2172,12 @@ def _dispersion_metrics(chi_real, k_vec, L):
 
 def _probe_saturation_metrics(raw, params, length_m):
     """Finite-power model provenance and its strongest local saturation scale."""
+    if "transit_rates_s" in raw:
+        rates = ", ".join(f"{name}: {rate / (2 * np.pi * 1e3):.2f} kHz"
+                          for name, rate in raw["transit_rates_s"].items())
+        return [dict(label="Transit γₜ/2π", value=rates, kind="status",
+                     help="Experimental Gaussian-beam estimate, per isotope, using the kinetic temperature "
+                          "and the intensity FWHM diameter (Häupl et al., Eq. 8).")]
     if raw.get("probe_model") in RATE_MODELS:
         from ..od_model import RATE_MODEL_ACCURACY
         return [dict(label="Probe model", value="Magnetic-sublevel rate", kind="status",

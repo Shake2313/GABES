@@ -28,12 +28,14 @@ import math
 import numpy as np
 
 from . import constants, core, linear_hyperfine, observables, probe_saturation, species
-from .transit import rate_from_khz_over_2pi
+from .transit import gaussian_transit_rate_s, rate_from_khz_over_2pi
 from ._arrays import readonly_float_array
 from .optical_frequency import reference_offset_hz
 from .optical_pumping import MAGNETIC_PI, ProjectedProbe
 from .schemes.sas import (
     EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, OD_MODEL_KEY, RB_COMPOSITION_CUSTOM,
+    GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODELS, GAUSSIAN_TRANSIT,
+    OD_TRANSIT_KEY, _species_path_density, _temperatures,
     RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
     _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
 )
@@ -52,6 +54,13 @@ RATE_MODEL_ACCURACY = (
     "through 75 mm (pure isotopes, D2, line centres, OD0 1.1-1.8) the "
     "transmission differs by at most 1.85e-3 and the effective optical depth by "
     "at most 1.21 %; at 100 µW by at most 6.1e-4 and 0.20 %."
+)
+
+
+GAUSSIAN_TRANSIT_ACCURACY = (
+    "The rate-equation comparison with the full optical Bloch model used a fixed "
+    "γₜ/(2π) of 100 kHz. Its error bounds have not been established independently "
+    "across the rates calculated from beam size and kinetic temperature."
 )
 
 
@@ -95,6 +104,12 @@ MODELS = {model.model_id: model for model in (
             "measured Rb D2 self-broadening, any probe power",
             "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY,
             per_line_self_broadening=True),
+    ODModel(GAUSSIAN_TRANSIT_MODEL,
+            "Rb magnetic-sublevel probe model with Gaussian transit and measured Rb D2 self-broadening",
+            "implemented", True, engine="rate", accuracy=GAUSSIAN_TRANSIT_ACCURACY, per_line_self_broadening=True),
+    ODModel(GAUSSIAN_TRANSIT_D20_MODEL,
+            "Rb magnetic-sublevel probe model with Gaussian transit and historical D2 self-broadening",
+            "implemented", True, engine="rate", accuracy=GAUSSIAN_TRANSIT_ACCURACY),
 )}
 
 
@@ -221,7 +236,27 @@ class ODConditions:
         if profile is not None:
             params["weak_probe_profile"] = profile
         params[MODEL_KEY] = self.model_id
+        if self.model_id in GAUSSIAN_TRANSIT_MODELS:
+            params[OD_TRANSIT_KEY] = GAUSSIAN_TRANSIT
         return params
+
+    def _transit_rate_s(self, isotope):
+        if self.model_id in GAUSSIAN_TRANSIT_MODELS:
+            kinetic_c = self.temp_c if self.doppler_temp_c is None else self.doppler_temp_c
+            return gaussian_transit_rate_s(self.probe_waist_mm * 1e-3, kinetic_c + 273.15, isotope.mass)
+        return rate_from_khz_over_2pi(self.transit_khz)
+
+    def transit_rates_s(self):
+        """Beam replacement rates in s⁻¹ for the isotopes present, keyed by isotope name."""
+        components, *_ = _isotope_composition(self.to_params())
+        return {isotope.name: self._transit_rate_s(isotope) for isotope, _ in components}
+
+    def transit_metadata(self):
+        """Beam conditions and per-isotope rates for a pump-free OD calculation."""
+        kinetic_c = self.temp_c if self.doppler_temp_c is None else self.doppler_temp_c
+        return dict(mode=GAUSSIAN_TRANSIT if self.model_id in GAUSSIAN_TRANSIT_MODELS else "fixed",
+                    kinetic_temperature_k=kinetic_c + 273.15, probe_waist_m=self.probe_waist_mm * 1e-3,
+                    rate_s_inverse=self.transit_rates_s())
 
 
 @dataclass(frozen=True)
@@ -347,7 +382,7 @@ def with_extra_width(conditions, extra_homogeneous_fwhm_hz):
 # ---------------------------------------------------------------------------
 
 def _rate_model_reason(conditions):
-    return _rate_scope_reason(conditions.to_params())
+    return _rate_scope_reason(conditions.to_params(), geometry=conditions.model_id in GAUSSIAN_TRANSIT_MODELS)
 
 
 def _rate_model_params(conditions):
@@ -373,9 +408,8 @@ def _rate_model_scan(conditions, points=2001):
     components, reference, *_ = _isotope_composition(params)
     fractions = {isotope.name: fraction for isotope, fraction in components}
     line = params["line"]
-    temperature_k = params["temp_c"] + 273.15
+    cold_k, temperature_k, _ = _temperatures(params)
     reference_hz = reference.line(line)[1]
-    transit_rate = rate_from_khz_over_2pi(params["transit_khz"])
     peak_intensity = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
     per_line = MODELS[conditions.model_id].per_line_self_broadening
@@ -383,14 +417,13 @@ def _rate_model_scan(conditions, points=2001):
     doppler_fwhm_max = 0.0
     broadened_fwhm_max = 0.0
     for isotope in (species.RB85, species.RB87):
-        manifold = species.build_manifold(isotope, line, transit_rate=transit_rate)
+        manifold = species.build_manifold(isotope, line, transit_rate=conditions._transit_rate_s(isotope))
         offset = 2 * np.pi * (manifold.nu0 - reference_hz)
         centers.append(manifold.omega + offset)
         sigma_v = np.sqrt(constants.KB * temperature_k / isotope.mass)
         doppler_fwhm_max = max(
             doppler_fwhm_max, np.sqrt(8 * np.log(2)) * manifold.k_vec * sigma_v)
-        density = (species.number_density(isotope, temperature_k)
-                   * fractions.get(isotope.name, 0.0))
+        density = _species_path_density(isotope, cold_k, temperature_k, fractions.get(isotope.name, 0.0))
         gamma_effective = manifold.gamma + species.self_broadening(
             isotope, density, line, per_line=per_line)
         saturation_intensity = probe_saturation.closed_two_level_saturation_intensity(
@@ -405,19 +438,19 @@ def _rate_model_scan(conditions, points=2001):
 
 
 def _rate_model_optics(conditions):
-    """Per-isotope (manifold, density, offset, Doppler sigma, optical HWHM), transit, peak I."""
+    """Per-isotope manifold, density, offset, Doppler σ, optical HWHM and replacement rate."""
     params = _rate_model_params(conditions)
     isotope_fractions, reference, *_ = _isotope_composition(params)
     line = params["line"]
-    temperature = params["temp_c"] + 273.15
-    transit = rate_from_khz_over_2pi(params["transit_khz"])
+    cold_k, temperature, _ = _temperatures(params)
     extra_hwhm = np.pi * conditions.extra_homogeneous_fwhm_hz
     peak = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
     per_line = MODELS[conditions.model_id].per_line_self_broadening
     optics = []
     for isotope, fraction in isotope_fractions:
-        density = fraction * species.number_density(isotope, temperature)
+        density = _species_path_density(isotope, cold_k, temperature, fraction)
+        transit = conditions._transit_rate_s(isotope)
         manifold = species.build_manifold(isotope, line)
         offset = 2 * np.pi * (manifold.nu0 - reference.line(line)[1])
         sigma = manifold.k_vec * np.sqrt(constants.KB * temperature / isotope.mass)
@@ -425,26 +458,26 @@ def _rate_model_optics(conditions):
             isotope, density, line, per_line=per_line)) + transit
         if extra_hwhm:
             gamma2 += extra_hwhm
-        optics.append((manifold, density, offset, sigma, gamma2))
-    return optics, temperature, transit, peak
+        optics.append((manifold, density, offset, sigma, gamma2, transit))
+    return optics, temperature, peak
 
 
 def _rate_model_alpha0(optics, temperature, scan):
     """Weak absorption in m^-1 with the transit HWHM; pointwise in frequency."""
     alpha0 = np.zeros_like(scan)
-    for manifold, density, offset, _sigma, gamma2 in optics:
+    for manifold, density, offset, _sigma, gamma2, _transit in optics:
         weak, _ = linear_hyperfine.species_complex_voigt(
             scan, manifold, density, temperature, 2 * gamma2, offset=offset)
         alpha0 += weak
     return alpha0
 
 
-def _rate_model_ratio(optics, transit, peak, scan, alpha0, *, log_step=0.25,
+def _rate_model_ratio(optics, peak, scan, alpha0, *, log_step=0.25,
                       propagation_step=0.02, frequency_stride=4):
     """log(alpha(I, nu)/alpha0) on every frequency_stride-th sample of ``scan``."""
     components = []
     pumping_scale = 0.0
-    for manifold, density, offset, sigma, gamma2 in optics:
+    for manifold, density, offset, sigma, gamma2, transit in optics:
         probe = ProjectedProbe(manifold, gamma2, transit, resolution=MAGNETIC_PI)
         components.append((probe, density, offset, sigma))
         pumping_scale = max(pumping_scale, float(probe.peak_saturation(peak))
@@ -489,12 +522,12 @@ def _rate_model_tables(conditions, scan, *, log_step=0.25, propagation_step=0.02
     """
     from scipy.interpolate import CubicSpline
 
-    optics, temperature, transit, peak = _rate_model_optics(conditions)
+    optics, temperature, peak = _rate_model_optics(conditions)
     alpha0 = _rate_model_alpha0(optics, temperature, scan)
     if peak == 0:
         return alpha0, None, None
     log_intensity, propagation_grid, coarse_scan, ratio = _rate_model_ratio(
-        optics, transit, peak, scan, alpha0, log_step=log_step,
+        optics, peak, scan, alpha0, log_step=log_step,
         propagation_step=propagation_step, frequency_stride=frequency_stride)
     spline = CubicSpline(coarse_scan, ratio, axis=1)
     table = _rate_model_table(log_intensity, propagation_grid, spline, scan, alpha0,
@@ -531,7 +564,8 @@ def _rate_model_on_axis(conditions, scan_rad_s):
 
 def _table_key(conditions):
     """Conditions that change the optical table; length and strength enter later."""
-    return replace(conditions, cell_mm=1.0, line_strength=1.0)
+    return replace(conditions, cell_mm=1.0, line_strength=1.0,
+                   transit_khz=0.0 if conditions.model_id in GAUSSIAN_TRANSIT_MODELS else conditions.transit_khz)
 
 
 @lru_cache(maxsize=8)
@@ -543,14 +577,14 @@ def _rate_model_spline(key):
     """
     from scipy.interpolate import CubicSpline
 
-    optics, temperature, transit, peak = _rate_model_optics(key)
+    optics, temperature, peak = _rate_model_optics(key)
     if peak == 0:
         return None
     grid_scan = _rate_model_scan(key)
     with core.blas_single_thread():
         alpha0 = _rate_model_alpha0(optics, temperature, grid_scan)
         log_intensity, propagation_grid, coarse_scan, ratio = _rate_model_ratio(
-            optics, transit, peak, grid_scan, alpha0)
+            optics, peak, grid_scan, alpha0)
     spline = CubicSpline(coarse_scan, ratio, axis=1)
     return log_intensity, propagation_grid, spline, float(coarse_scan[0]), float(coarse_scan[-1])
 
@@ -565,11 +599,11 @@ def rate_model_display_tables(conditions, scan):
     if reason := _rate_model_reason(conditions):
         raise ODUnsupportedError(reason)
     scan = np.asarray(scan, dtype=float)
-    optics, temperature, _transit, _peak = _rate_model_optics(conditions)
+    optics, temperature, _peak = _rate_model_optics(conditions)
     chi_real = np.zeros_like(scan)
     with core.blas_single_thread():
         alpha0 = _rate_model_alpha0(optics, temperature, scan)
-        for manifold, density, offset, _sigma, gamma2 in optics:
+        for manifold, density, offset, _sigma, gamma2, _transit in optics:
             chi_real += linear_hyperfine.species_complex_voigt(
                 scan, manifold, density, temperature, 2 * gamma2, offset=offset)[1]
     cached = _rate_model_spline(_table_key(conditions))
@@ -590,7 +624,7 @@ def _rate_model_evaluate(conditions, scan):
     propagation are evaluated at each requested frequency. Outside the
     table span the probe is treated as unsaturated.
     """
-    optics, temperature, _transit, _peak = _rate_model_optics(conditions)
+    optics, temperature, _peak = _rate_model_optics(conditions)
     with core.blas_single_thread():
         alpha0 = _rate_model_alpha0(optics, temperature, scan)
     cached = _rate_model_spline(_table_key(conditions))

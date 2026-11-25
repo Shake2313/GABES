@@ -83,17 +83,26 @@ def compute(params, isotope_densities, reference, temperature_k, probe_mw):
 
 def _compute(params, isotope_densities, reference, temperature_k, probe_mw, deadline):
     line = params["line"]
-    from .sas import per_line_self_broadening
+    from .sas import GAUSSIAN_TRANSIT_MODELS, _od_model_setting, per_line_self_broadening
     per_line = per_line_self_broadening(params)
+    if _od_model_setting(params)[1] in GAUSSIAN_TRANSIT_MODELS:
+        from ..od_model import ODConditions
+        geometry_rates = ODConditions.from_params(params).transit_rates_s()
+    else:
+        geometry_rates = None
     probe_waist = _bounded_parameter(params, "probe_waist_mm", 0.1, 5.0)
-    transit_khz = _bounded_parameter(params, "transit_khz", 5.0, 2000.0)
+    if geometry_rates is None:
+        transit_khz = _bounded_parameter(params, "transit_khz", 5.0, 2000.0)
+        fixed_rate = rate_from_khz_over_2pi(transit_khz)
+        transit_provenance = {"transit_khz": transit_khz}
+    else:
+        transit_provenance = {"transit_model": "gaussian_fwhm", "transit_rates_s": geometry_rates}
     strength = _bounded_parameter(params, "line_strength", 0.01, 2.0)
     length_m = _bounded_parameter(params, "cell_mm", 0.5, 200.0) * 1e-3
     count = _bounded_parameter(params, "scan_points", 2, 4001)
     if int(count) != count:
         raise ValueError("Scan points must be an integer.")
     intensity = probe_saturation.gaussian_peak_intensity(probe_mw, probe_waist)
-    transit = rate_from_khz_over_2pi(transit_khz)
     nu_ref = reference.line(line)[1]
 
     components = []
@@ -103,6 +112,7 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
     margin = 0.0
     pumping_scale = 0.0
     for isotope, fraction, density in isotope_densities:
+        transit = fixed_rate if geometry_rates is None else geometry_rates[isotope.name]
         man = species.build_manifold(isotope, line, transit_rate=transit)
         offset = 2 * np.pi * (man.nu0 - nu_ref)
         sigma = man.k_vec * constants.thermal_speed(temperature_k, isotope.mass)
@@ -138,7 +148,7 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
         provenance=dict(model="hyperfine_projected_probe_obe", validation="numerical readiness",
                         polarization="linear", frequency_reference=reference.name,
                         isotope_fractions=fractions, homogeneous_fwhm_mhz=widths,
-                        transit_khz=transit_khz, peak_probe_intensity_w_m2=float(intensity),
+                        **transit_provenance, peak_probe_intensity_w_m2=float(intensity),
                         line_strength=dict(factor=strength, applies_to="propagated absorption coefficient"),
                         linear_limit="complex Voigt with natural, self and transit broadening",
                         beam="constant Gaussian waist, full collection"),

@@ -301,6 +301,12 @@ initial alignment for the open file.
   the alignment and selected conditions. A shape fit to detector voltage
   gives model-dependent estimates. An independent transmission calibration is
   required to report measured optical depth.
+- **Pump-off OD transit** defaults to the stored fixed rate. In a uniform, uncoated,
+  buffer-free Rb cell, **Gaussian beam (experimental)** uses the probe's 1/e²
+  intensity radius and kinetic temperature to calculate a replacement rate per
+  isotope. The same rate enters the thermal population reset and the transit
+  contribution to optical coherence decay. The comparison CSV records those
+  rates and beam conditions. See [transit model and its validation](docs/transit_time.md).
 - **Fit physical OD parameters** uses an independently calibrated frequency
   scale and absolute transmission. Select an acquisition branch to fit.
   The bounded fit reports residuals and identifiability, and transfers

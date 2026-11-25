@@ -220,6 +220,63 @@ def _autood_acquisition_metadata(first):
     return result
 
 
+def _validate_transit_record(record, conditions):
+    expected = conditions.transit_metadata()
+    rates = record["rate_s_inverse"]
+    if (record["mode"] != expected["mode"] or not isinstance(rates, dict)
+            or rates.keys() != expected["rate_s_inverse"].keys()
+            or not all(math.isclose(rates[k], v, rel_tol=1e-12) for k, v in expected["rate_s_inverse"].items())
+            or not all(math.isclose(record[k], expected[k], rel_tol=1e-12)
+                       for k in ("kinetic_temperature_k", "probe_waist_m"))):
+        raise ValueError("rates or recorded geometry disagree with the conditions")
+    return expected
+
+
+def _validate_gabes_transit(metadata):
+    from .od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
+
+    model = metadata.get("model_id")
+    if model not in GAUSSIAN_TRANSIT_MODELS and "transit" not in metadata:
+        return
+    try:
+        conditions = ODConditions(**metadata["conditions"])
+        if conditions.model_id != model or model not in GAUSSIAN_TRANSIT_MODELS:
+            raise ValueError("model ID mismatch")
+        _validate_transit_record(metadata["transit"], conditions)
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise ExperimentalCSVError(f"Invalid GABES transit metadata: {exc}") from exc
+
+
+def _autood_transit_metadata(row):
+    """Validate the versioned desktop geometry record against its displayed inputs."""
+    from .od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
+    from . import species
+
+    text = row.get("autood_transit_v1")
+    if not text:
+        if row.get("model") in GAUSSIAN_TRANSIT_MODELS:
+            raise ExperimentalCSVError("Missing AutoOD transit metadata for the recorded Gaussian model.")
+        return {}
+
+    try:
+        record = json.loads(text)
+        model = row["model"]
+        if model not in GAUSSIAN_TRANSIT_MODELS or record["model_id"] != model:
+            raise ValueError("model ID mismatch")
+        fraction = float(row["rb85_percent"]) / 100.
+        if not 0. <= fraction <= 1. or float(row["cell_mm"]) <= 0.:
+            raise ValueError("invalid isotope fraction or cell length")
+        conditions = ODConditions(
+            species="Rb (natural)", line=row["line"], temp_c=float(row["temperature_c"]),
+            cell_mm=float(row["cell_mm"]), model_id=model, rb85_fraction=fraction,
+            rb_composition="Natural" if math.isclose(fraction, species.RB85.abundance, abs_tol=1e-15, rel_tol=0.) else "Custom",
+            probe_waist_mm=float(row["diameter_mm"]) / 2., probe_power_uw=float(row["probe_uw"]))
+        expected = _validate_transit_record(record, conditions)
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise ExperimentalCSVError(f"Invalid AutoOD transit metadata: {exc}") from exc
+    return {"transit": {**expected, "model_id": model}, "conditions": asdict(conditions)}
+
+
 def _read_comparison(read_row, header, digest):
     names = _labels(header)
     x, y = (names.index(name) for name in _INPUT_COLUMNS)
@@ -262,12 +319,15 @@ def _read_comparison(read_row, header, digest):
                     _split_legacy_reference(metadata)
                 elif "frequency_reference" in metadata or not _valid_theory_references(metadata):
                     raise ExperimentalCSVError("Invalid v2 comparison theory references or offset.")
+                _validate_gabes_transit(metadata)
             else:
                 metadata = {k: v for k, v in first.items() if k not in (*_INPUT_COLUMNS, names[0])
                             and not k.startswith(("experiment_display_", "experiment_original_",
                                                   "experiment_aligned_", "theory_"))}
                 metadata.pop("autood_measurement_v1", None)
                 metadata.update(_autood_acquisition_metadata(first))
+                metadata.pop("autood_transit_v1", None)
+                metadata.update(_autood_transit_metadata(first))
                 if not metadata.get("autood_version") or not metadata.get("gabes_commit"):
                     raise ExperimentalCSVError("Missing AutoOD comparison provenance.")
             if "scope" in metadata:
@@ -479,6 +539,7 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
     meta.pop("frequency_reference", None)
     if not isinstance(meta.get("model_id"), str) or not meta["model_id"].strip():
         raise ValueError("Comparison export requires a non-blank recorded model_id.")
+    _validate_gabes_transit(meta)
     if not _valid_theory_references(meta):
         raise ValueError("Comparison export requires both theory references and a finite offset.")
     tx, ty = np.asarray(theory_x_ghz, dtype=float), np.asarray(theory_transmission, dtype=float)
@@ -521,6 +582,7 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
     if "autood_version" in upload.metadata:
         meta["measurement_source"] = {key: value for key, value in upload.metadata.items()
                                       if key in ("autood_version", "gabes_commit", "model", "frequency_reference")
+                                      or (key in ("transit", "conditions") and isinstance(upload.metadata.get("transit"), dict))
                                       or key.startswith("scope_")}
     elif "measurement_source" in upload.metadata:
         meta["measurement_source"] = upload.metadata["measurement_source"]

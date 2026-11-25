@@ -115,7 +115,7 @@ def _chart(box, trace, alignment, invert, window, indices, theory_x, theory_y, r
 
 
 def _condition_rows(box, params, settings):
-    from gabes.od_model import ODConditions
+    from gabes.od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
     from gabes.od_profile_fit import profile_fit_parameters
     from gabes.od_spectrum_fit import PARAMETERS, CANDIDATE_PARAMETERS
     from gabes.schemes.sas import RB_COMPOSITION_CUSTOM, _isotope_composition
@@ -137,6 +137,7 @@ def _condition_rows(box, params, settings):
             if value != params[name] * factor:
                 preview[name] = value / factor
 
+    model_id = None
     try:
         model_id = ODConditions.from_params(preview).model_id
         offered = profile_fit_parameters(preview, model_id=model_id)
@@ -154,7 +155,9 @@ def _condition_rows(box, params, settings):
             state[fit_key] = eligible and name in settings.get("vary", ())
         help_text = None
         if not eligible:
-            if name == "probe_waist_mm":
+            if model_id in GAUSSIAN_TRANSIT_MODELS and name in ("probe_power_uw", "probe_waist_mm", "rb85_fraction"):
+                help_text = "Set this value from the experiment. Fitting it with Gaussian transit has not been validated."
+            elif name == "probe_waist_mm":
                 help_text = "Fixed during fitting. Probe intensity depends on power divided by beam radius squared."
             elif name == "probe_power_uw":
                 help_text = "Power estimation requires the finite-probe Rb D2 rate model."

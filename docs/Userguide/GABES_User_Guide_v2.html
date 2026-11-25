@@ -653,6 +653,12 @@ streamlit run streamlit_app.py</pre>
     주 결과로 표시됩니다.
   </p>
 
+  <h4>펌프를 끈 Rb 셀의 빔 통과시간</h4>
+  <p><b>Pump-off OD transit</b>의 기본값 <b>Fixed rate</b>에서는 γₜ/(2π)를 kHz로 정합니다.
+    <b>Gaussian beam (experimental)</b>을 선택하면 빔 세기의 1/e² 반경과 빔 경로의 운동 온도에서 동위원소별 교체율을 계산합니다.
+    예를 들어 ⁸⁵Rb, 99 °C, 반경 0.53 mm이면 교체시간은 2.05 µs입니다. 기본 100 kHz에서는 1.59 µs입니다.
+    이 선택지는 균일하고 코팅·완충기체가 없는 Rb 셀에서 선형 편광 단일 프로브를 쓸 때 적용합니다.</p>
+
   <h4 id="od-csv-fit">측정 CSV로 OD 스펙트럼 피팅하기</h4>
   <p><b>Absorption spectroscopy → Fit OD Data → Open CSV...</b>에서 측정 CSV(최대 10 MiB)나 Standard·Origin 비교 파일(최대 16 MiB)을 엽니다.
     파일을 연 동안 펌프를 끈 조건으로 계산합니다. 전체 스펙트럼과 그 아래 투과율·광학 깊이 확대 그래프에서 같은 주파수 구간을 확인합니다.</p>

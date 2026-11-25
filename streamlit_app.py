@@ -214,6 +214,8 @@ READOUT_CACHE_VERSION = "v19-od-sas-unified-workspace-20261124" if is_sas else "
 if is_sas:
     from gabes_ui import od_fit_panel
 measurement_open = is_sas and od_fit_panel.has_csv()
+if is_sas:
+    od_fit_panel.sync_recorded_geometry()
 has_spectra = scheme.model_comparison_parameter is not None
 if has_spectra:
     workspace = st.container(key="gabes_sas_workspace")

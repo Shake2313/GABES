@@ -1021,3 +1021,55 @@ def test_dialog_restores_declared_frequency_origin_when_the_transition_is_correc
     assert not app.exception and not app.error
     assert app.session_state["sas__line"] == "D2"
     assert exports[-1]["comparison_payload"]["alignment"]["shift"] == pytest.approx(-.08)
+
+def _desktop_geometry_worksheet(*, bad_waist=False, include_record=True):
+    import csv
+    import io
+    import json
+    from gabes.od_model import GAUSSIAN_TRANSIT_D20_MODEL, ODConditions
+
+    c = ODConditions("Rb (natural)", "D1", 99., 12.5, GAUSSIAN_TRANSIT_D20_MODEL,
+                     probe_power_uw=0., probe_waist_mm=.53, rb_composition="Custom", rb85_fraction=1.)
+    record = {"model_id": c.model_id, **c.transit_metadata()}
+    if bad_waist:
+        record["probe_waist_m"] *= 2
+    meta = {"autood_version": "0.3.0", "gabes_commit": "example", "model": c.model_id,
+            "experiment_input_mode": "fraction", "experiment_x_unit": "GHz",
+            "line": "D1", "temperature_c": 99, "cell_mm": 12.5, "probe_uw": 0,
+            "diameter_mm": 1.06, "rb85_percent": 100}
+    if include_record:
+        meta["autood_transit_v1"] = json.dumps(record)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(["detuning_GHz", "theory_transmission", "experiment_input_x", "experiment_input_signal", *meta])
+    for i in range(20):
+        writer.writerow([i / 100., .9, i / 100., .9, *(meta.values() if i == 0 else [""] * len(meta))])
+    return out.getvalue().encode(), record
+
+
+def test_versioned_geometry_csv_checks_rate_and_restores_preset(workspace):
+    from gabes.experimental_csv import ExperimentalCSVError
+    from gabes.od_measurement import prepare_measurement_upload
+    from gabes_ui.od_measurement import recorded_model_id
+    app, exports, _, uploads = workspace
+    with pytest.raises(ExperimentalCSVError, match="Invalid AutoOD transit"):
+        prepare_measurement_upload(_desktop_geometry_worksheet(bad_waist=True)[0])
+    unversioned = _desktop_geometry_worksheet(include_record=False)[0]
+    with pytest.raises(ExperimentalCSVError, match="Missing AutoOD transit"):
+        prepare_measurement_upload(unversioned)
+    historical = unversioned.replace(b"od_finite_rb_mf_gaussian_transit_d20_v1", b"od_finite_rb_mf_rate_v1")
+    assert recorded_model_id(prepare_measurement_upload(historical)) is None
+    content, expected = _desktop_geometry_worksheet()
+    uploads[:] = [_upload(content)]
+    app.run()
+    assert not app.exception and not app.error
+    model = exports[-1]["comparison_payload"]["model"]
+    assert model["model_id"] == expected.pop("model_id")
+    assert model["conditions"]["line"] == "D1" and model["conditions"]["temp_c"] == 99.
+    assert model["transit"] == expected
+    app.session_state["sas__temp_c"] = 100.
+    app.run()
+    assert exports[-1]["comparison_payload"]["model"]["transit"]["kinetic_temperature_k"] == 373.15
+    app.button(key="sas_close_csv").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state["sas__temp_c"] == 49. and app.session_state["sas__pump_power_mw"] == 1.5
