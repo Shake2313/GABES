@@ -165,7 +165,7 @@ def _precise_dialog(upload, params, trace, alignment, source, context, tx, ty, o
     from gabes_ui.od_fit_alignment import draft_alignment, render_detector_calibration, set_draft_alignment
     from gabes_ui.od_measurement import native_reference_shift
     from gabes_ui.od_profile_fit import render_profile_fit
-    from gabes_ui.plotcard import _render_fit_progress, _render_physical_od_fit
+    from gabes_ui.plotcard import _dialog_fit_progress, _render_physical_od_fit
 
     state = st.session_state
     if not state.get("sas_precise_open"):
@@ -223,7 +223,7 @@ def _precise_dialog(upload, params, trace, alignment, source, context, tx, ty, o
     try:
         draft, preview_params, valid = render_profile_fit(
             left, upload, params, working_trace, draft_alignment(alignment), False, source, working_context, tx, ty,
-            apply_profile, _render_fit_progress, controls=controls, render_alignment=render_alignment,
+            apply_profile, _dialog_fit_progress, controls=controls, render_alignment=render_alignment,
             origin_issue=origin_issue, detector_issue=detector_issue)
         updated = preview_params != params
         label = "Apply alignment and conditions" if updated else "Apply alignment"
@@ -233,7 +233,7 @@ def _precise_dialog(upload, params, trace, alignment, source, context, tx, ty, o
         applied = valid and not updated and draft == alignment and working_context == context
         if working_trace.is_absolute_transmission and applied:
             _render_physical_od_fit(left, trace, alignment, params, context, upload=upload,
-                                    pending_conditions=pending)
+                                    pending_conditions=pending, render_progress=_dialog_fit_progress)
         else:
             from gabes_ui.od_fit_job import SESSION_KEY as OD_FIT_JOB
             if job := state.pop(OD_FIT_JOB, None):

@@ -165,12 +165,16 @@ def _cancel_requested_fit(job, key):
         st.session_state["sas_od_fit_cancelled" if key == OD_FIT_JOB else "sas_profile_cancelled"] = True
 
 
-@st.fragment(run_every=0.75)
+_FIT_DIALOG_TIMER = st.components.v2.component(
+    "gabes_fit_dialog_timer", html="", js="""
+    export default function pollFit({setTriggerValue}) {
+        const timer = window.setInterval(() => setTriggerValue("tick", Date.now()), 750);
+        return () => window.clearInterval(timer);
+    }
+    """)
+
+
 def _render_fit_progress(job, key=OD_FIT_JOB):
-    # Poll only this row; a terminal result needs the complete fit identity
-    # (file, widgets and model) revalidated by its owner before it can publish.
-    if st.session_state.get(key) is not job or job.future.done():
-        st.rerun(scope="app")
     progress = job.observe()
     if progress is not None:
         stage = {"global": "Global search", "local": "Local refinement"}.get(progress.stage, "Profile search")
@@ -183,6 +187,22 @@ def _render_fit_progress(job, key=OD_FIT_JOB):
               on_click=_cancel_requested_fit, args=(job, key))
 
 
+@st.fragment(run_every=0.75)
+def _poll_fit_progress(job, key=OD_FIT_JOB):
+    if st.session_state.get(key) is not job or job.future.done():
+        st.rerun(scope="app")
+    _render_fit_progress(job, key)
+
+
+def _dialog_fit_progress(job, key=OD_FIT_JOB):
+    # A dialog is itself a fragment. Its own widget events refresh the live
+    # controls and validate finished results without nesting a timer fragment.
+    _render_fit_progress(job, key)
+    # AppTest has no browser clock and advances progress with explicit runs.
+    if not st.config.get_option("global.appTest"):
+        _FIT_DIALOG_TIMER(key=f"{key}_poll", height=0, on_tick_change=lambda: None)
+
+
 def _csv_uploader(panel, scheme_name):
     options = {}
     if "max_upload_size" in inspect.signature(panel.file_uploader).parameters:
@@ -192,7 +212,7 @@ def _csv_uploader(panel, scheme_name):
 
 
 def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upload=None,
-                            pending_conditions=None):
+                            pending_conditions=None, render_progress=_poll_fit_progress):
     from gabes.od_model import ODConditions, ODUnsupportedError, od_unavailable
     from gabes_ui.od_measurement import (
         APPLICABLE_FIT_CONDITIONS, apply_fitted_conditions, fit_conditions_key,
@@ -317,7 +337,7 @@ def _render_physical_od_fit(panel, trace, alignment, params, fit_context, *, upl
     if job is not None:
         job.visible = True
         with box:
-            _render_fit_progress(job)
+            render_progress(job)
         return None
     if saved is None:
         return None
