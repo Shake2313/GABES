@@ -55,10 +55,15 @@ def anchored_rabi_mhz(anchor_mhz, power, ref_power, diameter=None,
 
 def transit_broadening_mhz(temp_k, diameter_mm, *, mass=constants.MASS_85RB,
                            factor=1.0, min_diameter_m=1e-9):
-    """Transit broadening / 2pi in MHz from most-probable speed over diameter."""
-    v_mp = math.sqrt(2.0 * constants.KB * float(temp_k) / float(mass))
+    """Transit broadening / 2pi in MHz from most-probable speed over diameter.
+
+    The rate comes from transit.most_probable_transit_rate_s; this wrapper keeps
+    the diameter floor and the MHz/2π conversion.
+    """
+    from .transit import most_probable_transit_rate_s
+
     diameter_m = max(float(diameter_mm) * 1e-3, min_diameter_m)
-    return float(factor) * v_mp / diameter_m / MHZ
+    return most_probable_transit_rate_s(temp_k, diameter_m, mass, factor=factor) / MHZ
 
 
 def wavevector_from_wavelength_nm(wavelength_nm):

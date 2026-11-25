@@ -15,6 +15,7 @@ import numpy as np
 from .. import (affine_doppler, beam, constants, core, kernels, observables,
                 pole_doppler, species, zeeman)
 from ..lineshape import level_crossing
+from ..transit import rate_from_khz_over_2pi
 from ..magneto_noise import (DEFAULT_BEAM_DIAMETER_MM, DEFAULT_DETECTION_EFFICIENCY,
                              DEFAULT_NOISE_BANDWIDTH_HZ, shot_noise_reference,
                              magnetic_sensitivity)
@@ -602,8 +603,8 @@ class SinglePairMagnetoReference(Scheme):
         gamma_transit = gamma_depol = gamma_light_dephasing = 0.0
 
         if cell_type == CELL_BUFFER:
-            gamma_transit = 2 * np.pi * params["buffer_ground_relax_khz"] * 1e3
-            gamma_depol = 2 * np.pi * params["collisional_depol_khz"] * 1e3
+            gamma_transit = rate_from_khz_over_2pi(params["buffer_ground_relax_khz"])
+            gamma_depol = rate_from_khz_over_2pi(params["collisional_depol_khz"])
             atom = (zeeman.zeeman_manifold(
                         Fg, Fe, gamma=GAMMA_D1, gamma_gg=gamma_depol,
                         transit_rate=gamma_transit,
@@ -612,12 +613,12 @@ class SinglePairMagnetoReference(Scheme):
             atom_dark = None
             gamma_out = gamma_in = gamma_wall = 0.0
         else:
-            gamma_out = 2 * np.pi * params["transit_relax_khz"] * 1e3
+            gamma_out = rate_from_khz_over_2pi(params["transit_relax_khz"])
             light_dephasing_khz = float(params.get("light_dephasing_khz", 0.0))
             if not math.isfinite(light_dephasing_khz) or light_dephasing_khz < 0:
                 raise ValueError("extra light-region dephasing must be finite and nonnegative")
-            gamma_light_dephasing = 2 * np.pi * light_dephasing_khz * 1e3
-            gamma_in = 2 * np.pi * params["dark_return_khz"] * 1e3
+            gamma_light_dephasing = rate_from_khz_over_2pi(light_dephasing_khz)
+            gamma_in = rate_from_khz_over_2pi(params["dark_return_khz"])
             gamma_wall = 1.0 / max(params["wall_coherence_ms"] * 1e-3, 1e-9)
             atom = (zeeman.zeeman_manifold(Fg, Fe, gamma=GAMMA_D1,
                                            gamma_gg=gamma_light_dephasing, transit_rate=0.0)
