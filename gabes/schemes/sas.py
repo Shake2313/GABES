@@ -218,29 +218,33 @@ class ODModelSettingError(ValueError):
     """An invalid ``od_model`` setting; shown to the user instead of a fallback."""
 
 
-def _od_model_setting(params):
+def _od_model_setting(params, *, driven=None):
     """(model set, explicit pump-free model or None).
 
     A missing key is pre-D20, so parameter dictionaries written before the
     setting existed replay unchanged. ``None`` is an unset session value and
-    takes the current default, like a fresh session.
+    takes the current default, like a fresh session. A driven pump uses the SAS
+    transit rate. Callers may resolve the pump-off preference independently.
     """
+    if driven is None:
+        driven = _pump_is_driven(params.get("pump_power_mw", 0.0))
     value = params.get(OD_MODEL_KEY, OD_MODELS_PRE_D20)
     if value is None:
         value = OD_MODELS_DEFAULT
     if isinstance(value, str) and value in OD_MODEL_SETS:
         transit = params.get(OD_TRANSIT_KEY, "fixed")
+        if transit == "fixed":
+            return value, None
         if isinstance(transit, str) and transit in BALLISTIC_MODELS:
-            return OD_MODELS_D2SB, BALLISTIC_MODELS[transit]
-        if transit == GAUSSIAN_TRANSIT:
-            if value == OD_MODELS_D2SB:
-                return value, GAUSSIAN_TRANSIT_MODEL
-            return OD_MODELS_D20, GAUSSIAN_TRANSIT_D20_MODEL
-        if transit != "fixed":
+            model = BALLISTIC_MODELS[transit]
+        elif transit == GAUSSIAN_TRANSIT:
+            model = GAUSSIAN_TRANSIT_MODEL if value == OD_MODELS_D2SB else GAUSSIAN_TRANSIT_D20_MODEL
+        else:
             raise ODModelSettingError(f"Unknown pump-off OD transit model {transit!r}.")
-        return value, None
+        return (value, None) if driven else (_EXPLICIT_OD_MODELS[model], model)
     if isinstance(value, str) and value in _EXPLICIT_OD_MODELS:
-        return _EXPLICIT_OD_MODELS[value], value
+        model = None if driven and value in GEOMETRY_MODELS else value
+        return _EXPLICIT_OD_MODELS[value], model
     raise ODModelSettingError(
         f"Invalid OD model ID {value!r}. Choose one of: {', '.join(OD_MODEL_CHOICES)}.")
 
@@ -258,7 +262,7 @@ def _rate_scope_reason(params, *, geometry=False):
     if params.get("species") not in _RB_MEDIA or params.get("line") not in ("D1", "D2"):
         return "The magnetic-sublevel rate model covers rubidium D1 and D2 only."
     if geometry and _pump_is_driven(params.get("pump_power_mw", 0.0)):
-        return "Gaussian transit applies to pump-off OD only. Select Fixed rate to simulate pumped SAS."
+        return "Gaussian transit describes single-probe OD with the pump off."
     if not geometry and not bool(params.get("constrain_doppler_temp", True)):
         return "The magnetic-sublevel rate model needs the Doppler temperature tied to the cell."
     if (float(params.get("ne_pressure_torr", 0.0)) != 0.0 or params.get("paraffin_coated", False)
@@ -285,7 +289,7 @@ def _ballistic_scope_reason(params):
 
 def _pump_free_model_id(params):
     """Model of the pump-off solve for these parameters (explicit ID or model set)."""
-    model_set, explicit = _od_model_setting(params)
+    model_set, explicit = _od_model_setting(params, driven=False)
     if explicit is not None:
         return explicit
     v2 = model_set == OD_MODELS_D2SB
@@ -450,7 +454,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "18"           # d20_d2sb by default (D20 set + measured Rb D2 self-broadening)
+    cache_version = "19"           # pump-driven SAS uses its configured transit rate
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -585,10 +589,11 @@ class SASScheme(Scheme):
                                      BALLISTIC_TRANSIT: "Beam-crossing history (⁸⁵Rb D1 reference)",
                                      BALLISTIC_FAST_TRANSIT: "Beam-crossing history (⁸⁵Rb D1 Fast)"},
                       advanced=True,
-                      help="For one linearly polarized probe in uniform, uncoated, buffer-free Rb, "
-                           "estimate the replacement rate from the probe radius and kinetic temperature. "
-                           "The history model follows thermal atoms through a linearly polarized beam at zero field. "
-                           "Recorded explicit OD model IDs take precedence."),
+                      help="Turning on the pump uses the SAS transit relaxation rate for both comparison curves. "
+                           "Returning to zero pump restores the selected OD model. "
+                           "Gaussian beam estimates the replacement rate from the probe radius and kinetic "
+                           "temperature in uniform, uncoated, buffer-free Rb. Beam-crossing history follows "
+                           "thermal ⁸⁵Rb atoms through a linearly polarized D1 probe at zero field."),
             ParamSpec("transit_khz", "Transit relaxation γ_t/2π", "Atomic", 100.0,
                       5.0, 2000.0, 5.0, "kHz", advanced=True,
                       help="Atoms leaving/entering the beam relax toward the thermal "
@@ -819,7 +824,9 @@ class SASScheme(Scheme):
             keys = tuple(key for key in keys if key != "weak_probe_profile")
         if OD_MODEL_KEY not in params:
             keys = tuple(key for key in keys if key != OD_MODEL_KEY)
-        if params.get(OD_TRANSIT_KEY, "fixed") == "fixed":
+        transit = params.get(OD_TRANSIT_KEY, "fixed")
+        if transit == "fixed" or (transit in (GAUSSIAN_TRANSIT, *BALLISTIC_MODELS)
+                                  and _pump_is_driven(params.get("pump_power_mw", 0.0))):
             keys = tuple(key for key in keys if key != OD_TRANSIT_KEY)
         if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
             return keys + ("cell_mm", "line_strength")

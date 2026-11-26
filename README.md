@@ -311,7 +311,10 @@ initial alignment for the open file.
   power. It assumes linear polarization, zero magnetic field and a Gaussian transverse
   profile at each position along the cell. **Fast** uses a smaller trajectory grid in
   the validated range. Outside it the app runs the reference and records the reason
-  in the model details. See [transit models and validation](docs/transit_time.md).
+  in the model details. Turning the pump on switches the pumped spectrum and its
+  0 mW comparison curve to the configured SAS transit relaxation rate. Returning
+  the pump to 0 mW restores the selected OD transit model.
+  See [transit models and validation](docs/transit_time.md).
 - **Fit physical OD parameters** uses an independently calibrated frequency
   scale and absolute transmission. Select an acquisition branch to fit.
   The bounded fit reports residuals and identifiability, and transfers

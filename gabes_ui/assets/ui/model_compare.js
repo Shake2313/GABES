@@ -391,6 +391,8 @@ export default function mount({parentElement, data, key, setStateValue}) {
     if (group?.overlaps?.length) markerNote += ' Group windows overlap. Curves show total transmission.';
     q('.mc-marker-note').textContent=markerNote;
     const fixed=d.fixed || {}, conditions=[fixed.species,fixed.line];
+    if (d.source?.pump_off_transit_preference && d.source.kind==='species')
+      conditions.push('SAS transit γₜ/2π = '+format(fixed.transit_khz,6)+' kHz for all pump powers');
     if (Number.isFinite(fixed.temp_c)) conditions.push(fixed.temp_c+' °C');
     if (Number.isFinite(fixed.cell_mm)) conditions.push(fixed.cell_mm+' mm cell');
     if (Number.isFinite(fixed.probe_power_uw)) conditions.push(fixed.probe_power_uw+' µW probe');

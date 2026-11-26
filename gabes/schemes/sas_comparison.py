@@ -7,7 +7,10 @@ import numpy as np
 
 from .. import __version__
 from ..model_comparison import SCHEMA, condition_samples, condition_views, same_grid, sample_values
-from .sas import EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, _pump_is_driven, _weak_probe_profile
+from .sas import (
+    EXACT_WEAK_PROBE, GEOMETRY_MODELS, LEGACY_WEAK_PROBE, OD_MODEL_KEY, OD_TRANSIT_KEY,
+    _od_model_setting, _pump_is_driven, _weak_probe_profile,
+)
 
 
 # The solver emits one marker per allowed transition as "<isotope> <Fg>→<Fe>′".
@@ -65,8 +68,16 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
     powers = list(dict.fromkeys(condition_samples(key, [0., current] if current else [0.])))
     if not powers or not all(np.isfinite(power) and power >= 0. for power in powers):
         raise ValueError("Choose finite, non-negative pump powers for the comparison.")
-    off_profile = _weak_probe_profile({**params, key: 0.})
     positive_power = next((power for power in powers if _pump_is_driven(power)), None)
+    preference = _od_model_setting(params, driven=False)[1]
+    use_sas_transit = positive_power is not None and preference in GEOMETRY_MODELS
+    if use_sas_transit:
+        # A pump-power difference needs the same transit prescription at both powers.
+        sas_set, _ = _od_model_setting(params, driven=True)
+        params = {**params, OD_MODEL_KEY: sas_set, OD_TRANSIT_KEY: "fixed"}
+        if not _pump_is_driven(current):
+            current_raw = current_view = None
+    off_profile = _weak_probe_profile({**params, key: 0.})
     fallback = None
     if (off_profile is not None and off_profile["status"] == "active"
             and positive_power is not None
@@ -124,18 +135,18 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "delta": sample_values(transmission - baseline),
             "resolution": readout["resolution"],
             "attenuation_scope": readout["attenuation_scope"],
+            "probe_model": raw.get("probe_model"),
             "probe_model_scope": probe_scope.get("value"),
             "probe_model_note": probe_scope.get("help"),
         }
         row_profile = fallback or raw.get("weak_probe_profile")
         if row_profile is not None:
             row["weak_probe_profile"] = row_profile
-            row["probe_model"] = raw.get("probe_model")
             if not probe_scope:
                 row.update(probe_model_scope=row_profile["applied"],
                            probe_model_note=row_profile["scope"])
         if "ballistic_diagnostics" in readout:
-            row.update(probe_model=raw["probe_model"], ballistic_diagnostics=readout["ballistic_diagnostics"])
+            row["ballistic_diagnostics"] = readout["ballistic_diagnostics"]
             profile = None
         if "axial_cell" in readout:
             axial = readout["axial_cell"]
@@ -176,6 +187,7 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             "baseline_power_mw": 0.0, "missing_value": "null",
             "crossover_basis": "Midpoint of allowed lines from the same ground F; not a detected peak.",
             "group_scope": "Group windows show total transmission, including other transitions in overlapping windows.",
+            **({"pump_off_transit_preference": preference} if use_sas_transit else {}),
             **({"weak_probe_profile": profile} if profile is not None else {}),
         },
     }

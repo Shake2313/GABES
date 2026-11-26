@@ -70,7 +70,7 @@ def test_isotope_rates_use_path_temperature_and_waist():
 
 
 @pytest.mark.parametrize("unsupported", [
-    {"pump_power_mw": .4}, {"paraffin_coated": True}, {"ne_pressure_torr": 10.},
+    {"paraffin_coated": True}, {"ne_pressure_torr": 10.},
     {"species": species.CS133.label}, {"cell_propagation": "Segmented reference"},
 ])
 def test_geometry_rejects_unsupported_conditions(unsupported):

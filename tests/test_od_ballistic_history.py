@@ -5,11 +5,14 @@ import numpy as np
 import pytest
 
 from gabes import species
+from gabes.core import blas_single_thread
 from gabes.od_measurement import export_comparison_csv, load_measurement, prepare_measurement_upload
 from gabes.od_model import ODConditions, evaluate_od_display, od_unavailable
 from gabes.od_spectrum_fit import od_fit_unavailable, od_transmission, offered_fit_parameters
 from gabes.schemes.sas import (
-    BALLISTIC_FAST, BALLISTIC_FAST_TRANSIT, BALLISTIC_REFERENCE, BALLISTIC_TRANSIT, EXACT_MODEL, ODModelSettingError, SASScheme,
+    BALLISTIC_FAST, BALLISTIC_FAST_TRANSIT, BALLISTIC_REFERENCE, BALLISTIC_TRANSIT,
+    EXACT_MODEL, GAUSSIAN_TRANSIT, GAUSSIAN_TRANSIT_D20_MODEL, OD_MODELS_D20,
+    OD_MODELS_D2SB, OD_MODELS_PRE_D20, ODModelSettingError, SASScheme,
 )
 
 
@@ -44,12 +47,48 @@ def test_history_weak_limit_sampled_view_and_fitter(transit, model):
 
 @pytest.mark.parametrize("conditions", [
     {"species": species.RB87.label}, {"species": "Rb (natural)"}, {"line": "D2"},
-    {"pump_power_mw": 1.}, {"ne_pressure_torr": 5.}, {"paraffin_coated": True},
+    {"ne_pressure_torr": 5.}, {"paraffin_coated": True},
     {"cell_propagation": "Segmented reference"}, {"probe_waist_mm": 0.},
 ])
 def test_history_scope_rejects_before_solve(conditions):
     with pytest.raises(ODModelSettingError):
         SASScheme().compute(parameters(**conditions))
+
+
+@pytest.mark.parametrize(("setting", "selector", "sas_set", "off_id", "probe_uw"), [
+    (OD_MODELS_D2SB, BALLISTIC_TRANSIT, OD_MODELS_D2SB, BALLISTIC_REFERENCE, 0.),
+    (OD_MODELS_PRE_D20, BALLISTIC_FAST_TRANSIT, OD_MODELS_PRE_D20, BALLISTIC_FAST, 3.),
+    (BALLISTIC_REFERENCE, "fixed", OD_MODELS_D2SB, BALLISTIC_REFERENCE, 0.),
+    (OD_MODELS_PRE_D20, GAUSSIAN_TRANSIT, OD_MODELS_PRE_D20, GAUSSIAN_TRANSIT_D20_MODEL, 0.),
+    (GAUSSIAN_TRANSIT_D20_MODEL, "fixed", OD_MODELS_D20, GAUSSIAN_TRANSIT_D20_MODEL, 0.),
+])
+def test_geometry_preference_survives_driven_sas(setting, selector, sas_set, off_id, probe_uw):
+    scheme = SASScheme()
+    p = parameters(od_model=setting, od_transit_model=selector, pump_power_mw=.02,
+                   transit_khz=250., probe_power_uw=probe_uw, scan_points=101)
+    original = p.copy()
+    fixed = dict(p, od_model=sas_set, od_transit_model="fixed")
+    assert "transit_khz" in scheme.solve_param_keys(p)
+    with blas_single_thread():
+        raw = scheme.compute({k: p[k] for k in scheme.solve_param_keys(p)})
+        control = scheme.compute({k: fixed[k] for k in scheme.solve_param_keys(fixed)})
+    assert raw["od_model_set"] == sas_set
+    assert raw["probe_model"] == control["probe_model"]
+    assert "ballistic_diagnostics" not in raw and "transit_rates_s" not in raw
+    readout = scheme.headless_observables(raw, p)["optical_readout"]
+    expected = scheme.headless_observables(control, fixed)["optical_readout"]
+    np.testing.assert_array_equal(readout["transmission"], expected["transmission"])
+    assert p == original
+    # CSV fitting always derives pump-off conditions, even when SAS is on.
+    assert ODConditions.from_params(p).model_id == off_id
+    off = dict(p, pump_power_mw=0., probe_power_uw=0.)
+    assert scheme.compute({k: off[k] for k in scheme.solve_param_keys(off)})["probe_model"] == off_id
+
+
+def test_invalid_transit_selector_still_errors_with_pump_on():
+    p = parameters(od_transit_model="unknown", pump_power_mw=1.)
+    with pytest.raises(ODModelSettingError, match="transit"):
+        SASScheme().compute(p)
 
 
 def test_pure_custom_and_fit_conditions():

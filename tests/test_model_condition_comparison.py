@@ -10,8 +10,8 @@ from gabes import schemes, species
 from gabes.core import blas_single_thread
 from gabes.model_comparison import comparison_values, sample_values, same_grid
 from gabes.schemes.sas import (
-    AUTO_WEAK_PROBE, EXACT_WEAK_PROBE, GENERIC, LEGACY_WEAK_PROBE,
-    PUMPED_MAXWELL, RB_COMPOSITION_CUSTOM,
+    AUTO_WEAK_PROBE, BALLISTIC_FAST, BALLISTIC_FAST_TRANSIT, EXACT_WEAK_PROBE, GENERIC,
+    LEGACY_WEAK_PROBE, PUMPED_MAXWELL, RATE_MODEL_V2, RB_COMPOSITION_CUSTOM, TWO_LEVEL_MODEL_V2,
 )
 
 
@@ -22,7 +22,7 @@ def _compare(**changes):
 
     def resolve(physical_params):
         solves.append(physical_params["pump_power_mw"])
-        return scheme.compute({k: physical_params[k] for k in scheme.recompute_keys()})
+        return scheme.compute({k: physical_params[k] for k in scheme.solve_param_keys(physical_params)})
 
     with blas_single_thread():
         current = resolve(params)
@@ -126,6 +126,27 @@ def test_explicit_exact_mixed_comparison_uses_same_legacy_grid_for_both_curves()
             np.testing.assert_array_equal(row["delta"], expected_delta[row["power_mw"]])
 
 
+@pytest.mark.parametrize(("line", "current", "sweep"), [
+    ("D2", .02, [0., .02]),    # The saved D1-only preference is inactive for SAS.
+    ("D1", 0., [.02, 0.]),     # Discard the cached pump-free history for the mixed sweep.
+    ("D1", 0., [.02]),         # Zero is still required for the delta, even if not displayed.
+])
+def test_mixed_pump_comparison_preserves_preference_but_uses_sas_baseline(line, current, sweep):
+    conditions = dict(line=line, species=species.RB85.label, temp_c=99., cell_mm=12.5,
+                      probe_waist_mm=.53, scan_points=101, transit_khz=350., pump_power_mw=current)
+    with comparison_values("pump_power_mw", sweep):
+        expected, _, _ = _compare(**conditions, od_transit_model="fixed")
+        actual, _, _ = _compare(**conditions, od_transit_model=BALLISTIC_FAST_TRANSIT)
+    assert actual["fixed"]["od_transit_model"] == "fixed"
+    assert actual["source"]["pump_off_transit_preference"] == BALLISTIC_FAST
+    assert [row["power_mw"] for row in actual["series"]] == sweep
+    for row, control in zip(actual["series"], expected["series"], strict=True):
+        assert row["probe_model"] == control["probe_model"] != BALLISTIC_FAST
+        assert "ballistic_diagnostics" not in row
+        for field in ("transmission", "optical_depth", "delta"):
+            np.testing.assert_array_equal(row[field], control[field])
+
+
 def test_automatic_pump_comparison_shares_exact_background_and_reuses_zero():
     base = dict(line="D2", temp_c=90., cell_mm=75., probe_power_uw=0.,
                 scan_points=1201, pump_power_mw=0.)
@@ -191,6 +212,7 @@ def test_native_depth_survives_underflow_and_carries_finite_probe_scope():
     assert finite["varied"]["values"] == [0., .83]
     assert all(c["effective"] for c in finite["series"])
     off, on = finite["series"]
+    assert (off["probe_model"], on["probe_model"]) == (RATE_MODEL_V2, TWO_LEVEL_MODEL_V2)
     assert np.max(np.abs(np.subtract(off["od0"], off["optical_depth"]))) > 1e-6
     assert np.max(np.abs(np.subtract(on["od0"], off["od0"]))) > 1e-6
     np.testing.assert_array_equal(on["od0"], current["optical_readout"]["od0"])
