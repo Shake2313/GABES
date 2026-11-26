@@ -74,16 +74,16 @@ def test_fwm_legacy_migration_does_not_accept_unknown_or_invalid_inputs():
 
 
 def test_sas_weak_probe_profile_is_replay_metadata():
-    from gabes.schemes.sas import PUMPED_MAXWELL, TRANSIT_WEAK_MODEL_V2, _weak_probe_profile
+    from gabes.schemes.sas import PUMPED_MAXWELL, TRANSIT_WEAK_MODEL_V3, _weak_probe_profile
     from gabes_ui.controls import param_visible
 
     scheme = schemes.get("sas")
     profile = next(spec for spec in scheme.param_schema() if spec.name == "weak_probe_profile")
     assert not param_visible(scheme.name, profile)
     defaults = dict(scheme.defaults(), pump_power_mw=0.0, scan_points=401)
-    assert scheme.compute(defaults)["probe_model"] == TRANSIT_WEAK_MODEL_V2
+    assert scheme.compute(defaults)["probe_model"] == TRANSIT_WEAK_MODEL_V3
     assert _weak_probe_profile(dict(defaults, pump_power_mw=0.5))["applied"] == PUMPED_MAXWELL
-    saved = create_default(scheme, "Archive grid", dict(defaults, weak_probe_profile=LEGACY_WEAK_PROBE))
+    saved = create_default(scheme, "Archive grid", dict(defaults, od_model="d20_d2sb", weak_probe_profile=LEGACY_WEAK_PROBE))
     restored = parse_default(scheme, dump_default(saved))["params"]
     assert scheme.compute(restored)["probe_model"] == "weak_probe_legacy"
 
@@ -94,9 +94,10 @@ def test_old_sas_snapshot_without_profile_replays_on_the_legacy_grid():
     assert record["params"]["weak_probe_profile"] == AUTO_WEAK_PROBE
     old = copy.deepcopy(record)
     del old["params"]["weak_probe_profile"]
+    del old["params"]["od_model"]
 
     restored = parse_default(scheme, old)["params"]
-    assert restored == {**record["params"], "weak_probe_profile": LEGACY_WEAK_PROBE}
+    assert restored == {**record["params"], "weak_probe_profile": LEGACY_WEAK_PROBE, "od_model": "pre_d20"}
     assert "weak_probe_profile" not in old["params"]
     assert scheme.compute(restored)["probe_model"] == "weak_probe_legacy"
 

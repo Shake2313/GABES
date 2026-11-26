@@ -73,8 +73,10 @@ OD_MODELS_D20 = "d20"
 # 2026-11-24, checklist rb-d2-self-broadening-default-value). Its model IDs
 # carry a _v2 suffix; every older set and ID keeps BETA_SELF on D2 and replays.
 OD_MODELS_D2SB = "d20_d2sb"
-OD_MODEL_SETS = (OD_MODELS_PRE_D20, OD_MODELS_D20, OD_MODELS_D2SB)
-OD_MODELS_DEFAULT = OD_MODELS_D2SB  # ParamSpec default; also an explicit None
+# User decision 2026-11-26: all Rb isotopes act as collision partners.
+OD_MODELS_NTOTAL = "d20_ntotal"
+OD_MODEL_SETS = (OD_MODELS_PRE_D20, OD_MODELS_D20, OD_MODELS_D2SB, OD_MODELS_NTOTAL)
+OD_MODELS_DEFAULT = OD_MODELS_NTOTAL  # ParamSpec default; also an explicit None
 LEGACY_MODEL = "weak_probe_legacy"
 EXACT_MODEL = "weak_probe_exact_maxwell_voigt"
 TRANSIT_WEAK_MODEL = "od_weak_exact_voigt_transit_v1"
@@ -86,11 +88,25 @@ TRANSIT_WEAK_MODEL_V2 = "od_weak_exact_voigt_transit_v2"
 TWO_LEVEL_MODEL_V2 = "finite_power_2level_gaussian_propagation_v2"
 RATE_MODEL_V2 = "od_finite_rb_mf_rate_v2"
 PUMPED_TRANSIT_MODEL_V2 = "sas_pumped_exact_voigt_transit_v2"
-TRANSIT_WEAK_MODELS = (TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V2)
-TWO_LEVEL_MODELS = (TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2)
+TRANSIT_WEAK_MODEL_V3 = "od_weak_exact_voigt_transit_v3"
+TWO_LEVEL_MODEL_V3 = "finite_power_2level_gaussian_propagation_v3"
+RATE_MODEL_V3 = "od_finite_rb_mf_rate_v3"
+PUMPED_TRANSIT_MODEL_V3 = "sas_pumped_exact_voigt_transit_v3"
+GRID_NTOTAL_MODEL = "weak_probe_grid_ntotal_v1"
+TRANSIT_WEAK_MODELS = (TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V2, TRANSIT_WEAK_MODEL_V3)
+TWO_LEVEL_MODELS = (TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2, TWO_LEVEL_MODEL_V3)
 GAUSSIAN_TRANSIT_MODEL = "od_finite_rb_mf_gaussian_transit_v1"
 GAUSSIAN_TRANSIT_D20_MODEL = "od_finite_rb_mf_gaussian_transit_d20_v1"
-GAUSSIAN_TRANSIT_MODELS = (GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL)
+GAUSSIAN_TRANSIT_NTOTAL_MODEL = "od_finite_rb_mf_gaussian_transit_v2"
+GAUSSIAN_TRANSIT_MODELS = (GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_NTOTAL_MODEL)
+# Versions of the same OD/SAS solvers that use total elemental Rb perturber density.
+_NTOTAL_MODEL_IDS = {
+    TRANSIT_WEAK_MODEL_V2: TRANSIT_WEAK_MODEL_V3,
+    TWO_LEVEL_MODEL_V2: TWO_LEVEL_MODEL_V3,
+    RATE_MODEL_V2: RATE_MODEL_V3,
+    GAUSSIAN_TRANSIT_MODEL: GAUSSIAN_TRANSIT_NTOTAL_MODEL,
+    LEGACY_MODEL: GRID_NTOTAL_MODEL,
+}
 BALLISTIC_REFERENCE = "od_rb85_d1_ballistic_history_v1"
 BALLISTIC_TRANSIT = "ballistic_history"
 BALLISTIC_FAST_V1 = "od_rb85_d1_ballistic_history_fast_v1"
@@ -101,7 +117,7 @@ BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANS
 BALLISTIC_FIDELITIES = {BALLISTIC_REFERENCE: "reference", BALLISTIC_FAST_V1: "fast_v1", BALLISTIC_FAST: "fast"}
 OD_TRANSIT_KEY = "od_transit_model"
 GAUSSIAN_TRANSIT = "gaussian_fwhm"
-RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, *GAUSSIAN_TRANSIT_MODELS)
+RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, RATE_MODEL_V3, *GAUSSIAN_TRANSIT_MODELS)
 _EXPLICIT_OD_MODELS = {
     LEGACY_MODEL: OD_MODELS_PRE_D20, EXACT_MODEL: OD_MODELS_PRE_D20,
     TWO_LEVEL_MODEL: OD_MODELS_PRE_D20,
@@ -109,6 +125,7 @@ _EXPLICIT_OD_MODELS = {
     TRANSIT_WEAK_MODEL_V2: OD_MODELS_D2SB, TWO_LEVEL_MODEL_V2: OD_MODELS_D2SB,
     RATE_MODEL_V2: OD_MODELS_D2SB, GAUSSIAN_TRANSIT_MODEL: OD_MODELS_D2SB,
     GAUSSIAN_TRANSIT_D20_MODEL: OD_MODELS_D20,
+    **dict.fromkeys(_NTOTAL_MODEL_IDS.values(), OD_MODELS_NTOTAL),
     **dict.fromkeys(BALLISTIC_FIDELITIES, OD_MODELS_D2SB),
 }
 GEOMETRY_MODELS = (*GAUSSIAN_TRANSIT_MODELS, *BALLISTIC_FIDELITIES)
@@ -170,10 +187,14 @@ def _species_path_density(isotope, cold_k, path_k, fraction):
         species.number_density(isotope, cold_k), cold_k, path_k) * fraction
 
 
-def _species_path_densities(isotope, cold_k, path_k, fraction):
+def _species_path_densities(isotope, cold_k, path_k, fraction, *, total_rb=False):
     """Absorber and self-broadening perturber densities in the optical path (m^-3)."""
-    absorber = _species_path_density(isotope, cold_k, path_k, fraction)
-    return absorber, absorber
+    elemental = _species_path_density(isotope, cold_k, path_k, 1.0)
+    absorber = elemental * fraction
+    # The shared plotting axis includes an absent Rb isotope at enriched endpoints.
+    # Leave that invisible component at zero density, including its scan padding.
+    partner = elemental if total_rb and fraction > 0 and isotope in (species.RB85, species.RB87) else absorber
+    return absorber, partner
 
 
 def _pump_is_driven(power_mw):
@@ -247,7 +268,7 @@ def _od_model_setting(params, *, driven=None):
         if isinstance(transit, str) and transit in BALLISTIC_MODELS:
             model = BALLISTIC_MODELS[transit]
         elif transit == GAUSSIAN_TRANSIT:
-            model = GAUSSIAN_TRANSIT_MODEL if value == OD_MODELS_D2SB else GAUSSIAN_TRANSIT_D20_MODEL
+            model = _versioned_model(value, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODEL)
         else:
             raise ODModelSettingError(f"Unknown pump-off OD transit model {transit!r}.")
         return (value, None) if driven else (_EXPLICIT_OD_MODELS[model], model)
@@ -258,12 +279,25 @@ def _od_model_setting(params, *, driven=None):
         f"Invalid OD model ID {value!r}. Choose one of: {', '.join(OD_MODEL_CHOICES)}.")
 
 
+def _versioned_model(model_set, original, measured_d2):
+    if model_set == OD_MODELS_NTOTAL:
+        if measured_d2 == PUMPED_TRANSIT_MODEL_V2:
+            return PUMPED_TRANSIT_MODEL_V3
+        return _NTOTAL_MODEL_IDS[measured_d2]
+    return measured_d2 if model_set == OD_MODELS_D2SB else original
+
+
+def _ntotal_uniform_rb(params, model_set):
+    return (model_set == OD_MODELS_NTOTAL and params.get("species") in _RB_MEDIA
+            and params.get("cell_propagation", "Uniform") == "Uniform")
+
+
 def per_line_self_broadening(params):
     """Whether the finite-probe reference takes the measured Rb D2 self-broadening.
 
-    It follows the set (d20_d2sb), like the v2 finite-probe models it is compared with.
+    Both d20_d2sb and its d20_ntotal successor select the line-specific coefficients.
     """
-    return _od_model_setting(params)[0] == OD_MODELS_D2SB
+    return _od_model_setting(params)[0] in (OD_MODELS_D2SB, OD_MODELS_NTOTAL)
 
 
 def _rate_scope_reason(params, *, geometry=False):
@@ -301,24 +335,27 @@ def _pump_free_model_id(params):
     model_set, explicit = _od_model_setting(params, driven=False)
     if explicit is not None:
         return explicit
-    v2 = model_set == OD_MODELS_D2SB
     if _probe_power_mw(params) > 0.0:
         if model_set != OD_MODELS_PRE_D20 and _rate_scope_reason(params) is None:
-            return RATE_MODEL_V2 if v2 else RATE_MODEL
-        return TWO_LEVEL_MODEL_V2 if v2 else TWO_LEVEL_MODEL
+            return _versioned_model(model_set, RATE_MODEL, RATE_MODEL_V2)
+        return _versioned_model(model_set, TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2)
     model = _weak_probe_model_id(_weak_probe_profile(dict(params, pump_power_mw=0.0)))
     if model_set != OD_MODELS_PRE_D20 and model == EXACT_MODEL:
-        return TRANSIT_WEAK_MODEL_V2 if v2 else TRANSIT_WEAK_MODEL
+        return _versioned_model(model_set, TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V2)
+    if model == LEGACY_MODEL and _ntotal_uniform_rb(params, model_set):
+        return GRID_NTOTAL_MODEL
     return model
 
 
 def _pump_free_model_reason(params, model):
     """Why ``model`` cannot run the pump-off solve of these parameters, or None."""
     probe = _probe_power_mw(params)
-    if model in (LEGACY_MODEL, EXACT_MODEL, *TRANSIT_WEAK_MODELS):
+    if model in (LEGACY_MODEL, GRID_NTOTAL_MODEL, EXACT_MODEL, *TRANSIT_WEAK_MODELS):
         if probe > 0.0:
             return "This weak-probe model needs zero probe power."
-        if model != LEGACY_MODEL and not _exact_voigt_eligible(params):
+        if model == GRID_NTOTAL_MODEL and not _ntotal_uniform_rb(params, OD_MODELS_NTOTAL):
+            return "The total-Rb-density grid model requires uniform rubidium."
+        if model not in (LEGACY_MODEL, GRID_NTOTAL_MODEL) and not _exact_voigt_eligible(params):
             return ("The Exact Maxwell Voigt models need uniform, uncoated Rb D1/D2 "
                     "without buffer gas and with Legacy broadening.")
         return None
@@ -421,6 +458,13 @@ def _probe_scope_text(raw, params):
                 " The pump-prepared populations are frozen before this "
                 "correction; simultaneous finite pump + finite probe also "
                 "omits probe-induced hyperfine repumping.")
+    elif raw.get("od_model_set") == OD_MODELS_NTOTAL and len(raw.get("isotope_fractions", {})) > 1:
+        value = "Rb D2 mixture"
+        help_text = "Both Rb isotopes contribute to the self-broadening of each transition."
+        detail = (help_text + " The recorded AutoOD software reference used isotope-partial widths. "
+                  "Finite-power agreement for the total-density mixture requires separate validation.")
+        if pump_on:
+            detail += " This solve holds the pump-prepared populations fixed during probe propagation."
     elif reference_matched:
         value = "Rb D2 reference-matched"
         help_text = (
@@ -659,7 +703,8 @@ class SASScheme(Scheme):
                       401, 4001, 100, "", advanced=True),
             ParamSpec(OD_MODEL_KEY, "OD model", "Numerics", OD_MODELS_DEFAULT,
                       choices=OD_MODEL_CHOICES, advanced=True, hidden=True,
-                      help="d20_d2sb (default) is the current model set. It is d20 with "
+                      help="d20_ntotal (default) uses all Rb isotopes as self-broadening partners in uniform cells. "
+                           "d20_d2sb retains each isotope's own perturber density and uses "
                            "the measured Rb D2 self-broadening coefficient (1.10×10⁻⁷ Hz cm³) "
                            "in place of the D1 value. d20 adds the transit width to the "
                            "Exact profiles (pumped too) and uses the magnetic-sublevel rate "
@@ -805,14 +850,19 @@ class SASScheme(Scheme):
         """Run the on-demand reference independently of the cached SAS solve."""
         from .sas_probe_reference import compute
 
-        params = {**self.defaults(), **params}
+        # This independently callable reference historically filled an omitted model
+        # with d20_d2sb. Exported sessions supply an explicit set or ID.
+        params = {**self.defaults(), OD_MODEL_KEY: OD_MODELS_D2SB, **params}
         unavailable = self.extra_view_unavailable(PROJECTED_PROBE_VIEW, params)
         if unavailable is not None:
             raise ValueError(unavailable)
         components, reference, *_ = _isotope_composition(params)
         cold_k, path_k, _ = _temperatures(params)
-        densities = [(isotope, fraction, *_species_path_densities(isotope, cold_k, path_k, fraction))
-                     for isotope, fraction in components]
+        total_rb = _ntotal_uniform_rb(params, _od_model_setting(params)[0])
+        densities = [
+            (iso, fraction, *_species_path_densities(iso, cold_k, path_k, fraction, total_rb=total_rb))
+            for iso, fraction in components
+        ]
         return compute(params, densities, reference, path_k, _probe_power_mw(params))
 
     @staticmethod
@@ -960,10 +1010,10 @@ class SASScheme(Scheme):
             if reason := _pump_free_model_reason(params, pump_free_model):
                 # A valid model outside its scope is an input error the app shows.
                 raise ODModelSettingError(reason)
-            if explicit_model in (LEGACY_MODEL, EXACT_MODEL, *TRANSIT_WEAK_MODELS):
+            if explicit_model in (LEGACY_MODEL, GRID_NTOTAL_MODEL, EXACT_MODEL, *TRANSIT_WEAK_MODELS):
                 # An explicit weak-probe model fixes its velocity measure.
                 params = dict(params, weak_probe_profile=(
-                    LEGACY_WEAK_PROBE if explicit_model == LEGACY_MODEL else EXACT_WEAK_PROBE))
+                    LEGACY_WEAK_PROBE if explicit_model in (LEGACY_MODEL, GRID_NTOTAL_MODEL) else EXACT_WEAK_PROBE))
         weak_profile = None if use_history else _weak_probe_profile(params)
         applied_profile = weak_profile["applied"] if weak_profile is not None else None
         exact_weak_probe = applied_profile == EXACT_WEAK_PROBE
@@ -972,9 +1022,11 @@ class SASScheme(Scheme):
         transit_weak = pump_free_model in TRANSIT_WEAK_MODELS
         pumped_transit = pumped_maxwell and model_set != OD_MODELS_PRE_D20
         # The measured Rb D2 self-broadening applies on the paths that record a
-        # _v2 ID. Legacy-grid paths (requested, or outside the Exact scope) keep
-        # the historical width, so their recorded IDs replay unchanged.
-        per_line = model_set == OD_MODELS_D2SB and (
+        # versioned line-specific ID. The weak grid keeps its historical coefficient.
+        # The archived segmented solver and its uniform-limit scan retain isotope
+        # densities and their historical coefficient on both D lines.
+        total_rb = _ntotal_uniform_rb(params, model_set)
+        per_line = model_set in (OD_MODELS_D2SB, OD_MODELS_NTOTAL) and (
             use_rate or transit_weak or pumped_transit or probe_peak_intensity > 0.0)
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
@@ -996,7 +1048,7 @@ class SASScheme(Scheme):
             offset = 2 * np.pi * (man.nu0 - nu_ref)
             sigma_v = constants.thermal_speed(T_doppler, iso.mass)
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
-            N, perturber_density = _species_path_densities(iso, T_density, T_doppler, weight)
+            N, perturber_density = _species_path_densities(iso, T_density, T_doppler, weight, total_rb=total_rb)
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
             pump_atom = man.atom
             if reference or cs_reference:
@@ -1176,12 +1228,12 @@ class SASScheme(Scheme):
                     doppler_temp_c=T_doppler - 273.15,
                     doppler_temp_tied=tied,
                     probe_model=(pump_free_model if use_rate or use_history
-                                 else (TWO_LEVEL_MODEL_V2 if per_line else TWO_LEVEL_MODEL)
+                                 else _versioned_model(model_set, TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2)
                                  if probe_peak_intensity > 0.0
                                  else pump_free_model if transit_weak
-                                 else (PUMPED_TRANSIT_MODEL_V2 if per_line else PUMPED_TRANSIT_MODEL)
+                                 else _versioned_model(model_set, PUMPED_TRANSIT_MODEL, PUMPED_TRANSIT_MODEL_V2)
                                  if pumped_transit
-                                 else _weak_probe_model_id(weak_profile)),
+                                 else GRID_NTOTAL_MODEL if total_rb else _weak_probe_model_id(weak_profile)),
                     od_model_set=model_set,
                     probe_radial_order=96 if use_rate else probe_saturation.RADIAL_QUADRATURE_ORDER,
                     probe_saturation_supported=probe_supported,
@@ -1679,8 +1731,8 @@ class SASScheme(Scheme):
             tables.append({"title": "Beam-crossing history", "markdown": note})
         elif raw.get("probe_model") in RATE_MODELS:
             from ..od_model import MODELS
-            accuracy = MODELS[raw["probe_model"]].accuracy
-            model_id = raw["probe_model"] if "transit_rates_s" in raw else RATE_MODEL
+            model_id = raw["probe_model"]
+            accuracy = MODELS[model_id].accuracy
             tables.append({
                 "title": "Finite-probe model",
                 "markdown": (
@@ -1700,7 +1752,7 @@ class SASScheme(Scheme):
                 "markdown": (
                     "Independent-transition two-level power broadening, "
                     "self-consistent longitudinal depletion, and full Gaussian "
-                    "power averaging (`finite_power_2level_gaussian_propagation`). "
+                    f"power averaging (`{raw['probe_model']}`). "
                     f"{qualifier} The beam waist is held constant through the cell "
                     "and the detector collects the full output beam; diffraction, "
                     "clipping, and transverse atomic transport are omitted. "

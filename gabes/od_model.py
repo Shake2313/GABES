@@ -38,7 +38,7 @@ from .schemes.sas import (
     GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODELS, GAUSSIAN_TRANSIT,
     BALLISTIC_FAST, BALLISTIC_FAST_V1, BALLISTIC_FIDELITIES, BALLISTIC_REFERENCE,
     BALLISTIC_TRANSIT, BALLISTIC_FAST_TRANSIT, _ballistic_scope_reason,
-    OD_TRANSIT_KEY, _species_path_densities, _temperatures,
+    OD_TRANSIT_KEY, _NTOTAL_MODEL_IDS, _species_path_densities, _temperatures,
     RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
     _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
 )
@@ -89,6 +89,7 @@ class ODModel:
     # Measured Rb D2 self-broadening instead of the D1 value on D2 (_v2 IDs,
     # user decision 2026-11-24, checklist rb-d2-self-broadening-default-value).
     per_line_self_broadening: bool = False
+    total_rb_perturbers: bool = False
 
 
 MODELS = {model.model_id: model for model in (
@@ -130,6 +131,12 @@ MODELS = {model.model_id: model for model in (
             "Rb magnetic-sublevel probe model with Gaussian transit and historical D2 self-broadening",
             "implemented", True, engine="rate", accuracy=GAUSSIAN_TRANSIT_ACCURACY),
 )}
+# Each recorded model ID fixes both the beta coefficient and its density.
+MODELS.update({
+    new: replace(MODELS[old], model_id=new, total_rb_perturbers=True,
+                 description=MODELS[old].description + ". Rb self-broadening uses total elemental density.")
+    for old, new in _NTOTAL_MODEL_IDS.items()
+})
 
 
 def is_rate_model(model_id):
@@ -200,7 +207,7 @@ class ODConditions:
     def from_params(cls, params, *, extra_homogeneous_fwhm_hz=0.0):
         """Read SAS parameters; pump settings are ignored, as in the OD-fit view.
 
-        ``od_model`` holds a model set ("pre_d20", "d20", "d20_d2sb") or an explicit model
+        ``od_model`` holds a model set ("pre_d20", "d20", "d20_d2sb", "d20_ntotal") or an explicit model
         ID; the SAS scheme resolves it, so the evaluator and the plot agree.
         Without the key the pre-D20 choice applies, so older settings replay,
         exactly as in the SAS solve; the defaults merged below must not add it.
@@ -446,7 +453,7 @@ def _rate_model_scan(conditions, points=2001):
     reference_hz = reference.line(line)[1]
     peak_intensity = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
-    per_line = MODELS[conditions.model_id].per_line_self_broadening
+    model = MODELS[conditions.model_id]
     centers = []
     doppler_fwhm_max = 0.0
     broadened_fwhm_max = 0.0
@@ -458,9 +465,9 @@ def _rate_model_scan(conditions, points=2001):
         doppler_fwhm_max = max(
             doppler_fwhm_max, np.sqrt(8 * np.log(2)) * manifold.k_vec * sigma_v)
         _, perturber_density = _species_path_densities(
-            isotope, cold_k, temperature_k, fractions.get(isotope.name, 0.0))
+            isotope, cold_k, temperature_k, fractions.get(isotope.name, 0.0), total_rb=model.total_rb_perturbers)
         gamma_effective = manifold.gamma + species.self_broadening(
-            isotope, perturber_density, line, per_line=per_line)
+            isotope, perturber_density, line, per_line=model.per_line_self_broadening)
         saturation_intensity = probe_saturation.closed_two_level_saturation_intensity(
             manifold.nu0, manifold.gamma)
         saturation = probe_saturation.peak_saturation_parameter(
@@ -481,16 +488,17 @@ def _rate_model_optics(conditions):
     extra_hwhm = np.pi * conditions.extra_homogeneous_fwhm_hz
     peak = probe_saturation.gaussian_peak_intensity(
         params["probe_power_uw"] * 1e-3, params["probe_waist_mm"])
-    per_line = MODELS[conditions.model_id].per_line_self_broadening
+    model = MODELS[conditions.model_id]
     optics = []
     for isotope, fraction in isotope_fractions:
-        density, perturber_density = _species_path_densities(isotope, cold_k, temperature, fraction)
+        density, perturber_density = _species_path_densities(
+            isotope, cold_k, temperature, fraction, total_rb=model.total_rb_perturbers)
         transit = conditions._transit_rate_s(isotope)
         manifold = species.build_manifold(isotope, line)
         offset = 2 * np.pi * (manifold.nu0 - reference.line(line)[1])
         sigma = manifold.k_vec * np.sqrt(constants.KB * temperature / isotope.mass)
         gamma2 = 0.5 * (manifold.gamma + species.self_broadening(
-            isotope, perturber_density, line, per_line=per_line)) + transit
+            isotope, perturber_density, line, per_line=model.per_line_self_broadening)) + transit
         if extra_hwhm:
             gamma2 += extra_hwhm
         optics.append((manifold, density, offset, sigma, gamma2, transit))

@@ -8,8 +8,8 @@ from gabes import species
 from gabes.od_model import MODELS, ODConditions, evaluate_od_display, od_unavailable
 from gabes.od_spectrum_fit import offered_fit_parameters, od_transmission
 from gabes.schemes.sas import (
-    GAUSSIAN_TRANSIT, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODEL,
-    OD_MODELS_D20, OD_MODELS_D2SB, ODModelSettingError, RATE_MODEL, RATE_MODEL_V2, SASScheme,
+    GAUSSIAN_TRANSIT, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_NTOTAL_MODEL,
+    OD_MODELS_D20, OD_MODELS_D2SB, OD_MODELS_NTOTAL, ODModelSettingError, RATE_MODEL, RATE_MODEL_V2, RATE_MODEL_V3, SASScheme,
 )
 
 
@@ -17,6 +17,7 @@ from gabes.schemes.sas import (
 @pytest.mark.parametrize(("setting", "geometry", "fixed"), [
     (OD_MODELS_D20, GAUSSIAN_TRANSIT_D20_MODEL, RATE_MODEL),
     (OD_MODELS_D2SB, GAUSSIAN_TRANSIT_MODEL, RATE_MODEL_V2),
+    (OD_MODELS_NTOTAL, GAUSSIAN_TRANSIT_NTOTAL_MODEL, RATE_MODEL_V3),
 ])
 def test_d2_spectrum_matches_its_own_fixed_width_recipe(setting, geometry, fixed, power_uw):
     scheme = SASScheme()
@@ -91,7 +92,7 @@ def test_gaussian_weak_fit_recovers_temperature_and_reports_fitted_rates():
     y = od_transmission(x, truth)
     fit = fit_od_spectrum(ODFitInput(x, y, np.full_like(x, .001), 0, len(x), "test uncertainty"),
                           p, free=("temp_c",))
-    assert fit["probe_model"] == GAUSSIAN_TRANSIT_MODEL
+    assert fit["probe_model"] == GAUSSIAN_TRANSIT_NTOTAL_MODEL
     assert fit["parameters"][0]["value"] == pytest.approx(65., abs=1e-7)
     assert fit["transit"]["rate_s_inverse"] == pytest.approx(ODConditions.from_params(truth).transit_rates_s())
     ref = SASScheme().projected_probe_reference(truth)

@@ -98,4 +98,4 @@ def test_pump_free_evaluator_uses_the_model_flag():
 
 
 def test_sets_are_listed_for_the_ui():
-    assert OD_MODEL_SETS == ("pre_d20", "d20", "d20_d2sb")
+    assert OD_MODEL_SETS == ("pre_d20", "d20", "d20_d2sb", "d20_ntotal")

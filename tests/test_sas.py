@@ -686,8 +686,8 @@ def test_default_weak_probe_uses_exact_maxwell_voigt(line, medium, monkeypatch):
         raw = SAS.compute(settings)
         for key in ("scan", "alpha_unit", "chi_real_unit"):
             np.testing.assert_array_equal(raw[key], exact[key])
-        # Default set d20_d2sb: Automatic and Exact both apply the transit Voigt.
-        assert raw["probe_model"] == "od_weak_exact_voigt_transit_v2"
+        # Default set d20_ntotal: Automatic and Exact both apply the transit Voigt.
+        assert raw["probe_model"] == "od_weak_exact_voigt_transit_v3"
         profile = raw["weak_probe_profile"]
         assert profile["requested"] == AUTO_WEAK_PROBE
         assert profile["applied"] == EXACT_WEAK_PROBE
@@ -784,7 +784,7 @@ def test_pumped_velocity_sum_tends_to_explicit_legacy_at_zero_pump():
     with core.blas_single_thread():
         pumped = SAS.compute(dict(params, pump_power_mw=1e-8,
                                   weak_probe_profile=LEGACY_WEAK_PROBE))
-    assert legacy["probe_model"] == pumped["probe_model"] == "weak_probe_legacy"
+    assert legacy["probe_model"] == pumped["probe_model"] == "weak_probe_grid_ntotal_v1"
     np.testing.assert_array_equal(pumped["scan"], legacy["scan"])
     np.testing.assert_array_equal(exact["scan"], legacy["scan"])
     for key in ("alpha_unit", "chi_real_unit"):

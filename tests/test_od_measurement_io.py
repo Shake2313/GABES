@@ -495,3 +495,29 @@ def test_gabes_roundtrip_checks_geometry_record_against_conditions():
     meta["transit"]["rate_s_inverse"]["Rb85"] *= 2.
     with pytest.raises(ExperimentalCSVError, match="Invalid GABES transit"):
         reopen()
+
+
+@pytest.mark.parametrize("recorded_id", ["od_weak_exact_voigt_transit_v2", "od_weak_exact_voigt_transit_v3",
+                                         "od_finite_rb_mf_gaussian_transit_v1", "od_finite_rb_mf_gaussian_transit_v2"])
+def test_reopened_mixed_rb_worksheet_reproduces_its_recorded_density_convention(recorded_id):
+    from dataclasses import asdict
+    from gabes.od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions, evaluate_od
+    from gabes.schemes.sas import SASScheme
+    from gabes_ui.od_measurement import workspace_params
+
+    p = dict(SASScheme().defaults(), pump_power_mw=0., species="Rb (natural)", line="D2",
+             temp_c=150., cell_mm=2., rb_composition="Custom", rb85_fraction=.5)
+    recorded = ODConditions.from_params(dict(p, od_model=recorded_id))
+    offsets = np.linspace(-4e9, 5e9, 41)
+    ghz = offsets * 1e-9
+    y = evaluate_od(recorded, offsets).transmission
+    upload = prepare_measurement_upload(paired_csv(ghz, y))
+    trace = load_measurement(upload, mode="fraction", x_unit="GHz")
+    meta = dict(META, model_id=recorded_id, conditions=asdict(recorded))
+    if recorded_id in GAUSSIAN_TRANSIT_MODELS:
+        meta["transit"] = recorded.transit_metadata()
+    data = export_comparison_csv(upload, trace, ghz, y, metadata=meta, mode="fraction", x_unit="GHz")
+    reopened = prepare_measurement_upload(data)
+    restored = ODConditions.from_params(workspace_params(p, {}, reopened))
+    assert restored.model_id == recorded_id
+    np.testing.assert_array_equal(evaluate_od(restored, offsets).transmission, y)

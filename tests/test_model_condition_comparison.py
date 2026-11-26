@@ -11,7 +11,7 @@ from gabes.core import blas_single_thread
 from gabes.model_comparison import comparison_values, sample_values, same_grid
 from gabes.schemes.sas import (
     AUTO_WEAK_PROBE, BALLISTIC_FAST, BALLISTIC_FAST_TRANSIT, EXACT_WEAK_PROBE, GENERIC,
-    LEGACY_WEAK_PROBE, PUMPED_MAXWELL, RATE_MODEL_V2, RB_COMPOSITION_CUSTOM, TWO_LEVEL_MODEL_V2,
+    LEGACY_WEAK_PROBE, PUMPED_MAXWELL, RATE_MODEL_V3, RB_COMPOSITION_CUSTOM, TWO_LEVEL_MODEL_V3,
 )
 
 
@@ -102,7 +102,7 @@ def test_explicit_exact_mixed_comparison_uses_same_legacy_grid_for_both_curves()
     for actual_curve, expected_curve in zip(actual["series"], expected["series"], strict=True):
         np.testing.assert_array_equal(actual_curve["transmission"], expected_curve["transmission"])
         np.testing.assert_array_equal(actual_curve["delta"], expected_curve["delta"])
-        assert actual_curve["probe_model"] == "weak_probe_legacy"
+        assert actual_curve["probe_model"] == "weak_probe_grid_ntotal_v1"
         assert actual_curve["weak_probe_profile"]["requested"] == profile
         assert actual_curve["weak_probe_profile"]["applied"] == LEGACY_WEAK_PROBE
 
@@ -110,8 +110,8 @@ def test_explicit_exact_mixed_comparison_uses_same_legacy_grid_for_both_curves()
     conditions["pump_power_mw"] = 0.
     off_only, solves, current = _compare(**conditions, weak_probe_profile=profile)
     assert solves == []
-    # Default set d20_d2sb: an Exact request at zero pump is the transit Voigt (_v2).
-    assert off_only["series"][0]["probe_model"] == "od_weak_exact_voigt_transit_v2"
+    # Default set d20_ntotal: an Exact request at zero pump is the transit Voigt (_v3).
+    assert off_only["series"][0]["probe_model"] == "od_weak_exact_voigt_transit_v3"
     assert off_only["series"][0]["weak_probe_profile"]["requested"] == profile
     np.testing.assert_array_equal(off_only["series"][0]["transmission"],
                                   current["optical_readout"]["transmission"])
@@ -212,7 +212,7 @@ def test_native_depth_survives_underflow_and_carries_finite_probe_scope():
     assert finite["varied"]["values"] == [0., .83]
     assert all(c["effective"] for c in finite["series"])
     off, on = finite["series"]
-    assert (off["probe_model"], on["probe_model"]) == (RATE_MODEL_V2, TWO_LEVEL_MODEL_V2)
+    assert (off["probe_model"], on["probe_model"]) == (RATE_MODEL_V3, TWO_LEVEL_MODEL_V3)
     assert np.max(np.abs(np.subtract(off["od0"], off["optical_depth"]))) > 1e-6
     assert np.max(np.abs(np.subtract(on["od0"], off["od0"]))) > 1e-6
     np.testing.assert_array_equal(on["od0"], current["optical_readout"]["od0"])

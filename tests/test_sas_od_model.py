@@ -7,8 +7,8 @@ import pytest
 from gabes import observables, species
 from gabes.od_model import TWO_PI, ODConditions, evaluate_od_display
 from gabes.schemes.sas import (
-    OD_MODEL_KEY, OD_MODELS_D2SB, OD_MODELS_D20, OD_MODELS_PRE_D20, ODModelSettingError, PUMPED_MODEL,
-    PUMPED_TRANSIT_MODEL, RATE_MODEL, RATE_MODEL_V2, TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V2, SASScheme,
+    OD_MODEL_KEY, OD_MODELS_NTOTAL, OD_MODELS_D2SB, OD_MODELS_D20, OD_MODELS_PRE_D20, ODModelSettingError, PUMPED_MODEL,
+    PUMPED_TRANSIT_MODEL, RATE_MODEL, RATE_MODEL_V3, TRANSIT_WEAK_MODEL, TRANSIT_WEAK_MODEL_V3, SASScheme,
     _collected_response,
 )
 
@@ -25,10 +25,10 @@ def plotted(raw, p):
     return observables.transmission(alpha, length)
 
 
-def test_d20_d2sb_is_the_default_and_old_settings_replay():
+def test_ntotal_is_the_default_and_old_settings_replay():
     scheme = SASScheme()
-    # User decision 2026-11-24: d20_d2sb replaced d20 as the default; d20 replays.
-    assert scheme.defaults()[OD_MODEL_KEY] == OD_MODELS_D2SB
+    # User decision 2026-11-26: older choices retain their isotope-partial widths.
+    assert scheme.defaults()[OD_MODEL_KEY] == OD_MODELS_NTOTAL
     assert scheme.migrate_default_params({})[OD_MODEL_KEY] == OD_MODELS_PRE_D20
     assert scheme.migrate_default_params({OD_MODEL_KEY: OD_MODELS_D20})[OD_MODEL_KEY] == OD_MODELS_D20
     bare = {k: v for k, v in params().items() if k != OD_MODEL_KEY}
@@ -39,7 +39,7 @@ def test_d20_d2sb_is_the_default_and_old_settings_replay():
         np.testing.assert_array_equal(scheme.compute(p)["alpha_unit"], scheme.compute(absent)["alpha_unit"])
         # None is an unset session value: the current default, like a fresh session.
         assert (scheme.compute(dict(p, **{OD_MODEL_KEY: None}))["probe_model"]
-                == scheme.compute(dict(p, **{OD_MODEL_KEY: OD_MODELS_D2SB}))["probe_model"])
+                == scheme.compute(dict(p, **{OD_MODEL_KEY: OD_MODELS_NTOTAL}))["probe_model"])
 
 
 def test_d20_weak_probe_is_the_transit_voigt_on_both_views():
@@ -120,14 +120,14 @@ def test_scheme_and_evaluator_resolve_the_same_model_from_one_dictionary(probe_u
     """Missing key: pre_d20 in both. None: the current default. An ID: that model."""
     base = {k: v for k, v in params(probe_power_uw=probe_uw).items() if k != OD_MODEL_KEY}
     explicit = TRANSIT_WEAK_MODEL if probe_uw == 0.0 else RATE_MODEL
-    for setting in ("missing", None, OD_MODELS_D2SB, OD_MODELS_D20, OD_MODELS_PRE_D20, explicit):
+    for setting in ("missing", None, OD_MODELS_NTOTAL, OD_MODELS_D2SB, OD_MODELS_D20, OD_MODELS_PRE_D20, explicit):
         p = dict(base) if setting == "missing" else dict(base, **{OD_MODEL_KEY: setting})
         scheme_model = SASScheme().compute(p)["probe_model"]
         assert ODConditions.from_params(p).model_id == scheme_model, setting
     assert SASScheme().compute(base)["probe_model"] == (
         "weak_probe_exact_maxwell_voigt" if probe_uw == 0.0 else "finite_power_2level_gaussian_propagation")
     assert ODConditions.from_params(dict(base, **{OD_MODEL_KEY: None})).model_id == (
-        TRANSIT_WEAK_MODEL_V2 if probe_uw == 0.0 else RATE_MODEL_V2)
+        TRANSIT_WEAK_MODEL_V3 if probe_uw == 0.0 else RATE_MODEL_V3)
 
 
 def test_a_valid_model_outside_its_scope_is_a_displayed_input_error():

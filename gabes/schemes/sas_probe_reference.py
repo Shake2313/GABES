@@ -83,9 +83,10 @@ def compute(params, isotope_densities, reference, temperature_k, probe_mw):
 
 def _compute(params, isotope_densities, reference, temperature_k, probe_mw, deadline):
     line = params["line"]
-    from .sas import GAUSSIAN_TRANSIT_MODELS, _od_model_setting, per_line_self_broadening
+    from .sas import GAUSSIAN_TRANSIT_MODELS, OD_MODELS_NTOTAL, _od_model_setting, per_line_self_broadening
     per_line = per_line_self_broadening(params)
-    if _od_model_setting(params)[1] in GAUSSIAN_TRANSIT_MODELS:
+    model_set, explicit = _od_model_setting(params)
+    if explicit in GAUSSIAN_TRANSIT_MODELS:
         from ..od_model import ODConditions
         geometry_rates = ODConditions.from_params(params).transit_rates_s()
     else:
@@ -145,7 +146,8 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
                      "The calculation assumes a constant beam waist and full collection.")
     result = dict(
         x_ghz=scan / (2 * np.pi * 1e9), linear_transmission=linear_transmission,
-        provenance=dict(model="hyperfine_projected_probe_obe", validation="numerical readiness",
+        provenance=dict(model=("hyperfine_projected_probe_obe_ntotal_v1" if model_set == OD_MODELS_NTOTAL
+                               else "hyperfine_projected_probe_obe"), validation="numerical readiness",
                         polarization="linear", frequency_reference=reference.name,
                         isotope_fractions=fractions, homogeneous_fwhm_mhz=widths,
                         **transit_provenance, peak_probe_intensity_w_m2=float(intensity),
