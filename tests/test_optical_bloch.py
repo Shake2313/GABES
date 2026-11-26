@@ -53,3 +53,35 @@ def test_explicit_laser_frequency_sets_doppler_shift_and_propagation_wave_number
 def test_explicit_laser_frequency_must_be_finite_positive(frequency):
     with pytest.raises(ValueError, match="laser_frequency_hz"):
         solve_optical_pump("Rb85", "D2", 0., laser_frequency_hz=frequency)
+
+
+@pytest.mark.parametrize(("isotope", "line"), [
+    ("Rb87", "D1"), ("Rb85", "D1"), ("Rb87", "D2"), ("Rb85", "D2"),
+])
+@pytest.mark.parametrize("jones_xy", [
+    (1., 0.),
+    (0., 1.),
+    (np.cos(0.37), np.sin(0.37)),
+    tuple(np.exp(0.6j) * np.array([np.cos(-0.83), np.sin(-0.83)])),
+])
+def test_linear_pi_mirror_matches_dense_reference_and_compact_contract(isotope, line, jones_xy):
+    inputs = dict(intensity_mw_cm2=85., velocity_m_s=73., temp_c=85.,
+                  ground_relaxation_hz=3e5, density_m3=1e15, jones_xy=jones_xy)
+    auto_state = solve_optical_pump(isotope, line, 450., **inputs, solver="auto", include_atomic_state=True)
+    auto_compact = solve_optical_pump(isotope, line, 450., **inputs, solver="auto", include_atomic_state=False)
+    ref_state = solve_optical_pump(isotope, line, 450., **inputs, solver="full", include_atomic_state=True)
+
+    # Full z-basis state and populations must match dense reference to <= 1e-12
+    np.testing.assert_allclose(auto_state["rho"], ref_state["rho"], rtol=1e-12, atol=1e-13)
+    np.testing.assert_allclose(auto_state["ground_populations"], ref_state["ground_populations"], rtol=1e-12, atol=1e-13)
+    np.testing.assert_allclose(auto_state["excited_populations"], ref_state["excited_populations"], rtol=1e-12, atol=1e-13)
+    np.testing.assert_allclose(auto_state["chi_probe"], ref_state["chi_probe"], rtol=1e-12, atol=1e-18)
+    np.testing.assert_allclose(auto_state["polarization_xy_c_m2"], ref_state["polarization_xy_c_m2"], rtol=1e-12, atol=1e-26)
+    assert auto_state["excited_fraction"] == pytest.approx(ref_state["excited_fraction"], rel=1e-12, abs=1e-14)
+
+    # Compact and full payloads must match identically
+    for key in ("chi_probe", "alpha_per_m", "excited_fraction"):
+        assert auto_compact[key] == auto_state[key]
+    for key in ("polarization_xy_c_m2", "ground_populations", "excited_populations"):
+        np.testing.assert_array_equal(auto_compact[key], auto_state[key])
+    assert auto_compact["diagnostics"] == auto_state["diagnostics"]

@@ -12,14 +12,128 @@ from time import perf_counter
 import numpy as np
 from scipy.interpolate import PchipInterpolator
 
-from . import constants, core, magneto_multilevel, species
+from . import constants, core, magneto_multilevel, pole_doppler, species
 from ._arrays import readonly_float_array
 from .psr_full_obe import solve_psr_pump
-from .optical_bloch import solve_optical_pump
+from .optical_bloch import (
+    _assemble_pi_mirror_generator,
+    _linear_coherence_per_half_rabi,
+    _pi_mirror_model,
+    _reduced_state_diagnostics,
+    solve_optical_pump,
+)
 from .optical_frequency import RbComposition, RbOpticalFrequency
 
 
 MODEL_ID = "rb87_d1_maxwell_full_obe_mean_v1"
+_POLE_GUARD_RTOL = 1e-9
+
+
+def _zero_drive_maxwell_mean(atom, detuning, shifts, weights, density, reset):
+    """Exact analytic zero-drive susceptibility averaged on the supplied velocity nodes."""
+    n_ground = len(atom.ground)
+    centroid = magneto_multilevel.component_centroid_mhz(atom)
+    laser_mhz = centroid + detuning - shifts
+    # Sum_{g,e} |d_0[g,e]|^2 / (-(laser + E_g - E_e)*MHZ - i*(Gamma/2 + reset)) / n_ground
+    hwhm = atom.gamma / 2.0 + reset
+    d0_sq = np.abs(atom.dipoles[0]) ** 2
+    chi_sum = 0j
+    for ground_slice, energy in zip(atom.ground_slices, atom.ground_energy_mhz):
+        line_weights = np.sum(d0_sq[ground_slice, :], axis=0)
+        det = (laser_mhz[:, None] + energy - atom.excited_energy_mhz[None, :]) * species.MHZ
+        denom = -det - 1j * hwhm
+        chi_sum += np.sum(weights[:, None] * (line_weights[None, :] / (n_ground * denom)))
+    prefactor = density * atom.dipole_sq / (constants.EPS_0 * constants.HBAR)
+    return complex(prefactor * chi_sum)
+
+
+def _pi_mirror_pole_maxwell_mean(isotope, line, atom, detuning, rabi, density,
+                                 reset, shifts, weights):
+    """Exact discrete-measure Maxwell average via M-even pi-frame pole_doppler.
+
+    Reproduces the fixed quadrature nodes/weights (pole_doppler.discrete_mean)
+    with a direct-solve guard at representative nodes. Falls back to batched
+    reduced real solves across all velocity nodes if the pole decomposition
+    fails or misses the guard.
+    """
+    model = _pi_mirror_model(isotope, line)
+    centroid = magneto_multilevel.component_centroid_mhz(atom)
+    laser_mhz = centroid + detuning
+    a00 = _assemble_pi_mirror_generator(model, laser_mhz, rabi, reset)
+    if not np.isfinite(a00).all():
+        raise ValueError("settings exceed the finite full-OBE generator range")
+    dim = a00.shape[0]
+    scale = max(float(np.max(np.abs(a00))), 1.0)
+    a00_tr = a00.copy()
+    a00_tr[0, :] = model.trace_vec * scale
+    s_red = model.s_doppler.copy()
+    s_red[0, :] = 0.0
+    rhs_tr = np.zeros(dim, dtype=float)
+    rhs_tr[0] = scale
+
+    prefactor = density * atom.dipole_sq / (constants.EPS_0 * constants.HBAR)
+    w_chi = (prefactor / (0.5 * rabi)) * model.w_chi_unit
+    readouts = np.vstack([w_chi, model.w_exc.astype(complex)])
+    shift_rads = np.ascontiguousarray(shifts * species.MHZ, dtype=float)
+    weight_arr = np.ascontiguousarray(weights, dtype=float)
+
+    def _direct_check_nodes(indices):
+        health = dict(trace_error=0., hermiticity_error=0., min_eigenvalue=1.,
+                      steady_state_relative_residual=0.)
+        d_vals = shift_rads[indices]
+        mats = a00_tr[None, :, :] - d_vals[:, None, None] * s_red[None, :, :]
+        rhs_b = np.broadcast_to(rhs_tr, (len(indices), dim))[..., None]
+        xs = np.linalg.solve(mats, rhs_b)[..., 0]
+        direct_out = xs @ readouts.T
+        for k, d_val in enumerate(d_vals):
+            l_node = a00 - d_val * model.s_doppler
+            rho_vec = np.zeros(model.n_levels * model.n_levels, dtype=complex)
+            rho_vec[model.dm0] = model.u_even @ xs[k]
+            diag = _reduced_state_diagnostics(l_node, xs[k], rho_vec.reshape(model.n_levels, model.n_levels), reset)
+            for key in health:
+                reducer = min if key == "min_eigenvalue" else max
+                health[key] = reducer(health[key], diag[key])
+        return direct_out, health
+
+    # Runtime pole-quality guard on up to 3 representative nodes (edges + nearest to rest).
+    # Because discrete_mean evaluates scalar readouts directly from (lam, res, c0) without
+    # forming x(D_j) on all velocity nodes, solving every node for a full residual would forfeit
+    # the pole speedup. Checking 3 nodes directly catches ill-conditioned/defective eigenbases V
+    # (which corrupt the rational function globally) at ~0.1 ms cost; 1e-9 matches the physicality
+    # residual gate and is 1000x tighter than the repo's standard 1e-6 pole guard.
+    n_shifts = len(shift_rads)
+    mid_idx = int(np.argmin(np.abs(shift_rads)))
+    guard_idx = sorted(set((0, mid_idx, n_shifts - 1)))
+
+    try:
+        system = pole_doppler.AffineShiftSystem(
+            a00_tr, np.zeros_like(a00_tr), s_red, rhs_tr, readouts)
+        residues = system.residues(np.array([0.0]))
+        if (np.isfinite(residues.lam).all()
+                and np.isfinite(residues.res).all()
+                and np.isfinite(residues.c0).all()
+                and residues.min_abs_imag > 0.0):
+            direct_guard, health = _direct_check_nodes(guard_idx)
+            guard_ok = True
+            for k, idx in enumerate(guard_idx):
+                pole_val = residues.value_at(float(shift_rads[idx]))[0]
+                chi_scale = max(abs(direct_guard[k, 0]), 1e-30)
+                exc_scale = max(abs(direct_guard[k, 1]), 1e-12)
+                if (abs(pole_val[0] - direct_guard[k, 0]) > _POLE_GUARD_RTOL * chi_scale
+                        or abs(pole_val[1] - direct_guard[k, 1]) > _POLE_GUARD_RTOL * exc_scale):
+                    guard_ok = False
+                    break
+            if guard_ok:
+                means = residues.discrete_mean(shift_rads, weight_arr)[0]
+                if np.all(np.isfinite(means)):
+                    return complex(means[0]), float(means[1].real), health
+    except (ValueError, np.linalg.LinAlgError):
+        pass
+
+    # Fallback: exact batched reduced real solve over every velocity node
+    direct_all, health = _direct_check_nodes(list(range(n_shifts)))
+    means = weight_arr @ direct_all
+    return complex(means[0]), float(means[1].real), health
 
 
 def _maxwell_mean(isotope, line, detuning_mhz, intensity_w_m2, *, temp_c=70.,
@@ -62,29 +176,65 @@ def _maxwell_mean(isotope, line, detuning_mhz, intensity_w_m2, *, temp_c=70.,
     shifts, weights, sigma = magneto_multilevel.velocity_quadrature(
         quadrature_atom, centroid + detuning, temperature + 273.15,
         order=int(velocity_order), cutoff_sigma=cutoff)
-    inputs = dict(intensity_mw_cm2=intensity / 10., temp_c=temperature,
-                  ground_relaxation_hz=reset, density_m3=density_m3, jones_xy=(1., 0.))
-    mean = None
-    health = dict(trace_error=0., hermiticity_error=0., min_eigenvalue=1.,
-                  steady_state_relative_residual=0.)
-    with core.blas_single_thread():
-        for shift, weight in zip(shifts, weights, strict=True):
-            velocity = float(shift * 1e6 * constants.C_LIGHT / frequency_hz)
-            state = (solve_psr_pump(detuning, velocity_m_s=velocity, **inputs) if legacy else
-                     solve_optical_pump(isotope, line, detuning, velocity_m_s=velocity,
-                                        include_atomic_state=False, laser_frequency_hz=laser_frequency_hz, **inputs))
-            if mean is None:
-                mean = {key: np.zeros_like(state[key]) for key in
-                        ("chi_probe", "alpha_per_m", "excited_fraction", "polarization_xy_c_m2")}
-                conditions = deepcopy(state["conditions"])
-            for key in mean:
-                mean[key] += weight * state[key]
-            for key in health:
-                reducer = min if key == "min_eigenvalue" else max
-                health[key] = reducer(health[key], state["diagnostics"][key])
-
-    for key in ("velocity_m_s", "effective_detuning_mhz"):
-        conditions.pop(key, None)
+    if legacy:
+        inputs = dict(intensity_mw_cm2=intensity / 10., temp_c=temperature,
+                      ground_relaxation_hz=reset, density_m3=density_m3, jones_xy=(1., 0.))
+        mean = None
+        health = dict(trace_error=0., hermiticity_error=0., min_eigenvalue=1.,
+                      steady_state_relative_residual=0.)
+        with core.blas_single_thread():
+            for shift, weight in zip(shifts, weights, strict=True):
+                velocity = float(shift * 1e6 * constants.C_LIGHT / frequency_hz)
+                state = solve_psr_pump(detuning, velocity_m_s=velocity, **inputs)
+                if mean is None:
+                    mean = {key: np.zeros_like(state[key]) for key in
+                            ("chi_probe", "alpha_per_m", "excited_fraction", "polarization_xy_c_m2")}
+                    conditions = deepcopy(state["conditions"])
+                for key in mean:
+                    mean[key] += weight * state[key]
+                for key in health:
+                    reducer = min if key == "min_eigenvalue" else max
+                    health[key] = reducer(health[key], state["diagnostics"][key])
+        for key in ("velocity_m_s", "effective_detuning_mhz"):
+            conditions.pop(key, None)
+    else:
+        density = (species.number_density(species.ISOTOPES[isotope], temperature + 273.15)
+                   if density_m3 is None else float(density_m3))
+        if not np.isfinite(frequency_hz) or frequency_hz <= 0:
+            raise ValueError("laser_frequency_hz must be finite and positive")
+        intensity_mw_cm2 = intensity / 10.
+        peak_field = float(np.sqrt(2 * intensity_mw_cm2 * 10 / (constants.EPS_0 * constants.C_LIGHT)))
+        rabi = float(np.sqrt(atom.dipole_sq) * peak_field / constants.HBAR)
+        wave_number = 2 * np.pi * frequency_hz / constants.C_LIGHT
+        with core.blas_single_thread():
+            if intensity == 0.:
+                chi_val = _zero_drive_maxwell_mean(atom, detuning, shifts, weights, density, reset)
+                exc_val = 0.0
+                health = dict(trace_error=0., hermiticity_error=0., min_eigenvalue=0.,
+                              steady_state_relative_residual=0.)
+            else:
+                chi_val, exc_val, health = _pi_mirror_pole_maxwell_mean(
+                    isotope, line, atom, detuning, rabi, density, reset, shifts, weights)
+        mean = {
+            "chi_probe": complex(chi_val),
+            "alpha_per_m": float(wave_number * chi_val.imag),
+            "excited_fraction": float(exc_val),
+            "polarization_xy_c_m2": np.array([constants.EPS_0 * peak_field * chi_val, 0j], dtype=complex),
+        }
+        conditions = {
+            "isotope": isotope, "line": line, "b_ut": 0.,
+            "detuning_mhz": detuning,
+            "reference_centroid_mhz": centroid,
+            "optical_frequency_hz": float(frequency_hz),
+            "intensity_mw_cm2": intensity_mw_cm2,
+            "jones_xy": np.array([1., 0.], dtype=complex),
+            "peak_field_v_m": peak_field, "rabi_rad_s": rabi,
+            "temp_c": temperature, "ground_relaxation_hz": reset, "density_m3": float(density),
+            "density_source": "pure-isotope vapor-pressure density" if density_m3 is None else "specified isotope density",
+            "ground_f_coherences": "retained",
+            "emission_secularization": "final Fg and q resolved, excited F coherent",
+            "susceptibility_basis": "finite-drive induced polarization" if intensity > 0 else "zero-drive linear-probe limit",
+        }
     conditions.update(
         intensity_w_m2=intensity, polarization="x-linear", doppler=True,
         velocity_distribution="independent one-dimensional Maxwell classes",

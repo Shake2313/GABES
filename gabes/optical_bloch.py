@@ -6,18 +6,254 @@ but coherently sums excited-F and magnetic-sublevel paths, as in the weak PSR
 pumping model. Thermal replacement acts on the entire density operator. The
 state, Hamiltonian and named jumps are available for subsequent linearization.
 """
+from dataclasses import dataclass
 from functools import lru_cache
+import math
 
 import numpy as np
 from scipy import sparse
+from scipy.linalg import expm
 from scipy.sparse.linalg import splu
 
-from . import constants, core, magneto_multilevel, species
+from . import constants, core, magneto_multilevel, species, zeeman
 from .psr_conventions import atom_frame_detuning_mhz, circular_to_jones, jones_to_circular, stokes_rates
 from .quantum.reservoirs import CollapseChannel, ExplicitReservoirs, thermal_reset_channels
 
 
 MODEL_ID = "rb_dline_single_velocity_full_obe_v1"
+_LINEAR_ELLIPTICITY_ATOL = 1e-13
+
+
+@dataclass(frozen=True)
+class _PiMirrorModel:
+    """Exact real Hermitian M-even pi-frame representation at zero magnetic field."""
+
+    n_levels: int
+    n_ground: int
+    dm0: np.ndarray
+    u_even: np.ndarray
+    rx_half_pi: np.ndarray
+    m_levels: np.ndarray
+    l_emiss: np.ndarray
+    l_reset_unit: np.ndarray
+    l_base: np.ndarray
+    l_det: np.ndarray
+    l_pi_unit: np.ndarray
+    s_doppler: np.ndarray
+    trace_vec: np.ndarray
+    w_chi_unit: np.ndarray
+    w_exc: np.ndarray
+
+
+def _is_linear_jones(jones):
+    """True when unit Jones vector (Ex, Ey) has zero circular Stokes component S3."""
+    s3 = 2.0 * (jones[0].conjugate() * jones[1]).imag
+    return abs(s3) <= _LINEAR_ELLIPTICITY_ATOL
+
+
+def _build_rx_half_pi(atom):
+    """Block-diagonal SO(3) rotation exp(-i * (pi/2) * F_x) on each hyperfine F manifold."""
+    ng, ne = len(atom.ground), len(atom.excited)
+    n = ng + ne
+    rot = np.zeros((n, n), dtype=complex)
+    for sl in atom.ground_slices:
+        f = atom.ground[sl.start][0]
+        fx, _, _ = zeeman.angular_momentum_matrices(f)
+        rot[sl, sl] = expm(-0.5j * math.pi * fx)
+    idx = ng
+    while idx < n:
+        f = atom.excited[idx - ng][0]
+        dim = 2 * f + 1
+        fx, _, _ = zeeman.angular_momentum_matrices(f)
+        rot[idx:idx + dim, idx:idx + dim] = expm(-0.5j * math.pi * fx)
+        idx += dim
+    rot.flags.writeable = False
+    return rot
+
+
+def _pi_to_z_unitary(model, circular):
+    """Exact unitary U mapping pi-quantized H_pi onto z-quantized linear H_z(circular)."""
+    cp, cm = circular[1], circular[-1]
+    ratio = cp / cm
+    delta = 0.5 * math.atan2(ratio.imag, ratio.real)
+    z0 = cp * np.exp(-1j * delta)
+    gphase = math.atan2(z0.imag, z0.real)
+    diag = np.exp(1j * delta * model.m_levels)
+    diag[model.n_ground:] *= 1j * np.exp(1j * gphase)
+    return diag[:, None] * model.rx_half_pi
+
+
+def _build_pi_mirror_basis(atom):
+    """Orthonormal real Hermitian M-even basis for the Delta_m = 0 sector."""
+    ng, ne = len(atom.ground), len(atom.excited)
+    n = ng + ne
+    levels = list(atom.ground) + list(atom.excited)
+    ms = np.array([m for _, m in levels], dtype=int)
+    fs = np.array([f for f, _ in levels], dtype=int)
+    is_exc = np.arange(n) >= ng
+    index_of = {(bool(is_exc[i]), int(fs[i]), int(ms[i])): i for i in range(n)}
+    dm0 = np.flatnonzero((ms[:, None] - ms[None, :]).ravel() == 0)
+    cols = []
+    inv_sqrt2 = 1.0 / math.sqrt(2.0)
+
+    # Diagonal populations |i><i| paired under m <-> -m
+    for i in range(n):
+        if ms[i] < 0:
+            continue
+        v = np.zeros((n, n), dtype=complex)
+        if ms[i] == 0:
+            v[i, i] = 1.0
+        else:
+            jm = index_of[(bool(is_exc[i]), int(fs[i]), int(-ms[i]))]
+            v[i, i] = inv_sqrt2
+            v[jm, jm] = inv_sqrt2
+        cols.append(v.ravel()[dm0])
+
+    # Off-diagonal Delta_m = 0 coherences paired under mirror reflection M
+    for i in range(n):
+        for j in range(i + 1, n):
+            if ms[i] != ms[j] or ms[i] < 0:
+                continue
+            pi = -1 if (int(fs[i]) + int(is_exc[i])) % 2 else 1
+            pj = -1 if (int(fs[j]) + int(is_exc[j])) % 2 else 1
+            sgn = pi * pj
+            if ms[i] == 0:
+                if sgn != 1:
+                    continue
+                v_re = np.zeros((n, n), dtype=complex)
+                v_re[i, j] = inv_sqrt2
+                v_re[j, i] = inv_sqrt2
+                v_im = np.zeros((n, n), dtype=complex)
+                v_im[i, j] = 1j * inv_sqrt2
+                v_im[j, i] = -1j * inv_sqrt2
+                cols.append(v_re.ravel()[dm0])
+                cols.append(v_im.ravel()[dm0])
+            else:
+                im = index_of[(bool(is_exc[i]), int(fs[i]), int(-ms[i]))]
+                jm = index_of[(bool(is_exc[j]), int(fs[j]), int(-ms[j]))]
+                v_re = np.zeros((n, n), dtype=complex)
+                v_re[i, j] = 0.5
+                v_re[j, i] = 0.5
+                v_re[im, jm] = 0.5 * sgn
+                v_re[jm, im] = 0.5 * sgn
+                v_im = np.zeros((n, n), dtype=complex)
+                v_im[i, j] = 0.5j
+                v_im[j, i] = -0.5j
+                v_im[im, jm] = 0.5j * sgn
+                v_im[jm, im] = -0.5j * sgn
+                cols.append(v_re.ravel()[dm0])
+                cols.append(v_im.ravel()[dm0])
+
+    u_even = np.ascontiguousarray(np.column_stack(cols), dtype=complex)
+    return dm0, u_even, ms
+
+
+@lru_cache(maxsize=4)
+def _pi_mirror_model(isotope, line):
+    """Precompute static reduced M-even pi-frame operators once per (isotope, line)."""
+    atom = magneto_multilevel.build_multilevel_atom(isotope, line)
+    ng, ne = len(atom.ground), len(atom.excited)
+    n = ng + ne
+    dm0, u_even, ms = _build_pi_mirror_basis(atom)
+    uh = u_even.conj().T
+
+    def project_real(full_super):
+        block = full_super[np.ix_(dm0, dm0)]
+        proj = uh @ block @ u_even
+        arr = np.ascontiguousarray(proj.real, dtype=float)
+        arr.flags.writeable = False
+        return arr
+
+    # Spontaneous emission and unit thermal reset superoperators
+    channels = []
+    for ground_slice in atom.ground_slices:
+        ground_f = atom.ground[ground_slice.start][0]
+        for q in (-1, 0, 1):
+            jump = np.zeros((n, n), complex)
+            jump[ground_slice, ng:] = np.sqrt(atom.gamma) * atom.dipoles[q][ground_slice]
+            channels.append(CollapseChannel(
+                f"emission:F={ground_f}:q={q}", jump, "spontaneous_emission",
+                f"{isotope} {line} signed dipoles and natural width from species.level_structure",
+            ))
+    thermal_populations = np.zeros(n)
+    thermal_populations[:ng] = 1.0 / ng
+    l_emiss = project_real(ExplicitReservoirs(n, tuple(channels)).dissipator())
+    l_reset_unit = project_real(core.thermal_reset_superoperator(1.0, thermal_populations))
+
+    zero = np.zeros((ne, ng), complex)
+    base_h = _hamiltonian(atom, 0., 0., zero)
+    det_h = np.diag(np.r_[np.zeros(ng), np.full(ne, -species.MHZ)])
+    pi_h = _hamiltonian(atom, 0., 1., atom.dipoles[0].T) - base_h
+    doppler_h = np.diag(np.r_[np.zeros(ng), np.ones(ne)])
+
+    l_base = project_real(core.comm_super(base_h))
+    l_det = project_real(core.comm_super(det_h))
+    l_pi_unit = project_real(core.comm_super(pi_h))
+    # H(D) = H(0) + D * P_e => comm_super(D * P_e) = -D * S_doppler
+    s_doppler = project_real(-core.comm_super(doppler_h))
+
+    trace_vec = np.ascontiguousarray((np.eye(n).ravel()[dm0] @ u_even).real, dtype=float)
+    w_full = np.zeros((n, n), dtype=complex)
+    w_full[:ng, ng:] = atom.dipoles[0]
+    w_chi_unit = np.ascontiguousarray(w_full.T.ravel()[dm0] @ u_even, dtype=complex)
+    w_exc = np.ascontiguousarray((np.diag(np.r_[np.zeros(ng), np.ones(ne)]).ravel()[dm0] @ u_even).real, dtype=float)
+    rx_half_pi = _build_rx_half_pi(atom)
+    for arr in (dm0, u_even, ms, trace_vec, w_chi_unit, w_exc):
+        arr.flags.writeable = False
+    return _PiMirrorModel(
+        n_levels=n, n_ground=ng, dm0=dm0, u_even=u_even,
+        rx_half_pi=rx_half_pi, m_levels=ms,
+        l_emiss=l_emiss, l_reset_unit=l_reset_unit,
+        l_base=l_base, l_det=l_det, l_pi_unit=l_pi_unit,
+        s_doppler=s_doppler, trace_vec=trace_vec,
+        w_chi_unit=w_chi_unit, w_exc=w_exc,
+    )
+
+
+def _assemble_pi_mirror_generator(model, laser_mhz, rabi, reset):
+    """Assemble the real M-even pi-frame Liouvillian at (laser_mhz, rabi, reset)."""
+    return (model.l_emiss + reset * model.l_reset_unit
+            + model.l_base + laser_mhz * model.l_det + rabi * model.l_pi_unit)
+
+
+def _solve_pi_mirror_state(model, l_even, reset):
+    """Solve the reduced real M-even system and return (rho_pi, x_even, diagnostics)."""
+    if not np.isfinite(l_even).all():
+        raise ValueError("settings exceed the finite full-OBE generator range")
+    dim = l_even.shape[0]
+    scale = max(float(np.max(np.abs(l_even))), 1.0)
+    matrix = l_even.copy()
+    matrix[0, :] = model.trace_vec * scale
+    rhs = np.zeros(dim, dtype=float)
+    rhs[0] = scale
+    x_even = np.linalg.solve(matrix, rhs)
+    rho_vec = np.zeros(model.n_levels * model.n_levels, dtype=complex)
+    rho_vec[model.dm0] = model.u_even @ x_even
+    rho_pi = rho_vec.reshape(model.n_levels, model.n_levels)
+    diagnostics = _reduced_state_diagnostics(l_even, x_even, rho_pi, reset)
+    return rho_pi, x_even, diagnostics
+
+
+def _reduced_state_diagnostics(l_even, x_even, rho_pi, reset_rate):
+    """Exact unitary-invariant steady-state physicality diagnostics in the M-even basis."""
+    residual = float(np.linalg.norm(l_even @ x_even))
+    scale = max(float(np.linalg.norm(np.abs(l_even) @ np.abs(x_even))),
+                reset_rate * float(np.linalg.norm(x_even)))
+    diagnostics = {
+        "trace_error": float(abs(np.trace(rho_pi) - 1)),
+        "hermiticity_error": float(np.linalg.norm(rho_pi - rho_pi.conj().T)),
+        "min_eigenvalue": float(np.linalg.eigvalsh((rho_pi + rho_pi.conj().T) / 2)[0]),
+        "steady_state_residual_s_inverse": residual,
+        "steady_state_relative_residual": residual / scale,
+    }
+    if (not all(np.isfinite(list(diagnostics.values())))
+            or diagnostics["trace_error"] > 1e-9
+            or diagnostics["hermiticity_error"] > 1e-9
+            or diagnostics["min_eigenvalue"] < -1e-9
+            or diagnostics["steady_state_relative_residual"] > 1e-9):
+        raise np.linalg.LinAlgError(f"Optical full-OBE steady-state check failed: {diagnostics}")
+    diagnostics["solver_status"] = "physical steady state"
+    return diagnostics
 
 
 @lru_cache(maxsize=8)
@@ -209,15 +445,35 @@ def solve_optical_pump(isotope, line, detuning_mhz, *, intensity_mw_cm2=0.1, jon
     excitation = sum(circular[q] * atom.dipoles[q].T for q in (-1, 1))
     hamiltonian = _hamiltonian(atom, laser_mhz, rabi, excitation)
     legacy = solver == "full" and isotope == "Rb87" and line == "D1"
-    reservoirs, dissipator = _prepared_reservoirs(isotope, line, reset, legacy)
+    use_pi_mirror = (solver == "auto" and intensity > 0. and _is_linear_jones(jones))
     with core.blas_single_thread():
         if solver == "full":
+            reservoirs, dissipator = _prepared_reservoirs(isotope, line, reset, legacy)
             dense_dissipator = dissipator.toarray() if sparse.issparse(dissipator) else dissipator
             generator = core.comm_super(hamiltonian) + dense_dissipator
             if not np.isfinite(generator).all():
                 raise ValueError("settings exceed the finite full-OBE generator range")
             rho = core.steady_state_from_liouvillian(generator, reservoirs.n_levels)
+            diagnostics = _state_diagnostics(generator, rho, reset)
+        elif use_pi_mirror:
+            model = _pi_mirror_model(isotope, line)
+            l_even = _assemble_pi_mirror_generator(model, laser_mhz, rabi, reset)
+            try:
+                rho_pi, _, diagnostics = _solve_pi_mirror_state(model, l_even, reset)
+                u_rot = _pi_to_z_unitary(model, circular)
+                rho = u_rot @ rho_pi @ u_rot.conj().T
+                if include_atomic_state:
+                    reservoirs, dissipator = _prepared_reservoirs(isotope, line, reset, False)
+                    generator = _sparse_generator(atom, laser_mhz, rabi, circular, dissipator)
+            except np.linalg.LinAlgError:
+                reservoirs, dissipator = _prepared_reservoirs(isotope, line, reset, False)
+                generator = _sparse_generator(atom, laser_mhz, rabi, circular, dissipator)
+                if not np.isfinite(generator.data).all():
+                    raise ValueError("settings exceed the finite full-OBE generator range")
+                rho = _sparse_stationary_state(generator, reservoirs.n_levels)
+                diagnostics = _state_diagnostics(generator, rho, reset)
         else:
+            reservoirs, dissipator = _prepared_reservoirs(isotope, line, reset, False)
             generator = _sparse_generator(atom, laser_mhz, rabi, circular, dissipator)
             if not np.isfinite(generator.data).all():
                 raise ValueError("settings exceed the finite full-OBE generator range")
@@ -226,7 +482,7 @@ def solve_optical_pump(isotope, line, detuning_mhz, *, intensity_mw_cm2=0.1, jon
                                    np.zeros(len(atom.excited))]).astype(complex)
             else:
                 rho = _sparse_stationary_state(generator, reservoirs.n_levels)
-        diagnostics = _state_diagnostics(generator, rho, reset)
+            diagnostics = _state_diagnostics(generator, rho, reset)
 
     n_ground = len(atom.ground)
     optical_eg = rho[n_ground:, :n_ground]

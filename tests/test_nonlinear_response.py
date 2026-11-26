@@ -128,3 +128,52 @@ def test_complex_table_never_extrapolates(points):
 def test_complex_table_requires_explicit_finite_weak_node(intensities, values):
     with pytest.raises(ValueError):
         ComplexSusceptibilityTable(intensities, values)
+
+
+@pytest.mark.parametrize(("isotope", "line"), [
+    ("Rb87", "D1"), ("Rb85", "D1"), ("Rb87", "D2"), ("Rb85", "D2"),
+])
+def test_pole_maxwell_mean_matches_direct_velocity_quadrature(isotope, line):
+    from gabes import nonlinear_response as nr
+    from gabes.optical_bloch import solve_optical_pump
+
+    detuning, intensity, temp_c, reset, density = 600., 5000., 90., 3e5, 1e16
+    fast = nr._maxwell_mean(isotope, line, detuning, intensity, temp_c=temp_c,
+                            ground_relaxation_hz=reset, density_m3=density,
+                            velocity_order=3, cutoff_sigma=5., legacy=False)
+    atom = magneto_multilevel.build_multilevel_atom(isotope, line)
+    centroid = magneto_multilevel.component_centroid_mhz(atom)
+    shifts, weights, _ = magneto_multilevel.velocity_quadrature(
+        atom, centroid + detuning, temp_c + 273.15, order=3, cutoff_sigma=5.)
+    chi_ref = 0j
+    exc_ref = 0.0
+    for shift, weight in zip(shifts, weights, strict=True):
+        vel = float(shift * 1e6 * constants.C_LIGHT / atom.frequency_hz)
+        st = solve_optical_pump(isotope, line, detuning, intensity_mw_cm2=intensity / 10.,
+                                velocity_m_s=vel, temp_c=temp_c, ground_relaxation_hz=reset,
+                                density_m3=density, jones_xy=(1., 0.), solver="full",
+                                include_atomic_state=False)
+        chi_ref += weight * st["chi_probe"]
+        exc_ref += weight * st["excited_fraction"]
+    np.testing.assert_allclose(fast["chi"], chi_ref, rtol=1e-12, atol=1e-20)
+    assert fast["excited_fraction"] == pytest.approx(exc_ref, rel=1e-12, abs=1e-14)
+    assert fast["alpha_per_m"] == pytest.approx(
+        2 * np.pi * atom.frequency_hz / constants.C_LIGHT * chi_ref.imag, rel=1e-12)
+
+
+def test_pole_maxwell_mean_falls_back_cleanly_on_pole_failure(monkeypatch):
+    from gabes import nonlinear_response as nr, pole_doppler
+
+    ref = nr._maxwell_mean("Rb87", "D1", 400., 250., temp_c=70.,
+                           ground_relaxation_hz=2e5, density_m3=1e16,
+                           velocity_order=3, cutoff_sigma=5., legacy=False)
+
+    def fail_residues(self, t):
+        raise np.linalg.LinAlgError("forced pole failure")
+
+    monkeypatch.setattr(pole_doppler.AffineShiftSystem, "residues", fail_residues)
+    fallback = nr._maxwell_mean("Rb87", "D1", 400., 250., temp_c=70.,
+                                ground_relaxation_hz=2e5, density_m3=1e16,
+                                velocity_order=3, cutoff_sigma=5., legacy=False)
+    np.testing.assert_allclose(fallback["chi"], ref["chi"], rtol=1e-12, atol=1e-20)
+    assert fallback["excited_fraction"] == pytest.approx(ref["excited_fraction"], rel=1e-12, abs=1e-14)
