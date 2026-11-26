@@ -12,7 +12,7 @@ from gabes.od_spectrum_fit import od_fit_unavailable, od_transmission, offered_f
 from gabes.schemes.sas import (
     BALLISTIC_FAST, BALLISTIC_FAST_V1, BALLISTIC_FAST_TRANSIT, BALLISTIC_REFERENCE, BALLISTIC_TRANSIT,
     EXACT_MODEL, GAUSSIAN_TRANSIT, GAUSSIAN_TRANSIT_D20_MODEL, OD_MODELS_D20,
-    OD_MODELS_D2SB, OD_MODELS_PRE_D20, ODModelSettingError, SASScheme,
+    OD_MODELS_D2SB, OD_MODELS_NTOTAL, OD_MODELS_PRE_D20, RB_HISTORY_REFERENCE, ODModelSettingError, SASScheme,
 )
 
 
@@ -83,6 +83,32 @@ def test_geometry_preference_survives_driven_sas(setting, selector, sas_set, off
     assert ODConditions.from_params(p).model_id == off_id
     off = dict(p, pump_power_mw=0., probe_power_uw=0.)
     assert scheme.compute({k: off[k] for k in scheme.solve_param_keys(off)})["probe_model"] == off_id
+
+
+@pytest.mark.parametrize("overrides", [
+    {"species": species.CS133.label}, {"ne_pressure_torr": 1.}, {"paraffin_coated": True},
+    {"cell_propagation": "Segmented reference"},
+])
+def test_isotope_resolved_histories_require_uniform_uncoated_rb(overrides):
+    p = parameters(species="Rb (natural)", line="D2", od_model=RB_HISTORY_REFERENCE)
+    with pytest.raises(ODModelSettingError):
+        SASScheme().compute(dict(p, **overrides))
+
+
+def test_pumped_mixture_uses_current_sas_and_recovers_general_history_on_return():
+    scheme = SASScheme()
+    p = parameters(species="Rb (natural)", rb_composition="Custom", rb85_fraction=.38,
+                   line="D2", od_model=OD_MODELS_NTOTAL, pump_power_mw=.02, scan_points=101)
+    fixed = dict(p, od_transit_model="fixed")
+    with blas_single_thread():
+        raw = scheme.compute(p)
+        expected = scheme.compute(fixed)
+    np.testing.assert_array_equal(raw["alpha_unit"], expected["alpha_unit"])
+    assert raw["probe_model"] == expected["probe_model"]
+    assert "ballistic_depth" not in raw
+    p["pump_power_mw"] = 0.
+    assert ODConditions.from_params(p).model_id == RB_HISTORY_REFERENCE
+    assert scheme.compute(p)["probe_model"] == RB_HISTORY_REFERENCE
 
 
 def test_invalid_transit_selector_still_errors_with_pump_on():

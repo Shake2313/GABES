@@ -7168,6 +7168,31 @@
       }
     },
     {
+      "id": "od-rb-ballistic-fast-multi-geometry-table",
+      "area": "OD/SAS finite-probe reference",
+      "title": "펌프를 끈 Rb D₁·D₂의 빔 반경·광학폭에 따른 Fast 표 검증",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "effort": "research",
+      "status": "ready",
+      "depends_on": [
+        "od-sas-finite-probe-zeeman-and-transit-refinement",
+        "od-sas-rb-mixture-self-broadening-density-audit"
+      ],
+      "scope": "⟦AI⟧ 03da63c의 직접 궤적을 기준으로 한다. 동위원소·선종별로 Γw/v_th, 고유 HWHM/Γ, 중심 세기와 원자 기준 디튜닝을 구분한다. 시간·광학폭·세기·디튜닝이 일치하는 궤적의 재사용은 현재 가능하다.",
+      "pilot_2026_11_26": "⟦AI⟧ 3×3 선형 표는 144개 독립점에서 최대 0.979%, 0.5% 한계를 29회 넘어 미달. 7×7×9 후보는 1,728개 국소 독립 단면적에서 최악 최대 0.117%, RMS 0.02949%로 국소 기준 통과. 두 후보 모두 제품에 채택하지 않았다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 선폭이 바뀌면 주파수 적분점의 개수와 위치가 변한다. 공통 물리 디튜닝 구적법이나 별도 재표본화를 직접 적분과 대조하고, 축 전파 중 0 µW까지 내려가는 세기 및 cycling 전이를 포함한다. 표의 출처·격자·영역을 확인하고 외삽 요청은 기준 해로 계산한다.",
+        "⟦AI⟧ 자연/사용자 혼합비 및 양쪽 끝점, 2,001점 투과율·OD, 검출 하한 양쪽, 50% 교차점, 기록 CSV 피팅과 첫 계산/조건 변경 시간을 사전 기준에 따라 검증한다. 단일 속도군의 국소 오차를 출구 투과율 오차로 해석하지 않는다."
+      ],
+      "local_evidence": [
+        "runs/od_history_generalization_20261126/table_pilot/README.md",
+        "runs/od_history_generalization_20261126/table_pilot/candidate2/README.md",
+        "runs/od_history_generalization_20261126/common_panels/summary.json"
+      ],
+      "common_frequency_grid_2026_11_26": "⟦AI⟧ 각 동위원소·전이선에 물리 디튜닝을 고정하고 24개 조건·각 2,001점에서 직접 궤적을 대조했다. 가변 8차 구적 대비 |Δσ|/σ_weak 최대 16.27 ppm. 국소 손실을 고정한 투과율 변화 ≤0.000077%p. 이는 보간된 비선형 출구 투과율이나 CSV 피팅의 검증이 아니다."
+    },
+    {
       "id": "od-rb85-d1-ballistic-independent-waist-validation",
       "area": "OD/SAS finite-probe reference",
       "title": "두 번째 빔 반경에서 ⁸⁵Rb D₁ 선택형 통과 이력 모델의 측정 예측 검증",
