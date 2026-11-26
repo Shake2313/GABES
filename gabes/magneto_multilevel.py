@@ -217,6 +217,9 @@ def _ground_generator(atom, b_ut, reset_rate, pure_dephasing_rate,
     for gs, rs, gf in zip(atom.ground_slices, atom.reduced_slices, atom.ground_g):
         m = np.array([level[1] for level in atom.ground[gs]])
         L[rs, rs] -= np.diag(pure_dephasing_rate*(1-np.eye(len(m))).ravel())
+    # b_x_ut and b_y_ut are in the Jones frame of _polarization; see
+    # zeeman.field_from_jones_frame for the 90 degree map onto F_x, F_y.
+    b_x_ut, b_y_ut, _ = zeeman.field_from_jones_frame(b_x_ut, b_y_ut)
     for axis, field in (("x", b_x_ut), ("y", b_y_ut), ("z", b_ut)):
         if field:
             L += float(field)*1e-6*_magnetic_generator(atom.isotope, atom.line, axis)

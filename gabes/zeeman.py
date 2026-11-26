@@ -37,6 +37,20 @@ def angular_momentum_matrices(F):
     return Fx, Fy, Fz
 
 
+def field_from_jones_frame(bx, by, bz=0.0):
+    """Map a field given in the light's Jones (x, y, k) frame onto these matrices' frame.
+
+    The circular drive weights used with the signed dipoles
+    (psr_conventions.jones_to_circular, magneto_multilevel._polarization,
+    schemes.magneto._qwp_drive_weights) omit the Condon-Shortley sign of the
+    q=+1 component. Jones-x light is therefore y-linear here: its coupling
+    commutes with F_y, not F_x. A +90 degree rotation about the beam axis
+    maps the Jones frame onto this frame: Jones x -> y, Jones y -> -x; the
+    beam axis is unchanged. Zero components stay +0.0.
+    """
+    return (-by if by else 0.0, bx, bz)
+
+
 def zeeman_hamiltonian(F, g_f, field_t, *, multiply_g_before_hbar=False):
     """Linear Zeeman Hamiltonian in angular-frequency units for a field in tesla.
 

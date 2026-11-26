@@ -4,7 +4,7 @@ import json
 import numpy as np
 import pytest
 
-from gabes import magneto_multilevel as current
+from gabes import magneto_multilevel as current, zeeman
 from fixtures.magneto_speed_20261030.validation import (
     _json, array_check, branch_cases, compare_backend, compare_scheme_case,
     load_baselines, small_scheme_cases,
@@ -32,6 +32,19 @@ def reference_at_current_ground_g(monkeypatch):
         finally:
             backend._magnetic_generator.cache_clear()
             backend.build_multilevel_atom.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _raw_field_frame(monkeypatch):
+    """Compare solver arithmetic in the frozen backend's field frame.
+
+    The frozen 2026-10-30 backend applies b_x/b_y directly to F_x/F_y. Since
+    2026-11-26 the live code maps Jones-frame fields with
+    zeeman.field_from_jones_frame (tests/test_jones_frame_convention.py checks
+    that convention). These tests check the speed patch, so they use the
+    identity map on the live side.
+    """
+    monkeypatch.setattr(zeeman, "field_from_jones_frame", lambda bx, by, bz=0.0: (bx, by, bz))
 
 
 def test_frozen_scheme_is_bound_to_frozen_backend_only():

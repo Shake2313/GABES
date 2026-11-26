@@ -160,8 +160,8 @@ class UnifiedMagnetoScheme(Scheme):
     caption = ("Rb D1/D2 Hanle transmission and nonlinear magneto-optical rotation, "
                "using a shared multihyperfine Budker-based model for magnetic-field "
                "and optical-detuning scans.")
-    cache_version = "budker-unified-v6-cylinder-relaxation"
-    defaults_version = "budker-unified-v2-axis-readout"
+    cache_version = "budker-unified-v7-jones-frame-field"
+    defaults_version = "budker-unified-v3-jones-frame-angle"
     supports_headless_observables = True
     model_comparison_parameter = "qwp_deg"
     model_comparison_controls = ("comparison_mode",)
@@ -243,7 +243,8 @@ class UnifiedMagnetoScheme(Scheme):
                       help="B_physical = B_command + bias; optical scans use this physical field."),
             ParamSpec("residual_transverse_b_ut", "Residual transverse B", "Fields", .0001 if self.mode == "eia" else 0.,
                       0., 5., .00001, "µT", advanced=True, format="%.5f"),
-            ParamSpec("transverse_field_angle_deg", "Transverse B angle", "Fields", 0., 0., 180., 1., "deg", advanced=True),
+            ParamSpec("transverse_field_angle_deg", "Transverse B angle", "Fields", 90., 0., 180., 1., "deg", advanced=True,
+                      help="Azimuth of the residual transverse field from the QWP-0 linear polarization axis."),
             ParamSpec("temp_c", "Temperature", "Cell & beams", 20., 0., 120., 1., "°C"),
             ParamSpec("cell_mm", "Cell length", "Cell & beams", 100., .5, 200., .5, "mm", recompute=False),
             ParamSpec("density_mode", "Vapor density", "Cell & beams", "manual", choices=("manual", "vapor"), recompute=False, advanced=True),
@@ -279,7 +280,7 @@ class UnifiedMagnetoScheme(Scheme):
             b_offset_ut=0., qwp_deg=0., scan_points=121,
             ground_relaxation_hz=1., pure_dephasing_hz=0.,
             gamma_out_hz=8e4, gamma_in_hz=1e3, wall_relaxation_hz=1/.003,
-            velocity_mixing="complete", doppler="on", transverse_field_angle_deg=0.,
+            velocity_mixing="complete", doppler="on", transverse_field_angle_deg=90.,
         )
         # These are new-model starting rates in s^-1. The historical model's
         # kHz pure-dephasing parameters are not identical to isotropic reset.

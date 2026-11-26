@@ -213,8 +213,8 @@ class SinglePairMagnetoReference(Scheme):
     """
     cluster = "C - Magneto-optics"
     presets_group = "Default"
-    cache_version = "polarized-two-region-v8-light-dephasing"
-    defaults_version = "polarized-two-region-v4"
+    cache_version = "polarized-two-region-v9-jones-frame-field"
+    defaults_version = "polarized-two-region-v5-jones-frame-angle"
     supports_headless_observables = True
 
     _REGIME_EMOJI = {
@@ -377,9 +377,9 @@ class SinglePairMagnetoReference(Scheme):
                       help="Weak transverse field. Enables MIA/MIT-like switching and "
                            "the circular-light level-crossing absorption (LCA).",
                       advanced_group="Systematics"),
-            ParamSpec("transverse_field_angle_deg", "Transverse B angle", "Fields", 0.0,
+            ParamSpec("transverse_field_angle_deg", "Transverse B angle", "Fields", 90.0,
                       0.0, 180.0, 1.0, "deg", advanced=True,
-                      help="Azimuth of the residual transverse magnetic field.",
+                      help="Azimuth of the residual transverse field from the QWP-0 linear polarization axis.",
                       advanced_group="Systematics"),
             ParamSpec("line_strength", "Line-strength factor", "Detection & scaling", 1.0,
                       0.01, 2.0, 0.01, "", recompute=False, advanced=True,
@@ -446,13 +446,13 @@ class SinglePairMagnetoReference(Scheme):
                 transition=_transition_label(2, 1), intensity_mw_cm2=0.8, qwp_deg=0.0,
                 b_max_ut=2.0, transit_relax_khz=80.0, dark_return_khz=1.0,
                 wall_coherence_ms=3.0, residual_transverse_b_ut=0.05,
-                transverse_field_angle_deg=0.0, doppler="on"),
+                transverse_field_angle_deg=90.0, doppler="on"),
             "EIA peak": dict(
                 signal_type=SIGNAL_TRANSMISSION, cell_type=CELL_PARAFFIN,
                 transition=_transition_label(2, 1), intensity_mw_cm2=0.8, qwp_deg=45.0,
                 b_max_ut=2.0, transit_relax_khz=80.0, dark_return_khz=1.0,
                 wall_coherence_ms=3.0, residual_transverse_b_ut=0.08,
-                transverse_field_angle_deg=0.0, doppler="on"),
+                transverse_field_angle_deg=90.0, doppler="on"),
             "Buffer Hanle": dict(
                 signal_type=SIGNAL_TRANSMISSION, cell_type=CELL_BUFFER,
                 transition=_transition_label(2, 1), intensity_mw_cm2=0.8, qwp_deg=0.0,
@@ -464,7 +464,7 @@ class SinglePairMagnetoReference(Scheme):
                 transition=_transition_label(2, 2), intensity_mw_cm2=0.2, qwp_deg=45.0,
                 b_max_ut=2.0, ne_pressure_torr=20.0,
                 buffer_ground_relax_khz=5.0, collisional_depol_khz=0.5,
-                residual_transverse_b_ut=0.03, transverse_field_angle_deg=90.0,
+                residual_transverse_b_ut=0.03, transverse_field_angle_deg=0.0,
                 doppler="on"),
         },
         SIGNAL_NMOR: {
@@ -473,7 +473,7 @@ class SinglePairMagnetoReference(Scheme):
                 transition=_transition_label(2, 1), intensity_mw_cm2=0.7, qwp_deg=0.0,
                 b_max_ut=2.0, transit_relax_khz=50.0, dark_return_khz=1.0,
                 wall_coherence_ms=5.0, residual_transverse_b_ut=0.02,
-                transverse_field_angle_deg=0.0, doppler="on"),
+                transverse_field_angle_deg=90.0, doppler="on"),
         },
     }
 
@@ -640,8 +640,10 @@ class SinglePairMagnetoReference(Scheme):
         # produce a B=0 resonance. Buffer and paraffin cells share this physics.
         b_perp = params.get("residual_transverse_b_ut", 0.0) * 1e-6
         phi = math.radians(params.get("transverse_field_angle_deg", 0.0))
-        b_x = b_perp * math.cos(phi)
-        b_y = b_perp * math.sin(phi)
+        # The azimuth is measured in the Jones frame of _qwp_drive_weights
+        # (0 deg = along QWP-0 linear light). zeeman.field_from_jones_frame
+        # maps it onto the angular-momentum frame of the Hamiltonian.
+        b_x, b_y, _ = zeeman.field_from_jones_frame(b_perp * math.cos(phi), b_perp * math.sin(phi))
 
         T = params["temp_c"] + 273.15
         N = species.number_density(RB87, T)
