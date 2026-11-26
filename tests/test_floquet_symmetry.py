@@ -146,3 +146,66 @@ def test_checked_lu_preserves_solutions_across_scales(dtype, scale, damping):
     assert np.linalg.cond(matrix) < 10.0 / damping
     assert np.linalg.norm(matrix @ actual - rhs) / np.linalg.norm(rhs) < 1e-13
     np.testing.assert_allclose(actual, expected, rtol=1e-13, atol=0.0)
+
+
+@pytest.mark.parametrize("n,n_f", [(2, 1), (3, 2), (4, 2), (4, 4)])
+def test_floquet_solve_truncated_conjugate_symmetry_matches_direct_and_halves_solves(monkeypatch, n, n_f):
+    l0, _, sv, cp, cm, _, deff, whf, _, _, _, _, _ = physical_grid(n=n, n_f=n_f)
+    assert core._is_conjugate_symmetric_floquet(l0, cp, cm, whf, deff, sv, n)
+
+    solve_calls = []
+    real_solve = core._solve_checked
+    def counting_solve(matrix, rhs, kernel, **axes):
+        solve_calls.append(kernel)
+        return real_solve(matrix, rhs, kernel, **axes)
+    monkeypatch.setattr(core, "_solve_checked", counting_solve)
+
+    harmonics = core.floquet_solve_truncated(
+        l0, cp, cm, whf, deff, sv, n, n_f, return_harmonics=True)
+    # Only positive chain (n_f solves) + zero harmonic (1 solve)
+    assert len(solve_calls) == n_f + 1
+
+    direct = core.floquet_solve_direct(
+        l0, cp, cm, whf, deff, sv, n, n_f, return_harmonics=True)
+    np.testing.assert_allclose(harmonics, direct, rtol=1e-12, atol=1e-13)
+
+    # Signed harmonic ordering -n_f..+n_f obeys rho[-h] == rho[+h]^H
+    for h in range(1, n_f + 1):
+        np.testing.assert_allclose(
+            harmonics[:, n_f - h], harmonics[:, n_f + h].conj().swapaxes(-1, -2),
+            rtol=0.0, atol=1e-15)
+
+    diag = core.floquet_solution_diagnostics(l0, cp, cm, whf, deff, sv, harmonics)
+    assert diag["max_normalized_residual"] < 1e-12
+    assert diag["max_trace_error"] < 1e-13
+    assert diag["max_nonzero_harmonic_trace"] < 1e-13
+    assert diag["max_rho0_hermiticity_error"] < 1e-13
+
+    rho0, rho1 = core.floquet_solve_truncated(
+        l0, cp, cm, whf, deff, sv, n, n_f, return_harmonics=False)
+    np.testing.assert_array_equal(rho0, harmonics[:, n_f])
+    np.testing.assert_array_equal(rho1, harmonics[:, n_f + 1])
+
+
+@pytest.mark.parametrize("defect_target", ["L0", "S_v", "Cm"])
+def test_floquet_solve_truncated_one_ulp_defect_uses_dual_chain(monkeypatch, defect_target):
+    l0, _, sv, cp, cm, _, deff, whf, _, _, _, _, _ = physical_grid(n=3, n_f=2)
+    l0, sv, cm = l0.copy(), sv.copy(), cm.copy()
+    target = {"L0": l0, "S_v": sv, "Cm": cm}[defect_target]
+    target[0, 1] = np.nextafter(target[0, 1].real, np.inf) + 1j * target[0, 1].imag
+    assert not core._is_conjugate_symmetric_floquet(l0, cp, cm, whf, deff, sv, 3)
+
+    solve_calls = []
+    real_solve = core._solve_checked
+    def counting_solve(matrix, rhs, kernel, **axes):
+        solve_calls.append(kernel)
+        return real_solve(matrix, rhs, kernel, **axes)
+    monkeypatch.setattr(core, "_solve_checked", counting_solve)
+
+    harmonics = core.floquet_solve_truncated(
+        l0, cp, cm, whf, deff, sv, 3, 2, return_harmonics=True)
+    # Full dual chain: 2*n_f + 1 = 5 solves
+    assert len(solve_calls) == 5
+    direct = core.floquet_solve_direct(
+        l0, cp, cm, whf, deff, sv, 3, 2, return_harmonics=True)
+    np.testing.assert_allclose(harmonics, direct, rtol=1e-12, atol=1e-13)

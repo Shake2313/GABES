@@ -171,14 +171,33 @@ def build_liouvillian(H, atom):
     return comm_super(H) + atom.lindblad
 
 
+def _is_conjugate_symmetric_floquet(L0, Cp, Cm, Omega_beat, deff, S_v, n_levels):
+    """True when L0, S_v preserve Hermiticity, Cm = P conj(Cp) P, and axes are real.
+
+    Checked with exact equality (zero tolerance) in raw row-major vec coordinates
+    so that even a 1-ULP symmetry defect or non-finite entry stays on the general
+    dual-chain path. Matches the guard used by :func:`gabes.kernels.floquet_chi_grid`.
+    """
+    perm = _transpose_perm(n_levels)
+    real_axes = (
+        np.isrealobj(Omega_beat) and np.isfinite(Omega_beat)
+        and np.isrealobj(deff) and np.isfinite(deff).all()
+    )
+    return bool(
+        real_axes
+        and np.isfinite(L0).all() and np.isfinite(S_v).all() and np.isfinite(Cp).all()
+        and np.array_equal(L0, L0.conj()[perm][:, perm])
+        and np.array_equal(S_v, S_v.conj()[perm][:, perm])
+        and np.array_equal(Cm, Cp.conj()[perm][:, perm])
+    )
+
+
 def floquet_solve(L0_at_Deff_zero, Cp, Cm, Omega_beat, Delta_eff_axis,
                   S_v, n_levels):
     """3-mode sideband (Floquet) steady state: ``floquet_solve_truncated`` at n_f=1.
 
     Kept under its original name for ``archive/fwm_obe.py`` and older imports.
-    Returns ρ_0 and ρ_+1, each reshaped to (N_deff, n_levels, n_levels). The
-    ±sideband conjugate-symmetry shortcut this function used to take lives on in
-    the compiled ``kernels.floquet_chi_grid``.
+    Returns ρ_0 and ρ_+1, each reshaped to (N_deff, n_levels, n_levels).
     """
     return floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
                                    Delta_eff_axis, S_v, n_levels, n_f=1)
@@ -196,9 +215,15 @@ def floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
     Positive and negative harmonic chains are eliminated by exact block
     continued fractions at the selected finite boundary.  Only ``M x M``
     systems (``M=n_levels**2``) are solved, rather than one dense
-    ``(2*n_f+1)M`` system per detuning.  The zero harmonic has trace one and all
-    nonzero harmonics have trace zero as a consequence of the trace-preserving
-    block equations; :func:`floquet_solution_diagnostics` verifies both.
+    ``(2*n_f+1)M`` system per detuning.  When :func:`_is_conjugate_symmetric_floquet`
+    holds (exact raw-vec conjugation invariance of ``L0``, ``S_v``,
+    ``Cm = P conj(Cp) P`` and real ``Omega_beat``/``Delta_eff_axis``), the
+    negative chain is obtained by exact symmetry ``Q[-h] = P conj(R[+h]) P``
+    and ``rho[-h] = rho[+h]^H``, halving the continued-fraction solves; all
+    other inputs retain the general dual-chain branch.  The zero harmonic has
+    trace one and all nonzero harmonics have trace zero as a consequence of the
+    trace-preserving block equations; :func:`floquet_solution_diagnostics`
+    verifies both.
 
     With ``return_harmonics=False`` the compatibility return is ``(rho_0,
     rho_+1)``.  Otherwise a single array with shape
@@ -230,6 +255,9 @@ def floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
     Cp_batch = np.broadcast_to(Cp, (n_deff, M, M))
     Cm_batch = np.broadcast_to(Cm, (n_deff, M, M))
 
+    symmetric = _is_conjugate_symmetric_floquet(
+        L0, Cp, Cm, Omega_beat, deff, S_v, n_levels)
+
     # R[h-1] maps rho_(h-1) -> rho_h for h=1,...,n_f.
     R = [None] * n_f
     next_R = None
@@ -241,18 +269,25 @@ def floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
         R[harmonic - 1] = current
         next_R = current
 
-    # Q[h+n_f] maps rho_(h+1) -> rho_h for h=-n_f,...,-1.
-    Q = [None] * n_f
-    previous_Q = None
-    for harmonic in range(-n_f, 0):
-        A = L_batch + 1j * harmonic * float(Omega_beat) * eye[None, :, :]
-        if previous_Q is not None:
-            A = A + Cp_batch @ previous_Q
-        current = -_solve_checked(A, Cm_batch, f"floquet_solve harmonic={harmonic}", deff=deff)
-        Q[harmonic + n_f] = current
-        previous_Q = current
+    if symmetric:
+        perm = _transpose_perm(n_levels)
+        # Exact induction under L0 = P L0* P, S_v = P S_v* P, Cm = P Cp* P:
+        # Q[-1] = P conj(R[+1]) P.
+        Q_minus_1 = R[0][:, perm][:, :, perm].conj()
+        A_eff = L_batch + Cp_batch @ Q_minus_1 + Cm_batch @ R[0]
+    else:
+        # Q[h+n_f] maps rho_(h+1) -> rho_h for h=-n_f,...,-1.
+        Q = [None] * n_f
+        previous_Q = None
+        for harmonic in range(-n_f, 0):
+            A = L_batch + 1j * harmonic * float(Omega_beat) * eye[None, :, :]
+            if previous_Q is not None:
+                A = A + Cp_batch @ previous_Q
+            current = -_solve_checked(A, Cm_batch, f"floquet_solve harmonic={harmonic}", deff=deff)
+            Q[harmonic + n_f] = current
+            previous_Q = current
+        A_eff = L_batch + Cp_batch @ Q[-1] + Cm_batch @ R[0]
 
-    A_eff = L_batch + Cp_batch @ Q[-1] + Cm_batch @ R[0]
     trace_rhs = _border_trace(A_eff, population_trace(n_levels))
     rho0 = _solve_checked(A_eff, trace_rhs, "floquet_solve harmonic=0", deff=deff)
 
@@ -269,10 +304,15 @@ def floquet_solve_truncated(L0_at_Deff_zero, Cp, Cm, Omega_beat,
     for harmonic in range(1, n_f + 1):
         current = R[harmonic - 1] @ current
         harmonic_vectors[:, n_f + harmonic] = current
-    current = rho0
-    for harmonic in range(-1, -n_f - 1, -1):
-        current = Q[harmonic + n_f] @ current
-        harmonic_vectors[:, n_f + harmonic] = current
+    if symmetric:
+        for harmonic in range(1, n_f + 1):
+            harmonic_vectors[:, n_f - harmonic] = (
+                harmonic_vectors[:, n_f + harmonic][:, perm].conj())
+    else:
+        current = rho0
+        for harmonic in range(-1, -n_f - 1, -1):
+            current = Q[harmonic + n_f] @ current
+            harmonic_vectors[:, n_f + harmonic] = current
     return harmonic_vectors[..., 0].reshape(
         n_deff, 2 * n_f + 1, n_levels, n_levels)
 
