@@ -10,8 +10,8 @@ from gabes import schemes, species
 from gabes.core import blas_single_thread
 from gabes.model_comparison import comparison_values, sample_values, same_grid
 from gabes.schemes.sas import (
-    AUTO_WEAK_PROBE, BALLISTIC_FAST, BALLISTIC_FAST_TRANSIT, EXACT_WEAK_PROBE, GENERIC,
-    LEGACY_WEAK_PROBE, PUMPED_MAXWELL, RATE_MODEL_V3, RB_COMPOSITION_CUSTOM, TWO_LEVEL_MODEL_V3,
+    AUTO_WEAK_PROBE, BALLISTIC_FAST, BALLISTIC_FAST_TRANSIT, EXACT_WEAK_PROBE, FIELD_HISTORY_REFERENCE, FIELD_HISTORY_TRANSIT, GENERIC,
+    LEGACY_WEAK_PROBE, PUMPED_MAXWELL, RATE_MODEL_V3, RB_COMPOSITION_CUSTOM, RB_HISTORY_FAST, TWO_LEVEL_MODEL_V3,
 )
 
 
@@ -126,22 +126,23 @@ def test_explicit_exact_mixed_comparison_uses_same_legacy_grid_for_both_curves()
             np.testing.assert_array_equal(row["delta"], expected_delta[row["power_mw"]])
 
 
-@pytest.mark.parametrize(("line", "current", "sweep"), [
-    ("D2", .02, [0., .02]),    # The saved D1-only preference is inactive for SAS.
-    ("D1", 0., [.02, 0.]),     # Discard the cached pump-free history for the mixed sweep.
-    ("D1", 0., [.02]),         # Zero is still required for the delta, even if not displayed.
+@pytest.mark.parametrize(("line", "current", "sweep", "selector", "preference"), [
+    ("D2", .02, [0., .02], BALLISTIC_FAST_TRANSIT, RB_HISTORY_FAST),
+    ("D1", 0., [.02, 0.], BALLISTIC_FAST_TRANSIT, BALLISTIC_FAST),  # Discard the pump-free cache.
+    ("D1", 0., [.02], BALLISTIC_FAST_TRANSIT, BALLISTIC_FAST),      # Delta still requires zero.
+    ("D2", .02, [.02, 0.], FIELD_HISTORY_TRANSIT, FIELD_HISTORY_REFERENCE),
 ])
-def test_mixed_pump_comparison_preserves_preference_but_uses_sas_baseline(line, current, sweep):
+def test_mixed_pump_comparison_preserves_preference_but_uses_sas_baseline(line, current, sweep, selector, preference):
     conditions = dict(line=line, species=species.RB85.label, temp_c=99., cell_mm=12.5,
                       probe_waist_mm=.53, scan_points=101, transit_khz=350., pump_power_mw=current)
     with comparison_values("pump_power_mw", sweep):
         expected, _, _ = _compare(**conditions, od_transit_model="fixed")
-        actual, _, _ = _compare(**conditions, od_transit_model=BALLISTIC_FAST_TRANSIT)
+        actual, _, _ = _compare(**conditions, od_transit_model=selector, od_field_y_ut=50.)
     assert actual["fixed"]["od_transit_model"] == "fixed"
-    assert actual["source"]["pump_off_transit_preference"] == BALLISTIC_FAST
+    assert actual["source"]["pump_off_transit_preference"] == preference
     assert [row["power_mw"] for row in actual["series"]] == sweep
     for row, control in zip(actual["series"], expected["series"], strict=True):
-        assert row["probe_model"] == control["probe_model"] != BALLISTIC_FAST
+        assert row["probe_model"] == control["probe_model"] != preference
         assert "ballistic_diagnostics" not in row
         for field in ("transmission", "optical_depth", "delta"):
             np.testing.assert_array_equal(row[field], control[field])

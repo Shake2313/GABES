@@ -1073,3 +1073,67 @@ def test_versioned_geometry_csv_checks_rate_and_restores_preset(workspace):
     app.button(key="sas_close_csv").click().run()
     assert not app.exception and not app.error
     assert app.session_state["sas__temp_c"] == 49. and app.session_state["sas__pump_power_mw"] == 1.5
+
+
+@pytest.mark.parametrize("model,fidelity", [
+    ("od_rb85_d1_ballistic_history_v1", "od_rb_ballistic_history_v1"),
+    ("od_rb85_d1_ballistic_history_fast_v1", "od_rb_ballistic_history_fast_v1"),
+    ("od_rb85_d1_ballistic_history_fast_v2", "od_rb_ballistic_history_fast_v1"),
+])
+def test_editable_pure_history_preset_changes_scope_without_rewriting_original(model, fidelity):
+    from gabes import species
+    from gabes.od_model import ODConditions, od_unavailable
+    from gabes.schemes.sas import SASScheme
+
+    scheme = SASScheme()
+    original = dict(scheme.defaults(), species=species.RB85.label, line="D1", od_model=model,
+                    pump_power_mw=0., probe_power_uw=0.)
+    for composition, fraction in [("Natural", .7217), ("Custom", .38)]:
+        edited = dict(original, species="Rb (natural)", rb_composition=composition, rb85_fraction=fraction)
+        selected = ODConditions.from_params(scheme.normalize_params(edited))
+        assert selected.model_id == fidelity and not od_unavailable(selected)
+        assert edited["od_model"] == model and od_unavailable(ODConditions.from_params(edited))
+    assert ODConditions.from_params(scheme.normalize_params(original)).model_id == model
+
+
+def test_edit_recorded_pure_fast_csv_to_mixture_and_restore_exact_replay(workspace):
+    from gabes import species
+    from gabes.experimental_csv import ExperimentalCSVError
+    from gabes.od_measurement import export_comparison_csv, load_measurement, prepare_measurement_upload
+    from gabes.od_model import ODConditions
+    from gabes.schemes.sas import BALLISTIC_FAST_V1, RB_HISTORY_FAST
+    from gabes_ui.od_measurement import plot_metadata
+
+    app, exports, _, uploads = workspace
+    conditions = ODConditions(species.RB85.label, "D1", 25., 10., BALLISTIC_FAST_V1)
+    metadata = plot_metadata(conditions.to_params(), conditions.model_id)
+    native = prepare_measurement_upload(b"detuning_GHz,transmission\n-1,0.97\n0,0.94\n1,0.98\n")
+    trace = load_measurement(native, mode="fraction", x_unit="GHz")
+    x, y = [-1., 0., 1.], [.97, .94, .98]
+    with pytest.raises(ExperimentalCSVError, match="Invalid GABES transit"):
+        malformed = dict(metadata, conditions=dict(metadata["conditions"], species="Rb (natural)"))
+        export_comparison_csv(native, trace, x, y, metadata=malformed)
+    original = export_comparison_csv(native, trace, x, y, metadata=metadata)
+    uploads[:] = [_upload(original)]
+    app.run()
+    assert not app.exception and not app.error
+    assert exports[-1]["comparison_payload"]["model"]["model_id"] == BALLISTIC_FAST_V1
+    for isotope in ("Natural", "Custom", "85"):
+        next(w for w in app.selectbox if w.label == "Isotope").select(isotope).run()
+        if isotope == "Custom":
+            next(w for w in app.text_input if "fraction" in w.label).set_value(".38").run()
+        assert not app.exception and not app.error
+        payload = exports[-1]["comparison_payload"]
+        model = payload["model"]
+        assert payload["input_metadata"]["model_id"] == BALLISTIC_FAST_V1
+        assert model["model_id"] == (BALLISTIC_FAST_V1 if isotope == "85" else RB_HISTORY_FAST)
+        if isotope == "Custom":
+            assert model["conditions"]["rb85_fraction"] == .38
+            source = prepare_measurement_upload(original)
+            saved = export_comparison_csv(source, load_measurement(source), x, y, metadata=model)
+            reopened = prepare_measurement_upload(saved)
+            assert reopened.metadata["model_id"] == RB_HISTORY_FAST
+            assert reopened.metadata["original_theory_model_id"] == BALLISTIC_FAST_V1
+    app.button(key="sas_close_csv").click().run()
+    assert not app.exception and not app.error
+    assert (app.session_state["sas__line"], app.session_state["sas__pump_power_mw"]) == ("D2", 1.5)

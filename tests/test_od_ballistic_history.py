@@ -12,7 +12,8 @@ from gabes.od_spectrum_fit import od_fit_unavailable, od_transmission, offered_f
 from gabes.schemes.sas import (
     BALLISTIC_FAST, BALLISTIC_FAST_V1, BALLISTIC_FAST_TRANSIT, BALLISTIC_REFERENCE, BALLISTIC_TRANSIT,
     EXACT_MODEL, GAUSSIAN_TRANSIT, GAUSSIAN_TRANSIT_D20_MODEL, OD_MODELS_D20,
-    OD_MODELS_D2SB, OD_MODELS_NTOTAL, OD_MODELS_PRE_D20, RB_HISTORY_REFERENCE, ODModelSettingError, SASScheme,
+    OD_MODELS_D2SB, OD_MODELS_NTOTAL, OD_MODELS_PRE_D20, RB_HISTORY_FAST, RB_HISTORY_REFERENCE,
+    ODModelSettingError, SASScheme,
 )
 
 
@@ -109,6 +110,29 @@ def test_pumped_mixture_uses_current_sas_and_recovers_general_history_on_return(
     p["pump_power_mw"] = 0.
     assert ODConditions.from_params(p).model_id == RB_HISTORY_REFERENCE
     assert scheme.compute(p)["probe_model"] == RB_HISTORY_REFERENCE
+
+
+@pytest.mark.parametrize("model_set", [OD_MODELS_PRE_D20, OD_MODELS_D20, OD_MODELS_D2SB, OD_MODELS_NTOTAL])
+@pytest.mark.parametrize("transit,general,pure", [
+    (BALLISTIC_TRANSIT, RB_HISTORY_REFERENCE, BALLISTIC_REFERENCE),
+    (BALLISTIC_FAST_TRANSIT, RB_HISTORY_FAST, BALLISTIC_FAST),
+])
+def test_automatic_history_resolves_mixtures_without_changing_recorded_pure_ids(model_set, transit, general, pure):
+    scheme = SASScheme()
+    for line in ("D1", "D2"):
+        for composition, fraction in (("Natural", .7217), ("Custom", .38), ("Custom", 0.), ("Custom", 1.)):
+            p = parameters(species="Rb (natural)", line=line, rb_composition=composition,
+                           rb85_fraction=fraction, od_model=model_set, od_transit_model=transit, scan_points=51)
+            old_endpoint = line == "D1" and fraction == 1. and model_set != OD_MODELS_NTOTAL
+            expected = pure if old_endpoint else general
+            c = ODConditions.from_params(p)
+            assert c.model_id == expected and od_unavailable(c) is None
+            raw = scheme.compute(p)
+            assert raw["probe_model"] == expected
+            explicit = scheme.compute(dict(p, od_model=expected))
+            np.testing.assert_array_equal(raw["ballistic_depth"], explicit["ballistic_depth"])
+    pure85 = parameters(od_model=model_set, od_transit_model=transit)
+    assert ODConditions.from_params(pure85).model_id == pure
 
 
 def test_invalid_transit_selector_still_errors_with_pump_on():

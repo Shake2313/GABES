@@ -118,3 +118,32 @@ def test_changed_spectrum_uses_the_grid_that_apply_will_commit(workspace, monkey
     main = exports[-1]["comparison_payload"]["theory_trace"]
     np.testing.assert_array_equal(new_x, main["detuning"])
     np.testing.assert_array_equal(new_y, main["transmission"])
+
+def test_changed_finite_field_conditions_wait_for_explicit_background_fit(workspace, monkeypatch):
+    from gabes.schemes.sas import FIELD_HISTORY_TRANSIT
+    from gabes_ui import od_profile_fit as profile
+
+    app, _, _, _ = workspace
+    app.session_state["sas__od_transit_model"] = FIELD_HISTORY_TRANSIT
+    app.session_state["sas__od_field_z_ut"] = 50.
+    app.run()
+    assert not app.exception and not app.error
+    assert any("Magnetic field" in w.label for w in app.text_input)  # CSV mode from a pumped preset
+    app.button(key="sas_open_precise").click().run()
+    assert not app.button(key="sas_profile_frame").disabled
+
+    chart = profile._chart
+    sampled = []
+    def draw(box, trace, alignment, invert, window, indices, x, y, result):
+        sampled.append(y)
+        return chart(box, trace, alignment, invert, window, indices, x, y, result)
+    monkeypatch.setattr(profile, "_chart", draw)
+    def synchronous_solve(*args):
+        pytest.fail("A finite field draft must be solved after an explicit request")
+    monkeypatch.setattr(profile, "_preview_spectrum", synchronous_solve)
+    app.number_input(key="sas_precise_base_probe_power_uw").set_value(8.).run()
+    assert not app.exception and not app.error
+    assert sampled[-1] is None
+    assert app.button(key="sas_profile_frame").disabled
+    assert not app.button(key="sas_profile_run").disabled
+    assert any("in the background" in item.value for item in app.caption)

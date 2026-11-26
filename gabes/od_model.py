@@ -22,7 +22,7 @@ offsets. Units follow the SAS controls (°C, mm, µW, kHz).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from functools import lru_cache
 import math
 
@@ -38,6 +38,7 @@ from .schemes.sas import (
     GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODELS, GAUSSIAN_TRANSIT,
     BALLISTIC_FAST, BALLISTIC_FAST_V1, BALLISTIC_FIDELITIES, BALLISTIC_REFERENCE, RB_HISTORY_MODELS,
     BALLISTIC_TRANSIT, BALLISTIC_FAST_TRANSIT, _ballistic_scope_reason,
+    FIELD_HISTORY_KEYS, FIELD_HISTORY_REFERENCE, FIELD_HISTORY_TRANSIT,
     OD_TRANSIT_KEY, _NTOTAL_MODEL_IDS, _species_path_densities, _temperatures,
     RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
     _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
@@ -136,6 +137,14 @@ MODELS = {model.model_id: model for model in (
                        "These comparisons do not bound exit transmission.")
       for model_id, label in zip(RB_HISTORY_MODELS, ("Rb isotope-resolved beam-crossing history",
                                                      "Rb isotope-resolved beam-crossing history (Fast)"))),
+    ODModel(FIELD_HISTORY_REFERENCE, "Rb beam-crossing history with a static field and Jones polarization",
+            "implemented", True, engine="ballistic", per_line_self_broadening=True, total_rb_perturbers=True,
+            accuracy="Uniform, uncoated, buffer-free Rb D1 or D2 with a static magnetic field and a fixed "
+                     "probe polarization. Zeeman shifts are linear within each hyperfine F manifold; the "
+                     "splittings should be small compared with the hyperfine separations. The readout gives "
+                     "collected transmission for a fixed Gaussian profile and incident polarization. Longitudinal "
+                     "velocities enter the Doppler average; each crossing is evaluated at one axial plane. "
+                     "Radiation trapping is omitted."),
     ODModel(GAUSSIAN_TRANSIT_MODEL,
             "Rb magnetic-sublevel probe model with Gaussian transit and measured Rb D2 self-broadening",
             "implemented", True, engine="rate", accuracy=GAUSSIAN_TRANSIT_ACCURACY, per_line_self_broadening=True),
@@ -198,6 +207,11 @@ class ODConditions:
     paraffin_coated: bool = False
     cs_self_broadening_reference: bool = False
     extra_homogeneous_fwhm_hz: float = 0.0
+    od_field_x_ut: float = 0.0
+    od_field_y_ut: float = 0.0
+    od_field_z_ut: float = 0.0
+    od_probe_azimuth_deg: float = 0.0
+    od_probe_ellipticity_deg: float = 0.0
 
     def __post_init__(self):
         if self.species not in species.SPECIES_ORDER:
@@ -208,6 +222,14 @@ class ODConditions:
             raise ODUnsupportedError(f"Unknown OD model ID {self.model_id!r}.")
         if self.rb_composition not in (RB_COMPOSITION_NATURAL, RB_COMPOSITION_CUSTOM):
             raise ODUnsupportedError("Rb isotope composition must be Natural or Custom.")
+        for name in FIELD_HISTORY_KEYS:
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ODUnsupportedError(f"{name} must be a finite number.")
+            if self.model_id != FIELD_HISTORY_REFERENCE and value:
+                raise ODUnsupportedError("Choose the static-field beam-crossing model to apply a field or polarization.")
+        if abs(self.od_probe_ellipticity_deg) > 45.0:
+            raise ODUnsupportedError("Probe ellipticity must lie between −45° and +45°.")
         for item in fields(self):
             value = getattr(self, item.name)
             if isinstance(value, float) and not math.isfinite(value):
@@ -252,7 +274,28 @@ class ODConditions:
             paraffin_coated=bool(params.get("paraffin_coated", False)),
             cs_self_broadening_reference=bool(params.get("cs_self_broadening_reference", False)),
             extra_homogeneous_fwhm_hz=float(extra_homogeneous_fwhm_hz),
+            **({key: params[key] for key in FIELD_HISTORY_KEYS} if model_id == FIELD_HISTORY_REFERENCE else {}),
         )
+
+    @property
+    def field_ut(self):
+        """Static field in the lab Jones frame (x, y, z along propagation), in µT."""
+        return self.od_field_x_ut, self.od_field_y_ut, self.od_field_z_ut
+
+    @property
+    def probe_jones(self):
+        """Unit transverse Jones vector. Positive ellipticity gives positive S₃."""
+        from .psr_conventions import jones_from_angles
+        return tuple(jones_from_angles(math.radians(self.od_probe_azimuth_deg),
+                                       math.radians(self.od_probe_ellipticity_deg)))
+
+    def recorded_conditions(self):
+        """Save the input schema belonging to the recorded model ID."""
+        record = asdict(self)
+        if self.model_id != FIELD_HISTORY_REFERENCE:
+            for key in FIELD_HISTORY_KEYS:
+                record.pop(key)
+        return record
 
     def to_params(self):
         """SAS parameters for this solve: pump off, uniform cell, profile from the model."""
@@ -276,7 +319,10 @@ class ODConditions:
         params[MODEL_KEY] = self.model_id
         if self.model_id in GAUSSIAN_TRANSIT_MODELS:
             params[OD_TRANSIT_KEY] = GAUSSIAN_TRANSIT
-        if self.model_id in BALLISTIC_FIDELITIES:
+        if self.model_id == FIELD_HISTORY_REFERENCE:
+            params[OD_TRANSIT_KEY] = FIELD_HISTORY_TRANSIT
+            params.update({key: getattr(self, key) for key in FIELD_HISTORY_KEYS})
+        elif self.model_id in BALLISTIC_FIDELITIES:
             params[OD_TRANSIT_KEY] = BALLISTIC_TRANSIT if BALLISTIC_FIDELITIES[self.model_id] == "reference" else BALLISTIC_FAST_TRANSIT
         return params
 
@@ -393,10 +439,14 @@ def _evaluate(conditions, offsets, scan):
     if model.engine in ("rate", "ballistic"):
         diagnostics = None
         if model.engine == "ballistic":
-            from .ballistic_spectrum import evaluate_ballistic_spectrum, evaluate_rb_ballistic_spectrum
-            fidelity = BALLISTIC_FIDELITIES[model.model_id]
-            evaluate = evaluate_rb_ballistic_spectrum if model.model_id in RB_HISTORY_MODELS else evaluate_ballistic_spectrum
-            result = evaluate(conditions, scan, fidelity=fidelity)
+            if model.model_id == FIELD_HISTORY_REFERENCE:
+                from .field_spectrum import evaluate_field_ballistic_spectrum
+                result = evaluate_field_ballistic_spectrum(conditions, scan)
+            else:
+                from .ballistic_spectrum import evaluate_ballistic_spectrum, evaluate_rb_ballistic_spectrum
+                fidelity = BALLISTIC_FIDELITIES[model.model_id]
+                evaluate = evaluate_rb_ballistic_spectrum if model.model_id in RB_HISTORY_MODELS else evaluate_ballistic_spectrum
+                result = evaluate(conditions, scan, fidelity=fidelity)
             transmission, depth, od0 = result.transmission, result.optical_depth, result.od0
             diagnostics = result.diagnostics
         else:

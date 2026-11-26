@@ -80,7 +80,8 @@ def _chart(box, trace, alignment, invert, window, indices, theory_x, theory_y, r
     lo, hi = indices
     picked = slice(lo, hi + 1)
     values += _rows(x[picked], y[picked], "Selected samples", window, segments[picked])
-    values += _rows(np.asarray(theory_x), np.asarray(theory_y), "OD model", window)
+    if theory_y is not None:
+        values += _rows(np.asarray(theory_x), np.asarray(theory_y), "OD model", window)
     if not values:
         box.caption("No samples fall within this spectral region.")
         return
@@ -92,10 +93,15 @@ def _chart(box, trace, alignment, invert, window, indices, theory_x, theory_y, r
     # a brush gesture alone keeps its widget and the native-sample ROI.
     revision = hashlib.sha256()
     for values_in_plot in (x, y, theory_x, theory_y, window):
+        if values_in_plot is None:
+            continue
         array = np.ascontiguousarray(values_in_plot, dtype=np.float64)
         revision.update(array.size.to_bytes(8, "little"))
         revision.update(array)
     key = "sas_profile_graph_" + revision.hexdigest()[:20]
+    colors = {"Measurement": "#ad939b", "Selected samples": "#a44360"}
+    if theory_y is not None:
+        colors = {"OD model": "#286f75", **colors}
     box.vega_lite_chart(data=values, spec={
         "height": 300, "autosize": {"type": "fit-x", "contains": "padding"},
         "params": [{"name": "samples", "select": {"type": "interval", "encodings": ["x"]}}],
@@ -107,8 +113,7 @@ def _chart(box, trace, alignment, invert, window, indices, theory_x, theory_y, r
                   "scale": {"domain": [bottom - padding, top + padding], "zero": False}},
             "detail": {"field": "segment", "type": "nominal"},
             "color": {"field": "trace", "type": "nominal", "title": None,
-                      "scale": {"domain": ["OD model", "Measurement", "Selected samples"],
-                                "range": ["#286f75", "#ad939b", "#a44360"]},
+                      "scale": {"domain": list(colors), "range": list(colors.values())},
                       "legend": {"orient": "bottom"}},
         }}, key=key, use_container_width=True, on_select=lambda: _apply_brush(key, x),
         selection_mode="samples")
@@ -118,7 +123,7 @@ def _condition_rows(box, params, settings):
     from gabes.od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
     from gabes.od_profile_fit import profile_fit_parameters
     from gabes.od_spectrum_fit import PARAMETERS, CANDIDATE_PARAMETERS
-    from gabes.schemes.sas import BALLISTIC_FIDELITIES, RB_HISTORY_MODELS, RB_COMPOSITION_CUSTOM, _isotope_composition
+    from gabes.schemes.sas import BALLISTIC_FIDELITIES, RB_MIXTURE_HISTORY_MODELS, RB_COMPOSITION_CUSTOM, _isotope_composition
 
     state = st.session_state
     _, _, composition, fraction, _ = _isotope_composition(params)
@@ -167,7 +172,7 @@ def _condition_rows(box, params, settings):
         selected = field.checkbox(label, key=fit_key, disabled=not eligible, help=help_text)
         spec = (PARAMETERS if name in PARAMETERS else CANDIDATE_PARAMETERS)[name]
         lower, upper = spec[2] * factor, spec[3] * factor
-        pure_history = model_id in BALLISTIC_FIDELITIES and model_id not in RB_HISTORY_MODELS
+        pure_history = model_id in BALLISTIC_FIDELITIES and model_id not in RB_MIXTURE_HISTORY_MODELS
         locked = name == "rb85_fraction" and (not custom or pure_history)
         current = fraction if locked else params[name]
         if locked and custom:
@@ -337,7 +342,11 @@ def render_profile_fit(panel, upload, params, trace, alignment, invert, source, 
         conditions = ODConditions.from_params(preview)
         reason = od_unavailable(conditions)
         if changed and not reason:
-            theory_x, theory_y = _preview_spectrum(preview, schemes.get("sas").cache_version)
+            from gabes_ui.od_field_job import needs_field_job
+            if needs_field_job("sas", preview):
+                theory_y = None
+            else:
+                theory_x, theory_y = _preview_spectrum(preview, schemes.get("sas").cache_version)
     except ValueError as exc:
         reason = str(exc)
 
@@ -362,6 +371,8 @@ def render_profile_fit(panel, upload, params, trace, alignment, invert, source, 
                 None if bounds is None else tuple(bounds.items()))
     box = panel
     job, result = _current_fit(box, identity)
+    if theory_y is None and job is None and result is None:
+        box.caption("Choose Preview profile fit to calculate the revised static-field spectrum in the background.")
     _chart(chart_box, trace, alignment, invert, window, indices, theory_x, theory_y, result)
     selected_count = 1 + indices[1] - indices[0]
     box.caption(f"{selected_count:,} of {len(trace.detuning):,} measured samples selected."

@@ -112,13 +112,20 @@ BALLISTIC_TRANSIT = "ballistic_history"
 BALLISTIC_FAST_V1 = "od_rb85_d1_ballistic_history_fast_v1"
 BALLISTIC_FAST = "od_rb85_d1_ballistic_history_fast_v2"
 BALLISTIC_FAST_TRANSIT = "ballistic_history_fast"
-BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANSIT: BALLISTIC_FAST}
+FIELD_HISTORY_REFERENCE = "od_rb_field_history_v1"
+FIELD_HISTORY_TRANSIT = "ballistic_field_history"
+FIELD_HISTORY_KEYS = ("od_field_x_ut", "od_field_y_ut", "od_field_z_ut",
+                      "od_probe_azimuth_deg", "od_probe_ellipticity_deg")
+BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANSIT: BALLISTIC_FAST,
+                    FIELD_HISTORY_TRANSIT: FIELD_HISTORY_REFERENCE}
 # An explicit prior Fast ID replays the original trajectory grid.
 BALLISTIC_FIDELITIES = {BALLISTIC_REFERENCE: "reference", BALLISTIC_FAST_V1: "fast_v1", BALLISTIC_FAST: "fast"}
 RB_HISTORY_REFERENCE = "od_rb_ballistic_history_v1"
 RB_HISTORY_FAST = "od_rb_ballistic_history_fast_v1"
 RB_HISTORY_MODELS = (RB_HISTORY_REFERENCE, RB_HISTORY_FAST)
-BALLISTIC_FIDELITIES.update({RB_HISTORY_REFERENCE: "reference", RB_HISTORY_FAST: "fast"})
+RB_MIXTURE_HISTORY_MODELS = (*RB_HISTORY_MODELS, FIELD_HISTORY_REFERENCE)
+BALLISTIC_FIDELITIES.update({RB_HISTORY_REFERENCE: "reference", RB_HISTORY_FAST: "fast",
+                             FIELD_HISTORY_REFERENCE: "reference"})
 OD_TRANSIT_KEY = "od_transit_model"
 GAUSSIAN_TRANSIT = "gaussian_fwhm"
 RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, RATE_MODEL_V3, *GAUSSIAN_TRANSIT_MODELS)
@@ -131,7 +138,7 @@ _EXPLICIT_OD_MODELS = {
     GAUSSIAN_TRANSIT_D20_MODEL: OD_MODELS_D20,
     **dict.fromkeys(_NTOTAL_MODEL_IDS.values(), OD_MODELS_NTOTAL),
     **dict.fromkeys(BALLISTIC_FIDELITIES, OD_MODELS_D2SB),
-    **dict.fromkeys(RB_HISTORY_MODELS, OD_MODELS_NTOTAL),
+    **dict.fromkeys(RB_MIXTURE_HISTORY_MODELS, OD_MODELS_NTOTAL),
 }
 GEOMETRY_MODELS = (*GAUSSIAN_TRANSIT_MODELS, *BALLISTIC_FIDELITIES)
 OD_MODEL_CHOICES = (*OD_MODEL_SETS, *_EXPLICIT_OD_MODELS)
@@ -272,8 +279,15 @@ def _od_model_setting(params, *, driven=None):
             return value, None
         if isinstance(transit, str) and transit in BALLISTIC_MODELS:
             model = BALLISTIC_MODELS[transit]
-            if value == OD_MODELS_NTOTAL and (params.get("species") != species.RB85.label or params.get("line") != "D1"):
-                model = RB_HISTORY_REFERENCE if transit == BALLISTIC_TRANSIT else RB_HISTORY_FAST
+            if transit in (BALLISTIC_TRANSIT, BALLISTIC_FAST_TRANSIT):
+                # Older automatic selectors produced a spectrum only on pure 85Rb D1,
+                # including a Custom 100% endpoint. Preserve those replay IDs.
+                # Current Custom mixtures keep their common isotope-resolved ID at both endpoints.
+                medium = params.get("species", "Rb (natural)")
+                use_pure_history = (_pure_rb85_d1(params) and
+                                    (value != OD_MODELS_NTOTAL or medium == species.RB85.label))
+                if medium in _RB_MEDIA and not use_pure_history:
+                    model = RB_HISTORY_REFERENCE if transit == BALLISTIC_TRANSIT else RB_HISTORY_FAST
         elif transit == GAUSSIAN_TRANSIT:
             model = _versioned_model(value, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODEL)
         else:
@@ -332,8 +346,10 @@ def _pure_rb85_d1(params):
 
 
 def _ballistic_scope_reason(params, model=BALLISTIC_REFERENCE):
-    if model not in RB_HISTORY_MODELS and not _pure_rb85_d1(params):
-        return "Beam-crossing histories require pure ⁸⁵Rb on D1."
+    if params.get("species", "Rb (natural)") not in _RB_MEDIA or params.get("line") not in ("D1", "D2"):
+        return "Beam-crossing histories require rubidium on D1 or D2."
+    if model not in RB_MIXTURE_HISTORY_MODELS and not _pure_rb85_d1(params):
+        return "This recorded beam-crossing model requires pure ⁸⁵Rb on D1."
     if _pump_is_driven(params.get("pump_power_mw", 0.0)):
         return "Turn off the pump for the single-probe beam-crossing model."
     if params.get("probe_waist_mm", 1.0) <= 0 or params.get("cell_mm", 1.0) < 0:
@@ -651,15 +667,33 @@ class SASScheme(Scheme):
                       choices=("fixed", GAUSSIAN_TRANSIT, *BALLISTIC_MODELS),
                       choice_labels={"fixed": "Fixed rate", GAUSSIAN_TRANSIT: "Gaussian beam (experimental)",
                                      BALLISTIC_TRANSIT: "Beam-crossing history (reference)",
-                                     BALLISTIC_FAST_TRANSIT: "Beam-crossing history (Fast)"},
+                                     BALLISTIC_FAST_TRANSIT: "Beam-crossing history (Fast)",
+                                     FIELD_HISTORY_TRANSIT: "Beam-crossing history (static field)"},
                       advanced=True,
                       help="Turning on the pump uses the SAS transit relaxation rate for both comparison curves. "
                            "Returning to zero pump restores the selected OD model. "
                            "Gaussian beam estimates the replacement rate from the probe radius and kinetic "
                            "temperature in uniform, uncoated, buffer-free Rb. Beam-crossing history follows "
                            "each Rb isotope through a linearly polarized probe at zero field. "
+                           "The static-field option accepts a Jones polarization. "
                            "The precomputed Fast table covers pure ⁸⁵Rb D1 at a 0.530 mm radius, 95–107 °C, up to 160 µW "
-                           "and a cell up to 12.5 mm long. Other histories use direct trajectories. D2 is a population approximation."),
+                           "and a cell up to 12.5 mm long. Other histories use direct trajectories. The zero-field D2 "
+                           "history uses a population approximation; static-field D2 retains coherences."),
+            *(ParamSpec(key, label, "Atomic", 0.0, low, high, step, unit,
+                        advanced=True, help=help_text,
+                        visible_if={OD_TRANSIT_KEY: FIELD_HISTORY_TRANSIT, "pump_power_mw": 0.0})
+              for key, label, low, high, step, unit, help_text in (
+                  ("od_field_x_ut", "Magnetic field Bₓ", None, None, 1.0, "µT",
+                   "Static field along the probe’s transverse Jones x axis."),
+                  ("od_field_y_ut", "Magnetic field Bᵧ", None, None, 1.0, "µT",
+                   "Static field along the probe’s transverse Jones y axis."),
+                  ("od_field_z_ut", "Magnetic field B_z", None, None, 1.0, "µT",
+                   "Positive z points along probe propagation."),
+                  ("od_probe_azimuth_deg", "Probe azimuth ψ", None, None, 1.0, "°",
+                   "Major-axis angle from Jones x toward y. With zero ellipticity, 0° is x-linear."),
+                  ("od_probe_ellipticity_deg", "Probe ellipticity ε", -45.0, 45.0, 1.0, "°",
+                   "0° is linear, ±45° is circular. Positive ε gives positive S₃ = 2 Im(Eₓ* Eᵧ)."),
+              )),
             ParamSpec("transit_khz", "Transit relaxation γ_t/2π", "Atomic", 100.0,
                       5.0, 2000.0, 5.0, "kHz", advanced=True,
                       help="Atoms leaving/entering the beam relax toward the thermal "
@@ -882,10 +916,28 @@ class SASScheme(Scheme):
 
         return render(data)
 
+    def normalize_params(self, params):
+        """Select a live history for edits outside a recorded pure-85 D1 model.
+
+        The UI retains the pinned choice and replays it again when the cell
+        returns to its original composition. Explicit solver requests stay strict.
+        """
+        recorded = params.get(OD_MODEL_KEY)
+        if (recorded not in (BALLISTIC_REFERENCE, BALLISTIC_FAST_V1, BALLISTIC_FAST)
+                or params.get("species") not in _RB_MEDIA or params.get("line") not in ("D1", "D2")
+                or _pure_rb85_d1(params)):
+            return params
+        reference = recorded == BALLISTIC_REFERENCE
+        return {**params, OD_MODEL_KEY: RB_HISTORY_REFERENCE if reference else RB_HISTORY_FAST,
+                OD_TRANSIT_KEY: BALLISTIC_TRANSIT if reference else BALLISTIC_FAST_TRANSIT}
+
     def migrate_default_params(self, params):
         # Saved snapshots without a profile predate the Exact Voigt default;
         # snapshots without an OD model predate the D20 model choices.
-        return {"weak_probe_profile": LEGACY_WEAK_PROBE, OD_MODEL_KEY: OD_MODELS_PRE_D20, **params}
+        migrated = {"weak_probe_profile": LEGACY_WEAK_PROBE, OD_MODEL_KEY: OD_MODELS_PRE_D20, **params}
+        if migrated[OD_MODEL_KEY] == FIELD_HISTORY_REFERENCE:
+            migrated[OD_TRANSIT_KEY] = FIELD_HISTORY_TRANSIT
+        return migrated
 
     def solve_param_keys(self, params):
         keys = super().solve_param_keys(params)
@@ -900,15 +952,17 @@ class SASScheme(Scheme):
         if transit == "fixed" or (transit in (GAUSSIAN_TRANSIT, *BALLISTIC_MODELS)
                                   and _pump_is_driven(params.get("pump_power_mw", 0.0))):
             keys = tuple(key for key in keys if key != OD_TRANSIT_KEY)
-        if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
-            return keys + ("cell_mm", "line_strength")
-        keys = tuple(key for key in keys if not key.startswith("axial_"))
         # Invalid saved IDs are reported by compute inside the app's input-error handler.
         # Cache-key construction must also work before that handler runs.
         try:
             model = _od_model_setting(params)[1]
         except ODModelSettingError:
             model = None
+        keys = tuple(key for key in keys if key not in FIELD_HISTORY_KEYS
+                     or (model == FIELD_HISTORY_REFERENCE and key in params))
+        if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
+            return keys + ("cell_mm", "line_strength")
+        keys = tuple(key for key in keys if not key.startswith("axial_"))
         if model in BALLISTIC_FIDELITIES:
             return tuple(key for key in keys if key != "transit_khz") + ("cell_mm", "line_strength")
         return keys
@@ -997,6 +1051,7 @@ class SASScheme(Scheme):
         T_density, T_doppler, tied = _temperatures(params)
         model_set, explicit_model = _od_model_setting(params)
         use_history = explicit_model in BALLISTIC_FIDELITIES
+        field_history = explicit_model == FIELD_HISTORY_REFERENCE
         gt = 0.0 if use_history else rate_from_khz_over_2pi(params["transit_khz"])
         power, waist = params["pump_power_mw"], params["waist_mm"]
         probe_supported = (
@@ -1119,8 +1174,8 @@ class SASScheme(Scheme):
         ng_of = {id(b["man"]): len(b["man"].Fg) for b in built}
         for b in built:
             man, off = b["man"], b["offset"]
-            if use_rate:
-                pass   # the rate model supplies alpha and the dispersion below
+            if use_rate or field_history:
+                pass   # the selected model supplies the weak-probe response below
             elif use_history or exact_weak_probe or transit_weak:
                 # U1: the transit rate adds gamma_t to the optical HWHM.
                 width = b["gamma_eff"] + 2.0 * gt if transit_weak else b["gamma_eff"]
@@ -1130,7 +1185,7 @@ class SASScheme(Scheme):
                 component_alpha, component_chi_real, component_probe_profiles = (
                     self._component_response(b, scan, T_doppler))
                 probe_profiles.extend(component_probe_profiles)
-            if not use_rate:
+            if not (use_rate or field_history):
                 alpha += component_alpha
                 chi_real += component_chi_real
             ng = ng_of[id(man)]
@@ -1157,6 +1212,10 @@ class SASScheme(Scheme):
                 history = evaluate_od_display(conditions, scan)
             except ArithmeticError as error:
                 raise ODModelSettingError(f"Beam-crossing reference did not converge: {error}") from error
+            if field_history:
+                scale = conditions.cell_mm * 1e-3 * conditions.line_strength
+                alpha = history.od0 / scale if scale else np.zeros_like(scan)
+                chi_real = None   # the field model returns collected intensity only
         if probe_peak_intensity > 0.0 and not (use_rate or use_history):
             probe_log_grid = probe_saturation.saturation_log_grid(
                 probe_saturation_max)
@@ -1280,6 +1339,10 @@ class SASScheme(Scheme):
         if use_history:
             result["ballistic_depth"] = history.optical_depth
             result["ballistic_diagnostics"] = history.diagnostics
+            if field_history:
+                result["field_history"] = dict(conditions=conditions.recorded_conditions(),
+                                               offsets_hz=history.offsets_hz, transmission=history.transmission,
+                                               od0=history.od0)
         if geometry_rates is not None:
             result["transit_rates_s"] = geometry_rates
         if weak_profile is not None:
@@ -1735,6 +1798,11 @@ class SASScheme(Scheme):
             model = MODELS[raw["probe_model"]]
             diagnostics = raw["ballistic_diagnostics"]
             note = model.accuracy
+            if model.model_id == FIELD_HISTORY_REFERENCE:
+                bx, by, bz, azimuth, ellipticity = (params.get(key, 0.0) for key in FIELD_HISTORY_KEYS)
+                note += (f" Applied B = ({bx:g}, {by:g}, {bz:g}) µT in the probe frame (+z along propagation), "
+                         f"azimuth {azimuth:g}° and ellipticity {ellipticity:g}°. "
+                         "Transition markers identify zero-field hyperfine centers.")
             if reason := diagnostics.get("fallback_reason"):
                 note += " " + str(reason)
             optical_readout["model_accuracy"] = note
@@ -1991,6 +2059,8 @@ def _probe_atom_count(raw, params, length_m):
     """Gaussian intensity-weighted atom count for the same cell and probe."""
     if raw["mode"] != "species":
         return None  # The generic toy has no physical probe waist.
+    if length_m == 0.0:
+        return 0.0
     if axial := raw.get("axial_cell"):
         segment_densities = sum(axial["density_m3"].values())
         density = np.average(segment_densities, weights=np.diff(axial["z_edges_m"]))

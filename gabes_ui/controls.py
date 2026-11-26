@@ -232,14 +232,15 @@ def render_param(container, scheme_name, sp, scheme_obj=None):
     )
 
 
-def param_visible(scheme_name, sp):
+def param_visible(scheme_name, sp, overrides=None):
     if getattr(sp, "hidden", False):
         return False
     cond = getattr(sp, "visible_if", None)
     if not cond:
         return True
     for pname, allowed in cond.items():
-        cur = st.session_state.get(skey(scheme_name, pname))
+        cur = (overrides[pname] if overrides and pname in overrides
+               else st.session_state.get(skey(scheme_name, pname)))
         if isinstance(allowed, (set, tuple, list)):
             if cur not in allowed:
                 return False

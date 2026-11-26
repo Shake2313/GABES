@@ -4,9 +4,11 @@ from dataclasses import asdict, dataclass
 import numpy as np
 import streamlit as st
 
-from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
-                            evaluate_od_display, od_fit_conditions, od_unavailable)
-from gabes.schemes.sas import BALLISTIC_FIDELITIES, GEOMETRY_MODELS, TWO_LEVEL_MODELS
+from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODEvaluation, ODUnsupportedError,
+                            display_reference_offset_hz, evaluate_od_display, frequency_reference,
+                            od_fit_conditions, od_unavailable)
+from gabes.schemes.sas import (BALLISTIC_FIDELITIES, FIELD_HISTORY_KEYS, FIELD_HISTORY_REFERENCE,
+                               GEOMETRY_MODELS, SASScheme, TWO_LEVEL_MODELS)
 from gabes_ui.controls import skey
 
 
@@ -42,6 +44,8 @@ def geometry_replay_params(upload):
             "rb_composition", "rb85_fraction", "probe_power_uw", "probe_waist_mm", "line_strength",
             "ne_pressure_torr", "paraffin_coated", "optical_collision_model", "cell_propagation",
             "od_transit_model")
+    if model_id == FIELD_HISTORY_REFERENCE:
+        keys += FIELD_HISTORY_KEYS
     return {key: params[key] for key in keys}
 
 
@@ -55,6 +59,10 @@ def workspace_params(params, state, upload=None):
         if model_id not in MODELS:
             raise ODUnsupportedError(f"Unknown recorded pump-free OD model ID {model_id!r}.")
         derived[MODEL_KEY] = model_id
+        # The parser validates the original worksheet before any editable controls apply.
+        # Preserve its pinned solver in the original scope, even after a mixture edit.
+        derived = SASScheme().normalize_params(derived)
+        model_id = derived[MODEL_KEY]
         conditions = ODConditions.from_params(derived)
         if MODELS[model_id].status == "implemented":
             reason = od_unavailable(conditions)
@@ -92,6 +100,20 @@ def evaluate_workspace(params, raw):
         if explicit and explicit != scheme_id:
             raise ODUnsupportedError(reason)
         return None
+    if conditions.model_id == FIELD_HISTORY_REFERENCE:
+        solved = raw.get("field_history")
+        # The fixed replacement rate is absent from a history solve's cache
+        # key. Preserve its current displayed value in the measurement record.
+        if (scheme_id == conditions.model_id and solved is not None
+                and dict(solved["conditions"], transit_khz=conditions.transit_khz) == conditions.recorded_conditions()
+                and np.array_equal(solved["offsets_hz"], np.asarray(raw["scan"]) / (2*np.pi)
+                                   + display_reference_offset_hz(conditions))):
+            return ODEvaluation(offsets_hz=solved["offsets_hz"], transmission=solved["transmission"],
+                                optical_depth=raw["ballistic_depth"], od0=solved["od0"],
+                                model_id=scheme_id, frequency_reference=frequency_reference(conditions),
+                                conditions=conditions, diagnostics=raw["ballistic_diagnostics"])
+        if conditions.probe_power_uw > 0.0 and conditions.cell_mm > 0.0:
+            raise ODUnsupportedError("Calculate the field-history spectrum for the current conditions.")
     return _spectrum(conditions, np.asarray(raw["scan"]))
 
 
@@ -142,7 +164,7 @@ def measurement_model_view(view, raw, evaluation):
     output_raw.update(probe_model=evaluation.model_id, transmission=evaluation.transmission,
                       optical_depth=evaluation.optical_depth, od0=evaluation.od0,
                       frequency_reference=asdict(evaluation.frequency_reference),
-                      offsets_hz=evaluation.offsets_hz, od_conditions=asdict(conditions))
+                      offsets_hz=evaluation.offsets_hz, od_conditions=conditions.recorded_conditions())
     return output_view, output_raw
 
 
@@ -253,7 +275,6 @@ def _select_scope_channel(panel, name, detected, content, previous):
 
 def plot_metadata(params, actual_model):
     from gabes import species
-    from gabes.od_model import frequency_reference
     metadata = {"model_id": actual_model, "line": params.get("line"),
                 "pump_power_mw": params.get("pump_power_mw"),
                 "probe_power_uw": params.get("probe_power_uw")}
@@ -266,7 +287,7 @@ def plot_metadata(params, actual_model):
     if conditions.species == species.RB87.label:
         axis["isotope"] = species.RB87.name
     metadata.update(model_id=actual_model or conditions.model_id,
-                    conditions=asdict(conditions),
+                    conditions=conditions.recorded_conditions(),
                     axis_reference=axis, contract_reference=asdict(contract),
                     display_reference_offset_hz=display_reference_offset_hz(conditions))
     if conditions.model_id in GEOMETRY_MODELS:
@@ -279,7 +300,6 @@ def plot_metadata(params, actual_model):
 def native_reference_shift(upload, params):
     """Convert a declared native fine-centroid origin to the current plot, in GHz."""
     from gabes.od_measurement import native_frequency_reference
-    from gabes.od_model import frequency_reference
     from gabes.optical_frequency import reference_offset_hz
 
     source = native_frequency_reference(upload.metadata)
@@ -301,7 +321,7 @@ def native_reference_shift(upload, params):
 
 
 def fit_conditions_key(params, free=()):
-    conditions = asdict(ODConditions.from_params(params))
+    conditions = ODConditions.from_params(params).recorded_conditions()
     return tuple((key, value) for key, value in conditions.items() if key not in free)
 
 

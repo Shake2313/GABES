@@ -1,5 +1,6 @@
 """One bounded fit worker shared by web sessions. Workers never touch Streamlit."""
 from concurrent.futures import CancelledError, ThreadPoolExecutor
+from contextlib import nullcontext
 from copy import deepcopy
 from threading import Event, Lock
 from time import monotonic
@@ -14,14 +15,14 @@ PROFILE_JOB = "sas_od_profile_job"
 class ODFitJob:
     """Run a fit on its own prepared branch and a snapshot of the model inputs."""
 
-    def __init__(self, identity, data, params, *, fit_function=None, **options):
+    def __init__(self, identity, data, params, *, fit_function=None, executor=_EXECUTOR, **options):
         self.identity = identity
         self.visible = True
         self._cancel = Event()
         self._lock = Lock()
         self._last_seen = monotonic()
         self._progress = None
-        self.future = _EXECUTOR.submit(self._run, fit_function, data, deepcopy(params), options)
+        self.future = executor.submit(self._run, fit_function, data, deepcopy(params), options)
 
     def _run(self, fit_function, data, params, options):
         if fit_function is None:
@@ -29,11 +30,22 @@ class ODFitJob:
         with self._lock:
             if not self._continue():
                 raise CancelledError()
-        with blas_single_thread():
+        guard = nullcontext()
+        from gabes.schemes.sas import FIELD_HISTORY_REFERENCE
+        if options.get("model_id") == FIELD_HISTORY_REFERENCE:
+            from gabes.field_spectrum import field_progress
+            # Keep optimizer progress intact while allowing a single expensive
+            # model evaluation to observe cancellation and the session lease.
+            guard = field_progress(lambda _: self._lease_active())
+        with blas_single_thread(), guard:
             return fit_function(data, params, progress=self._report, **options)
 
     def _continue(self):
         return not self._cancel.is_set() and monotonic() - self._last_seen <= 120
+
+    def _lease_active(self):
+        with self._lock:
+            return self._continue()
 
     def _report(self, progress):
         with self._lock:

@@ -16,10 +16,10 @@ from . import core, species
 from ._arrays import readonly_float_array
 from .experimental_alignment import AxisAlignment, fit_signal_affine, frame_alignment, frame_signal_range
 from .experimental_csv import ExperimentalCSV
-from .od_model import ODConditions, evaluate_od_display, is_rate_model, od_unavailable, rate_model_axis
+from .od_model import evaluate_od_display, is_rate_model, od_unavailable, rate_model_axis
 from .od_spectrum_fit import (
     BOUND_TOLERANCE, MAX_ABS_CORRELATION, MAX_CONDITION_NUMBER,
-    ODFitCancelled, ODFitProgress, offered_fit_parameters,
+    ODFitCancelled, ODFitProgress, _fit_conditions, offered_fit_parameters,
 )
 from .schemes.sas import RB_COMPOSITION_CUSTOM, _isotope_composition
 
@@ -268,9 +268,7 @@ def fit_od_profile(trace: ExperimentalCSV, params, alignment: AxisAlignment, roi
     unidentifiable conditions, in which case the estimates are preview-only.
     """
     bounds = dict(bounds or {})
-    conditions = ODConditions.from_params(params)
-    if model_id is not None:
-        conditions = replace(conditions, model_id=model_id)
+    conditions = _fit_conditions(params, model_id)
     if reason := od_unavailable(conditions):
         raise ValueError(reason)
     if float(params.get("pump_power_mw", 0.)) != 0:

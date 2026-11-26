@@ -232,13 +232,13 @@ def _workspace_inputs(scheme, params):
     return declared(params) if callable(declared) else scheme.workspace_inputs
 
 
-def render_conditions(scheme, specs):
+def render_conditions(scheme, specs, *, overrides=None):
     """Mount automatic editors before compute; presets and exports share their state."""
     params = current_params(scheme.name, scheme)
     workspace = set(_workspace_inputs(scheme, params)) | set(scheme.model_comparison_controls)
     main = [sp for sp in specs if not sp.advanced and sp.control != "derived_slider"
             and not (sp.applies_defaults and sp.control == "segmented")
-            and param_visible(scheme.name, sp)]
+            and param_visible(scheme.name, sp, overrides)]
     with st.container(key="gabes_conditions"):
         st.html('<h3 class="gabes-conditions-heading">Conditions</h3>')
         with st.container(horizontal=True, gap="small", key="gabes_conditions_options"):
@@ -249,7 +249,7 @@ def render_conditions(scheme, specs):
                                    [sp], params)
             advanced = [sp for sp in specs if sp.advanced and sp.control != "derived_slider"
                         and sp.name not in grouped and sp.name not in workspace
-                        and param_visible(scheme.name, sp)]
+                        and param_visible(scheme.name, sp, overrides)]
             _field_popover(scheme, "Advanced", advanced, params)
     return params
 

@@ -151,6 +151,9 @@ def _open_sabes():
 
 if st.query_params.get("app") == SABES_QUERY_VALUE:
     plotcard.cancel_od_fit()
+    if "sas_od_field_history_job" in st.session_state:
+        from gabes_ui.od_field_job import cancel_field_job
+        cancel_field_job()
     from gabes_ui.sabes import page as sabes_page
     sabes_page.render(host=_sabes_host())
     st.stop()
@@ -301,7 +304,8 @@ def render_spectra():
             from gabes.od_model import PUMP_GROUP
             from gabes_ui.od_measurement import workspace_params
             visible_specs = [sp for sp in specs if sp.group != PUMP_GROUP]
-        params = render_conditions(scheme, visible_specs)
+        params = render_conditions(scheme, visible_specs,
+                                   overrides={"pump_power_mw": 0.0} if measurement_open else None)
         if not comparing:
             params = render_power_inputs(scheme, visible_specs)
         if measurement_open:
@@ -309,6 +313,8 @@ def render_spectra():
                 upload = od_fit_panel.current_upload()
                 params = workspace_params(params, st.session_state, upload)
             except ValueError as error:
+                from gabes_ui.od_field_job import cancel_field_job
+                cancel_field_job()
                 st.error(str(error))
                 od_fit_panel.render_fit_panel(st.container())
                 return
@@ -335,9 +341,25 @@ def render_spectra():
         from gabes.schemes.sas_axial import AxialInputError
         input_errors += (AxialInputError, ODModelSettingError)
     try:
-        raw = retained[0] if retained is not None else _cached_compute(
-            scheme.name, recompute_items, cache_version)
+        field_pending = False
+        if is_sas or "sas_od_field_history_job" in st.session_state:
+            from gabes_ui.od_field_job import cancel_field_job, field_result, needs_field_job
+            field_pending = needs_field_job(scheme.name, params)
+            if not field_pending:
+                cancel_field_job()
+        if field_pending:
+            def pending_controls():
+                render_power_inputs(scheme, visible_specs)
+                od_fit_panel.render_fit_panel(st.container())
+            raw = field_result(scheme, recompute_items, cache_version, pending_controls)
+            if raw is None:
+                return
+        else:
+            raw = retained[0] if retained is not None else _cached_compute(
+                scheme.name, recompute_items, cache_version)
     except input_errors as error:
+        if is_sas:
+            cancel_field_job()
         st.error(str(error))
         if is_sas:
             od_fit_panel.render_fit_panel(st.container())

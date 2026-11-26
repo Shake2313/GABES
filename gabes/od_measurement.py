@@ -234,13 +234,16 @@ def _validate_transit_record(record, conditions):
 
 def _validate_gabes_transit(metadata):
     from .od_model import ODConditions, od_unavailable
-    from .schemes.sas import GEOMETRY_MODELS
+    from .schemes.sas import FIELD_HISTORY_KEYS, FIELD_HISTORY_REFERENCE, GEOMETRY_MODELS
 
     model = metadata.get("model_id")
     if model not in GEOMETRY_MODELS and "transit" not in metadata:
         return
     try:
-        conditions = ODConditions(**metadata["conditions"])
+        recorded = metadata["conditions"]
+        if model == FIELD_HISTORY_REFERENCE and not set(FIELD_HISTORY_KEYS).issubset(recorded):
+            raise ValueError("missing recorded static field or probe polarization")
+        conditions = ODConditions(**recorded)
         if conditions.model_id != model or model not in GEOMETRY_MODELS or od_unavailable(conditions):
             raise ValueError("model ID mismatch")
         _validate_transit_record(metadata["transit"], conditions)
@@ -275,7 +278,7 @@ def _autood_transit_metadata(row):
         expected = _validate_transit_record(record, conditions)
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise ExperimentalCSVError(f"Invalid AutoOD transit metadata: {exc}") from exc
-    return {"transit": {**expected, "model_id": model}, "conditions": asdict(conditions)}
+    return {"transit": {**expected, "model_id": model}, "conditions": conditions.recorded_conditions()}
 
 
 def _read_comparison(read_row, header, digest):
@@ -576,6 +579,10 @@ def export_comparison_csv(upload, trace, theory_x_ghz, theory_transmission, *,
         experiment_calibration_offset=correction.calibration_offset,
         experiment_display_scaling="display_only", experiment_alignment=asdict(alignment),
     )
+    if upload.metadata.get("generated_by") == "GABES":
+        original_model = upload.metadata.get("original_theory_model_id", upload.metadata["model_id"])
+        if original_model != meta["model_id"]:
+            meta["original_theory_model_id"] = original_model
     if "experiment_sparse_manual_overlay" in upload.metadata:
         meta["experiment_sparse_manual_overlay"] = upload.metadata["experiment_sparse_manual_overlay"]
     if "scope" in upload.metadata:

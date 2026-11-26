@@ -1,7 +1,7 @@
 """Bounded calibration of absolutely calibrated weak-probe OD spectra."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 import numpy as np
 from scipy.optimize import least_squares
@@ -14,7 +14,8 @@ from .experimental_csv import ExperimentalCSV, transform_x
 from .od_model import (MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, is_rate_model,
                        od_unavailable)
 from .schemes.sas import (
-    BALLISTIC_FIDELITIES, GAUSSIAN_TRANSIT_MODELS, GEOMETRY_MODELS, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
+    BALLISTIC_FIDELITIES, FIELD_HISTORY_KEYS, FIELD_HISTORY_REFERENCE, GAUSSIAN_TRANSIT_MODELS,
+    GEOMETRY_MODELS, OD_MODEL_KEY, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
 )
 from .vapor_cell import CellTemperatureState
 
@@ -334,10 +335,9 @@ def od_fit_unavailable(params, *, model_id=None):
 
 
 def _fit_conditions(params, model_id=None, extra_homogeneous_fwhm_hz=0.0):
-    conditions = ODConditions.from_params(params, extra_homogeneous_fwhm_hz=extra_homogeneous_fwhm_hz)
     if model_id is not None:
-        conditions = replace(conditions, model_id=model_id)
-    return conditions
+        params = {**params, OD_MODEL_KEY: model_id}
+    return ODConditions.from_params(params, extra_homogeneous_fwhm_hz=extra_homogeneous_fwhm_hz)
 
 
 def prepare_od_fit(trace: ExperimentalCSV, alignment: AxisAlignment | None = None, *,
@@ -671,7 +671,10 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
             scope={key: _candidate_scope(key, params, applied_model) for key in candidate_keys})
     if applied_model in GEOMETRY_MODELS:
         fitted_params = dict(params, **dict(zip(free, values)))
-        result["transit"] = _fit_conditions(fitted_params, applied_model).transit_metadata()
+        fitted_conditions = _fit_conditions(fitted_params, applied_model)
+        result["transit"] = fitted_conditions.transit_metadata()
+        if applied_model == FIELD_HISTORY_REFERENCE:
+            result["fixed_parameters"].update({key: getattr(fitted_conditions, key) for key in FIELD_HISTORY_KEYS})
     probe_free = [i for i, key in enumerate(free) if key in _PROBE_PARAMETERS]
     if probe_free:
         i = probe_free[0]
