@@ -91,6 +91,11 @@ TWO_LEVEL_MODELS = (TWO_LEVEL_MODEL, TWO_LEVEL_MODEL_V2)
 GAUSSIAN_TRANSIT_MODEL = "od_finite_rb_mf_gaussian_transit_v1"
 GAUSSIAN_TRANSIT_D20_MODEL = "od_finite_rb_mf_gaussian_transit_d20_v1"
 GAUSSIAN_TRANSIT_MODELS = (GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL)
+BALLISTIC_REFERENCE = "od_rb85_d1_ballistic_history_v1"
+BALLISTIC_TRANSIT = "ballistic_history"
+BALLISTIC_FAST = "od_rb85_d1_ballistic_history_fast_v1"
+BALLISTIC_FAST_TRANSIT = "ballistic_history_fast"
+BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANSIT: BALLISTIC_FAST}
 OD_TRANSIT_KEY = "od_transit_model"
 GAUSSIAN_TRANSIT = "gaussian_fwhm"
 RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, *GAUSSIAN_TRANSIT_MODELS)
@@ -101,7 +106,9 @@ _EXPLICIT_OD_MODELS = {
     TRANSIT_WEAK_MODEL_V2: OD_MODELS_D2SB, TWO_LEVEL_MODEL_V2: OD_MODELS_D2SB,
     RATE_MODEL_V2: OD_MODELS_D2SB, GAUSSIAN_TRANSIT_MODEL: OD_MODELS_D2SB,
     GAUSSIAN_TRANSIT_D20_MODEL: OD_MODELS_D20,
+    **dict.fromkeys(BALLISTIC_MODELS.values(), OD_MODELS_D2SB),
 }
+GEOMETRY_MODELS = (*GAUSSIAN_TRANSIT_MODELS, *BALLISTIC_MODELS.values())
 OD_MODEL_CHOICES = (*OD_MODEL_SETS, *_EXPLICIT_OD_MODELS)
 # Atom / Isotope rows of the species knob (rendered as two selectors).
 ATOM_MENU = (
@@ -223,6 +230,8 @@ def _od_model_setting(params):
         value = OD_MODELS_DEFAULT
     if isinstance(value, str) and value in OD_MODEL_SETS:
         transit = params.get(OD_TRANSIT_KEY, "fixed")
+        if isinstance(transit, str) and transit in BALLISTIC_MODELS:
+            return OD_MODELS_D2SB, BALLISTIC_MODELS[transit]
         if transit == GAUSSIAN_TRANSIT:
             if value == OD_MODELS_D2SB:
                 return value, GAUSSIAN_TRANSIT_MODEL
@@ -260,6 +269,20 @@ def _rate_scope_reason(params, *, geometry=False):
     return None
 
 
+def _ballistic_scope_reason(params):
+    pure = (params.get("species") == species.RB85.label or
+            (params.get("species") == "Rb (natural)"
+             and params.get("rb_composition") == RB_COMPOSITION_CUSTOM
+             and params.get("rb85_fraction") == 1.0))
+    if not pure or params.get("line") != "D1":
+        return "Beam-crossing histories require pure ⁸⁵Rb on D1."
+    if _pump_is_driven(params.get("pump_power_mw", 0.0)):
+        return "Turn off the pump for the single-probe beam-crossing model."
+    if params.get("probe_waist_mm", 1.0) <= 0 or params.get("cell_mm", 1.0) < 0:
+        return "Beam-crossing histories require a positive beam radius and nonnegative cell length."
+    return _rate_scope_reason(params, geometry=True)
+
+
 def _pump_free_model_id(params):
     """Model of the pump-off solve for these parameters (explicit ID or model set)."""
     model_set, explicit = _od_model_setting(params)
@@ -286,6 +309,8 @@ def _pump_free_model_reason(params, model):
             return ("The Exact Maxwell Voigt models need uniform, uncoated Rb D1/D2 "
                     "without buffer gas and with Legacy broadening.")
         return None
+    if model in BALLISTIC_MODELS.values():
+        return _ballistic_scope_reason(params)
     if model in RATE_MODELS:
         return _rate_scope_reason(params, geometry=model in GAUSSIAN_TRANSIT_MODELS)
     return None
@@ -555,11 +580,14 @@ class SASScheme(Scheme):
                            "constant through the cell and assumes full output-beam "
                            "collection; check the Rayleigh range for small waists."),
             ParamSpec(OD_TRANSIT_KEY, "Pump-off OD transit", "Atomic", "fixed",
-                      choices=("fixed", GAUSSIAN_TRANSIT),
-                      choice_labels={"fixed": "Fixed rate", GAUSSIAN_TRANSIT: "Gaussian beam (experimental)"},
+                      choices=("fixed", GAUSSIAN_TRANSIT, *BALLISTIC_MODELS),
+                      choice_labels={"fixed": "Fixed rate", GAUSSIAN_TRANSIT: "Gaussian beam (experimental)",
+                                     BALLISTIC_TRANSIT: "Beam-crossing history (⁸⁵Rb D1 reference)",
+                                     BALLISTIC_FAST_TRANSIT: "Beam-crossing history (⁸⁵Rb D1 Fast)"},
                       advanced=True,
                       help="For one linearly polarized probe in uniform, uncoated, buffer-free Rb, "
                            "estimate the replacement rate from the probe radius and kinetic temperature. "
+                           "The history model follows thermal atoms through a linearly polarized beam at zero field. "
                            "Recorded explicit OD model IDs take precedence."),
             ParamSpec("transit_khz", "Transit relaxation γ_t/2π", "Atomic", 100.0,
                       5.0, 2000.0, 5.0, "kHz", advanced=True,
@@ -746,6 +774,8 @@ class SASScheme(Scheme):
                 or _measured_collision_mode(params)):
             return ("Select Rb D1 or D2, turn off the pump, and use a uniform, uncoated cell "
                     "with zero buffer pressure and Legacy broadening.")
+        if _od_model_setting(params)[1] in BALLISTIC_MODELS.values():
+            return "The stationary probe reference uses a replacement rate. Select Fixed rate or Gaussian beam to compare it."
         if not 0.0 <= _probe_power_mw(params) <= 0.1:
             return "Set the probe power between 0 and 100 µW."
         cold_k, path_k, _ = _temperatures(params)
@@ -793,11 +823,21 @@ class SASScheme(Scheme):
             keys = tuple(key for key in keys if key != OD_TRANSIT_KEY)
         if params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED:
             return keys + ("cell_mm", "line_strength")
-        return tuple(key for key in keys if not key.startswith("axial_"))
+        keys = tuple(key for key in keys if not key.startswith("axial_"))
+        # Invalid saved IDs are reported by compute inside the app's input-error handler.
+        # Cache-key construction must also work before that handler runs.
+        try:
+            model = _od_model_setting(params)[1]
+        except ODModelSettingError:
+            model = None
+        if model in BALLISTIC_MODELS.values():
+            return tuple(key for key in keys if key != "transit_khz") + ("cell_mm", "line_strength")
+        return keys
 
     def compute(self, params):
-        if _od_model_setting(params)[1] in GAUSSIAN_TRANSIT_MODELS:
-            reason = _rate_scope_reason(params, geometry=True)
+        requested = _od_model_setting(params)[1]
+        if requested in GEOMETRY_MODELS:
+            reason = _pump_free_model_reason(params, requested)
             if reason:
                 raise ODModelSettingError(reason)
         segmented = params.get("cell_propagation", "Uniform") == sas_axial.SEGMENTED
@@ -876,7 +916,9 @@ class SASScheme(Scheme):
         comps, iso_ref, composition, rb85_fraction, composition_matched = (
             _isotope_composition(params))
         T_density, T_doppler, tied = _temperatures(params)
-        gt = rate_from_khz_over_2pi(params["transit_khz"])
+        model_set, explicit_model = _od_model_setting(params)
+        use_history = explicit_model in BALLISTIC_MODELS.values()
+        gt = 0.0 if use_history else rate_from_khz_over_2pi(params["transit_khz"])
         power, waist = params["pump_power_mw"], params["waist_mm"]
         probe_supported = (
             params["species"] in species.SPECIES_ORDER
@@ -894,7 +936,6 @@ class SASScheme(Scheme):
         paraffin_memory = paraffin_coated and power > 0.0
         reference = _measured_collision_mode(params)
         cs_reference = iso_ref == species.CS133 and params.get("cs_self_broadening_reference", False)
-        model_set, explicit_model = _od_model_setting(params)
         pump_free_model = None
         if probe_supported and not _pump_is_driven(power):
             pump_free_model = _pump_free_model_id(params)
@@ -905,7 +946,7 @@ class SASScheme(Scheme):
                 # An explicit weak-probe model fixes its velocity measure.
                 params = dict(params, weak_probe_profile=(
                     LEGACY_WEAK_PROBE if explicit_model == LEGACY_MODEL else EXACT_WEAK_PROBE))
-        weak_profile = _weak_probe_profile(params)
+        weak_profile = None if use_history else _weak_probe_profile(params)
         applied_profile = weak_profile["applied"] if weak_profile is not None else None
         exact_weak_probe = applied_profile == EXACT_WEAK_PROBE
         pumped_maxwell = applied_profile == PUMPED_MAXWELL
@@ -985,7 +1026,7 @@ class SASScheme(Scheme):
             scan = np.asarray(scan_rad_s, dtype=float)
             if scan.ndim != 1 or not scan.size or not np.isfinite(scan).all():
                 raise ValueError("The frequency axis must be a nonempty, finite 1-D array.")
-            if probe_power > 0.0 and not use_rate:
+            if probe_power > 0.0 and not (use_rate or use_history):
                 steps = np.diff(scan)
                 if not steps.size or steps[0] <= 0.0 or not np.allclose(steps, steps[0], rtol=1e-9, atol=0.0):
                     raise ValueError("Finite-probe propagation requires an increasing, uniform frequency axis.")
@@ -999,7 +1040,7 @@ class SASScheme(Scheme):
             man, off = b["man"], b["offset"]
             if use_rate:
                 pass   # the rate model supplies alpha and the dispersion below
-            elif exact_weak_probe or transit_weak:
+            elif use_history or exact_weak_probe or transit_weak:
                 # U1: the transit rate adds gamma_t to the optical HWHM.
                 width = b["gamma_eff"] + 2.0 * gt if transit_weak else b["gamma_eff"]
                 component_alpha, component_chi_real = linear_hyperfine.species_complex_voigt(
@@ -1028,7 +1069,14 @@ class SASScheme(Scheme):
                 params, extra_homogeneous_fwhm_hz=extra_fwhm)
             alpha, chi_real, probe_log_grid, probe_alpha_table = rate_model_display_tables(
                 conditions, scan)
-        if probe_peak_intensity > 0.0 and not use_rate:
+        if use_history:
+            from ..od_model import ODConditions, evaluate_od_display
+            conditions = ODConditions.from_params(params, extra_homogeneous_fwhm_hz=extra_fwhm)
+            try:
+                history = evaluate_od_display(conditions, scan)
+            except ArithmeticError as error:
+                raise ODModelSettingError(f"Beam-crossing reference did not converge: {error}") from error
+        if probe_peak_intensity > 0.0 and not (use_rate or use_history):
             probe_log_grid = probe_saturation.saturation_log_grid(
                 probe_saturation_max)
             probe_background_table = np.zeros((probe_log_grid.size, scan.size))
@@ -1109,7 +1157,7 @@ class SASScheme(Scheme):
                     density_temp_c=T_density - 273.15,
                     doppler_temp_c=T_doppler - 273.15,
                     doppler_temp_tied=tied,
-                    probe_model=(pump_free_model if use_rate
+                    probe_model=(pump_free_model if use_rate or use_history
                                  else (TWO_LEVEL_MODEL_V2 if per_line else TWO_LEVEL_MODEL)
                                  if probe_peak_intensity > 0.0
                                  else pump_free_model if transit_weak
@@ -1148,6 +1196,9 @@ class SASScheme(Scheme):
                         if paraffin_coated else None),
                     paraffin_t1_s=(PARAFFIN_REFERENCE_T1_S
                                    if paraffin_coated else None))
+        if use_history:
+            result["ballistic_depth"] = history.optical_depth
+            result["ballistic_diagnostics"] = history.diagnostics
         if geometry_rates is not None:
             result["transit_rates_s"] = geometry_rates
         if weak_profile is not None:
@@ -1423,11 +1474,13 @@ class SASScheme(Scheme):
     def _obs_species(self, raw, params, alpha, chi_real, L, include_figures=True):
         x = raw["scan"] / (2 * np.pi) / 1e9                  # GHz (relative)
         finite_probe = raw.get("probe_model") in (*TWO_LEVEL_MODELS, *RATE_MODELS)
-        if "transit_rates_s" in raw:
+        if "ballistic_depth" in raw or "transit_rates_s" in raw:
             finite_probe = raw["probe_power_mw"] > 0
         optical_readout = _optical_readout(
             x, "GHz", alpha, L, params, raw, effective=finite_probe)
         T_trans = optical_readout["transmission"]
+        if "ballistic_depth" in raw:
+            optical_readout["ballistic_diagnostics"] = raw["ballistic_diagnostics"]
         if "transit_rates_s" in raw:
             optical_readout["transit_rates_s"] = raw["transit_rates_s"]
         if "optical_collisions" in raw:
@@ -1596,7 +1649,17 @@ class SASScheme(Scheme):
         if profile is not None:
             optical_readout["weak_probe_profile"] = profile
             metrics.append(_weak_probe_profile_metric(profile))
-        if raw.get("probe_model") in RATE_MODELS:
+        if "ballistic_depth" in raw:
+            from ..od_model import MODELS
+            model = MODELS[raw["probe_model"]]
+            diagnostics = raw["ballistic_diagnostics"]
+            note = model.accuracy
+            if reason := diagnostics.get("fallback_reason"):
+                note += " " + str(reason)
+            optical_readout["model_accuracy"] = note
+            metrics.append(dict(label="Probe model scope", value=model.description, help=note, kind="status"))
+            tables.append({"title": "Beam-crossing history", "markdown": note})
+        elif raw.get("probe_model") in RATE_MODELS:
             from ..od_model import MODELS
             accuracy = MODELS[raw["probe_model"]].accuracy
             model_id = raw["probe_model"] if "transit_rates_s" in raw else RATE_MODEL
@@ -1781,6 +1844,8 @@ def _collected_response(raw, params):
     chi_real_unit = raw.get("chi_real_unit")
     chi_real = None if chi_real_unit is None else chi_real_unit * params["line_strength"]
     alpha_table = raw.get("probe_alpha_table_unit") if raw["mode"] == "species" else None
+    if "ballistic_depth" in raw and raw["probe_power_mw"] > 0:
+        return (raw["ballistic_depth"] / L if L > 0 else alpha), None, L
     if alpha_table is not None:
         # The nonlinear model gives collected power but no unique phase index.
         _transmission, alpha = probe_saturation.propagate_gaussian_spectrum(

@@ -14,7 +14,8 @@ SAS scheme draws pure Rb87 against the Rb87 centroid; add
 Implemented models (``MODELS``): the zero-probe SAS profiles (legacy velocity
 grid and Exact Maxwell Voigt), the Exact profile with the transit HWHM (user
 decision U1), and the magnetic-sublevel rate model for a linearly polarized Rb
-probe ported from AutoOD 0.2.2. ``from_params`` still selects today's SAS model
+probe ported from AutoOD 0.2.2. Pure ⁸⁵Rb D1 also supports opt-in ballistic
+beam-crossing histories for a pump-free, uncoated, buffer-free cell. ``from_params`` still selects today's SAS model
 when no ``od_model`` is saved; the defaults change in a separate value commit.
 The current two-level finite-probe SAS path is not evaluable on arbitrary
 offsets. Units follow the SAS controls (°C, mm, µW, kHz).
@@ -35,6 +36,7 @@ from .optical_pumping import MAGNETIC_PI, ProjectedProbe
 from .schemes.sas import (
     EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, OD_MODEL_KEY, RB_COMPOSITION_CUSTOM,
     GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODELS, GAUSSIAN_TRANSIT,
+    BALLISTIC_FAST, BALLISTIC_MODELS, BALLISTIC_REFERENCE, _ballistic_scope_reason,
     OD_TRANSIT_KEY, _species_path_density, _temperatures,
     RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
     _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
@@ -64,6 +66,16 @@ GAUSSIAN_TRANSIT_ACCURACY = (
 )
 
 
+BALLISTIC_ACCURACY = (
+    "Thermal atoms enter a linearly polarized beam at zero magnetic field. "
+    "The model integrates magnetic-sublevel populations along each crossing with intrinsic optical "
+    "width and propagates the collected power through the cell. A Gaussian profile is assumed at each "
+    "depth. At 99 °C and 100 µW, evolving the radial profile changed transmission by about "
+    "0.6–0.8 percentage points at the two measured inner wings and 2.85 points at +2.275 GHz. "
+    "Stray-field effects, radiation trapping and longitudinal atomic motion are omitted."
+)
+
+
 @dataclass(frozen=True)
 class ODModel:
     model_id: str
@@ -71,7 +83,7 @@ class ODModel:
     status: str                       # implemented | scheme_only
     finite_power: bool
     weak_probe_profile: str | None = None
-    engine: str = "sas"               # sas | rate
+    engine: str = "sas"               # sas | rate | ballistic
     accuracy: str = ""                # documented accuracy, for readouts and exports
     # Measured Rb D2 self-broadening instead of the D1 value on D2 (_v2 IDs,
     # user decision 2026-11-24, checklist rb-d2-self-broadening-default-value).
@@ -104,6 +116,10 @@ MODELS = {model.model_id: model for model in (
             "measured Rb D2 self-broadening, any probe power",
             "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY,
             per_line_self_broadening=True),
+    ODModel(BALLISTIC_FAST, "Fast beam-crossing history for pure ⁸⁵Rb D1",
+            "implemented", True, engine="ballistic", accuracy=BALLISTIC_ACCURACY, per_line_self_broadening=True),
+    ODModel(BALLISTIC_REFERENCE, "Beam-crossing history for pure ⁸⁵Rb D1",
+            "implemented", True, engine="ballistic", accuracy=BALLISTIC_ACCURACY, per_line_self_broadening=True),
     ODModel(GAUSSIAN_TRANSIT_MODEL,
             "Rb magnetic-sublevel probe model with Gaussian transit and measured Rb D2 self-broadening",
             "implemented", True, engine="rate", accuracy=GAUSSIAN_TRANSIT_ACCURACY, per_line_self_broadening=True),
@@ -238,6 +254,9 @@ class ODConditions:
         params[MODEL_KEY] = self.model_id
         if self.model_id in GAUSSIAN_TRANSIT_MODELS:
             params[OD_TRANSIT_KEY] = GAUSSIAN_TRANSIT
+        for mode, model_id in BALLISTIC_MODELS.items():
+            if self.model_id == model_id:
+                params[OD_TRANSIT_KEY] = mode
         return params
 
     def _transit_rate_s(self, isotope):
@@ -248,13 +267,15 @@ class ODConditions:
 
     def transit_rates_s(self):
         """Beam replacement rates in s⁻¹ for the isotopes present, keyed by isotope name."""
+        if self.model_id in BALLISTIC_MODELS.values():
+            return {}
         components, *_ = _isotope_composition(self.to_params())
         return {isotope.name: self._transit_rate_s(isotope) for isotope, _ in components}
 
     def transit_metadata(self):
         """Beam conditions and per-isotope rates for a pump-free OD calculation."""
         kinetic_c = self.temp_c if self.doppler_temp_c is None else self.doppler_temp_c
-        return dict(mode=GAUSSIAN_TRANSIT if self.model_id in GAUSSIAN_TRANSIT_MODELS else "fixed",
+        return dict(mode=self.to_params()[OD_TRANSIT_KEY],
                     kinetic_temperature_k=kinetic_c + 273.15, probe_waist_m=self.probe_waist_mm * 1e-3,
                     rate_s_inverse=self.transit_rates_s())
 
@@ -269,6 +290,7 @@ class ODEvaluation:
     frequency_reference: FrequencyReference
     conditions: ODConditions
     weak_probe_profile: dict | None = field(default=None, compare=False)
+    diagnostics: dict | None = field(default=None, compare=False)
 
 
 def od_fit_conditions(params):
@@ -303,6 +325,8 @@ def od_unavailable(conditions):
     if model.status != "implemented":
         return (f"{model.description}. Use the magnetic-sublevel rate model "
                 "(od_finite_rb_mf_rate_v1) for a finite probe on arbitrary frequencies.")
+    if model.engine == "ballistic":
+        return _ballistic_scope_reason(conditions.to_params())
     if model.engine == "rate":
         return _rate_model_reason(conditions)
     if conditions.probe_power_uw > 0.0:
@@ -345,13 +369,21 @@ def _evaluate(conditions, offsets, scan):
         raise ODUnsupportedError(reason)
     model = MODELS[conditions.model_id]
     reference = frequency_reference(conditions)
-    if model.engine == "rate":
-        transmission, depth, od0 = _rate_model_evaluate(conditions, scan)
+    if model.engine in ("rate", "ballistic"):
+        diagnostics = None
+        if model.engine == "ballistic":
+            from .ballistic_spectrum import evaluate_ballistic_spectrum
+            fidelity = "fast" if model.model_id == BALLISTIC_FAST else "reference"
+            result = evaluate_ballistic_spectrum(conditions, scan, fidelity=fidelity)
+            transmission, depth, od0 = result.transmission, result.optical_depth, result.od0
+            diagnostics = result.diagnostics
+        else:
+            transmission, depth, od0 = _rate_model_evaluate(conditions, scan)
         return ODEvaluation(
             offsets_hz=readonly_float_array(offsets),
             transmission=readonly_float_array(transmission),
             optical_depth=readonly_float_array(depth), od0=readonly_float_array(od0),
-            model_id=model.model_id, frequency_reference=reference, conditions=conditions)
+            model_id=model.model_id, frequency_reference=reference, conditions=conditions, diagnostics=diagnostics)
     params = conditions.to_params()
     raw = SASScheme()._compute_species(
         params, scan_rad_s=scan, extra_homogeneous_fwhm_hz=conditions.extra_homogeneous_fwhm_hz)

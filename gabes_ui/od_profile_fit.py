@@ -118,12 +118,11 @@ def _condition_rows(box, params, settings):
     from gabes.od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
     from gabes.od_profile_fit import profile_fit_parameters
     from gabes.od_spectrum_fit import PARAMETERS, CANDIDATE_PARAMETERS
-    from gabes.schemes.sas import RB_COMPOSITION_CUSTOM, _isotope_composition
+    from gabes.schemes.sas import BALLISTIC_MODELS, RB_COMPOSITION_CUSTOM, _isotope_composition
 
     state = st.session_state
     _, _, composition, fraction, _ = _isotope_composition(params)
     custom = composition == RB_COMPOSITION_CUSTOM
-    fixed_fraction = None if custom else fraction
     preview = dict(params)
     columns = (2.25, 1, 1)
     headers = box.columns(columns, gap="small")
@@ -155,7 +154,9 @@ def _condition_rows(box, params, settings):
             state[fit_key] = eligible and name in settings.get("vary", ())
         help_text = None
         if not eligible:
-            if model_id in GAUSSIAN_TRANSIT_MODELS and name in ("probe_power_uw", "probe_waist_mm", "rb85_fraction"):
+            if model_id in BALLISTIC_MODELS.values() and name in ("probe_power_uw", "probe_waist_mm", "rb85_fraction"):
+                help_text = "Beam-crossing fits use pure ⁸⁵Rb and the measured incident power and beam radius."
+            elif model_id in GAUSSIAN_TRANSIT_MODELS and name in ("probe_power_uw", "probe_waist_mm", "rb85_fraction"):
                 help_text = "Set this value from the experiment. Fitting it with Gaussian transit has not been validated."
             elif name == "probe_waist_mm":
                 help_text = "Fixed during fitting. Probe intensity depends on power divided by beam radius squared."
@@ -166,8 +167,10 @@ def _condition_rows(box, params, settings):
         selected = field.checkbox(label, key=fit_key, disabled=not eligible, help=help_text)
         spec = (PARAMETERS if name in PARAMETERS else CANDIDATE_PARAMETERS)[name]
         lower, upper = spec[2] * factor, spec[3] * factor
-        locked = name == "rb85_fraction" and not custom
-        current = fixed_fraction if locked else params[name]
+        locked = name == "rb85_fraction" and (not custom or model_id in BALLISTIC_MODELS.values())
+        current = fraction if locked else params[name]
+        if locked and custom:
+            preview[name] = current
         key = "sas_precise_base_" + name
         if key not in state or locked:
             state[key] = current * factor

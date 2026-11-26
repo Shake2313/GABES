@@ -7058,7 +7058,7 @@
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
       "effort": "research",
-      "status": "ready",
+      "status": "done",
       "depends_on": [
         "od-sas-finite-probe-hyperfine-pumping",
         "shared-transit-time-model"
@@ -7097,7 +7097,8 @@
         "shared-transit-time-model",
         "od-sas-weak-probe-magneto-optical-reference-mode",
         "od-sas-rb-mixture-self-broadening-density-audit",
-        "od-sas-external-weak-probe-spectrum-regression"
+        "od-sas-external-weak-probe-spectrum-regression",
+        "od-rb85-d1-ballistic-independent-waist-validation"
       ],
       "source_documents": [
         "docs/transit_time.md",
@@ -7112,9 +7113,43 @@
         "runs/transit_time_2026_11_25/experiment/trajectory.json",
         "runs/transit_time_2026_11_25/experiment/README.md",
         "runs/od_precision_2026_11_26/fast_kernel/verdict.json",
-        "runs/od_precision_2026_11_26/fast_doppler/result.json"
+        "runs/od_precision_2026_11_26/fast_doppler/result.json",
+        "runs/od_history_2026_11_26/README.md",
+        "runs/od_history_2026_11_26/gate/GATE.md",
+        "runs/od_history_2026_11_26/gate/verdict.json"
       ],
-      "review_2026_11_26": "⟦AI⟧ Codex·Claude 합의. 허브 20261126-1030 정밀도 검토와 1033 Fast 검토 및 같은 날 수락 회신. 다음 패치 전 파일 분담을 알리고 species.py 또는 od_profile_fit.py가 필요해지면 담당자와 조율한다."
+      "review_2026_11_26": "⟦AI⟧ Codex·Claude 합의. 허브 20261126-1030 정밀도 검토와 1033 Fast 검토 및 같은 날 수락 회신. 다음 패치 전 파일 분담을 알리고 species.py 또는 od_profile_fit.py가 필요해지면 담당자와 조율한다.",
+      "implementation_2026_11_26": {
+        "scope": "⟦AI⟧ 사용자 요청에 따른 선택형 구현. od_rb85_d1_ballistic_history_v1과 od_rb85_d1_ballistic_history_fast_v1. 한 단면에서 원자가 횡단하는 동안 점유 이력을 적분하고 전체 광파워를 z 방향으로 전파한다. 단면은 각 z에서 가우시안, B=0, 선형 편광, 전 빔 수광을 가정한다. 기본 모델과 예전 모델 ID 보존.",
+        "convergence": "⟦AI⟧ 99 °C·0.530 mm·12.5 mm, 1/10/100 µW, 2001점. 국소/횡속도·도플러·세기 격자 세분화 전후 출구 T 최대 0.0218%p, 모든 절대 50% 교차점 0.044 MHz 이내. 축 적분만 8→32배 세분화한 최대 차이 0.00588%p. 시간 의존 24준위 OBE에서 중앙 통과 광자수 차이는 영자장 네 사례 최대 0.018%.",
+        "fast": "⟦AI⟧ 기준 해 확정 뒤 GATE 동결. 3점 원자 디튜닝 적분은 T=0.001 분류 오류로 기각. 채택 격자 64×10×10, 디튜닝 구간당 4점. 11개 표준 스펙트럼의 동일 조건에서 OD₀ 동일, T 최대 0.00238%p, 검출 하한 위 OD_eff 최대 0.000648, 하한 판정 불일치 0. 온도·파워·주파수 및 별도 범위 끝점과 혼합/역순 입력 검사. 범위 밖 기준 해의 사용 사유 표시.",
+        "data": "⟦AI⟧ 고정 SAS 보정과 11개 실측 상대 CSV 9581점. 센서 99 °C 정규화 RMS: 고정 교체율 4.477%p, 가우시안 교체율 5.052%p, 이력 기준 6.787%p. 온도 공동 피팅: 고정 100.901 °C/4.026%p, 가우시안 교체율 102.049 °C/3.920%p, 이력 기준 104.08848 °C/4.01952%p, Fast 104.08849 °C/4.01947%p. 이력 기준의 간격 증가는 245.26 MHz, 실측 255.69 MHz. 독립 파워 눈금 적합이 하한에 걸려 그 불확도 비교는 미판정.",
+        "performance": "⟦AI⟧ 1코어·BLAS=1·Numba. 물리 온도를 바꾼 워밍 5회 중앙값: 가우시안 교체율 0.140 s, 이력 기준 37.16 s, Fast 23.35 s. 11개 CSV 고정온도·공동온도·파워눈금 진단 전체 26.36 / 422.53 / 264.58 s. Numba 미사용 기준 해 2001점·100 µW 283.90 s (1회).",
+        "limits": "⟦AI⟧ 100 µW에서 단면 변형을 허용하면 두 안쪽 날개 출구 T는 약 0.57/0.80%p, +2.275 GHz에서는 2.85%p 이동. 셀 끝의 축방향 원자 유입·복사 포획·미측정 B·편광의 영향은 미분리. 두 번째 반경 예측과 기본값 판단의 잔여 측정은 od-rb85-d1-ballistic-independent-waist-validation에 등록."
+      }
+    },
+    {
+      "id": "od-rb85-d1-ballistic-independent-waist-validation",
+      "area": "OD/SAS finite-probe reference",
+      "title": "두 번째 빔 반경에서 ⁸⁵Rb D₁ 선택형 통과 이력 모델의 측정 예측 검증",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "effort": "research",
+      "status": "blocked_external",
+      "depends_on": [
+        "od-sas-finite-probe-zeeman-and-transit-refinement"
+      ],
+      "blocked_on": [
+        "⟦AI⟧ 독립 반경에서의 실측 파워 스캔과 셀 위치 자기장·편광 기록."
+      ],
+      "unblock_condition": "⟦AI⟧ 동일 입구 중심 세기(P∝w²)의 별도 CSV, 파워·반경·온도·주파수·편광/자기장·검출 보정이 확보될 때.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 0.53 mm/100 µW와 0.265 mm/25 µW에서 이미 계산된 두 날개의 T와 간격을 대조. 조건부 추정 온도와 상대 신호, 실제 절대 T를 구분해 판정.",
+        "⟦AI⟧ 측정 잔차가 통과 이력·자기장·단면 변형·재흡수 중 어느 요인으로 설명되는지 평가한 뒤 기본값 채택 여부는 사용자 결정으로 기록."
+      ],
+      "source_documents": [
+        "docs/transit_time.md"
+      ]
     },
     {
       "id": "shared-transit-time-model",

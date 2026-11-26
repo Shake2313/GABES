@@ -378,6 +378,8 @@ def render_fit_panel(panel, *, params=None, view=None):
     parts = measurement.gap_slices(trace)
     coverage = sorted(tuple(sorted((float(x[s.start]), float(x[s.stop - 1])))) for s in parts)
     model = inputs.plot_metadata(params, view.get("od_model_id"))
+    if "ballistic_diagnostics" in readout:
+        model["ballistic_diagnostics"] = readout["ballistic_diagnostics"]
     if origin := measurement.native_frequency_reference(upload.metadata):
         model["experiment_frequency_reference"] = origin
     theory = {"detuning": tx.tolist(), "transmission": ty.tolist(), "n_eff": readout.get("n_eff")}

@@ -134,6 +134,9 @@ def pump_power_comparison(scheme, params, *, resolve_raw, current_raw=None, curr
             if not probe_scope:
                 row.update(probe_model_scope=row_profile["applied"],
                            probe_model_note=row_profile["scope"])
+        if "ballistic_diagnostics" in readout:
+            row.update(probe_model=raw["probe_model"], ballistic_diagnostics=readout["ballistic_diagnostics"])
+            profile = None
         if "axial_cell" in readout:
             axial = readout["axial_cell"]
             row["axial_cell"] = {key: axial[key] for key in (

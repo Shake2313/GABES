@@ -35,7 +35,7 @@ def _fit_dataset(dataset, view):
     if model_id in MODELS:
         model = MODELS[model_id]
         row.update(probe_model=model_id, probe_model_scope=model.description,
-                   probe_model_note=model.accuracy)
+                   probe_model_note=readout.get("model_accuracy", model.accuracy))
         source.update(probe_model=model_id)
     if "resolution" not in readout:
         # These diagnostics belong to the original solver. A replay evaluator

@@ -233,14 +233,15 @@ def _validate_transit_record(record, conditions):
 
 
 def _validate_gabes_transit(metadata):
-    from .od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
+    from .od_model import ODConditions, od_unavailable
+    from .schemes.sas import GEOMETRY_MODELS
 
     model = metadata.get("model_id")
-    if model not in GAUSSIAN_TRANSIT_MODELS and "transit" not in metadata:
+    if model not in GEOMETRY_MODELS and "transit" not in metadata:
         return
     try:
         conditions = ODConditions(**metadata["conditions"])
-        if conditions.model_id != model or model not in GAUSSIAN_TRANSIT_MODELS:
+        if conditions.model_id != model or model not in GEOMETRY_MODELS or od_unavailable(conditions):
             raise ValueError("model ID mismatch")
         _validate_transit_record(metadata["transit"], conditions)
     except (KeyError, TypeError, ValueError, OverflowError) as exc:

@@ -14,7 +14,7 @@ from .experimental_csv import ExperimentalCSV, transform_x
 from .od_model import (MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, is_rate_model,
                        od_unavailable)
 from .schemes.sas import (
-    GAUSSIAN_TRANSIT_MODELS, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
+    BALLISTIC_MODELS, GAUSSIAN_TRANSIT_MODELS, GEOMETRY_MODELS, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
 )
 from .vapor_cell import CellTemperatureState
 
@@ -88,7 +88,7 @@ def offered_fit_parameters(params, *, model_id=None):
     except (ODUnsupportedError, ValueError, KeyError):
         model = None
     # The identifiability study used a fixed transit rate and fixed beam radius.
-    if model in GAUSSIAN_TRANSIT_MODELS:
+    if model in GEOMETRY_MODELS:
         return offered
     if (params.get("species") == "Rb (natural)"
             and params.get("rb_composition") == RB_COMPOSITION_CUSTOM):
@@ -318,7 +318,7 @@ def od_fit_unavailable(params, *, model_id=None):
             requested = _od_model_setting(params)[1]
         except ValueError as error:
             return str(error)
-        if requested in GAUSSIAN_TRANSIT_MODELS:
+        if requested in GEOMETRY_MODELS:
             model_id = requested
     finite = model_id is not None and MODELS.get(model_id) is not None and MODELS[model_id].finite_power
     if float(params.get("pump_power_mw", 0.0)) != 0.0 or (_probe_power_mw(params) != 0.0 and not finite):
@@ -496,6 +496,8 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     if not free or len(free) != len(set(free)) or any(key not in _FIT_PARAMETERS for key in free):
         raise ValueError("Choose distinct physical fit parameters from the supported list.")
     candidate_keys = tuple(key for key in free if key in CANDIDATE_PARAMETERS)
+    if candidate_keys and _fit_conditions(params, model_id).model_id in BALLISTIC_MODELS.values():
+        raise ValueError("For a beam-crossing fit, fix the isotope composition, measured beam radius and power.")
     if (set(candidate_keys) & set(_PROBE_PARAMETERS)
             and not is_rate_model(_fit_conditions(params, model_id).model_id)):
         raise ValueError("Probe power and beam radius can be fitted only with the "
@@ -627,8 +629,8 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         return dict(points=int(r.size), rms=float(np.sqrt(np.mean(r**2))),
                     mean=float(np.mean(r)), quantiles=np.quantile(r, [0.05, 0.5, 0.95]).tolist())
 
-    profile = _weak_probe_profile(params)
     applied_model = _fit_conditions(params, model_id).model_id
+    profile = None if applied_model in BALLISTIC_MODELS.values() else _weak_probe_profile(params)
     finite = MODELS[applied_model].finite_power
     result = dict(
         status="converged" if best.success else "optimizer_limit",
@@ -667,7 +669,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
         result["candidate_parameters"] = dict(
             keys=list(candidate_keys),
             scope={key: _candidate_scope(key, params, applied_model) for key in candidate_keys})
-    if applied_model in GAUSSIAN_TRANSIT_MODELS:
+    if applied_model in GEOMETRY_MODELS:
         fitted_params = dict(params, **dict(zip(free, values)))
         result["transit"] = _fit_conditions(fitted_params, applied_model).transit_metadata()
     probe_free = [i for i, key in enumerate(free) if key in _PROBE_PARAMETERS]
