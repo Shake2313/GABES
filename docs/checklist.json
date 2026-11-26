@@ -1577,7 +1577,7 @@
       "user_decision_model_ids_2026_11_24": "User decision 2026-11-24: add new model IDs and a new default model set that use the D2 coefficient; existing IDs and sets (pre_d20, d20, weak_probe_legacy and the rest) keep 0.69 on D2 so saved comparisons and the AutoOD 0.2.2 fixture replay unchanged (as for U1).",
       "decision_required": [
         "Rb D2 기본 계수: (가) 현재 D1 값 0.69 유지, 대신 문서·정확도 문구에 차이와 크기 명시, (나) D2 측정값 1.10±0.17(Kondo 2006) 기본 채택, (다) D2 이론값 1.03(Weller 2011 Table 1) 채택.",
-        "밀도 규약: 동위원소 밀도 N_i 유지 또는 전체 Rb 밀도 N_total. N_total은 D2뿐 아니라 D1(FWM 포함) 값도 바꾼다."
+        "⟦AI⟧ 2026-11-26: 기존 밀도 규약 질문의 판정·사용자 결정은 od-sas-rb-mixture-self-broadening-density-audit로 이관."
       ],
       "impact_scope": "⟦AI⟧ D2 계수만 바꾸면 D2 조건의 호출자만 값이 바뀐다: schemes/sas.py:900, schemes/sas_axial.py, schemes/sas_probe_reference.py, od_model.py(rate·weak 모델), 그리고 AutoOD(고정 엔진 갱신 시). D2 조건에서 hyperfine.self_broadened_gamma를 거치는 그 밖 경로(Magneto·Rydberg 포함 여부)는 구현 때 호출자 목록으로 확정한다. 밀도 규약을 바꾸면 D1까지 바뀐다: hyperfine.self_broadened_gamma 호출자(schemes/fwm/common.py:822, fwm_zeeman_response.py, schemes/absorption.py, dressed_cell_absorption.py)와 tests/baseline_focused.npz. FWM 충돌 dephasing은 이 값 위에서 맞춰져 있다.",
       "acceptance_criteria": [
@@ -1590,7 +1590,40 @@
         "⟦AI⟧ Cs의 opt-in 기준 경로(cs_reference)와 2026-11-16 결정은 그대로 둔다."
       ],
       "implementation_2026_11_24": "⟦AI⟧ 3956706 added the set d20_d2sb with od_weak_exact_voigt_transit_v2, od_finite_rb_mf_rate_v2, finite_power_2level_gaussian_propagation_v2 and sas_pumped_exact_voigt_transit_v2 as an opt-in; the next commit makes it the default (SAS cache_version 18). The measured D2 coefficient applies on the paths that record a _v2 ID and in the finite-probe reference. Legacy-grid paths keep 0.69 in every set so their recorded IDs replay: an explicit Legacy request, configurations outside the Exact scope (buffer gas, coating, measured collisions) and the segmented cell. Snapshot (runs/rb_d2_self_broadening): all 250 pre_d20/d20 entries bit-identical; under d20_d2sb D1 and every Legacy-grid entry identical; D2 max |dT| 8.2e-4 (weak, 90 C, 12.5 mm), 2.7e-3 (rate, 100 uW), 0.070 (weak, 150 C). The AutoOD engine pin and manual Sec. 2.2 are with the product Codex chat; the archive gitlink with the archive chat.",
-      "last_reviewed_at": "2026-11-24"
+      "last_reviewed_at": "2026-11-24",
+      "related_items": [
+        "od-sas-rb-mixture-self-broadening-density-audit"
+      ]
+    },
+    {
+      "id": "od-sas-rb-mixture-self-broadening-density-audit",
+      "area": "OD/SAS · Rb 자체 충돌폭",
+      "title": "자연 Rb D₁·D₂ 자체 충돌폭에 곱하는 섭동 원자 밀도 검증",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "status": "ready",
+      "effort": "research",
+      "related_items": [
+        "rb-d2-self-broadening-default-value"
+      ],
+      "problem": "⟦AI⟧ 2026-11-24에 결정한 D₂ 계수와 별개로, 혼합셀에서 β에 곱할 밀도가 미결이다. 이 항목이 해당 밀도 결정의 유일한 담당 항목이다. 감사는 지금 진행할 수 있으며 기본값 변경은 별도 사용자 결정이다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ Weller(D₁)·Kondo(D₂) 계수별 측정 셀 조성과 밀도 정의, HWHM/FWHM·2π·단위를 명시한다. 흡수체 가중치는 fᵢN에 고정하고 섭동체 밀도 fᵢN·N을 대조한다. 동위원소별 βᵢⱼ는 독립 자료 유무를 표시한다.",
+        "⟦AI⟧ 순수 동위원소 극한과 고온 자연 혼합셀 날개를 각각 검사한다. ⁸⁵Rb 중심 기준 약 −3.4 GHz 부근에서 충격 근사 Lorentz 선모양이 유효한지 따로 검토한다. 측정 전후의 좌표·온도·모델 ID를 고정해 잔차를 보고한다.",
+        "⟦AI⟧ 2026-11-26 GABES D₂ 선별 계수 약한 프로브 민감도: 55/110 °C·12.5 mm 및 150 °C·2 mm에서 밀도 정의만 바꾼 최대 |ΔT|는 0.00164/0.834/8.00%p. 실측 오차와 구분한다. 사용자 채택 전 기존 계수·모델 ID·결과를 보존하고 D₁/FWM을 포함한 호출 경로와 기준값 영향을 보고한다."
+      ],
+      "source_documents": [
+        "https://arxiv.org/abs/1107.3092",
+        "https://doi.org/10.1103/PhysRevA.73.062504",
+        "gabes/species.py",
+        "gabes/od_model.py"
+      ],
+      "local_evidence": [
+        "runs/od_precision_2026_11_26/mixture/sensitivity.json"
+      ],
+      "depends_on": [
+        "rb-d2-self-broadening-default-value"
+      ]
     },
     {
       "id": "species-line-rabi-and-saturation-provenance",
@@ -4533,7 +4566,8 @@
         "The ground-state population assumption is stated, degeneracy-weighted or Boltzmann, and is testable in a case with large ground-state splitting.",
         "Polarization propagation uses the medium's normal modes rather than assuming a Faraday geometry; Voigt and intermediate angles are either supported with a convergence statement or refused with an explicit unsupported status.",
         "Transmission, rotation, and ellipticity are all derived from one output field vector, so they cannot disagree with each other.",
-        "At zero field with linear input polarization, the mode reproduces the existing pump-off absorption spectrum within a documented tolerance."
+        "At zero field with linear input polarization, the mode reproduces the existing pump-off absorption spectrum within a documented tolerance.",
+        "⟦AI⟧ 2026-11-26 비교 검증: ElecSus의 약한 프로브에서 종·횡·비스듬한 자기장의 S₀와 검출 Stokes를 같은 조건으로 대조한다. 유한 파워 파워 스캔은 별도 범위다. HIP-ElecSus의 지름별 열린/닫힌 전이 검증은 0.6 T·거의 균일한 빔의 실험 설계 사례로 사용한다."
       ],
       "out_of_scope": [
         "Replacing the OBE OD/SAS path.",
@@ -4573,6 +4607,10 @@
         "docs/daily_report/2026-10-06_scheme-2_lambda-coherence.md",
         "docs/daily_report/2026-10-11_scheme-2_lambda-coherence.md",
         "docs/daily_report/2026-10-16_scheme-2_lambda-coherence.md"
+      ],
+      "scope_link_2026_11_26": "⟦AI⟧ 유한 파워 자기장 효과는 궤적 항목의 별도 보류 범위다. 이 항목의 약한 프로브·자기장 모드와 분리한다.",
+      "related_items": [
+        "od-sas-finite-probe-zeeman-and-transit-refinement"
       ]
     },
     {
@@ -5291,7 +5329,40 @@
       ],
       "depends_on": [],
       "problem": "⟦AI⟧ Current species.line_integrated_alpha uses CF2/[2(2I+1)] without second pF. tests/test_sas.py:91..109 checks lifetime oscillator sums and degeneracy ratios for all 6 isotope/line combinations, ratio7/5 retained. External AutoOD-Rb source/baseline lies under ignored references/*. sas.py:358-359 still says lab AutoOD calculator <0.1%; guide lines409,563,922 repeat it. Internal ODScheme closure is not independent experimental validation.; tests/test_sas.py:260-271 still asserts area and peak <0.01, while sas.info states <0.1%. Tighten only internal numerical closure, not claim external experimental validation.",
-      "implementation_2026_11_13": "⟦AI⟧ 45492e6 distinguishes Rb D1 internal OD/SAS pump-off closure (relative area 3.938e-4, peak 1.186e-4 in the named test) from Rb D2 AutoOD software-reference matching. Guide regenerated with 11 embedded images. 110 focused tests passed."
+      "implementation_2026_11_13": "⟦AI⟧ 45492e6 distinguishes Rb D1 internal OD/SAS pump-off closure (relative area 3.938e-4, peak 1.186e-4 in the named test) from Rb D2 AutoOD software-reference matching. Guide regenerated with 11 embedded images. 110 focused tests passed.",
+      "related_items": [
+        "od-sas-external-weak-probe-spectrum-regression"
+      ]
+    },
+    {
+      "id": "od-sas-external-weak-probe-spectrum-regression",
+      "area": "OD/SAS · 외부 실측 검증",
+      "title": "자연 Rb D₂ 약한 프로브의 공개 투과 스펙트럼 회귀",
+      "origin": "ai_execution_of_human_request",
+      "priority": "P2",
+      "status": "ready",
+      "effort": "small",
+      "related_items": [
+        "od-sas-normalization-reference-provenance",
+        "shared-transit-time-model",
+        "od-sas-rb-mixture-self-broadening-density-audit"
+      ],
+      "acceptance_criteria": [
+        "⟦AI⟧ Pizzey 등의 자연 Rb D₂, 75 mm, 명목 40/73 °C 데이터를 원본 SHA-256·주파수 기준·정규화·800빈 규칙과 함께 고정한다. 명목 온도 고정과 온도만 피팅한 RMS 및 추정 온도를 따로 보고한다. ElecSus 추정 온도와 독립 온도계 교정을 구별한다. 원자료 전체와 날짜별 결과는 main에 넣지 않는다.",
+        "⟦AI⟧ 논문이 제시한 프로브 파워·빔 크기로 유한 파워와 약한 프로브 예측 차이가 사전에 정한 비교 허용오차 안인지 검사한다. 조건이 누락되면 범위/불확실성을 보고한다. gabes.transit 단위 변환을 사용해 점유율 교체와 광학 HWHM을 각각 검산하며 HIP-ElecSus의 이완 계수를 그대로 채택하지 않는다."
+      ],
+      "source_documents": [
+        "https://doi.org/10.1088/1367-2630/ac9cfe",
+        "https://github.com/durham-qlm/scope2elecsus/tree/bec17b0e30d3ce6904c5945a49ff79422096b4f3/Notebook_Folder",
+        "gabes/transit.py"
+      ],
+      "local_evidence": [
+        "runs/elecsus_review_2026_11_25/experiment/results.json",
+        "runs/elecsus_review_2026_11_25/hip/README.md"
+      ],
+      "depends_on": [
+        "od-sas-normalization-reference-provenance"
+      ]
     },
     {
       "id": "scheme-current-documentation-and-examples",
@@ -6983,19 +7054,67 @@
     {
       "id": "od-sas-finite-probe-zeeman-and-transit-refinement",
       "area": "OD/SAS finite-probe reference",
-      "title": "Resolve magnetic sublevel pumping and transit in the finite-probe reference",
+      "title": "유한 파워 ⁸⁵Rb D₁에서 원자의 빔 횡단 이력을 계산하고 셀 출구 투과율 검증",
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
       "effort": "research",
-      "status": "parked",
+      "status": "ready",
       "depends_on": [
-        "od-sas-finite-probe-hyperfine-pumping"
+        "od-sas-finite-probe-hyperfine-pumping",
+        "shared-transit-time-model"
       ],
-      "activation_trigger": "⟦AI⟧ 분포형 통과시간 또는 통합한 Rb 모델의 적용 범위를 벗어나는 자기 부분준위 모델을 별도로 요청하고 목표 조건이 정해질 때.",
       "acceptance_criteria": [
-        "⟦AI⟧ Quantify the effect against the projected reference under the target conditions and document grid convergence, runtime and the applicable polarization and geometry."
+        "⟦AI⟧ 열평형으로 입사한 원자에 대해 I[r(t)]를 따라 점유율을 적분한다. 충돌 파라미터·횡속도·종방향 Maxwell 속도를 평균하고 광파워를 셀 길이 방향으로 전파한다. 유입 플럭스의 속도 가중치와 체류시간을 함께 써 균일장의 점유율 적분이 1인지 검사한다. 경로 이력에 교체 reset을 중복 적용하지 않는다.",
+        "⟦AI⟧ 광학 HWHM과 모집단 교체율의 단위·물리적 채널을 명시한다. 일정한 세기와 지수분포의 경과시간에서는 같은 광학폭을 사용한 정상상태 단일 reset 해를 회복하는지 확인한다. P→0 전 스펙트럼의 해석적 약한 흡수, 얇은 셀 극한, 입자수 보존과 양수성, 궤적·속도·축 방향 적분의 독립 세분화를 검사한다.",
+        "⟦AI⟧ 99 °C, 1/e² 반경 0.53 mm, 셀 길이 12.5 mm에서 충돌단면적 출처와 평균자유행로/w, |v_z|τ와 국소 흡수길이의 비 및 셀 끝 효과를 제시한다. 300 m/s×2 µs ≈ 0.6 mm는 길이 진단의 예시다. 단면마다 가우시안 모양을 고정하면 100 µW 최대 포화 주파수에서 변형 가능한 단면과 비교한다. 공명광 재흡수는 보류 가정으로 명시하고 횡방향 OD를 추정한다.",
+        "⟦AI⟧ 가장 포화가 큰 안쪽 날개에서 100 µW, 중심 통과(b=0) 한 궤적의 시간 의존 전체 OBE와 율방정식을 대조한다. 국소 흡수 단면적, 속도·단면 평균, 출구 T와 OD_eff를 각각 보고한다.",
+        "⟦AI⟧ 11개 파워(3.95–100 µW)의 SAS 주파수, 상대 투과율 정규화, 제외 구간을 고정한다. 센서 99 °C 결과를 먼저 보고하고 양쪽 50% 교차점·간격·스펙트럼 잔차와 공동 온도 피팅에 따른 이동량을 제시한다. 한 반경에서 T·파워 눈금·w·γₜ를 동시에 피팅하지 않는다. 중심 세기를 맞춘 독립 두 번째 반경(P∝w²)을 예측한 뒤 기본값 여부를 판단한다.",
+        "⟦AI⟧ 실측 잔차를 통과 이력에 귀속하려면 차폐 여부, E와 k에 대한 B 크기·방향, 입사 편광/타원율을 기록한다. 미측정 시 귀속을 유보한다. 이 기록과 두 번째 반경 측정은 선택형 경로 개발의 선행조건이 아니다."
       ],
-      "scope_update_2026_11_20": "⟦AI⟧ 단일 선형 편광·영자장·펌프 없는 Rb OD의 자기 부분준위 점유율은 od-sas-autood-csv-web-workspace에서 통합하도록 지정됐다. 여기에는 분포형 통과시간과 그 밖의 적용 범위 확장만 남긴다. 기존 유한 프로브 참조 보기의 검증 기록은 od-sas-finite-probe-hyperfine-pumping에 있다."
+      "scope_update_2026_11_20": "⟦AI⟧ 단일 선형 편광·영자장·펌프 없는 Rb OD의 자기 부분준위 점유율은 od-sas-autood-csv-web-workspace에서 통합하도록 지정됐다. 여기에는 분포형 통과시간과 그 밖의 적용 범위 확장만 남긴다. 기존 유한 프로브 참조 보기의 검증 기록은 od-sas-finite-probe-hyperfine-pumping에 있다.",
+      "user_request_2026_11_26": "“비교군에서 본받을 사항들을 GABES 체크리스트에 반영하기 위해, 반영할 사항들 클로드에게도 넘기고, 피드백을 한번 받고 합의를 본 뒤 체크리스트에 반영해주세요. 그 이후 빔 전파에 의한 누적되는 광펌핑 이력을 계산하는 패치를 진행하겠습니다.”",
+      "scope_2026_11_26": "⟦AI⟧ Codex·Claude 합의. 펌프 없는 무코팅·무완충 ⁸⁵Rb D₁, 영자장·선형 편광을 대상으로 한다. 기존 정상상태 단일 교체율, 가우시안 횡단면 평균, 종방향 광 감쇠를 기준으로 보존한다. 새 선택형 모델 ID로 원자의 경로를 따른 점유율 이력을 추가한다. 향후 D₂에 적용할 때 d20_d2sb의 선별 자체 충돌폭 규약을 명시한다. 기존 ID와 저장 결과를 재현한다.",
+      "coherence_evidence_2026_11_26": "⟦AI⟧ 99 °C, 순수 ⁸⁵Rb D₁, B=0, 단일 π 프로브, 같은 파수·γₜ=488,156 s⁻¹, 자체 충돌폭 끔, 입구 중심 세기에서 종속도 평균. 두 파워의 실측 양쪽 50% 날개 네 점에서 율방정식과 전체 정상상태 OBE의 국소 흡수 단면적 상대차 ≤0.146%. 출구 T 또는 시간 의존 궤적 오차의 상한으로 쓰지 않는다. CoOMBE 24상태 D₁은 폭·점유·교체 조건을 맞춘 국소 독립 대조용이다.",
+      "parked_scope_2026_11_26": "⟦AI⟧ 유한 파워의 비영자장·타원 편광과 복사 포획은 보류한다. 자기장·편광을 교정한 파워 스캔 또는 재흡수를 판별할 횡 OD·독립 관측량이 생기면 해당 범위를 따로 평가한다.",
+      "measurement_condition_2026_11_24": {
+        "user_quote_via_claude_2026_11_26": "“자기 차폐 없었습니다.”",
+        "field": "클로드 회신에 따르면 셀 위치 B의 크기·방향은 미측정.",
+        "interpretation": "⟦AI⟧ ⁸⁵Rb F=3, τ≈2.05 µs에서는 약 16.5 µT에서 |ω_L|τ≈1. 실제 B값으로 대입하지 않는다. 궤적 인터페이스와 내부 상태를 분리한다. 자장을 지원하는 시간 의존 OBE가 준비되면 100 µW·b=0에서 B⊥E = 50 µT를 가정한 민감도와 B=0 결과를 함께 보고한다."
+      },
+      "fast_companion_2026_11_26": {
+        "user_request": "“속도를 비교적 덜 느려지거나, 오히려 빠르게 만들 수 있을지도 판단해주세요.”",
+        "status": "⟦AI⟧ 동시 타당성 조사. Fast 제품 판정은 새 이력 모델 ID와 수렴한 기준 해를 고정한 다음 진행한다.",
+        "reference": "⟦AI⟧ 같은 경계조건·입사 상태·횡/종속도 측도·절단·광학폭·축 방향 감쇠와 검출 정의를 사용한다. 기준 해가 변경되면 다시 검증한다. 감쇠로 변형되는 빔은 전체 반경 세기 분포에 의존한다. 원자가 z 경계나 종속도에 따라 다른 세기 이력을 겪으면 그 결합을 보존한다.",
+        "candidates": "⟦AI⟧ 같은 이력에서 작은 행렬 풀이를 일괄 처리하고 동일한 유효 디튜닝의 원자 응답을 재사용한다. v_z가 Δ−kv_z에만 들어갈 때 같은 속도 가중치·절단·꼬리를 보존한 선형 합성곱으로 국소 흡수를 구한다. 축방향 감쇠는 평균 후에 풀고 출구에서 검출 개구에 맞춰 광파워를 적분한다. 캐시는 물리 입력·조사 이력·프로필·경계·수치 설정을 포함한다. 누적 광량 해는 단열·비포화 극한 대조용이며 포화된 경로의 시간 순서를 보존한다.",
+        "gate": [
+          "⟦AI⟧ 제품 최적화 전에 GATE에 수치 한계와 이유를 고정한다. 기본·끝점·약/강한 파워·좁은 구조·양쪽 날개·표 바깥을 포함하고 동일 표시 축 전 점의 T, OD₀, OD_eff, 교차점 위치, 내보내기·CSV 판독, 유효성 및 하한/상한 상태를 판정한다. 직접 해로 경계/보간점을 확인하고 실패 구간은 정확 계산·기준 해 또는 미인증 표시로 처리한다.",
+          "⟦AI⟧ 적응표 경계에서 셀 온도·파워눈금·주파수 이동을 연속 스윕한다. OD_eff와 날개 위치의 유한차분 기울기·화면 정밀도 이상의 점프를 검사한다. 11월 24일 자료에서 센서 온도 고정/공통 온도 피팅을 각각 Fast와 기준 해로 수행해 피팅 T와 눈금 차이를 사전 지정한 피팅 불확도의 분율로 판정한다. 실측 보정은 기준 해에서 정한다.",
+          "⟦AI⟧ 첫 실행(새 프로세스, JIT 디스크 캐시 비움/예열), 워밍 후 5회 중앙값, 최악 조건, 물리 입력 변경 및 캐시 적중을 구별한다. 전체 2,001점 스펙트럼과 반복 피팅을 각각 새 이력 기준 해 및 기존 정상상태 배포 경로와 비교한다. 스레드 수, JIT 유무 및 NumPy 대체 경로 동등성, 수렴/대체 비율을 기록한다. AutoOD 노출 전 전체 스펙트럼 예산을 고정한다. 부분 실험의 가속비는 전체 속도비로 환산하지 않는다."
+        ],
+        "pilot_evidence": "⟦AI⟧ 기준 해 확정 전 별도 타당성 조사, 단일 코어·워밍 후 5회 중앙값. 얇은 입구의 14상태 D₁ 궤적(v_z=0, 4개 파워): SDIRK 행렬의 정확한 블록 소거+Numba로 0.169→0.0487 s(3.47×), 시간 격자 2배에서 0.348→0.0972 s(3.58×), 단면적 상대차 ≤4×10⁻¹⁵. 빈 JIT 캐시 첫 호출 2.92 s. 별도 10 µW·주파수 9점·종속도 108점·횡궤적 16개의 같은 이산 측도: 고유 유효 디튜닝 972→578회, 3.072→1.841 s(1.67×), 국소 흡수 곡선 상대차 ≤1.4×10⁻¹⁴. 두 가속비는 곱하지 않는다. 전체 도플러·셀 전파의 수렴 및 실제 2,001점 스펙트럼·피팅 속도는 후속 판정."
+      },
+      "related_items": [
+        "shared-transit-time-model",
+        "od-sas-weak-probe-magneto-optical-reference-mode",
+        "od-sas-rb-mixture-self-broadening-density-audit",
+        "od-sas-external-weak-probe-spectrum-regression"
+      ],
+      "source_documents": [
+        "docs/transit_time.md",
+        "gabes/optical_pumping.py",
+        "gabes/od_model.py",
+        "https://doi.org/10.1103/PhysRevA.80.032505",
+        "https://doi.org/10.1016/j.optcom.2010.10.101",
+        "https://doi.org/10.1016/j.cpc.2024.109374"
+      ],
+      "local_evidence": [
+        "runs/od_precision_2026_11_26/spot_same_k.json",
+        "runs/transit_time_2026_11_25/experiment/trajectory.json",
+        "runs/transit_time_2026_11_25/experiment/README.md",
+        "runs/od_precision_2026_11_26/fast_kernel/verdict.json",
+        "runs/od_precision_2026_11_26/fast_doppler/result.json"
+      ],
+      "review_2026_11_26": "⟦AI⟧ Codex·Claude 합의. 허브 20261126-1030 정밀도 검토와 1033 Fast 검토 및 같은 날 수락 회신. 다음 패치 전 파일 분담을 알리고 species.py 또는 od_profile_fit.py가 필요해지면 담당자와 조율한다."
     },
     {
       "id": "shared-transit-time-model",
