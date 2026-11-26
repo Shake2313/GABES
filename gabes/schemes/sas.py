@@ -115,6 +115,10 @@ BALLISTIC_FAST_TRANSIT = "ballistic_history_fast"
 BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANSIT: BALLISTIC_FAST}
 # An explicit prior Fast ID replays the original trajectory grid.
 BALLISTIC_FIDELITIES = {BALLISTIC_REFERENCE: "reference", BALLISTIC_FAST_V1: "fast_v1", BALLISTIC_FAST: "fast"}
+RB_HISTORY_REFERENCE = "od_rb_ballistic_history_v1"
+RB_HISTORY_FAST = "od_rb_ballistic_history_fast_v1"
+RB_HISTORY_MODELS = (RB_HISTORY_REFERENCE, RB_HISTORY_FAST)
+BALLISTIC_FIDELITIES.update({RB_HISTORY_REFERENCE: "reference", RB_HISTORY_FAST: "fast"})
 OD_TRANSIT_KEY = "od_transit_model"
 GAUSSIAN_TRANSIT = "gaussian_fwhm"
 RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, RATE_MODEL_V3, *GAUSSIAN_TRANSIT_MODELS)
@@ -127,6 +131,7 @@ _EXPLICIT_OD_MODELS = {
     GAUSSIAN_TRANSIT_D20_MODEL: OD_MODELS_D20,
     **dict.fromkeys(_NTOTAL_MODEL_IDS.values(), OD_MODELS_NTOTAL),
     **dict.fromkeys(BALLISTIC_FIDELITIES, OD_MODELS_D2SB),
+    **dict.fromkeys(RB_HISTORY_MODELS, OD_MODELS_NTOTAL),
 }
 GEOMETRY_MODELS = (*GAUSSIAN_TRANSIT_MODELS, *BALLISTIC_FIDELITIES)
 OD_MODEL_CHOICES = (*OD_MODEL_SETS, *_EXPLICIT_OD_MODELS)
@@ -267,6 +272,8 @@ def _od_model_setting(params, *, driven=None):
             return value, None
         if isinstance(transit, str) and transit in BALLISTIC_MODELS:
             model = BALLISTIC_MODELS[transit]
+            if value == OD_MODELS_NTOTAL and (params.get("species") != species.RB85.label or params.get("line") != "D1"):
+                model = RB_HISTORY_REFERENCE if transit == BALLISTIC_TRANSIT else RB_HISTORY_FAST
         elif transit == GAUSSIAN_TRANSIT:
             model = _versioned_model(value, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODEL)
         else:
@@ -316,12 +323,16 @@ def _rate_scope_reason(params, *, geometry=False):
     return None
 
 
-def _ballistic_scope_reason(params):
+def _pure_rb85_d1(params):
     pure = (params.get("species") == species.RB85.label or
             (params.get("species") == "Rb (natural)"
              and params.get("rb_composition") == RB_COMPOSITION_CUSTOM
              and params.get("rb85_fraction") == 1.0))
-    if not pure or params.get("line") != "D1":
+    return pure and params.get("line") == "D1"
+
+
+def _ballistic_scope_reason(params, model=BALLISTIC_REFERENCE):
+    if model not in RB_HISTORY_MODELS and not _pure_rb85_d1(params):
         return "Beam-crossing histories require pure ⁸⁵Rb on D1."
     if _pump_is_driven(params.get("pump_power_mw", 0.0)):
         return "Turn off the pump for the single-probe beam-crossing model."
@@ -360,7 +371,7 @@ def _pump_free_model_reason(params, model):
                     "without buffer gas and with Legacy broadening.")
         return None
     if model in BALLISTIC_FIDELITIES:
-        return _ballistic_scope_reason(params)
+        return _ballistic_scope_reason(params, model)
     if model in RATE_MODELS:
         return _rate_scope_reason(params, geometry=model in GAUSSIAN_TRANSIT_MODELS)
     return None
@@ -639,16 +650,16 @@ class SASScheme(Scheme):
             ParamSpec(OD_TRANSIT_KEY, "Pump-off OD transit", "Atomic", "fixed",
                       choices=("fixed", GAUSSIAN_TRANSIT, *BALLISTIC_MODELS),
                       choice_labels={"fixed": "Fixed rate", GAUSSIAN_TRANSIT: "Gaussian beam (experimental)",
-                                     BALLISTIC_TRANSIT: "Beam-crossing history (⁸⁵Rb D1 reference)",
-                                     BALLISTIC_FAST_TRANSIT: "Beam-crossing history (⁸⁵Rb D1 Fast)"},
+                                     BALLISTIC_TRANSIT: "Beam-crossing history (reference)",
+                                     BALLISTIC_FAST_TRANSIT: "Beam-crossing history (Fast)"},
                       advanced=True,
                       help="Turning on the pump uses the SAS transit relaxation rate for both comparison curves. "
                            "Returning to zero pump restores the selected OD model. "
                            "Gaussian beam estimates the replacement rate from the probe radius and kinetic "
                            "temperature in uniform, uncoated, buffer-free Rb. Beam-crossing history follows "
-                           "thermal ⁸⁵Rb atoms through a linearly polarized D1 probe at zero field. "
-                           "Fast uses the tabulated reference for a 0.530 mm radius, 95–107 °C, up to 160 µW "
-                           "and a cell up to 12.5 mm long."),
+                           "each Rb isotope through a linearly polarized probe at zero field. "
+                           "The precomputed Fast table covers pure ⁸⁵Rb D1 at a 0.530 mm radius, 95–107 °C, up to 160 µW "
+                           "and a cell up to 12.5 mm long. Other histories use direct trajectories. D2 is a population approximation."),
             ParamSpec("transit_khz", "Transit relaxation γ_t/2π", "Atomic", 100.0,
                       5.0, 2000.0, 5.0, "kHz", advanced=True,
                       help="Atoms leaving/entering the beam relax toward the thermal "
@@ -1027,7 +1038,7 @@ class SASScheme(Scheme):
         # densities and their historical coefficient on both D lines.
         total_rb = _ntotal_uniform_rb(params, model_set)
         per_line = model_set in (OD_MODELS_D2SB, OD_MODELS_NTOTAL) and (
-            use_rate or transit_weak or pumped_transit or probe_peak_intensity > 0.0)
+            use_history or use_rate or transit_weak or pumped_transit or probe_peak_intensity > 0.0)
         pressure = params.get("ne_pressure_torr", 0.0)
         buffer_gamma = constants.neon_buffer_broadening(pressure) if not reference else 0.0
         collision_reports = {}

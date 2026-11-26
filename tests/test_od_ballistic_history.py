@@ -52,7 +52,7 @@ def test_history_weak_limit_sampled_view_and_fitter(transit, model):
 ])
 def test_history_scope_rejects_before_solve(conditions):
     with pytest.raises(ODModelSettingError):
-        SASScheme().compute(parameters(**conditions))
+        SASScheme().compute(parameters(od_model=BALLISTIC_REFERENCE, **conditions))
 
 
 @pytest.mark.parametrize(("setting", "selector", "sas_set", "off_id", "probe_uw"), [
@@ -94,7 +94,8 @@ def test_invalid_transit_selector_still_errors_with_pump_on():
 def test_pure_custom_and_fit_conditions():
     p = parameters(species="Rb (natural)", rb_composition="Custom", rb85_fraction=1., probe_power_uw=100.)
     assert od_fit_unavailable(p) is None
-    assert od_unavailable(ODConditions.from_params(dict(p, rb85_fraction=.999))) is not None
+    assert od_unavailable(ODConditions.from_params(dict(p, rb85_fraction=.999))) is None
+    assert od_unavailable(ODConditions.from_params(dict(p, rb85_fraction=.999, od_model=BALLISTIC_REFERENCE)))
     assert not {"rb85_fraction", "probe_power_uw", "probe_waist_mm"}.intersection(offered_fit_parameters(p))
 
 

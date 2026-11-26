@@ -1593,7 +1593,8 @@
       "last_reviewed_at": "2026-11-24",
       "related_items": [
         "od-sas-rb-mixture-self-broadening-density-audit"
-      ]
+      ],
+      "density_scope_2026_11_26": "⟦AI⟧ 11월 24일은 D₂ 계수 결정. 11월 26일 결정은 새 혼합 OD/SAS 모델의 섭동 밀도에만 적용되며 자연·사용자 혼합비의 D₁과 D₂가 바뀐다. 순수 동위원소 D₁/FWM 및 기록된 모델 ID는 이전 계산을 재현한다."
     },
     {
       "id": "od-sas-rb-mixture-self-broadening-density-audit",
@@ -1601,7 +1602,7 @@
       "title": "자연 Rb D₁·D₂ 자체 충돌폭에 곱하는 섭동 원자 밀도 검증",
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
-      "status": "ready",
+      "status": "done",
       "effort": "research",
       "related_items": [
         "rb-d2-self-broadening-default-value"
@@ -1619,11 +1620,20 @@
         "gabes/od_model.py"
       ],
       "local_evidence": [
-        "runs/od_precision_2026_11_26/mixture/sensitivity.json"
+        "runs/od_precision_2026_11_26/mixture/sensitivity.json",
+        "runs/gemini_rb_mixture_audit_20261126/results.json",
+        "runs/od_mixture_ntotal_20261126/README.md"
       ],
       "depends_on": [
         "rb-d2-self-broadening-default-value"
-      ]
+      ],
+      "user_decision_2026_11_26": {
+        "source": "Claude chat, 2026-11-26; runs/agent_hub/20261126-1221_claude-to-all_user-decision-mixture-density-ntotal.md",
+        "quote": "아니 그냥 지금 결정하겠습니다. (나)로 갑니다.",
+        "scope": "혼합 Rb OD/SAS D₁·D₂의 새 모델은 자체 충돌폭 βN_total, 흡수체 밀도 fᵢN_total. 과거 명시 모델 ID와 세트는 Nᵢ로 재현한다."
+      },
+      "audit_2026_11_26": "⟦AI⟧ Weller D₁, Kondo D₂는 자연 Rb 총밀도 기준. 동위원소쌍별 계수는 두 논문에서 정하지 않았다. 150 °C·2 mm 자연 Rb의 Nᵢ→N_total 최대 투과율 변화는 D₁ 3.13%p, D₂ 8.00%p. 순수 동위원소 변화 0. 감사와 측정 일치 여부는 별개다.",
+      "implementation_2026_11_26": "⟦AI⟧ 6c7c8b2는 35조건·4,397개 항목 바이트 동등. 9bc3321의 새 균일셀 기본 세트 d20_ntotal에만 총밀도 적용. 110 °C·12.5 mm 자연 Rb D₁/D₂ 최대 투과율 차이 0.30033/0.83370%p, 150 °C·2 mm에서 3.13289/7.99919%p. 50:50은 각 0.37261/1.12312 및 3.87335/9.85190%p. 순수·농축 끝점 및 기존 모델의 수치 재현. 예전 모델의 세 개 세부 표시는 실제 계산 ID로 교정. 분할 셀은 예전 밀도·계수 사용. AutoOD 기존 고정본의 6개 스펙트럼과 4개 CSV ID 왕복 검증. AutoOD 핀·이론서 갱신은 후속."
     },
     {
       "id": "species-line-rabi-and-saturation-provenance",
@@ -5340,7 +5350,7 @@
       "title": "자연 Rb D₂ 약한 프로브의 공개 투과 스펙트럼 회귀",
       "origin": "ai_execution_of_human_request",
       "priority": "P2",
-      "status": "ready",
+      "status": "done",
       "effort": "small",
       "related_items": [
         "od-sas-normalization-reference-provenance",
@@ -5358,11 +5368,15 @@
       ],
       "local_evidence": [
         "runs/elecsus_review_2026_11_25/experiment/results.json",
-        "runs/elecsus_review_2026_11_25/hip/README.md"
+        "runs/elecsus_review_2026_11_25/hip/README.md",
+        "runs/gemini_pizzey_d2_regression_20261126/results.json",
+        "runs/gemini_pizzey_d2_regression_20261126/weak_probe_thresholds.json"
       ],
       "depends_on": [
         "od-sas-normalization-reference-provenance"
-      ]
+      ],
+      "validation_2026_11_26": "⟦AI⟧ 75 mm 자연 Rb D₂, 800빈. 기존 d20_d2sb, transit=0에서 40/73 °C 고정 RMSE 0.8424/0.7520%p, 온도만 피팅한 39.6954/72.7179 °C에서 0.6909/0.6976%p. 공통 밀도로 계산한 ElecSus와의 모델 간 RMSE 0.0235/0.0210%p. 스캔별 빔 파워와 반경 및 독립 온도계 교정은 미기록. 논문 대표 조건의 유한 파워 모델 검증에는 사용할 수 없다. 40 °C 온도차는 주로 GABES의 Steck 표기 증기압과 ElecSus numDenRb 액상식 차이다.",
+      "fixture_disposition_2026_11_26": "⟦AI⟧ 원본 고정 커밋에서 측정 배열의 별도 배포 허가를 확인하지 못했다. 공개 main에는 데이터를 복사하지 않고 원본 SHA와 로컬 재현 결과를 기록한다."
     },
     {
       "id": "scheme-current-documentation-and-examples",
@@ -7116,7 +7130,13 @@
         "runs/od_precision_2026_11_26/fast_doppler/result.json",
         "runs/od_history_2026_11_26/README.md",
         "runs/od_history_2026_11_26/gate/GATE.md",
-        "runs/od_history_2026_11_26/gate/verdict.json"
+        "runs/od_history_2026_11_26/gate/verdict.json",
+        "runs/od_oct07_holdout_20261126/README.md",
+        "runs/gemini_rate_vs_obe_d2_20261126/README.md",
+        "runs/od_history_generalization_20261126/mixture_mesh.json",
+        "runs/od_history_generalization_20261126/weak_voigt_precision.json",
+        "runs/od_history_generalization_20261126/spectrum_real_row_replay.json",
+        "runs/od_history_generalization_20261126/table_parity.json"
       ],
       "review_2026_11_26": "⟦AI⟧ Codex·Claude 합의. 허브 20261126-1030 정밀도 검토와 1033 Fast 검토 및 같은 날 수락 회신. 다음 패치 전 파일 분담을 알리고 species.py 또는 od_profile_fit.py가 필요해지면 담당자와 조율한다.",
       "implementation_2026_11_26": {
@@ -7129,6 +7149,22 @@
         "data": "⟦AI⟧ 고정 SAS 보정과 11개 실측 상대 CSV 9581점. 센서 99 °C 정규화 RMS: 고정 교체율 4.477%p, 가우시안 교체율 5.052%p, 이력 기준 6.787%p. 온도 공동 피팅: 고정 100.901 °C/4.026%p, 가우시안 교체율 102.049 °C/3.920%p, 이력 기준 104.08848 °C/4.01952%p, Fast 104.08849 °C/4.01947%p. 이력 기준의 간격 증가는 245.26 MHz, 실측 255.69 MHz. 독립 파워 눈금 적합이 하한에 걸려 그 불확도 비교는 미판정.",
         "performance": "⟦AI⟧ 1코어·BLAS=1·Numba. 물리 온도를 바꾼 워밍 5회 중앙값: 가우시안 교체율 0.140 s, 이력 기준 37.16 s, Fast 23.35 s. 11개 CSV 고정온도·공동온도·파워눈금 진단 전체 26.36 / 422.53 / 264.58 s. Numba 미사용 기준 해 2001점·100 µW 283.90 s (1회).",
         "limits": "⟦AI⟧ 100 µW에서 단면 변형을 허용하면 두 안쪽 날개 출구 T는 약 0.57/0.80%p, +2.275 GHz에서는 2.85%p 이동. 셀 끝의 축방향 원자 유입·복사 포획·미측정 B·편광의 영향은 미분리. 두 번째 반경 예측과 기본값 판단의 잔여 측정은 od-rb85-d1-ballistic-independent-waist-validation에 등록."
+      },
+      "user_priorities_2026_11_26": {
+        "source": "Claude chat, 2026-11-26; runs/agent_hub/20261126-1232_claude-to-all_user-priorities-history-generalization.md",
+        "quote": "파라핀, 완충가스는 SAS보다 더 후순위로 가도 될 것 같고, 자기장은 지구 자기장 하에서의 측정이 꽤 있기 때문에 SAS랑 비슷한 우선순위로 두면 될 것 같습니다. 기존 부품을 다시 연결하면 되는 중간 규모 패치는 이번 거랑 동시에 진행할 수 있다면 병렬로 같이 진행하고, 다른 패치가 먼저 들어와야 한다면 기다렸다가 그 다음으로 진행해주세요.",
+        "sequence": [
+          "⟦AI⟧ 먼저 동위원소별 영자장 선형 편광·무완충·무코팅 궤적과 10월 독립 측정을 병렬 검증. 자연·사용자 혼합비는 새 N_total 규약 착지 뒤 각 동위원소 흡수를 합해 하나의 빔 파워를 전파한다.",
+          "⟦AI⟧ D₂는 정상상태 및 시간 의존 전체 OBE 대조가 필요하다. Fast 확장에는 선종, 초미세 분리, 광학폭과 횡단시간을 구분한 독립 궤적 검증이 필요하다.",
+          "⟦AI⟧ 다음 순위는 펌프가 있는 SAS의 두 빔 이력과 지구 자기장 범위의 정자장·편광. 파라핀 벽 기억 및 완충가스 확산은 그 뒤에 진행한다."
+        ]
+      },
+      "october_7_holdout_2026_11_26": "⟦AI⟧ 7146e5d 독립 재생. 순수 ⁸⁵Rb D₁, 9 µW, 반경 0.53 mm, CH4 1,081점, 측정 암전압 −0.286183 mV. 미확인 센서 113.1 °C, 같은 날의 SAS 주파수축에서 고정률/가우시안/궤적 이력 전압 RMS 0.47618/0.47174/0.47074 mV. 온도만 조정하면 111.34/112.02/113.29 °C. SAS 축 오차 범위를 허용하면 RMS 0.43992/0.44185/0.44880 mV로 순위 역전. 모델 판별과 두 번째 반경 검증은 미결.",
+      "isotope_extension_2026_11_26": {
+        "scope": "⟦AI⟧ 새 선택형 ID od_rb_ballistic_history_v1 및 od_rb_ballistic_history_fast_v1. ⁸⁵Rb/⁸⁷Rb·D₁/D₂·자연/사용자 혼합비, 영자장·선형 편광, 펌프 없는 균일·무완충·무코팅 셀. 10 µW 8개 전 스펙트럼(각 2,001점)에서 독립 합성과 제품 투과율 최대차 2.23×10⁻¹⁶. 동일 CSV 재생 수치 일치.",
+        "precision": "⟦AI⟧ 99 °C에서 1/100 µW rest 디튜닝 정밀화에 따른 σ/σ_weak 변화 ≤8.79×10⁻⁵. 10 µW 세기·전파 정밀화 후 |ΔT| ≤1.44×10⁻⁴. SciPy 독립 Voigt와 OD를 상대오차로 비교한 원래 약한 날개 기준 5×10⁻¹² 미달(최대 상대 OD 1.09×10⁻¹⁰, 절대 OD 1.23×10⁻¹²); 같은 엔진의 Voigt로 성분 합성한 상대오차 ≤6.67×10⁻¹⁶.",
+        "physical_limit": "⟦AI⟧ 99 °C, 0.53 mm, 100 µW 도플러 평균 정상상태 단면적 대조. ⁸⁷Rb D₁ 안쪽 날개 최대 0.102%; D₂ 표본 날개 최대 0.448%, ⁸⁵Rb D₂ F=2 중심 1.761%. 개별 D₂ 횡단 광자 수 최대 17.51% 차이. 지상 횡자장 50 µT에서 특정 ⁸⁷Rb D₂ 궤적 광흡수 +46.35%. 출구 투과율 한계는 미확정.",
+        "fast": "⟦AI⟧ 원래 ⁸⁵Rb D₁ 표의 25온도×18세기×272개 디튜닝 계수 및 세분화 기록 전량 재생·바이트 동등. 그 밖의 Rb 조건에서 같은 종·선·광학폭·세기·경로시간의 직접 계산만 재사용. 범용 보간표는 검증 대기."
       }
     },
     {

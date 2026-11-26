@@ -118,7 +118,7 @@ def _condition_rows(box, params, settings):
     from gabes.od_model import GAUSSIAN_TRANSIT_MODELS, ODConditions
     from gabes.od_profile_fit import profile_fit_parameters
     from gabes.od_spectrum_fit import PARAMETERS, CANDIDATE_PARAMETERS
-    from gabes.schemes.sas import BALLISTIC_FIDELITIES, RB_COMPOSITION_CUSTOM, _isotope_composition
+    from gabes.schemes.sas import BALLISTIC_FIDELITIES, RB_HISTORY_MODELS, RB_COMPOSITION_CUSTOM, _isotope_composition
 
     state = st.session_state
     _, _, composition, fraction, _ = _isotope_composition(params)
@@ -155,7 +155,7 @@ def _condition_rows(box, params, settings):
         help_text = None
         if not eligible:
             if model_id in BALLISTIC_FIDELITIES and name in ("probe_power_uw", "probe_waist_mm", "rb85_fraction"):
-                help_text = "Beam-crossing fits use pure ⁸⁵Rb and the measured incident power and beam radius."
+                help_text = "Beam-crossing fits hold the isotope composition, measured incident power and beam radius fixed."
             elif model_id in GAUSSIAN_TRANSIT_MODELS and name in ("probe_power_uw", "probe_waist_mm", "rb85_fraction"):
                 help_text = "Set this value from the experiment. Fitting it with Gaussian transit has not been validated."
             elif name == "probe_waist_mm":
@@ -167,7 +167,8 @@ def _condition_rows(box, params, settings):
         selected = field.checkbox(label, key=fit_key, disabled=not eligible, help=help_text)
         spec = (PARAMETERS if name in PARAMETERS else CANDIDATE_PARAMETERS)[name]
         lower, upper = spec[2] * factor, spec[3] * factor
-        locked = name == "rb85_fraction" and (not custom or model_id in BALLISTIC_FIDELITIES)
+        pure_history = model_id in BALLISTIC_FIDELITIES and model_id not in RB_HISTORY_MODELS
+        locked = name == "rb85_fraction" and (not custom or pure_history)
         current = fraction if locked else params[name]
         if locked and custom:
             preview[name] = current

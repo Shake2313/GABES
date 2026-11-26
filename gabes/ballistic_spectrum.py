@@ -42,11 +42,13 @@ class _Optics:
     density: float
     width: float
     waist: float
+    isotope: species.Isotope = species.RB85
+    line: str = 'D1'
 
     @property
     def sigma(self):
-        manifold = species.build_manifold(species.RB85, 'D1')
-        return manifold.k_vec * constants.thermal_speed(self.temperature, species.RB85.mass)
+        manifold = species.build_manifold(self.isotope, self.line)
+        return manifold.k_vec * constants.thermal_speed(self.temperature, self.isotope.mass)
 
 
 def _optics(conditions):
@@ -74,10 +76,12 @@ def _optics(conditions):
 
 
 @lru_cache(maxsize=32)
-def _atom(temperature, width):
-    from .ballistic_pumping import BallisticProbe85D1
-
-    return BallisticProbe85D1(temperature, width)
+def _atom(temperature, width, isotope=species.RB85, line='D1'):
+    if isotope == species.RB85 and line == 'D1':
+        from .ballistic_pumping import BallisticProbe85D1
+        return BallisticProbe85D1(temperature, width)
+    from .ballistic_atom import BallisticProbe
+    return BallisticProbe(isotope, line, temperature, width)
 
 
 def _path_grid(resolution):
@@ -88,13 +92,13 @@ def _path_grid(resolution):
 
 
 @lru_cache(maxsize=48)
-def _panels(width, order, wing_widths):
+def _panels(width, order, wing_widths, isotope=species.RB85, line='D1'):
     """Gauss-Legendre cells clustered at every allowed zero-velocity component.
 
     Every panel integrates in angular frequency. Adjacent component domains meet
     at their midpoint, so overlapping tails belong to exactly one domain.
     """
-    centers = np.unique(species.build_manifold(species.RB85, 'D1').omega)
+    centers = np.unique(species.build_manifold(isotope, line).omega)
     outer = width * wing_widths
     bounds = np.r_[centers[0]-outer, (centers[:-1]+centers[1:])/2, centers[-1]+outer]
     edges = list(bounds)
@@ -116,17 +120,17 @@ def _panels(width, order, wing_widths):
 
 
 def _weak(optics, scan):
-    manifold = species.build_manifold(species.RB85, 'D1')
+    manifold = species.build_manifold(optics.isotope, optics.line)
     absorption, _ = linear_hyperfine.species_complex_voigt(
         scan, manifold, 1., optics.temperature, 2*optics.width)
     return absorption
 
 
 @lru_cache(maxsize=512)
-def _rest_excess(temperature, width, waist, intensity, resolution):
+def _rest_excess(temperature, width, waist, intensity, resolution, isotope=species.RB85, line='D1'):
     """Absolute local cross section minus its discrete linear-response limit [m²]."""
-    atom = _atom(temperature, width)
-    nodes, _ = _panels(width, resolution.panel_order, resolution.wing_widths)
+    atom = _atom(temperature, width, isotope, line)
+    nodes, _ = _panels(width, resolution.panel_order, resolution.wing_widths, isotope, line)
     grid = _path_grid(resolution)
     local = np.empty(len(nodes))
     weak = atom.weak_cross_sections(nodes)
@@ -160,28 +164,41 @@ def _rest_excess(temperature, width, waist, intensity, resolution):
     return local, refined, max_steps
 
 
-def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use_table=False):
+def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use_table=False, reuse_flights=False):
     """Convolve a local absorption *excess* with the Maxwell velocity distribution.
 
     The Gaussian in rest frequency has unit integral. It is never renormalized
     to the finite panel span; the remainder carries the analytical weak result.
     Integrate before axial propagation. Frequency inputs may be nonuniform.
     """
-    nodes, weights = _panels(optics.width, resolution.panel_order, resolution.wing_widths)
+    component = () if (optics.isotope == species.RB85 and optics.line == 'D1') else (optics.isotope, optics.line)
+    nodes, weights = _panels(optics.width, resolution.panel_order, resolution.wing_widths, *component)
     weak = _weak(optics, scan)
     rest = None
     if use_table:
+        if component:
+            raise ValueError("The recorded Fast v2 table is specific to Rb85 D1.")
         from ._ballistic_reference_table import lookup
         rest, provenance = lookup(optics, intensity, nodes, weights)
         if diagnostics is not None:
             diagnostics.update(provenance)
     if rest is None:
-        sampled = [_rest_excess(optics.temperature, optics.width, optics.waist, float(power), resolution)
+        temperature, waist = optics.temperature, optics.waist
+        if reuse_flights:
+            # Only w/v_th enters a rest-frame flight at fixed peak irradiance,
+            # isotope, detuning and intrinsic width. Keep the actual Maxwell
+            # velocity distribution below. No rounding or interpolation of this key.
+            temperature = 300.
+            waist = (optics.waist / constants.thermal_speed(optics.temperature, optics.isotope.mass)
+                     * constants.thermal_speed(temperature, optics.isotope.mass))
+        sampled = [_rest_excess(temperature, optics.width, waist, float(power), resolution, *component)
                    for power in intensity]
         rest = np.stack([entry[0] for entry in sampled])
         if diagnostics is not None:
             diagnostics['refined_path_rows'] = sum(entry[1] for entry in sampled)
             diagnostics['max_transverse_steps'] = max(entry[2] for entry in sampled)
+            if reuse_flights:
+                diagnostics['rest_method'] = 'direct reference trajectories cached by thermal crossing time'
             if use_table:
                 diagnostics['rest_method'] = 'direct reference trajectories'
     table = np.empty((len(intensity), len(scan)))
@@ -339,28 +356,94 @@ def _evaluate_fast(conditions, scan, fidelity):
         return result
 
 
-def _evaluate(conditions, scan_rad_s, resolution, requested='reference', *, use_table=False):
+def _rb_components(conditions):
+    """(Optics, absorber fraction, offset from the SAS display centroid in rad/s)."""
+    from .schemes.sas import _isotope_composition, _species_path_densities, _temperatures
+
+    params = conditions.to_params()
+    composition, reference, *_ = _isotope_composition(params)
+    if any(iso not in (species.RB85, species.RB87) for iso, _ in composition):
+        raise ValueError("Beam-crossing histories require rubidium.")
+    if (conditions.ne_pressure_torr or conditions.paraffin_coated or
+            conditions.optical_collision_model not in (None, collisions.LEGACY_COLLISIONS)):
+        raise ValueError("Beam-crossing histories require an uncoated, buffer-gas-free cell.")
+    cold, warm, _ = _temperatures(params)
+    waist = conditions.probe_waist_mm * 1e-3
+    if (not np.isfinite([cold, warm, waist, conditions.cell_mm, conditions.probe_power_uw]).all()
+            or min(cold, warm, waist) <= 0 or min(conditions.cell_mm, conditions.probe_power_uw) < 0):
+        raise ValueError("Beam-crossing histories require physical temperatures, radius, power and length.")
+    components = []
+    line = conditions.line
+    for isotope, fraction in composition:
+        density, perturbers = _species_path_densities(isotope, cold, warm, fraction, total_rb=True)
+        manifold = species.build_manifold(isotope, line)
+        width = .5 * (manifold.gamma + species.self_broadening(isotope, perturbers, line, per_line=True))
+        width += np.pi * conditions.extra_homogeneous_fwhm_hz
+        offset = 2*np.pi*(manifold.nu0 - reference.line(line)[1])
+        components.append((_Optics(warm, density, width, waist, isotope, line), fraction, offset))
+    return components
+
+
+def evaluate_rb_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference'):
+    """Single-beam per-isotope histories with one common attenuated Gaussian power."""
+    if fidelity not in ('reference', 'fast'):
+        raise ValueError('Choose reference or fast for an isotope-resolved history.')
+    components = _rb_components(conditions)
+    if len(components) == 1 and components[0][0].isotope == species.RB85 and conditions.line == 'D1':
+        # Reuse the original reference and its certified Fast table on the complete old domain.
+        return evaluate_ballistic_spectrum(conditions, scan_rad_s, fidelity=fidelity)
+    result = _evaluate(conditions, scan_rad_s, _REFERENCE, fidelity, components=components,
+                       reuse_flights=fidelity == 'fast')
+    if fidelity == 'fast':
+        method = ("Using reference trajectories with crossing-time reuse." if result.diagnostics['intensity_rows']
+                  else "Using the analytical zero-power or zero-length limit.")
+        result.diagnostics['fallback_reason'] = "No interpolated Fast table for this composition or line. " + method
+    return result
+
+
+def _evaluate(conditions, scan_rad_s, resolution, requested='reference', *,
+              use_table=False, components=None, reuse_flights=False):
     scan = np.asarray(scan_rad_s, dtype=float)
     if scan.ndim != 1 or not len(scan) or not np.all(np.isfinite(scan)):
         raise ValueError('A nonempty finite one-dimensional detuning axis is required.')
     fast_route = use_table or resolution is _FAST
-    optics = _optics(conditions)
+    if components is None:
+        components = [(_optics(conditions), 1.0, 0.0)]
+    optics = components[0][0]
     length = conditions.cell_mm*1e-3
-    column = length*optics.density*conditions.line_strength
-    weak = _weak(optics, scan)
-    od0 = weak*column
+    total_density = sum(part.density for part, _, _ in components)
+    column = length*total_density*conditions.line_strength
     peak = beam.peak_intensity(conditions.probe_power_uw*1e-6, optics.waist)
+    intensity = _intensity_nodes(peak, resolution) if peak > 0 and column > 0 else np.array([])
     row_meta = {}
-    if peak > 0 and column > 0:
-        intensity = _intensity_nodes(peak, resolution)
-        weak, table = _thermal_table(optics, scan, intensity, resolution, diagnostics=row_meta, use_table=use_table)
+    weak = np.zeros_like(scan)
+    table = np.zeros((len(intensity), len(scan)))
+    species_meta = []
+    for part, fraction, offset in components:
+        local_scan = scan - offset
+        detail = {}
+        if intensity.size:
+            part_weak, part_table = _thermal_table(part, local_scan, intensity, resolution,
+                                                   diagnostics=detail, use_table=use_table, reuse_flights=reuse_flights)
+            table += fraction*part_table
+        else:
+            part_weak = _weak(part, local_scan)
+        weak += fraction*part_weak
+        species_meta.append(dict(isotope=part.isotope.name, line=part.line, fraction=fraction,
+                                 density_m3=part.density, optical_hwhm_rad_s=part.width,
+                                 centroid_offset_rad_s=offset, **detail))
+        if len(components) == 1:
+            row_meta.update(detail)
+    od0 = weak*column
+    if intensity.size:
+        # At each axial plane both isotopes see the same light. Sum their
+        # local coefficients before interpolation and nonlinear depletion.
         fine_intensity, fine_table = _refine_intensity(intensity, table)
         od = _deplete(weak, fine_intensity, fine_table, peak, column)
     else:
-        intensity = np.array([])
         od = od0.copy()
-    maximum_gradient = float(np.max(weak)*optics.density*conditions.line_strength)
-    manifold = species.build_manifold(species.RB85, 'D1')
+    maximum_gradient = float(np.max(weak)*total_density*conditions.line_strength)
+    manifold = species.build_manifold(optics.isotope, optics.line)
     rayleigh = probe_saturation.cell_to_rayleigh_ratio(length, optics.waist*1e3, manifold.k_vec)
     if 'rest_table_fallback_reason' in row_meta:
         row_meta['fallback_reason'] = row_meta['rest_table_fallback_reason'] + ' Evaluated the reference directly.'
@@ -377,8 +460,13 @@ def _evaluate(conditions, scan_rad_s, resolution, requested='reference', *, use_
                        max_weak_absorption_per_waist=maximum_gradient*optics.waist,
                        cell_length_to_rayleigh_range=rayleigh,
                        thermal_quadrature='analytical Voigt plus Gaussian-weighted rest-frame excess',
-                       rest_nodes=len(_panels(optics.width,resolution.panel_order,resolution.wing_widths)[0]),
+                       rest_nodes=sum(len(_panels(part.width, resolution.panel_order, resolution.wing_widths,
+                                                  part.isotope, part.line)[0]) for part, _, _ in components),
                        transverse_nodes=resolution.path_nodes, **row_meta)
+    if components[0][0].isotope != species.RB85 or conditions.line != 'D1' or len(components) > 1:
+        diagnostics['isotopes'] = species_meta
+        diagnostics['coherence_model'] = 'zero-field pi-polarized magnetic-sublevel populations; optical coherences adiabatically eliminated'
+        diagnostics['perturber_density'] = 'total elemental Rb'
     transmission = np.exp(-od)
     for data in (transmission, od, od0):
         data.setflags(write=False)
