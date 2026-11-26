@@ -32,6 +32,9 @@ class ZeemanModel:
     weak_coupling: np.ndarray
     thermal: np.ndarray
     provenance: dict
+    sector_bases: dict
+    sector_pump: dict
+    sector_lindblad: dict
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,18 @@ class ZeemanResponse:
             raise ValueError("density and residual must be finite and nonnegative")
         return observables.chi_phys(self.positive_frequency_chi_matrix, density,
                                     line_strength=factor/3.)
+
+
+def _sector_commutator(hamiltonian, indices):
+    """Assemble the selected rows and columns of core.comm_super."""
+    i, j = np.divmod(indices, N_LEVELS)
+    return -1j*(hamiltonian[np.ix_(i, i)]*(j[:, None] == j)
+                - hamiltonian[np.ix_(j, j)].T*(i[:, None] == i))
+
+
+def _pump_diagonal(fs):
+    return np.diag(np.r_[np.where(fs[:N_GROUND] == 3, constants.OMEGA_HF, 0.),
+                         np.where(fs[N_GROUND:] == 2, -constants.OMEGA_EXCITED_HF, 0.)])
 
 
 @lru_cache(maxsize=12)
@@ -183,8 +198,20 @@ def build_model(T=394.15, *, transit_rate=constants.GAMMA_GG,
         scope="pump-only state, infinitesimal full two-frequency response; uniform pi pump; zero B; collinear atomic Doppler")
     for value in (fs, ms, thermal, pump_coupling, weak_coupling, atom.lindblad, atom.S_v, *dipoles.values()):
         value.flags.writeable = False
+    diagonal = _pump_diagonal(fs)
+    drive = pump_coupling+pump_coupling.conj().T
+    sector_bases, sector_pump, sector_lindblad = {}, {}, {}
+    # The static Hamiltonian and pi drive have disjoint diagonal/off-diagonal
+    # support. Cache their sector blocks at the model's existing cache scope.
+    for q in (0, -1, 1):
+        indices = sectors[q]
+        sector_bases[q] = _sector_commutator(diagonal, indices)
+        sector_pump[q] = _sector_commutator(drive, indices)
+        sector_lindblad[q] = atom.lindblad[np.ix_(indices, indices)]
+        for block in (sector_bases[q], sector_pump[q], sector_lindblad[q]):
+            block.flags.writeable = False
     return ZeemanModel(atom, fs, ms, sectors, dipoles, pump_coupling,
-                       weak_coupling, thermal, provenance)
+                       weak_coupling, thermal, provenance, sector_bases, sector_pump, sector_lindblad)
 
 
 def pump_hamiltonian(pump_rabi_rad_s, model):
@@ -192,10 +219,7 @@ def pump_hamiltonian(pump_rabi_rad_s, model):
     omega = float(pump_rabi_rad_s)
     if not np.isfinite(omega) or omega < 0:
         raise ValueError("pump Rabi frequency must be finite and nonnegative")
-    diagonal = np.zeros(N_LEVELS)
-    diagonal[:N_GROUND] = np.where(model.level_F[:N_GROUND] == 3, constants.OMEGA_HF, 0.)
-    diagonal[N_GROUND:] = np.where(model.level_F[N_GROUND:] == 2, -constants.OMEGA_EXCITED_HF, 0.)
-    return np.diag(diagonal)+.5*omega*(model.pump_coupling+model.pump_coupling.conj().T)
+    return _pump_diagonal(model.level_F)+.5*omega*(model.pump_coupling+model.pump_coupling.conj().T)
 
 
 def _chunks(size, chunk_size):
@@ -221,10 +245,14 @@ def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
     if frequency_scale.shape != deff.shape or not np.isfinite(frequency_scale).all():
         raise ValueError("frequency Doppler scales must be finite and match velocities")
     model = build_model(float(T), **model_options)
-    h = pump_hamiltonian(pump_rabi_rad_s, model)
-    generator = core.build_liouvillian(h, model.atom)
+    omega = float(pump_rabi_rad_s)
+    if not np.isfinite(omega) or omega < 0:
+        raise ValueError("pump Rabi frequency must be finite and nonnegative")
+    half_omega = .5*omega
+    generator = {q: (model.sector_bases[q]+half_omega*model.sector_pump[q])+model.sector_lindblad[q]
+                 for q in (0, -1, 1)}
     indices = model.sectors[0]
-    base = generator[np.ix_(indices, indices)]
+    base = generator[0]
     velocity_diag = np.diag(model.atom.S_v)[indices]
     trace = np.eye(N_LEVELS).reshape(-1)[indices]
     rho = np.zeros((len(deff), N_LEVELS, N_LEVELS), complex)
@@ -234,7 +262,7 @@ def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
             matrices = np.broadcast_to(base, (len(deff[chunk]), len(indices), len(indices))).copy()
             diagonal = np.arange(len(indices))
             matrices[:, diagonal, diagonal] -= deff[chunk, None]*velocity_diag
-            if float(pump_rabi_rad_s) == 0.:
+            if omega == 0.:
                 states = np.broadcast_to(model.thermal.reshape(-1)[indices], (len(matrices), len(indices))).copy()
             else:
                 constrained = matrices.copy()
@@ -257,7 +285,7 @@ def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
     bases, diagonals, sources, readouts = {}, {}, {}, {}
     for q in (-1, 1):
         ind = model.sectors[q]
-        bases[q] = generator[np.ix_(ind, ind)].copy()
+        bases[q] = generator[q]
         diagonals[q] = np.diag(model.atom.S_v)[ind].copy()
         sources[q] = source[:, ind, :].copy()
         readouts[q] = readout[:, ind].copy()
@@ -268,7 +296,7 @@ def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
         minimum_pump_eigenvalue=float(np.min(np.linalg.eigvalsh(rho))),
         steady_sector_dimension=len(indices), response_sector_dimensions={str(q):len(model.sectors[q]) for q in (-1, 1)},
         velocity_classes=len(deff))
-    return PreparedPump(model, float(pump_rabi_rad_s), deff.copy(), weights.copy(), rho,
+    return PreparedPump(model, omega, deff.copy(), weights.copy(), rho,
                         bases, diagonals, sources, readouts, diagnostics, frequency_scale.copy())
 
 

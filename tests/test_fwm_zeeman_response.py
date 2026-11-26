@@ -81,6 +81,18 @@ def test_hyperfine_collision_projectors_preserve_within_F_coherence():
     np.testing.assert_allclose(diagonal[different_f], -gamma, atol=1e-13)
 
 
+@pytest.mark.parametrize("emission_mode", zeeman.EMISSION_MODES)
+def test_direct_sector_assembly_replays_dense_commutator(emission_mode):
+    model = zeeman.build_model(362.15, emission_mode=emission_mode)
+    for omega in (0., np.nextafter(0., 1.), 2*np.pi*350e6):
+        dense = core.build_liouvillian(zeeman.pump_hamiltonian(omega, model), model.atom)
+        for q in (0, -1, 1):
+            indices = model.sectors[q]
+            assembled = ((model.sector_bases[q]+(.5*omega)*model.sector_pump[q])
+                         + model.sector_lindblad[q])
+            np.testing.assert_array_equal(assembled, dense[np.ix_(indices, indices)])
+
+
 def test_block_state_and_full_resolvent_are_identical():
     pump, deff, delta = 2*np.pi*350e6, -2*np.pi*1.05e9, -2*np.pi*16e6
     prepared = zeeman.prepare_pump(pump, [deff], T=362.15)
