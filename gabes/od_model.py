@@ -38,7 +38,7 @@ from .schemes.sas import (
     GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODELS, GAUSSIAN_TRANSIT,
     BALLISTIC_FAST, BALLISTIC_FAST_V1, BALLISTIC_FIDELITIES, BALLISTIC_REFERENCE,
     BALLISTIC_TRANSIT, BALLISTIC_FAST_TRANSIT, _ballistic_scope_reason,
-    OD_TRANSIT_KEY, _species_path_density, _temperatures,
+    OD_TRANSIT_KEY, _species_path_densities, _temperatures,
     RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
     _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
 )
@@ -457,9 +457,10 @@ def _rate_model_scan(conditions, points=2001):
         sigma_v = np.sqrt(constants.KB * temperature_k / isotope.mass)
         doppler_fwhm_max = max(
             doppler_fwhm_max, np.sqrt(8 * np.log(2)) * manifold.k_vec * sigma_v)
-        density = _species_path_density(isotope, cold_k, temperature_k, fractions.get(isotope.name, 0.0))
+        _, perturber_density = _species_path_densities(
+            isotope, cold_k, temperature_k, fractions.get(isotope.name, 0.0))
         gamma_effective = manifold.gamma + species.self_broadening(
-            isotope, density, line, per_line=per_line)
+            isotope, perturber_density, line, per_line=per_line)
         saturation_intensity = probe_saturation.closed_two_level_saturation_intensity(
             manifold.nu0, manifold.gamma)
         saturation = probe_saturation.peak_saturation_parameter(
@@ -483,13 +484,13 @@ def _rate_model_optics(conditions):
     per_line = MODELS[conditions.model_id].per_line_self_broadening
     optics = []
     for isotope, fraction in isotope_fractions:
-        density = _species_path_density(isotope, cold_k, temperature, fraction)
+        density, perturber_density = _species_path_densities(isotope, cold_k, temperature, fraction)
         transit = conditions._transit_rate_s(isotope)
         manifold = species.build_manifold(isotope, line)
         offset = 2 * np.pi * (manifold.nu0 - reference.line(line)[1])
         sigma = manifold.k_vec * np.sqrt(constants.KB * temperature / isotope.mass)
         gamma2 = 0.5 * (manifold.gamma + species.self_broadening(
-            isotope, density, line, per_line=per_line)) + transit
+            isotope, perturber_density, line, per_line=per_line)) + transit
         if extra_hwhm:
             gamma2 += extra_hwhm
         optics.append((manifold, density, offset, sigma, gamma2, transit))

@@ -111,13 +111,13 @@ def _compute(params, isotope_densities, reference, temperature_k, probe_mw, dead
     fractions = {}
     margin = 0.0
     pumping_scale = 0.0
-    for isotope, fraction, density in isotope_densities:
+    for isotope, fraction, density, perturber_density in isotope_densities:
         transit = fixed_rate if geometry_rates is None else geometry_rates[isotope.name]
         man = species.build_manifold(isotope, line, transit_rate=transit)
         offset = 2 * np.pi * (man.nu0 - nu_ref)
         sigma = man.k_vec * constants.thermal_speed(temperature_k, isotope.mass)
         hwhm = (man.gamma + species.self_broadening(
-            isotope, density, line, per_line=per_line)) / 2 + transit
+            isotope, perturber_density, line, per_line=per_line)) / 2 + transit
         probe = ProjectedProbe(man, hwhm, transit)
         saturation = probe.peak_saturation(intensity)
         pumping_scale = max(pumping_scale, saturation * (man.gamma + transit) / transit)

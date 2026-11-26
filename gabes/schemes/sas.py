@@ -170,6 +170,12 @@ def _species_path_density(isotope, cold_k, path_k, fraction):
         species.number_density(isotope, cold_k), cold_k, path_k) * fraction
 
 
+def _species_path_densities(isotope, cold_k, path_k, fraction):
+    """Absorber and self-broadening perturber densities in the optical path (m^-3)."""
+    absorber = _species_path_density(isotope, cold_k, path_k, fraction)
+    return absorber, absorber
+
+
 def _pump_is_driven(power_mw):
     # Match the mW-to-watts conversion before the Rabi calculation.
     return float(power_mw) * 1e-3 > 0.0
@@ -805,7 +811,7 @@ class SASScheme(Scheme):
             raise ValueError(unavailable)
         components, reference, *_ = _isotope_composition(params)
         cold_k, path_k, _ = _temperatures(params)
-        densities = [(isotope, fraction, _species_path_density(isotope, cold_k, path_k, fraction))
+        densities = [(isotope, fraction, *_species_path_densities(isotope, cold_k, path_k, fraction))
                      for isotope, fraction in components]
         return compute(params, densities, reference, path_k, _probe_power_mw(params))
 
@@ -990,12 +996,12 @@ class SASScheme(Scheme):
             offset = 2 * np.pi * (man.nu0 - nu_ref)
             sigma_v = constants.thermal_speed(T_doppler, iso.mass)
             dopp_fwhm = max(dopp_fwhm, np.sqrt(8 * np.log(2)) * man.k_vec * sigma_v)
-            N = _species_path_density(iso, T_density, T_doppler, weight)
+            N, perturber_density = _species_path_densities(iso, T_density, T_doppler, weight)
             Op = species.pump_rabi_from_power(power, waist, man.gamma, iso=iso, line=line)
             pump_atom = man.atom
             if reference or cs_reference:
                 self_fwhm, self_reports[iso.name] = collisions.self_broadening_reference(
-                    iso.name, line, N, cs_reference=cs_reference)
+                    iso.name, line, perturber_density, cs_reference=cs_reference)
             if reference:
                 effects = collisions.pressure_effects(iso.name, line, pressure, T_doppler)
                 buffer_gamma = max(buffer_gamma, effects.fwhm_rad_s)
@@ -1008,7 +1014,7 @@ class SASScheme(Scheme):
                 gamma_eff = man.gamma + self_fwhm + buffer_gamma
                 pump_atom = pump_atom.with_optical_dephasing(self_fwhm / 2)
             else:
-                gamma_eff = (man.gamma + species.self_broadening(iso, N, line, per_line=per_line)
+                gamma_eff = (man.gamma + species.self_broadening(iso, perturber_density, line, per_line=per_line)
                              + buffer_gamma)
             if extra_fwhm:
                 gamma_eff += 2.0 * np.pi * extra_fwhm
