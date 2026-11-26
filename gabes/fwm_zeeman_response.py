@@ -15,11 +15,13 @@ import numpy as np
 
 from . import constants, core, doppler, hyperfine, observables, species
 from .atoms import AtomModel
+from . import _fwm_zeeman_optical as optical
 
 N_LEVELS = 24
 N_GROUND = 12
 EMISSION_MODES = ("hyperfine_secular", "global_polarization")
 _DIRECT_PARITY_RTOL = 1e-12
+OPTICAL_ELIMINATION = "optical_elimination"
 
 
 @dataclass(frozen=True)
@@ -118,12 +120,16 @@ def _pump_diagonal(fs):
                          np.where(fs[N_GROUND:] == 2, -constants.OMEGA_EXCITED_HF, 0.)])
 
 
-def _weak_sector_mirror(fs, ms, sectors):
-    """Map q=-1 entries to q=+1 under signed m reflection."""
+def _magnetic_reflection(fs, ms):
     ground = np.arange(N_LEVELS) < N_GROUND
     levels = {(g, f, m): i for i, (g, f, m) in enumerate(zip(ground, fs, ms))}
     reflection = np.array([levels[g, f, -m] for g, f, m in zip(ground, fs, ms)])
-    signs = (-1)**(fs + ~ground)
+    return reflection, (-1)**(fs + ~ground)
+
+
+def _weak_sector_mirror(fs, ms, sectors):
+    """Map q=-1 entries to q=+1 under signed m reflection."""
+    reflection, signs = _magnetic_reflection(fs, ms)
     i, j = np.divmod(sectors[-1], N_LEVELS)
     permutation = np.searchsorted(sectors[1], reflection[i]*N_LEVELS+reflection[j])
     sign = signs[i]*signs[j]
@@ -244,10 +250,61 @@ def _chunks(size, chunk_size):
     return (slice(start, min(start+int(chunk_size), size)) for start in range(0, size, int(chunk_size)))
 
 
+@lru_cache(maxsize=1)
+def _mirror_even_basis(fs, ms, indices):
+    """Hermitian coordinates even under signed reflection of m."""
+    indices = np.asarray(indices)
+    reflection, sign = _magnetic_reflection(np.asarray(fs), np.asarray(ms))
+    i, j = np.divmod(indices, N_LEVELS)
+    mirror = np.searchsorted(indices, reflection[i]*N_LEVELS+reflection[j])
+    hermitian = core.hermitian_basis(N_LEVELS)[indices]
+    hermitian = hermitian[:, np.any(hermitian != 0, axis=0)]
+    reflected = (sign[i]*sign[j])[:, None]*hermitian[mirror]
+    partners = np.argmax(abs(hermitian.conj().T @ reflected), axis=0)
+    even = hermitian+reflected
+    even = even[:, (np.arange(len(partners)) <= partners) & np.any(even != 0, axis=0)]
+    # Unit entries and a separately normalized dual avoid square-root roundoff.
+    basis = even/np.max(abs(even), axis=0)
+    return basis, basis.conj().T/np.sum(abs(basis)**2, axis=0)[:, None]
+
+
+def _mirror_pump_states(model, base, velocity_diag, trace, deff, omega, chunk_size):
+    indices = model.sectors[0]
+    basis, dual = _mirror_even_basis(tuple(model.level_F), tuple(model.level_m), tuple(indices))
+    projected = (dual @ base @ basis).real
+    projected_doppler = (dual @ (velocity_diag[:, None]*basis)).real
+    trace_row = (trace @ basis).real
+    base_diagonal = base.diagonal()
+    off_diagonal = base.copy()
+    np.fill_diagonal(off_diagonal, 0.)
+    off_norm_sq = np.sum(abs(off_diagonal)**2)
+    rho = np.zeros((len(deff), N_LEVELS, N_LEVELS), complex)
+    maximum_residual = 0.
+    with core.blas_single_thread():
+        for chunk in _chunks(len(deff), chunk_size):
+            if omega == 0.:
+                states = np.broadcast_to(model.thermal.ravel()[indices], (len(deff[chunk]), len(indices)))
+            else:
+                matrix = projected-deff[chunk, None, None]*projected_doppler
+                matrix[:, 0] = trace_row
+                rhs = np.zeros((*matrix.shape[:2], 1))
+                rhs[:, 0, 0] = 1.
+                scale = np.max(abs(matrix), axis=2)[..., None]
+                states = np.linalg.solve(matrix/scale, rhs/scale)[..., 0] @ basis.T
+            rho[chunk].reshape(-1, N_LEVELS**2)[:, indices] = states
+            detuning = deff[chunk, None]*velocity_diag
+            residual = states @ base.T-detuning*states
+            norm = np.sqrt(off_norm_sq+np.sum(abs(base_diagonal-detuning)**2, axis=1))
+            norm *= np.linalg.norm(states, axis=1)
+            maximum_residual = max(maximum_residual, float(np.max(
+                np.linalg.norm(residual, axis=1)/np.maximum(norm, 1e-300))))
+    return rho, maximum_residual, basis.shape[1]
+
+
 def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
                  velocity_weights=None, frequency_doppler_scale=None,
-                 chunk_size=64, **model_options):
-    """Solve the 88-dimensional Delta-m=0 state, retaining reusable ±1 blocks."""
+                 chunk_size=64, mirror_pump=False, **model_options):
+    """Solve the stationary pump, retaining reusable axial weak blocks."""
     deff = np.atleast_1d(np.asarray(delta_eff_axis_rad_s, float))
     if deff.ndim != 1 or deff.size < 1 or not np.isfinite(deff).all():
         raise ValueError("finite nonempty one-dimensional Delta_eff axis required")
@@ -271,26 +328,33 @@ def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
     base = generator[0]
     velocity_diag = np.diag(model.atom.S_v)[indices]
     trace = np.eye(N_LEVELS).reshape(-1)[indices]
-    rho = np.zeros((len(deff), N_LEVELS, N_LEVELS), complex)
-    maximum_residual = 0.
-    with core.blas_single_thread():
-        for chunk in _chunks(len(deff), chunk_size):
-            matrices = np.broadcast_to(base, (len(deff[chunk]), len(indices), len(indices))).copy()
-            diagonal = np.arange(len(indices))
-            matrices[:, diagonal, diagonal] -= deff[chunk, None]*velocity_diag
-            if omega == 0.:
-                states = np.broadcast_to(model.thermal.reshape(-1)[indices], (len(matrices), len(indices))).copy()
-            else:
-                constrained = matrices.copy()
-                scale = np.maximum(np.max(abs(matrices), axis=(1, 2)), 1.)
-                constrained[:, 0, :] = trace[None, :]*scale[:, None]
-                rhs = np.zeros((len(matrices), len(indices), 1), complex)
-                rhs[:, 0, 0] = scale
-                states = np.linalg.solve(constrained, rhs)[..., 0]
-            rho[chunk].reshape(-1, N_LEVELS**2)[:, indices] = states
-            residual = np.einsum("bij,bj->bi", matrices, states)
-            norm = np.linalg.norm(matrices, axis=(1, 2))*np.linalg.norm(states, axis=1)
-            maximum_residual = max(maximum_residual, float(np.max(np.linalg.norm(residual, axis=1)/np.maximum(norm, 1e-300))))
+    # Without transit replacement the stationary state need not be unique.
+    use_mirror = mirror_pump and model.provenance["transit_reset_rate_rad_s"] > 0.
+    if use_mirror:
+        rho, maximum_residual, steady_dimension = _mirror_pump_states(
+            model, base, velocity_diag, trace, deff, omega, chunk_size)
+    else:
+        steady_dimension = len(indices)
+        rho = np.zeros((len(deff), N_LEVELS, N_LEVELS), complex)
+        maximum_residual = 0.
+        with core.blas_single_thread():
+            for chunk in _chunks(len(deff), chunk_size):
+                matrices = np.broadcast_to(base, (len(deff[chunk]), len(indices), len(indices))).copy()
+                diagonal = np.arange(len(indices))
+                matrices[:, diagonal, diagonal] -= deff[chunk, None]*velocity_diag
+                if omega == 0.:
+                    states = np.broadcast_to(model.thermal.reshape(-1)[indices], (len(matrices), len(indices))).copy()
+                else:
+                    constrained = matrices.copy()
+                    scale = np.maximum(np.max(abs(matrices), axis=(1, 2)), 1.)
+                    constrained[:, 0, :] = trace[None, :]*scale[:, None]
+                    rhs = np.zeros((len(matrices), len(indices), 1), complex)
+                    rhs[:, 0, 0] = scale
+                    states = np.linalg.solve(constrained, rhs)[..., 0]
+                rho[chunk].reshape(-1, N_LEVELS**2)[:, indices] = states
+                residual = np.einsum("bij,bj->bi", matrices, states)
+                norm = np.linalg.norm(matrices, axis=(1, 2))*np.linalg.norm(states, axis=1)
+                maximum_residual = max(maximum_residual, float(np.max(np.linalg.norm(residual, axis=1)/np.maximum(norm, 1e-300))))
     lower = model.weak_coupling
     raise_ = lower.conj().T
     perturbations = np.stack((.5*raise_, .5*lower))
@@ -310,7 +374,7 @@ def prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, *, T=394.15,
         max_pump_trace_error=float(np.max(abs(np.trace(rho, axis1=-2, axis2=-1)-1.))),
         max_pump_hermiticity_error=float(np.max(abs(rho-rho.conj().swapaxes(-1, -2)))),
         minimum_pump_eigenvalue=float(np.min(np.linalg.eigvalsh(rho))),
-        steady_sector_dimension=len(indices), response_sector_dimensions={str(q):len(model.sectors[q]) for q in (-1, 1)},
+        steady_sector_dimension=steady_dimension, response_sector_dimensions={str(q):len(model.sectors[q]) for q in (-1, 1)},
         velocity_classes=len(deff))
     return PreparedPump(model, omega, deff.copy(), weights.copy(), rho,
                         bases, diagonals, sources, readouts, diagnostics, frequency_scale.copy())
@@ -410,6 +474,26 @@ def _weak_response_replay_mask(response):
     return _DIRECT_PARITY_RTOL*smallest_cross < resolution
 
 
+def _optical_response(prepared, frequencies, return_velocity_chi):
+    blocks = _direct_blocks(prepared, True)
+    if len(blocks) != 1:
+        return None
+    base, doppler_diagonal, source, readout, _ = blocks[0]
+    i, j = np.divmod(prepared.model.sectors[-1], N_LEVELS)
+    mask = (i < N_GROUND) != (j < N_GROUND)
+    recipe = optical.prepare_blocks(base, doppler_diagonal, readout, mask)
+    if recipe is None:
+        return None
+    retained = np.ascontiguousarray(-source[:, ~mask])
+    eliminated = np.ascontiguousarray(-source[:, mask])
+    with core.blas_single_thread():
+        output, raw, residual = optical.evaluate(
+            recipe, retained, eliminated, prepared.delta_eff_axis_rad_s,
+            prepared.frequency_doppler_scale, prepared.velocity_weights, frequencies,
+            return_velocity_chi)
+    return output, raw, residual, (len(recipe.retained), len(recipe.optical))
+
+
 def evaluate_prepared(prepared, delta_axis_rad_s, *, branch=-1,
                       analysis_frequency_axis_rad_s=(0.,), chunk_size=64,
                       return_velocity_chi=False, method="direct", use_mirror_symmetry=True):
@@ -420,17 +504,20 @@ def evaluate_prepared(prepared, delta_axis_rad_s, *, branch=-1,
         raise ValueError("branch must be -1 or +1")
     if any(axis.ndim != 1 or not axis.size or not np.isfinite(axis).all() for axis in (delta, analysis)):
         raise ValueError("finite nonempty one-dimensional frequency axes required")
-    if method not in ("direct", "poles"):
-        raise ValueError("method must be direct or poles")
+    if method not in ("direct", "poles", OPTICAL_ELIMINATION):
+        raise ValueError("method must be direct, poles or optical_elimination")
+    chunks = tuple(_chunks(len(prepared.delta_eff_axis_rad_s), chunk_size))
     frequencies = branch*constants.OMEGA_HF+delta[None, :]+analysis[:, None]
     nv = len(prepared.delta_eff_axis_rad_s)
     output = np.zeros((len(analysis), len(delta), 2, 2), complex)
     velocity_chi = (np.zeros((len(analysis), len(delta), nv, 2, 2), complex)
                     if return_velocity_chi else None)
     maximum_residual = 0.
-    direct_blocks = _direct_blocks(prepared, use_mirror_symmetry) if method == "direct" else ()
+    eliminated = _optical_response(prepared, frequencies, return_velocity_chi) if method == OPTICAL_ELIMINATION else None
+    use_direct = method == "direct" or (method == OPTICAL_ELIMINATION and eliminated is None)
+    direct_blocks = _direct_blocks(prepared, use_mirror_symmetry) if use_direct else ()
     with core.blas_single_thread():
-        for chunk in _chunks(nv, chunk_size):
+        for chunk in chunks:
             if not direct_blocks:
                 break
             class_response = np.zeros((len(analysis), len(delta), len(prepared.delta_eff_axis_rad_s[chunk]), 2, 2), complex)
@@ -467,6 +554,8 @@ def evaluate_prepared(prepared, delta_axis_rad_s, *, branch=-1,
             output += np.einsum("advij,v->adij", class_response, prepared.velocity_weights[chunk])
             if velocity_chi is not None:
                 velocity_chi[:, :, chunk] = class_response
+    if eliminated is not None:
+        output, velocity_chi, maximum_residual, dimensions = eliminated
     diagnostics = dict(prepared.diagnostics,
         max_response_normalized_residual=maximum_residual,
         max_response_trace_error=0.,
@@ -480,6 +569,14 @@ def evaluate_prepared(prepared, delta_axis_rad_s, *, branch=-1,
         relative_frequency="(branch*Omega_HF+delta+Omega_analysis)*frequency_doppler_scale; laboratory beat stays separate",
         nambu_order="outputs/inputs=(probe,conjugate-star); conjugate second row only for historical positive-frequency tuple",
         all_hyperfine_weak_couplings=True, block_reduction="exact axial Delta-m sectors; no state elimination")
+    if method == OPTICAL_ELIMINATION:
+        diagnostics["optical_elimination_used"] = eliminated is not None
+        provenance["response_solver"] = OPTICAL_ELIMINATION if eliminated is not None else "direct"
+        if eliminated is not None:
+            provenance["block_reduction"] = "paired axial response with exact optical-coherence elimination"
+            diagnostics["retained_response_dimension"], diagnostics["eliminated_response_dimension"] = dimensions
+        provenance["pump_solver"] = ("mirror_real_44"
+                                     if prepared.diagnostics["steady_sector_dimension"] == 44 else "complex_88")
     return ZeemanResponse(output, prepared.pump_state,
         np.einsum("v,vij->ij", prepared.velocity_weights, prepared.pump_state),
         delta.copy(), analysis.copy(), frequencies, prepared.delta_eff_axis_rad_s.copy(),
@@ -491,6 +588,7 @@ def pump_weak_response_reference(pump_rabi_rad_s, delta_axis_rad_s, delta_eff_ax
                                 analysis_frequency_axis_rad_s=(0.,), chunk_size=64,
                                 return_velocity_chi=False, frequency_doppler_scale=None,
                                 method="direct", **model_options):
+    model_options.setdefault("mirror_pump", method == OPTICAL_ELIMINATION)
     prepared = prepare_pump(pump_rabi_rad_s, delta_eff_axis_rad_s, T=T,
         velocity_weights=velocity_weights, frequency_doppler_scale=frequency_doppler_scale,
         chunk_size=chunk_size, **model_options)
@@ -527,6 +625,7 @@ def compute_response(D_GHz, delta_mhz, *, T, pump_power_W, pump_waist_m,
                      return_velocity_chi=False, velocities=None, velocity_weights=None,
                      method="direct", **model_options):
     """Convenience Maxwell response with the unchanged physical pump power map."""
+    model_options.setdefault("mirror_pump", method == OPTICAL_ELIMINATION)
     prepared = prepare_response(D_GHz, T=T, pump_power_W=pump_power_W,
         pump_waist_m=pump_waist_m, velocity_step=velocity_step, velocity_cutoff=velocity_cutoff,
         velocities=velocities, velocity_weights=velocity_weights, chunk_size=chunk_size, **model_options)

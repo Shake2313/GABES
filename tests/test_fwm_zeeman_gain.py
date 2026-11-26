@@ -57,7 +57,7 @@ def test_actual_dipole_prefactor_and_vacuum_geometry_are_counted_once(case, atom
     chi, calls = atomic_boundary
     before = deepcopy(case)
     response = model.build_response(case, [-16.])
-    assert calls[0][2:] == (-1, "poles")
+    assert calls[0][2:] == (-1, model.DEFAULT_RESPONSE_METHOD)
     assert calls[0][0]["pump_power_W"] == 1.
     _, kp, kc = fwm.seeded_option_a_wavenumbers(case["D_GHz"], response["probe_axis_GHz"])
     factor = observables.chi_phys(1., hyperfine.number_density(case["temperature_K"]),
@@ -104,6 +104,14 @@ def test_disabled_old_raw_needs_no_atomic_context_and_pump_zero_has_no_fitted_cr
     extrapolation = model.evaluate(case, 100., enabled=True)
     assert extrapolation["applied"] and not extrapolation["within_training_domain"]
     assert "EXTRAPOLATION" in str(extrapolation["point_status"])
+
+
+def test_legacy_poles_replay_remains_backend_only(case, atomic_boundary):
+    legacy = model.calibrate_spectrum(case, enabled=True, selected_delta_mhz=-16., method="poles")
+    assert {call[3] for call in atomic_boundary[1]} == {"poles"}
+    assert "solver_version" not in legacy["profile"]
+    current = model.build_response(case, [-16.])
+    assert current["propagation_snapshot"]["version"] == "fwm-zeeman-response-v2"
 
 
 def test_plus_branch_uses_its_own_external_carrier(case, atomic_boundary):

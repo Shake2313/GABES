@@ -114,7 +114,7 @@ def test_actual_zeeman_helper_focus_cursor_export_and_raw_provenance(case, atomi
         assert result["diagonal_susceptibility_scale"] == 1.
         assert result["zeeman_pump_populations"]["ground_F2"] == .6
         assert result["corrected_atomic_response_diagnostics"]["finite"]
-        assert atomic_boundary and all(x[2]["method"] == "poles" for x in atomic_boundary)
+        assert atomic_boundary and all(x[2]["method"] == zeeman.DEFAULT_RESPONSE_METHOD for x in atomic_boundary)
         assert view["metrics"] == headless["metrics"]
         assert view["metrics"][1]["label"] == "Zeeman pump + χ probe gain"
         assert "pump optical pumping" in view["metrics"][1]["help"]
@@ -265,6 +265,9 @@ def test_generated_profile_real_24state_response_through_rail_and_strict_export(
     assert result["model_id"] == zeeman.MODEL_ID
     assert result["profile"]["coefficients"] == record["coefficients"]
     assert result["zeeman_response_provenance"]["external_sublevel_population_factor"] == 1.
+    assert result["profile"]["solver_version"] == "fwm-zeeman-response-v2"
+    assert result["zeeman_response_provenance"]["pump_solver"] == "mirror_real_44"
+    assert result["zeeman_response_provenance"]["response_solver"] == "optical_elimination"
     populations = result["zeeman_pump_populations"]
     assert len(populations["sublevels"]) == 24
     assert populations["trace"] == pytest.approx(1., abs=1e-8)

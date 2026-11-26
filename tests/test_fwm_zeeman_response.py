@@ -133,6 +133,34 @@ def test_paired_direct_response_matches_independent_sectors(emission_mode):
         assert paired.provenance == independent.provenance
 
 
+@pytest.mark.parametrize("emission_mode", zeeman.EMISSION_MODES)
+def test_optical_elimination_and_real_pump_match_full_axial_solve(emission_mode):
+    settings = dict(T=362.15, pump_power_W=.05, pump_waist_m=950e-6,
+                    velocities=[-300., -20., 0., 300.], velocity_weights=[.1, .2, .3, .4],
+                    emission_mode=emission_mode)
+    full = zeeman.prepare_response(-1.04858, **settings)
+    prepared = zeeman.prepare_response(-1.04858, mirror_pump=True, **settings)
+    assert prepared.diagnostics["steady_sector_dimension"] == 44
+    np.testing.assert_allclose(prepared.pump_state, full.pump_state, atol=2e-12, rtol=1e-11)
+    assert prepared.diagnostics["max_pump_normalized_residual"] < 1e-14
+    delta = 2*np.pi*1e6*np.array([-16., 0., 16.])
+    for branch in (-1, 1):
+        call = dict(branch=branch, analysis_frequency_axis_rad_s=(0., 2*np.pi*1e6),
+                    return_velocity_chi=True)
+        reduced = zeeman.evaluate_prepared(prepared, delta, method=zeeman.OPTICAL_ELIMINATION, **call)
+        expected = zeeman.evaluate_prepared(prepared, delta, use_mirror_symmetry=False, **call)
+        np.testing.assert_allclose(reduced.velocity_chi_matrix, expected.velocity_chi_matrix,
+                                   rtol=1e-11, atol=1e-28)
+        assert reduced.diagnostics["max_response_normalized_residual"] < 1e-13
+        if emission_mode == "hyperfine_secular":
+            assert reduced.diagnostics["optical_elimination_used"]
+            assert reduced.diagnostics["retained_response_dimension"] == 40
+            assert reduced.diagnostics["eliminated_response_dimension"] == 40
+        else:
+            assert not reduced.diagnostics["optical_elimination_used"]
+            assert reduced.provenance["response_solver"] == "direct"
+
+
 def test_reusable_poles_match_direct_and_velocity_chunking():
     prepared = zeeman.prepare_pump(2*np.pi*400e6, 2*np.pi*np.array([-1.1e9,-1.e9,-.8e9]),
                                    T=362.15, velocity_weights=[.2,.5,.3])

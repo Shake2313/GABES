@@ -26,7 +26,10 @@ _sample_model = sample_model_gain
 _domain = literature_domain
 features = literature_features
 
+# The training record is unchanged. Version the numerical solve separately.
 MODEL_ID = "fwm_literature_zeeman_response_v1"
+DEFAULT_RESPONSE_METHOD = atom.OPTICAL_ELIMINATION
+_RESPONSE_V2 = "fwm-zeeman-response-v2"
 PROFILE_PATH = Path(__file__).with_name("data") / "fwm_zeeman_gain_v1.json"
 PHYSICAL_KEYS = ("D_GHz", "temperature_K", "input_pump_power_W", "input_seed_power_W",
     "w_pump_m", "w_probe_m", "cell_length_m", "pump_probe_angle_deg", "branch",
@@ -36,13 +39,16 @@ PHYSICAL_KEYS = ("D_GHz", "temperature_K", "input_pump_power_W", "input_seed_pow
 _record = cached_profile_loader(lambda: PROFILE_PATH)
 
 
-def profile():
+def profile(*, method=DEFAULT_RESPONSE_METHOD):
     record = copy.deepcopy(_record())
     record.update(model_id=MODEL_ID,
         method="Resolved 24-state optical pumping, consistent pump refractive phase and segmented propagation",
         formula="24-state steady state -> chi; delta_k=delta_k_vac+kp*Re(chi_pump); chi_offdiag'=kappa*chi_offdiag; chi_diag unchanged",
         noise_covariance_calibrated=False, susceptibility_identified=False,
         physical_assumptions="B=0; crossed linear fields; uniform pump; infinitesimal weak fields; collinear atomic Doppler")
+    if method == DEFAULT_RESPONSE_METHOD:
+        record.update(solver_version=_RESPONSE_V2,
+            method="44-real stationary pump, optical-coherence elimination, pump phase and segmented propagation")
     return record
 
 
@@ -75,13 +81,13 @@ def atomic_inputs(raw, velocity_step, velocity_cutoff):
 
 
 @lru_cache(maxsize=4)
-def _prepared(encoded_inputs):
-    return atom.prepare_response(**json.loads(encoded_inputs))
+def _prepared(encoded_inputs, mirror_pump):
+    return atom.prepare_response(**json.loads(encoded_inputs), mirror_pump=mirror_pump)
 
 
 @lru_cache(maxsize=8)
 def _atomic_response(encoded_inputs, delta_tuple, branch, method):
-    prepared = _prepared(encoded_inputs)
+    prepared = _prepared(encoded_inputs, method == DEFAULT_RESPONSE_METHOD)
     response = atom.evaluate_prepared(prepared, np.asarray(delta_tuple)*2*np.pi*1e6,
                                       branch=branch, method=method)
     return (response.positive_frequency_chi_matrix[0], response.mean_pump_state,
@@ -133,7 +139,7 @@ def pump_phase_mismatch(raw, mean_pump_state):
         scope="Uniform pump real refractive phase; pump attenuation and spatial state evolution not re-solved")
 
 
-def build_response(raw, delta_mhz, *, velocity_step=2., velocity_cutoff=6., method="poles"):
+def build_response(raw, delta_mhz, *, velocity_step=2., velocity_cutoff=6., method=DEFAULT_RESPONSE_METHOD):
     """Return an uncalibrated full-Zeeman propagation snapshot at exact deltas.
 
     Accepts native raw or context_from_params(). No native atom is solved here.
@@ -181,9 +187,12 @@ def build_response(raw, delta_mhz, *, velocity_step=2., velocity_cutoff=6., meth
         kp, kc, hyperfine.number_density(raw["temperature_K"]), constants.DIPOLE_D1, residual/3., delta_k_z=mismatch)
     gs, gc, clipped = propagation.propagate(matrix, raw["cell_length_m"], segment_profile,
         raw["input_pump_power_W"], raw["input_seed_power_W"], area_ratio, dynamic)
+    version = _RESPONSE_V2 if method == DEFAULT_RESPONSE_METHOD else "fwm-zeeman-response-v1"
+    if method == DEFAULT_RESPONSE_METHOD:
+        provenance = dict(provenance, solver_version=version)
     return dict(**{key: raw[key] for key in PHYSICAL_KEYS}, probe_axis_GHz=axis, delta_k_z=mismatch,
         vacuum_delta_k_z=vacuum_mismatch,
-        G_s=gs, G_c=gc, propagation_snapshot=dict(version="fwm-zeeman-response-v1", drift_per_m=matrix,
+        G_s=gs, G_c=gc, propagation_snapshot=dict(version=version, drift_per_m=matrix,
             chi=np.array(chi, copy=True), segment_profile=segment_profile, dynamic_depletion=dynamic,
             conjugate_power_ratio=area_ratio, source="resolved24-state pump and infinitesimal polarized atomic response"),
         zeeman_response_provenance=dict(provenance, practical_residual=residual, pump_phase=pump_phase,
@@ -193,16 +202,17 @@ def build_response(raw, delta_mhz, *, velocity_step=2., velocity_cutoff=6., meth
         atomic_effective_inputs=inputs)
 
 
-def evaluate(raw, delta_mhz, *, enabled=True):
+def evaluate(raw, delta_mhz, *, enabled=True, method=DEFAULT_RESPONSE_METHOD):
+    """Evaluate the calibration. The backend-only method="poles" replays v1."""
     delta = np.asarray(delta_mhz, float)
     if not np.isfinite(delta).all():
         raise ValueError("finite detunings required")
-    record = profile()
+    record = profile() if method == DEFAULT_RESPONSE_METHOD else profile(method=method)
     cross, matrix, response = 1., None, {}
     clipped = np.zeros(delta.size, bool)
     if enabled:
         response = build_response(raw, delta.ravel(), velocity_step=record.get("velocity_step_m_s", 2.),
-            velocity_cutoff=record.get("velocity_cutoff_sigma", 6.), method="poles")
+            velocity_cutoff=record.get("velocity_cutoff_sigma", 6.), method=method)
         snapshot = response["propagation_snapshot"]
         beta = np.asarray(record["coefficients"], float)
         cross = float(np.exp(np.clip(features(raw["temperature_K"], raw["input_pump_power_W"], raw["w_pump_m"])[:2]@beta,
@@ -241,11 +251,11 @@ def evaluate(raw, delta_mhz, *, enabled=True):
     return result
 
 
-def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
-    result = evaluate(raw, _axis(raw), enabled=enabled)
+def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None, method=DEFAULT_RESPONSE_METHOD):
+    result = evaluate(raw, _axis(raw), enabled=enabled, method=method)
     if enabled:
         response = build_response(raw, _axis(raw), velocity_step=result["profile"].get("velocity_step_m_s", 2.),
-            velocity_cutoff=result["profile"].get("velocity_cutoff_sigma", 6.), method="poles")
+            velocity_cutoff=result["profile"].get("velocity_cutoff_sigma", 6.), method=method)
         transfer, clipped = propagation.undepleted_transfer(result["corrected_drift_per_m"], raw["cell_length_m"],
             response["propagation_snapshot"]["segment_profile"])
         result.update(corrected_field_transfer_small_signal=transfer, transfer_stability_clipped=clipped,
@@ -253,7 +263,7 @@ def calibrate_spectrum(raw, *, enabled=False, selected_delta_mhz=None):
     else:
         result.update(G_s=np.array(raw["G_s"], copy=True), G_c=np.array(raw["G_c"], copy=True))
     if selected_delta_mhz is not None:
-        point = evaluate(raw, float(selected_delta_mhz), enabled=enabled)
+        point = evaluate(raw, float(selected_delta_mhz), enabled=enabled, method=method)
         result["selected_point"] = dict(G_s=float(point["G_s"]), G_c=float(point["G_c"]),
             internal_delta_mhz=float(selected_delta_mhz), available=True, applied=bool(enabled),
             status=str(point["point_status"]), within_training_domain=point["within_training_domain"],
