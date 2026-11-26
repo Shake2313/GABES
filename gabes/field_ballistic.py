@@ -143,7 +143,7 @@ class FieldBallisticProbe:
         self.speed_sigma = self._geometry.speed_sigma
         self.photon_energy_j = self._geometry.photon_energy_j
 
-    def _operators(self, delta):
+    def _orientation(self):
         b, e, quant = self.field_ut, self.jones, "k"
         # The dipole Hamiltonian depends only on B and E. A real (up to
         # global phase) polarization allows exact rotations when B is parallel
@@ -162,9 +162,23 @@ class FieldBallisticProbe:
                 b, e, quant = (parallel, 0., 0.), (1., 0.), "E"
             elif abs(parallel) <= tolerance * field_norm:
                 b, e = (0., 0., transverse), (1., 0.)
+        return b, tuple(e), quant
+
+    def _operators(self, delta):
+        field, jones, quantization = self._orientation()
         return field_history.operators(
-            self.isotope.name, self.line, delta / species.MHZ, field_ut=b, jones=e, quantization=quant,
+            self.isotope.name, self.line, delta / species.MHZ, field_ut=field, jones=jones,
             optical_hwhm_increment_rad_s=self.width - 0.5 * self.manifold.gamma)
+
+    def _bipartite_model(self):
+        field, jones, quantization = self._orientation()
+        # The current connected-component solver is already small in axial
+        # or polarization-axis geometries. Keep it in those cases.
+        if quantization != "k" or not any(field[:2]):
+            return None
+        from ._field_sdirk import prepare
+        return prepare(self.isotope.name, self.line, field, jones, quantization,
+                       self.width - 0.5 * self.manifold.gamma)
 
     def cross_sections(self, detuning_rad_s, peak_intensity_w_m2, waist_m, *,
                        grid=TrajectoryGrid(), accelerated=True, checkpoint=None):
@@ -178,15 +192,21 @@ class FieldBallisticProbe:
         first, second = np.exp(-r1**2), np.exp(-r2**2)
         roots = np.sqrt(peak)
         result = np.empty((len(peak), len(delta)))
+        dx = 2.0 * grid.xcut / grid.nx
         with core.blas_single_thread():
+            model = self._bipartite_model() if accelerated else None
+            if model is not None:
+                from ._field_sdirk import fixed_steps
             for j, freq in enumerate(delta):
-                ops = self._operators(freq)
                 counts = None
-                if accelerated:
-                    counts = _fixed_steps(ops, first, second, 2.0 * grid.xcut / grid.nx,
-                                          scales, flux, roots, checkpoint)
+                if model is not None:
+                    counts = fixed_steps(model, freq, first, second, dx, scales, flux, roots, checkpoint, _check)
                 if counts is None:
-                    counts = _direct(ops, first, second, step, bins, scales, flux, roots, 1, checkpoint)[:, 0]
+                    ops = self._operators(freq)
+                    if accelerated:
+                        counts = _fixed_steps(ops, first, second, dx, scales, flux, roots, checkpoint)
+                    if counts is None:
+                        counts = _direct(ops, first, second, step, bins, scales, flux, roots, 1, checkpoint)[:, 0]
                 result[:, j] = counts * self.photon_energy_j / (0.5 * np.pi * waist**2)
         if not np.isfinite(result).all() or np.any(result < 0.):
             raise ArithmeticError("Unresolved nonfinite or negative total field-history absorption.")

@@ -1,5 +1,6 @@
 """Crossing-flux normalization, coherent symmetry reductions and radial photon accounting."""
 from concurrent.futures import CancelledError
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -137,3 +138,59 @@ def test_arbitrary_jones_normalization_is_shared_with_the_weak_limit():
     atom = FieldBallisticProbe(species.RB85, "D1", TEMPERATURE, jones=(tiny, tiny*1j))
     ordinary = FieldBallisticProbe(species.RB85, "D1", TEMPERATURE, jones=(1., 1j))
     np.testing.assert_array_equal(atom.jones, ordinary.jones)
+
+
+
+@pytest.mark.parametrize("isotope,line", [(species.RB85, "D1"), (species.RB87, "D1"),
+                                           (species.RB85, "D2"), (species.RB87, "D2")])
+def test_oblique_reduction_matches_original_at_the_same_stages(isotope, line, monkeypatch):
+    from gabes import field_ballistic
+
+    atom = FieldBallisticProbe(isotope, line, TEMPERATURE, field_ut=(25., -18., 35.), jones=(.8, .6j))
+    delta = -1114.23 * species.MHZ
+    intensity = [0., 50., 200., 500.]
+    # The production path doubles nx if the original mesh has negative populations.
+    grid = replace(GRID, nx=192) if isotope == species.RB85 and line == "D1" else GRID
+    # Evaluate the full connected-system reference on identical quadrature.
+    with monkeypatch.context() as patch:
+        patch.setattr(FieldBallisticProbe, "_bipartite_model", lambda self: None)
+        expected = atom.cross_sections(delta, intensity, WAIST, grid=grid)
+
+    def unexpected(*args):
+        pytest.fail("reduced solver fell back on a validated same-grid input")
+
+    monkeypatch.setattr(field_ballistic, "_fixed_steps", unexpected)
+    actual = atom.cross_sections(delta, intensity, WAIST, grid=grid)
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=0.)
+    weak = atom.weak_cross_sections(delta, WAIST, grid=grid)
+    np.testing.assert_allclose(actual[0], weak, rtol=2e-9, atol=0.)
+
+
+def test_reduced_stage_fallback_and_cancellation(monkeypatch):
+    from gabes import field_ballistic, _field_sdirk
+
+    atom = FieldBallisticProbe(species.RB87, "D1", TEMPERATURE, field_ut=(23., -42., 57.),
+                              jones=(.8, .6j))
+    frequency, peak = -1114.23 * species.MHZ, [0., 70.]
+    def cancel():
+        raise CancelledError()
+
+    with pytest.raises(CancelledError):
+        atom.cross_sections(frequency, peak, WAIST, grid=GRID, checkpoint=cancel)
+
+    original = field_ballistic._fixed_steps
+    seen = []
+    def fallback(*args):
+        seen.append(True)
+        return original(*args)
+    fast = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
+    monkeypatch.setattr(field_ballistic, "_fixed_steps", fallback)
+    with monkeypatch.context() as patch:
+        patch.setattr(_field_sdirk, "_eigen_blocks", lambda matrix: None)
+        recovered = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
+        np.testing.assert_allclose(recovered, fast, rtol=1e-12, atol=0.)
+    with monkeypatch.context() as patch:
+        patch.setattr(_field_sdirk, "_within_residual", lambda *args: False)
+        recovered = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
+        np.testing.assert_allclose(recovered, fast, rtol=1e-12, atol=0.)
+    assert len(seen) == 2

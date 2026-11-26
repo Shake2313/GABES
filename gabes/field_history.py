@@ -66,13 +66,11 @@ class FieldCrossingOperators:
     dipole_sq: float
 
 
-@lru_cache(maxsize=32)
-def _operators(isotope, line, rest_mhz, field_ut, jones, optical_hwhm_increment_rad_s,
-               quantization):
+@lru_cache(maxsize=16)
+def _field_terms(isotope, line, field_ut, jones, quantization):
+    """Shared rotating-frame drive and Zeeman blocks, independent of detuning."""
     iso = species.ISOTOPES[isotope]
     atom = magneto_multilevel.build_multilevel_atom(isotope, line)
-    ng, ne = len(atom.ground), len(atom.excited)
-    n = ng + ne
     if quantization == "k":
         circular = jones_to_circular(np.asarray(jones, dtype=complex))
         excitation = sum(circular[q] * atom.dipoles[q].T for q in (-1, 1))
@@ -89,16 +87,25 @@ def _operators(isotope, line, rest_mhz, field_ut, jones, optical_hwhm_increment_
     else:
         raise ValueError("quantization must be 'k' or 'E'.")
 
-    h0 = _hamiltonian(atom, rest_mhz, 0.0, excitation)
-    h1 = _hamiltonian(atom, rest_mhz, 1.0, excitation) - h0
     ground_g = {f: species.lande_gf(iso.gJ_S, iso.g_I, iso.I, iso.Jg, f)
                 for f, _ in atom.ground}
     excited_g = {f: species.lande_gf(_excited_gj(iso, line), iso.g_I, iso.I, _excited_j(line), f)
                  for f, _ in atom.excited}
-    if np.any(field):
-        h0 = h0.copy()
-        h0[:ng, :ng] += _zeeman_block(atom.ground, ground_g, field)
-        h0[ng:, ng:] += _zeeman_block(atom.excited, excited_g, field)
+    ground_field = _zeeman_block(atom.ground, ground_g, field)
+    excited_field = _zeeman_block(atom.excited, excited_g, field)
+    return atom, excitation, ground_field, excited_field
+
+
+@lru_cache(maxsize=32)
+def _operators(isotope, line, rest_mhz, field_ut, jones, optical_hwhm_increment_rad_s,
+               quantization):
+    atom, excitation, ground_field, excited_field = _field_terms(isotope, line, field_ut, jones, quantization)
+    ng, ne = len(atom.ground), len(atom.excited)
+    n = ng + ne
+    h0 = _hamiltonian(atom, rest_mhz, 0.0, excitation)
+    h1 = _hamiltonian(atom, rest_mhz, 1.0, excitation) - h0
+    h0[:ng, :ng] += ground_field
+    h0[ng:, ng:] += excited_field
 
     excited = np.arange(n) >= ng
     optical = (excited[:, None] != excited).ravel(order="F").astype(float)
