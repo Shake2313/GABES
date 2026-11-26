@@ -113,6 +113,26 @@ def test_block_state_and_full_resolvent_are_identical():
     assert actual.diagnostics["minimum_pump_eigenvalue"] >= -1e-12
 
 
+@pytest.mark.parametrize("emission_mode", zeeman.EMISSION_MODES)
+def test_paired_direct_response_matches_independent_sectors(emission_mode):
+    prepared = zeeman.prepare_response(-1.04858, T=362.15, pump_power_W=.001,
+        pump_waist_m=950e-6, velocities=[-300., -.1, 20., 300.],
+        velocity_weights=[.1, .3, .4, .2], emission_mode=emission_mode)
+    assert len(zeeman._direct_blocks(prepared, True)) == 1
+    delta = 2*np.pi*1e6*np.array([-16., 0., 16.])
+    for branch in (-1, 1):
+        settings = dict(branch=branch, analysis_frequency_axis_rad_s=(0., 2*np.pi*1e6),
+                        return_velocity_chi=True, chunk_size=2)
+        paired = zeeman.evaluate_prepared(prepared, delta, **settings)
+        independent = zeeman.evaluate_prepared(prepared, delta,
+                                              use_mirror_symmetry=False, **settings)
+        np.testing.assert_allclose(paired.velocity_chi_matrix, independent.velocity_chi_matrix,
+                                   rtol=1e-12, atol=0.)
+        np.testing.assert_allclose(paired.chi_matrix, independent.chi_matrix, rtol=1e-12, atol=0.)
+        assert paired.diagnostics["max_response_normalized_residual"] < 1e-13
+        assert paired.provenance == independent.provenance
+
+
 def test_reusable_poles_match_direct_and_velocity_chunking():
     prepared = zeeman.prepare_pump(2*np.pi*400e6, 2*np.pi*np.array([-1.1e9,-1.e9,-.8e9]),
                                    T=362.15, velocity_weights=[.2,.5,.3])

@@ -19,6 +19,7 @@ from .atoms import AtomModel
 N_LEVELS = 24
 N_GROUND = 12
 EMISSION_MODES = ("hyperfine_secular", "global_polarization")
+_DIRECT_PARITY_RTOL = 1e-12
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class ZeemanModel:
     sector_bases: dict
     sector_pump: dict
     sector_lindblad: dict
+    weak_mirror: tuple[np.ndarray, np.ndarray]
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,19 @@ def _sector_commutator(hamiltonian, indices):
 def _pump_diagonal(fs):
     return np.diag(np.r_[np.where(fs[:N_GROUND] == 3, constants.OMEGA_HF, 0.),
                          np.where(fs[N_GROUND:] == 2, -constants.OMEGA_EXCITED_HF, 0.)])
+
+
+def _weak_sector_mirror(fs, ms, sectors):
+    """Map q=-1 entries to q=+1 under signed m reflection."""
+    ground = np.arange(N_LEVELS) < N_GROUND
+    levels = {(g, f, m): i for i, (g, f, m) in enumerate(zip(ground, fs, ms))}
+    reflection = np.array([levels[g, f, -m] for g, f, m in zip(ground, fs, ms)])
+    signs = (-1)**(fs + ~ground)
+    i, j = np.divmod(sectors[-1], N_LEVELS)
+    permutation = np.searchsorted(sectors[1], reflection[i]*N_LEVELS+reflection[j])
+    sign = signs[i]*signs[j]
+    permutation.flags.writeable = sign.flags.writeable = False
+    return permutation, sign
 
 
 @lru_cache(maxsize=12)
@@ -211,7 +226,8 @@ def build_model(T=394.15, *, transit_rate=constants.GAMMA_GG,
         for block in (sector_bases[q], sector_pump[q], sector_lindblad[q]):
             block.flags.writeable = False
     return ZeemanModel(atom, fs, ms, sectors, dipoles, pump_coupling,
-                       weak_coupling, thermal, provenance, sector_bases, sector_pump, sector_lindblad)
+                       weak_coupling, thermal, provenance, sector_bases, sector_pump,
+                       sector_lindblad, _weak_sector_mirror(fs, ms, sectors))
 
 
 def pump_hamiltonian(pump_rabi_rad_s, model):
@@ -353,10 +369,51 @@ def _pole_response(prepared, frequencies, chunk_size, return_velocity_chi):
                                     pole_guard_relative_tolerance=1e-6)
 
 
+def _direct_blocks(prepared, use_mirror_symmetry):
+    """Pair the weak inputs in the q=-1 coordinates before solving."""
+    p = prepared
+    # Retain the existing solve when the reset does not ensure uniqueness.
+    if use_mirror_symmetry and p.model.provenance["transit_reset_rate_rad_s"] > 0.:
+        permutation, sign = p.model.weak_mirror
+        readout = p.readouts[-1]
+        # The orthogonal weak polarization is odd under reflection.
+        if np.array_equal(readout, -p.readouts[1][:, permutation]*sign):
+            mirror_base = p.response_bases[1][np.ix_(permutation, permutation)]
+            base = .5*(p.response_bases[-1] + sign[:, None]*mirror_base*sign)
+            diagonal = .5*(p.velocity_diagonals[-1] + p.velocity_diagonals[1][permutation])
+            # An arithmetic mean of mapped inputs cancels the leading response
+            # error from their roundoff mismatch. Doubling one sector does not.
+            source = .5*(p.sources[-1] - sign[:, None]*p.sources[1][:, permutation, :])
+            return ((base, diagonal, source, readout, 2),)
+    return tuple((p.response_bases[q], p.velocity_diagonals[q], p.sources[q],
+                  p.readouts[q], 1) for q in (-1, 1))
+
+
+def _direct_solve(matrix, source, readout, *, equilibrate):
+    if equilibrate:
+        # GHz optical terms and slow Raman rates have different row scales.
+        scale = np.maximum(np.max(abs(matrix), axis=2), np.finfo(float).tiny)[..., None]
+        solution = np.linalg.solve(matrix/scale, -source/scale)
+    else:
+        solution = np.linalg.solve(matrix, -source)
+    response = np.einsum("oi,bik->bok", readout, solution)
+    residual = np.einsum("bij,bjk->bik", matrix, solution)+source
+    norm = np.linalg.norm(matrix, axis=(1, 2))*np.linalg.norm(solution, axis=(1, 2))+np.linalg.norm(source, axis=(1, 2))
+    return response, np.linalg.norm(residual, axis=(1, 2))/np.maximum(norm, 1e-300)
+
+
+def _weak_response_replay_mask(response):
+    """Identify cross terms whose size makes relative replay sensitive."""
+    magnitude = abs(response)
+    resolution = np.finfo(float).eps*np.max(magnitude, axis=(1, 2))
+    smallest_cross = np.minimum(magnitude[:, 0, 1], magnitude[:, 1, 0])
+    return _DIRECT_PARITY_RTOL*smallest_cross < resolution
+
+
 def evaluate_prepared(prepared, delta_axis_rad_s, *, branch=-1,
                       analysis_frequency_axis_rad_s=(0.,), chunk_size=64,
-                      return_velocity_chi=False, method="direct"):
-    """Resolve the complete 2x2 Nambu response using two 80-dimensional sectors."""
+                      return_velocity_chi=False, method="direct", use_mirror_symmetry=True):
+    """Resolve the Nambu response. Disable mirroring for the two-sector direct reference."""
     delta = np.atleast_1d(np.asarray(delta_axis_rad_s, float))
     analysis = np.atleast_1d(np.asarray(analysis_frequency_axis_rad_s, float))
     if branch not in (-1, 1):
@@ -371,27 +428,42 @@ def evaluate_prepared(prepared, delta_axis_rad_s, *, branch=-1,
     velocity_chi = (np.zeros((len(analysis), len(delta), nv, 2, 2), complex)
                     if return_velocity_chi else None)
     maximum_residual = 0.
+    direct_blocks = _direct_blocks(prepared, use_mirror_symmetry) if method == "direct" else ()
     with core.blas_single_thread():
         for chunk in _chunks(nv, chunk_size):
-            if method == "poles":
+            if not direct_blocks:
                 break
             class_response = np.zeros((len(analysis), len(delta), len(prepared.delta_eff_axis_rad_s[chunk]), 2, 2), complex)
-            for q in (-1, 1):
-                base = prepared.response_bases[q]
+            effective_detuning = prepared.delta_eff_axis_rad_s[chunk]
+            frequency_scale = prepared.frequency_doppler_scale[chunk]
+            for base, velocity_diagonal, sources, readout, multiplicity in direct_blocks:
                 n = len(base)
                 diagonal = np.arange(n)
                 generator = np.broadcast_to(base, (class_response.shape[2], n, n)).copy()
-                generator[:, diagonal, diagonal] -= prepared.delta_eff_axis_rad_s[chunk, None]*prepared.velocity_diagonals[q]
-                source = prepared.sources[q][chunk]
+                generator[:, diagonal, diagonal] -= effective_detuning[:, None]*velocity_diagonal
+                source = sources[chunk]
+                paired = multiplicity == 2
                 for a in range(len(analysis)):
                     for d in range(len(delta)):
+                        shift = 1j*frequencies[a, d]*frequency_scale
                         matrix = generator.copy()
-                        matrix[:, diagonal, diagonal] += 1j*frequencies[a, d]*prepared.frequency_doppler_scale[chunk, None]
-                        solution = np.linalg.solve(matrix, -source)
-                        class_response[a, d] += np.einsum("oi,bik->bok", prepared.readouts[q], solution)
-                        residual = np.einsum("bij,bjk->bik", matrix, solution)+source
-                        norm = np.linalg.norm(matrix, axis=(1, 2))*np.linalg.norm(solution, axis=(1, 2))+np.linalg.norm(source, axis=(1, 2))
-                        maximum_residual = max(maximum_residual, float(np.max(np.linalg.norm(residual, axis=(1, 2))/np.maximum(norm, 1e-300))))
+                        matrix[:, diagonal, diagonal] += shift[:, None]
+                        response, residual = _direct_solve(matrix, source, readout, equilibrate=paired)
+                        response *= multiplicity
+                        if paired and prepared.pump_rabi_rad_s > 0.:
+                            replay = _weak_response_replay_mask(response)
+                            if replay.any():
+                                response[replay] = 0.
+                                residual[replay] = 0.
+                                for qb, qv, qs, qr, _ in _direct_blocks(prepared, False):
+                                    exact = np.broadcast_to(qb, (np.count_nonzero(replay), n, n)).copy()
+                                    exact[:, diagonal, diagonal] -= effective_detuning[replay, None]*qv
+                                    exact[:, diagonal, diagonal] += shift[replay, None]
+                                    raw, raw_residual = _direct_solve(exact, qs[chunk][replay], qr, equilibrate=False)
+                                    response[replay] += raw
+                                    residual[replay] = np.maximum(residual[replay], raw_residual)
+                        class_response[a, d] += response
+                        maximum_residual = max(maximum_residual, float(np.max(residual)))
             output += np.einsum("advij,v->adij", class_response, prepared.velocity_weights[chunk])
             if velocity_chi is not None:
                 velocity_chi[:, :, chunk] = class_response
