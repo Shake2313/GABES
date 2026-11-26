@@ -2217,6 +2217,7 @@
     },
     {
       "id": "lambda-spectrum-validity",
+      "daily_review_followup_2026_11_26": "⟦AI⟧ 11-24 리뷰가 비교표·증분 행·JSON 분해능 판정 불일치(EIT 112.13 vs 4.11간격, CPT 원인 소실)를 재확인했다. done 상태는 유지하고 잔여 결함은 lambda-comparison-json-resolution-contract로 분리했다.",
       "area": "schemes/absorption.py + atoms.py + beam.py + kernels.py + lineshape.py + observables.py",
       "title": "Correct Lambda residual Doppler physics and gate unresolved spectra",
       "problem": "⟦AI⟧ Cold-angle/scan-velocity 혼동은 이번 수정으로 해결. 남은 범위: EIT/CPT 격자·linewidth/group-index/visibility gate, signed kp−kc와 비평행 공동 속도 평균.",
@@ -2398,6 +2399,15 @@
     },
     {
       "id": "rydberg-readout-validity-guardrails",
+      "review_evidence_2026_11_26": {
+        "origin": "⟦AI⟧ daily review observation; 구현 승인 아님",
+        "finding": "11-25: 주 판독은 기준광·관측량별 판정을 유지(기본 AT 기준광 2.51971 µW, AT 간격 3.16976 MHz, finite-IF 37.63간격/FWHM). 세 비교 행에는 기준광 평형점·전력·finite-IF validity 상세가 계속 누락. 합성 capped IF 검사에서 주 판독·선택 비교·증분·strict JSON은 감도/최적점 보류와 상위 사유(Doppler integral unconverged)를 보존하나 비교 행에는 class/refinement·관측량별 판정 상세가 없다. 20 °C Doppler on은 IF 표본 2/801 provisional-sparse-sampling.",
+        "next": "기준광 평형점·전력, 정적 AT/finite-IF별 판정·표본·edge·보간 여부, 대체 적분 상세를 비교 행·증분·저장으로 전달하고 양축·고온 edge·희소·미수렴 조건에서 일치를 확인한다. 실측 noise 전 가시성은 NOT_ASSESSED 유지.",
+        "sources": [
+          "GABES-archive docs/daily_report/2026-11-25_scheme-3_rydberg-eit.md",
+          "GABES-archive docs/daily_report/2026-11-25_rydberg/readout-audit/report.json"
+        ]
+      },
       "area": "schemes/rydberg.py + rydberg_electrometry.py + observables.py",
       "title": "Gate Rydberg linewidth, AT, and sensitivity readouts by observability",
       "problem": "Low contrast, near-zero transmitted power, scan-edge optima, and under-resolved AT/EIT structure can still produce precise-looking hero linewidth and sensitivity values.",
@@ -4691,6 +4701,22 @@
     },
     {
       "id": "app-result-export-and-provenance",
+      "review_evidence_2026_11_26": {
+        "origin": "⟦AI⟧ daily review observation; 구현 승인 아님",
+        "finding": "공유 축 subplot의 detuning 이름·MHz가 일부 곡선의 x_label/x_unit에서 누락(\"Axis 0 X\", 단위 \"\"). gabes_ui/export.py가 subplot마다 get_xlabel()을 읽고 마지막 공유축에만 xlabel이 있는 기존 원인이 재확인됨(11-26). JSON 곡선·개별 CSV·ZIP 모두 동일, 원시 좌표 배열과 CSV/ZIP 바이트 일치는 유지.",
+        "fixtures": [
+          "FWM: 7개 headless 조건 각각 3곡선 중 이득 2곡선 누락, Lab CSV 헤더 'Axis 0 X,Calibrated pump-off-reference gain' (11-20); 실제 Chrome Gold JSON/ZIP 401점 이득 2곡선 누락·NF 402점 보존 (11-21)",
+          "Rydberg AT: 3개 headless 번들 각 5/7 곡선 누락 (11-25)",
+          "Magneto 광학: 선형 영점 4/7, 타원 bias 6/9, 원편광 bias 4/7, 원편광 noise off 2/4 (marker 포함) (11-26)"
+        ],
+        "next": "공유축 이름·단위를 각 곡선에 전달하고 Rydberg 양축·오버레이, Magneto noise on/off·영점/bias·편광, FWM 7조건 fixture의 JSON/개별 CSV/ZIP을 재검수한다. 잘못된 헤더의 CSV/ZIP 상호 일치만으로 PASS 처리하지 않는다.",
+        "sources": [
+          "GABES-archive docs/daily_report/2026-11-20_scheme-5_fwm.md",
+          "GABES-archive docs/daily_report/2026-11-21_ux-review.md",
+          "GABES-archive docs/daily_report/2026-11-25_scheme-3_rydberg-eit.md",
+          "GABES-archive docs/daily_report/2026-11-26_scheme-4_hanle-eia-nmor.md"
+        ]
+      },
       "area": "streamlit_app.py + schemes/base.py",
       "title": "Export plotted arrays, parameters, and provenance from the app",
       "problem": "⟦AI⟧ JSON and CSV downloads with full parameters/revision/provenance exist. Named-array script/app sharing, round-trip reproduction, lazy extra-view coverage and sweep-branch/status exports remain open.",
@@ -5380,6 +5406,7 @@
     },
     {
       "id": "scheme-current-documentation-and-examples",
+      "daily_review_followup_2026_11_26": "⟦AI⟧ 11-20/11-22/11-23/11-26 리뷰가 SAS/Magneto/FWM/Rydberg의 잔여 문구를 재확인했다. done 상태는 유지하고 잔여분은 scheme-docs-residual-wording-2026-11로 분리했다.",
       "area": "README.md + docs/Userguide/GABES_User_Guide_v2.html + analysis examples",
       "title": "⟦AI⟧ 현 모델·trust 범위에 맞춰 Guide·그림·예제 동기화",
       "origin": "ai_review_of_automated_feedback",
@@ -7294,6 +7321,200 @@
       "related_items": [
         "od-sas-weak-probe-magneto-optical-reference-mode"
       ],
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "rydberg-affine-test-cache-isolation",
+      "area": "tests/test_doppler_on_scheme_matches_a_resolving_velocity_grid (Rydberg) + gabes/schemes/rydberg.py cache",
+      "title": "⟦AI⟧ 계측형 affine 테스트의 선행 캐시 격리",
+      "review_id": "review-2026-11-25-rydberg-affine-test-cache-isolation",
+      "priority": "P2",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ 11-25 결합 pytest(177)에서 test_doppler_on_scheme_matches_a_resolving_velocity_grid[rydberg_eit-params3]만 checked=[]로 실패. AT 단독 1 passed, EIT/AT 쌍 2 passed. 같은 AT 입력을 먼저 계산한 인스턴스에서는 실패, 새 인스턴스에서는 통과하며 두 chi_bar는 비트 동일. 캐시 적중이 계측 함수를 우회하므로 수치 불일치가 아니라 테스트 격리 부족이다. 최초로 캐시를 데운 선행 테스트는 특정하지 못했다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 계측형 affine 테스트는 parameter마다 새 인스턴스를 쓰거나 명시적으로 캐시를 비운다. 제품 계산·캐시 키는 바꾸지 않는다.",
+        "⟦AI⟧ 같은 결합 명령, 단독 실행, 선행 캐시 조건에서 직접 격자 검증이 실제로 실행됨(checked가 비어 있지 않음)을 각각 확인한다."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-25_scheme-3_rydberg-eit.md",
+        "GABES-archive docs/daily_report/2026-11-25_rydberg/cache_isolation_tests.json",
+        "GABES-archive docs/daily_report/2026-11-25_rydberg/cache-audit/report.json"
+      ],
+      "scope_note": "⟦AI⟧ 리뷰 관찰 등록. 제품·테스트 수정 승인은 아님; 우선순위는 AI 제안.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "fwm-preset-roundtrip-name-on-noedit-confirm",
+      "area": "gabes_ui/ direct value editor + FWM presets",
+      "title": "⟦AI⟧ 무편집 확정 시 정밀 프리셋 값·이름 보존",
+      "review_id": "review-2026-10-31-ux-preset-roundtrip-name",
+      "priority": "P3",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ 11-21 실제 Chrome: FWM 2026-10-13 experiment 프리셋에서 Two-photon Detuning 직접 편집창을 열고 무편집 Enter하면 1.7324390000003405 → 1.732439 MHz(약 3.4e-13 MHz)로 바뀌고 프리셋 이름이 Current settings로 해제된다. 물리 영향은 극소하나 저장 상태를 불필요하게 의심하게 한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 값이 편집되지 않은 확정(Enter/blur)은 내부 전체 정밀도 값과 선택된 프리셋 이름을 유지한다.",
+        "⟦AI⟧ 실제 편집은 기존처럼 반올림·Current settings 전환이 일어난다. 키보드 확정 경로를 브라우저에서 재검수한다."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-21_ux-review.md",
+        "GABES-archive docs/daily_report/2026-11-21_ux/fwm_noedit_precision.png"
+      ],
+      "scope_note": "⟦AI⟧ 미채택 AI UX 관찰의 등록. 구현 승인은 아님.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "magneto-optical-sensitivity-channel-label",
+      "area": "gabes/schemes/magneto_unified.py readout + polarization_comparison.py + gabes_ui/export.py",
+      "title": "⟦AI⟧ 광학축 감도 카드·비교·내보내기에 검출 채널 명시",
+      "review_id": "review-2026-11-12-magneto-optical-psn-channel",
+      "priority": "P2",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ 광학축 주 카드와 비교는 투과 ∂T/∂B 기준을 유지한다(D18 축별 자동 선택은 직접 사용자 결정). 선형편광 영점 B=0에서는 투과 감도가 unavailable이나 회전 감도는 유한하다. 11-26 3점 Doppler-off fixture에서 확인: 0°/0 µT 투과 unavailable·회전 유한; 22.5°·45°/+0.0002 µT 회전은 unsupported polarization으로 null. 카드의 일반적 'Best photon-limited sensitivity' 문구가 채널을 밝히지 않아 투과 unavailable을 NMOR 감도 없음으로 오독할 수 있다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 감도 카드·비교 행·JSON/CSV에 검출 채널(투과/회전)을 명시한다. 주 판독을 회전으로 자동 교체하지 않는다(D18 유지).",
+        "⟦AI⟧ 회전이 지원되는 조건에서는 최저 표본과 unavailable 사유를 병기하는 방안을 검토한다. 표본 유한성 확인이며 연속 최적점·수렴·절대 감도·실측 검증으로 쓰지 않는다."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-26_scheme-4_hanle-eia-nmor.md",
+        "GABES-archive docs/daily_report/2026-11-26_magneto/optical-channel-audit/report.json"
+      ],
+      "scope_note": "⟦AI⟧ 미채택 AI 관찰의 등록. D18 결정은 바뀌지 않음.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "fwm-zeeman-selected-point-cache-split",
+      "area": "gabes/fwm_zeeman_gain.py cache",
+      "title": "⟦AI⟧ Zeeman 커서 이동 시 고정 격자와 단일 선택점 응답 분리",
+      "review_id": "review-2026-11-13-fwm-zeeman-cursor-recompute",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "parked",
+      "activation_trigger": "⟦AI⟧ 현 핀에서 커서 이동 지연을 새로 측정하거나 사용자가 Zeeman 응답성 개선을 요청할 때.",
+      "problem": "⟦AI⟧ Zeeman 캐시가 δ 배열 전체 tuple을 키로 쓰는 구조는 현 소스에도 있다(11-20 정적 확인). 11-13 측정 7.75 s는 당시 값이며 현 핀 재측정·개선 주장 없음.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 고정 격자 응답과 정확한 단일 선택점 응답을 합성한다. 새 δ에서는 단일점만 평가한다.",
+        "⟦AI⟧ 양팔 이득·NF·JSON·가용 상태가 전체 재계산과 일치함을 검증한다. 캐시 키·삽입 변경 전후 시간을 같은 환경에서 측정해 기록한다."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-20_scheme-5_fwm.md",
+        "GABES-archive docs/daily_report/2026-11-13_scheme-5_fwm.md"
+      ],
+      "scope_note": "⟦AI⟧ 미채택 AI 관찰의 등록. 새 성능 주장 없음.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "mobile-first-plot-visibility",
+      "area": "gabes_ui layout (Λ/Rydberg/Magneto 좁은 화면)",
+      "title": "⟦AI⟧ 390×844에서 조건·비교 도구 뒤로 밀린 첫 그래프 위치 재측정",
+      "review_id": "review-2026-11-07-ux-comparison-first-screen",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "parked",
+      "related_items": [
+        "ui-anti-ai-slop-information-hierarchy"
+      ],
+      "activation_trigger": "⟦AI⟧ ui-anti-ai-slop-information-hierarchy의 2–4단계 또는 해당 스킴 화면 개편이 시작될 때 함께 처리한다.",
+      "problem": "⟦AI⟧ 11-21 실제 Chrome 390×844에서 첫 그래프 상단 Y가 Λ 875, Rydberg 1088, Magneto 1092 px로 지난주와 동일. 조건·비교 도구 뒤로 그래프가 밀려 첫 화면에서 결과 확인이 어렵다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 같은 viewport·스킴에서 첫 그래프 상단 Y를 재측정해 전후를 기록한다. 조작 가능한 지도·그래프 도달이 스크롤 없이 또는 최소 스크롤로 가능해야 한다.",
+        "⟦AI⟧ 정보 손실 없이 조건·도구 밀도를 조정하고, 옮긴 정보는 한 번의 조작으로 닿게 한다(D4)."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-21_ux-review.md",
+        "GABES-archive docs/daily_report/2026-11-21_ux/survey_result.json"
+      ],
+      "scope_note": "⟦AI⟧ 미채택 AI UX 관찰의 등록; anti-slop 항목과 범위 일부 중첩.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "lambda-selective-dephasing-positivity",
+      "area": "gabes/schemes/absorption.py selective pair damping (Lambda)",
+      "title": "⟦AI⟧ Λ 선택적 쌍 감쇠 채널의 임의 초기상태 완전양성(CP/GKSL) 검토",
+      "review_id": "review-2026-10-21-lambda-selective-dephasing-positivity",
+      "priority": "P3",
+      "effort": "medium",
+      "status": "parked",
+      "activation_trigger": "⟦AI⟧ Λ 모델을 임의 초기상태 시간 의존 dynamics로 확장하거나 감쇠 구현·물리 가정이 바뀔 때.",
+      "problem": "⟦AI⟧ 10-21 리뷰가 선택적 쌍 감쇠에서 과도 응답 반례를 지적했다. 11-10 리뷰는 현행 소스만 점검했고 과거 반례는 재현하지 않았다. 정상상태 출력 영향은 확인되지 않았다. CP 후보 채널은 미채택이며 물리 모델 변경 승인은 없다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 채널의 실험적 의미·rate convention과 positive/GKSL 일관성을 검사하고 Λ 출력 영향을 재현 가능한 반례로 정량한다.",
+        "⟦AI⟧ 기존 Λ 출력은 사용자 결정 없이 바꾸지 않는다. 변경이 필요하면 별도 value 커밋과 결정 기록을 따른다."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-10-21_scheme-2_lambda-coherence.md",
+        "GABES-archive docs/daily_report/2026-11-10_scheme-2_lambda-coherence.md"
+      ],
+      "scope_note": "⟦AI⟧ 물리 모델 미채택 AI 관찰의 등록. 모델 변경 승인은 아님.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "lambda-comparison-json-resolution-contract",
+      "area": "gabes/schemes/lambda_comparison.py + gabes/schemes/absorption.py + gabes_ui/export.py",
+      "title": "⟦AI⟧ Λ 비교표·증분 행·JSON에 주 판독의 분해능 판정 전달",
+      "review_id": "lambda-spectrum-validity",
+      "follow_up_of": "lambda-spectrum-validity",
+      "priority": "P1",
+      "effort": "medium",
+      "status": "ready",
+      "problem": "⟦AI⟧ lambda-spectrum-validity(done)의 주 판독 계약이 비교·JSON에 전달되지 않는다(11-22, 11-24 재현). 1 mW EIT(50 °C, 15 mm, Ωc/2π=17.238 MHz, γgg/2π=57.46 kHz, Δc=0, 0 mrad, Doppler off, 601점): 주 판독 FWHM 0.945621 MHz, 112.13간격 resolved; 비교·증분 행은 같은 폭이나 4.11간격 resolution-limited. 4 mW CPT: 주 판독 1.79간격 under_resolved로 숫자 보류, 비교·JSON은 unresolved로 원인 소실, JSON 폭 정의는 sample-bracketed. 일반 Scalar JSON은 구조화된 lambda_readout도 생략. 비교는 전체 스캔 중앙 간격·옛 6간격 기준을 사용한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 주 판독의 보간 폭, 반높이 교차 사이 최대 간격, ≥8간격/FWHM·양끝 ≥1 FWHM edge 판정과 보류 원인을 비교 행·증분 행·JSON에 동일하게 전달한다. 정확히 해상된 EIT를 비교 경고만으로 버리지 않는다.",
+        "⟦AI⟧ 위 EIT 1 mW(112.13간격/resolved)와 CPT 4 mW(under_resolved 원인·숫자 보류) 두 fixture에서 값·상태·정의가 일치한다. 물리 모델·출력 배열은 바꾸지 않는다.",
+        "⟦AI⟧ 비교·JSON 수정 뒤 end-to-end 계약 검증을 수행한다. 실험 가시성은 not assessed 유지."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-24_scheme-2_lambda-coherence.md",
+        "GABES-archive docs/daily_report/2026-11-22_weekly/focused-audit/report.json"
+      ],
+      "scope_note": "⟦AI⟧ done 항목 재개방이 아니라 잔여 결함의 후속 분리. 구현 승인은 아님; 우선순위는 AI 제안.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "scheme-docs-residual-wording-2026-11",
+      "area": "README.md + gabes/schemes/sas.py About + docs/Userguide/GABES_User_Guide_v2.html",
+      "title": "⟦AI⟧ README·About·Guide의 현 모델 대비 잔여 문구 정리(SAS/Magneto/FWM/Rydberg)",
+      "review_id": "scheme-current-documentation-and-examples",
+      "follow_up_of": "scheme-current-documentation-and-examples",
+      "priority": "P2",
+      "effort": "small",
+      "status": "ready",
+      "problem": "⟦AI⟧ scheme-current-documentation-and-examples(done) 이후 데일리 리뷰가 확인한 잔여 문구.",
+      "residual_wording": [
+        "OD/SAS: sas.py About과 README Traps가 경로 온도는 속도 분포만 바꾼다고 설명한다. 실제 밀도도 n_sat(T_cold)·T_cold/T_path로 변한다(11-23). README의 Cs가 Rb self-broadening 계수를 상속한다는 문구는 현재 기본 omission/명시 opt-in 분기와 불일치.",
+        "Magneto: README가 Hanle preset을 transmission용으로, Doppler를 exact untruncated Maxwell로 서술한다. 등록 앱의 주 판독은 B축 회전/광학축 투과, 적분은 공명 중심 복합 Gauss–Legendre 기본 ±6σ이며 exact pole 평균은 미등록 SinglePairMagnetoReference 범위다(11-26).",
+        "FWM: README의 보정 오차 4.92/3.87%는 v1 범위임을 현행 v2/v3와 구분해야 한다. User Guide FWM 절에 homodyne/IDS 구분 설명이 없다(README에는 있음)(11-20, 11-22).",
+        "Rydberg: CP rate·새 optical axes·현재 source/config를 Guide·예제·저장 그림에 반영하는 잔여 범위(11-04 리뷰)."
+      ],
+      "acceptance_criteria": [
+        "⟦AI⟧ 위 문구를 구현과 일치시키고 Guide를 재생성한다. 문서·스타일 변경이므로 내용·링크·렌더 검사를 하며 수치 회귀는 돌리지 않는다.",
+        "⟦AI⟧ 내부 provenance 마커는 독자용 문서에 넣지 않는다."
+      ],
+      "evidence": [
+        "GABES-archive docs/daily_report/2026-11-22_weekly-review.md",
+        "GABES-archive docs/daily_report/2026-11-23_scheme-1_od-sas.md",
+        "GABES-archive docs/daily_report/2026-11-26_scheme-4_hanle-eia-nmor.md",
+        "GABES-archive docs/daily_report/2026-11-20_scheme-5_fwm.md"
+      ],
+      "scope_note": "⟦AI⟧ done 항목 재개방이 아니라 잔여 문구의 후속 분리. 구현 승인은 아님.",
+      "origin": "ai_execution_of_human_request",
+      "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
       "last_reviewed_at": "2026-11-26"
     }
   ],
