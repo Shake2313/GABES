@@ -93,9 +93,12 @@ GAUSSIAN_TRANSIT_D20_MODEL = "od_finite_rb_mf_gaussian_transit_d20_v1"
 GAUSSIAN_TRANSIT_MODELS = (GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL)
 BALLISTIC_REFERENCE = "od_rb85_d1_ballistic_history_v1"
 BALLISTIC_TRANSIT = "ballistic_history"
-BALLISTIC_FAST = "od_rb85_d1_ballistic_history_fast_v1"
+BALLISTIC_FAST_V1 = "od_rb85_d1_ballistic_history_fast_v1"
+BALLISTIC_FAST = "od_rb85_d1_ballistic_history_fast_v2"
 BALLISTIC_FAST_TRANSIT = "ballistic_history_fast"
 BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANSIT: BALLISTIC_FAST}
+# An explicit prior Fast ID replays the original trajectory grid.
+BALLISTIC_FIDELITIES = {BALLISTIC_REFERENCE: "reference", BALLISTIC_FAST_V1: "fast_v1", BALLISTIC_FAST: "fast"}
 OD_TRANSIT_KEY = "od_transit_model"
 GAUSSIAN_TRANSIT = "gaussian_fwhm"
 RATE_MODELS = (RATE_MODEL, RATE_MODEL_V2, *GAUSSIAN_TRANSIT_MODELS)
@@ -106,9 +109,9 @@ _EXPLICIT_OD_MODELS = {
     TRANSIT_WEAK_MODEL_V2: OD_MODELS_D2SB, TWO_LEVEL_MODEL_V2: OD_MODELS_D2SB,
     RATE_MODEL_V2: OD_MODELS_D2SB, GAUSSIAN_TRANSIT_MODEL: OD_MODELS_D2SB,
     GAUSSIAN_TRANSIT_D20_MODEL: OD_MODELS_D20,
-    **dict.fromkeys(BALLISTIC_MODELS.values(), OD_MODELS_D2SB),
+    **dict.fromkeys(BALLISTIC_FIDELITIES, OD_MODELS_D2SB),
 }
-GEOMETRY_MODELS = (*GAUSSIAN_TRANSIT_MODELS, *BALLISTIC_MODELS.values())
+GEOMETRY_MODELS = (*GAUSSIAN_TRANSIT_MODELS, *BALLISTIC_FIDELITIES)
 OD_MODEL_CHOICES = (*OD_MODEL_SETS, *_EXPLICIT_OD_MODELS)
 # Atom / Isotope rows of the species knob (rendered as two selectors).
 ATOM_MENU = (
@@ -313,7 +316,7 @@ def _pump_free_model_reason(params, model):
             return ("The Exact Maxwell Voigt models need uniform, uncoated Rb D1/D2 "
                     "without buffer gas and with Legacy broadening.")
         return None
-    if model in BALLISTIC_MODELS.values():
+    if model in BALLISTIC_FIDELITIES:
         return _ballistic_scope_reason(params)
     if model in RATE_MODELS:
         return _rate_scope_reason(params, geometry=model in GAUSSIAN_TRANSIT_MODELS)
@@ -454,7 +457,7 @@ class SASScheme(Scheme):
     name = "sas"
     cluster = "A — Absorption"
     title = "Absorption spectroscopy (OD / SAS)"
-    cache_version = "19"           # pump-driven SAS uses its configured transit rate
+    cache_version = "22"           # Fast v2 uses the reference trajectory table
     defaults_version = "5"         # µW probe control + expanded visibility
     supports_headless_observables = True
     model_comparison_parameter = "pump_power_mw"
@@ -593,7 +596,9 @@ class SASScheme(Scheme):
                            "Returning to zero pump restores the selected OD model. "
                            "Gaussian beam estimates the replacement rate from the probe radius and kinetic "
                            "temperature in uniform, uncoated, buffer-free Rb. Beam-crossing history follows "
-                           "thermal ⁸⁵Rb atoms through a linearly polarized D1 probe at zero field."),
+                           "thermal ⁸⁵Rb atoms through a linearly polarized D1 probe at zero field. "
+                           "Fast uses the tabulated reference for a 0.530 mm radius, 95–107 °C, up to 160 µW "
+                           "and a cell up to 12.5 mm long."),
             ParamSpec("transit_khz", "Transit relaxation γ_t/2π", "Atomic", 100.0,
                       5.0, 2000.0, 5.0, "kHz", advanced=True,
                       help="Atoms leaving/entering the beam relax toward the thermal "
@@ -779,7 +784,7 @@ class SASScheme(Scheme):
                 or _measured_collision_mode(params)):
             return ("Select Rb D1 or D2, turn off the pump, and use a uniform, uncoated cell "
                     "with zero buffer pressure and Legacy broadening.")
-        if _od_model_setting(params)[1] in BALLISTIC_MODELS.values():
+        if _od_model_setting(params)[1] in BALLISTIC_FIDELITIES:
             return "The stationary probe reference uses a replacement rate. Select Fixed rate or Gaussian beam to compare it."
         if not 0.0 <= _probe_power_mw(params) <= 0.1:
             return "Set the probe power between 0 and 100 µW."
@@ -837,7 +842,7 @@ class SASScheme(Scheme):
             model = _od_model_setting(params)[1]
         except ODModelSettingError:
             model = None
-        if model in BALLISTIC_MODELS.values():
+        if model in BALLISTIC_FIDELITIES:
             return tuple(key for key in keys if key != "transit_khz") + ("cell_mm", "line_strength")
         return keys
 
@@ -924,7 +929,7 @@ class SASScheme(Scheme):
             _isotope_composition(params))
         T_density, T_doppler, tied = _temperatures(params)
         model_set, explicit_model = _od_model_setting(params)
-        use_history = explicit_model in BALLISTIC_MODELS.values()
+        use_history = explicit_model in BALLISTIC_FIDELITIES
         gt = 0.0 if use_history else rate_from_khz_over_2pi(params["transit_khz"])
         power, waist = params["pump_power_mw"], params["waist_mm"]
         probe_supported = (

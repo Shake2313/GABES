@@ -6,7 +6,7 @@ import streamlit as st
 
 from gabes.od_model import (MODEL_KEY, MODELS, ODConditions, ODUnsupportedError, display_reference_offset_hz,
                             evaluate_od_display, od_fit_conditions, od_unavailable)
-from gabes.schemes.sas import BALLISTIC_MODELS, GEOMETRY_MODELS, TWO_LEVEL_MODELS
+from gabes.schemes.sas import BALLISTIC_FIDELITIES, GEOMETRY_MODELS, TWO_LEVEL_MODELS
 from gabes_ui.controls import skey
 
 
@@ -34,7 +34,7 @@ def geometry_replay_params(upload):
         if conditions.extra_homogeneous_fwhm_hz:
             raise ValueError("the workspace cannot replay an additional fitted linewidth")
     except (TypeError, ValueError, KeyError) as exc:
-        name = "beam-crossing" if model_id in BALLISTIC_MODELS.values() else "Gaussian-transit"
+        name = "beam-crossing" if model_id in BALLISTIC_FIDELITIES else "Gaussian-transit"
         raise ValueError(f"Invalid {name} comparison conditions: {exc}") from exc
     # The measured file temporarily supplies these model controls. The pump
     # settings and the user's scan and display controls remain independently editable.

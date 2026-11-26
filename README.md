@@ -309,9 +309,11 @@ initial alignment for the open file.
   rates and beam conditions. With pure ⁸⁵Rb D1 and the pump off, **Beam-crossing history**
   follows initially thermal atoms through the probe and predicts the collected transmitted
   power. It assumes linear polarization, zero magnetic field and a Gaussian transverse
-  profile at each position along the cell. **Fast** uses a smaller trajectory grid in
-  the validated range. Outside it the app runs the reference and records the reason
-  in the model details. Turning the pump on switches the pumped spectrum and its
+  profile at each position along the cell. **Fast** reuses absorption cross sections
+  computed with the full reference trajectory solver. It evaluates the Maxwell average
+  and cell propagation at the entered temperature, power and frequencies. Within the
+  validated range it interpolates the cross sections between 0.5 °C temperature
+  knots. Outside it the app runs the reference and records the reason in the model details. Turning the pump on switches the pumped spectrum and its
   0 mW comparison curve to the configured SAS transit relaxation rate. Returning
   the pump to 0 mW restores the selected OD transit model.
   See [transit models and validation](docs/transit_time.md).

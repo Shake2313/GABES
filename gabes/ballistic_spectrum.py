@@ -33,7 +33,7 @@ class _Resolution:
 
 
 _REFERENCE = _Resolution()
-_FAST = _Resolution(path_nodes=(64, 10, 10))
+_FAST = _Resolution(path_nodes=(64, 10, 10))  # Direct mesh for recorded Fast v1 spectra.
 
 
 @dataclass(frozen=True)
@@ -160,7 +160,7 @@ def _rest_excess(temperature, width, waist, intensity, resolution):
     return local, refined, max_steps
 
 
-def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None):
+def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use_table=False):
     """Convolve a local absorption *excess* with the Maxwell velocity distribution.
 
     The Gaussian in rest frequency has unit integral. It is never renormalized
@@ -169,12 +169,21 @@ def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None):
     """
     nodes, weights = _panels(optics.width, resolution.panel_order, resolution.wing_widths)
     weak = _weak(optics, scan)
-    sampled = [_rest_excess(optics.temperature, optics.width, optics.waist, float(power), resolution)
-               for power in intensity]
-    rest = np.stack([entry[0] for entry in sampled])
-    if diagnostics is not None:
-        diagnostics['refined_path_rows'] = sum(entry[1] for entry in sampled)
-        diagnostics['max_transverse_steps'] = max(entry[2] for entry in sampled)
+    rest = None
+    if use_table:
+        from ._ballistic_reference_table import lookup
+        rest, provenance = lookup(optics, intensity, nodes, weights)
+        if diagnostics is not None:
+            diagnostics.update(provenance)
+    if rest is None:
+        sampled = [_rest_excess(optics.temperature, optics.width, optics.waist, float(power), resolution)
+                   for power in intensity]
+        rest = np.stack([entry[0] for entry in sampled])
+        if diagnostics is not None:
+            diagnostics['refined_path_rows'] = sum(entry[1] for entry in sampled)
+            diagnostics['max_transverse_steps'] = max(entry[2] for entry in sampled)
+            if use_table:
+                diagnostics['rest_method'] = 'direct reference trajectories'
     table = np.empty((len(intensity), len(scan)))
     sigma = optics.sigma
     for start in range(0, len(scan), 512):
@@ -256,8 +265,8 @@ def _deplete(weak, nodes, table, peak, column):
 
 def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference'):
     """Evaluate a pure 85Rb D1 scan in its fine-centroid frame."""
-    if fidelity not in ('reference', 'fast'):
-        raise ValueError('Choose reference or fast distributed-transit fidelity.')
+    if fidelity not in ('reference', 'fast', 'fast_v1'):
+        raise ValueError('Choose reference, fast or recorded fast_v1 distributed-transit fidelity.')
     scan = np.asarray(scan_rad_s, dtype=float)
     if fidelity == 'reference':
         return _evaluate(conditions, scan, _REFERENCE, fidelity)
@@ -266,8 +275,12 @@ def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference')
     # Mesh errors were measured in this single-beam geometry. The weak and
     # transparent-cell limits are analytical for either mesh.
     zero = conditions.probe_power_uw == 0 or conditions.cell_mm == 0
+    # Unit conversions in imported data can shift the same radius by a few ulps.
+    # The v1 replay keeps its original exact-equality eligibility boundary.
+    radius_matches = (conditions.probe_waist_mm == 0.53 if fidelity == 'fast_v1' else
+                      abs(conditions.probe_waist_mm - 0.53) <= 8*np.spacing(0.53))
     measured_geometry = (
-        conditions.probe_waist_mm == 0.53 and 0 < conditions.cell_mm <= 12.5
+        radius_matches and 0 < conditions.cell_mm <= 12.5
         and conditions.line_strength == 1 and conditions.extra_homogeneous_fwhm_hz == 0
         and (conditions.doppler_temp_c is None or conditions.doppler_temp_c == conditions.temp_c)
         and 95 <= conditions.temp_c <= 107 and 0 <= conditions.probe_power_uw <= 160
@@ -278,13 +291,13 @@ def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference')
         return result
     inside = np.abs(scan) <= 2*np.pi*7e9
     if zero or np.all(inside):
-        return _evaluate_fast(conditions, scan)
+        return _evaluate_fast(conditions, scan, fidelity)
     if not np.any(inside):
         result = _evaluate(conditions, scan, _REFERENCE, fidelity)
         result.diagnostics['fallback_reason'] = 'Frequencies outside the Fast validation range. Evaluated the reference.'
         return result
     # Preserve the pointwise OD contract for unordered, duplicated and mixed scans.
-    fast = _evaluate_fast(conditions, scan[inside])
+    fast = _evaluate_fast(conditions, scan[inside], fidelity)
     ref = _evaluate(conditions, scan[~inside], _REFERENCE, fidelity)
     arrays = []
     for name in ('transmission', 'optical_depth', 'od0'):
@@ -300,7 +313,9 @@ def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference')
                        max_weak_absorption_per_waist=max(fast.diagnostics['max_weak_absorption_per_waist'],
                                                         ref.diagnostics['max_weak_absorption_per_waist']))
     # Each partition can have different rest and trajectory grids and recovery steps.
-    grid_fields = ('transverse_nodes', 'rest_nodes', 'intensity_rows', 'refined_path_rows', 'max_transverse_steps')
+    grid_fields = ('transverse_nodes', 'rest_nodes', 'intensity_rows', 'refined_path_rows', 'max_transverse_steps',
+                   'rest_method', 'rest_table_sha256', 'rest_temperature_nodes_c', 'rest_temperature_interpolation',
+                   'rest_table_refined_rows_at_knots', 'rest_table_max_steps_at_knots', 'rest_table_fallback_reason')
     diagnostics['partitions'] = [
         dict(samples=count, fidelity_used=part['fidelity_used'],
              **{name: part[name] for name in grid_fields if name in part})
@@ -313,19 +328,22 @@ def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference')
     return BallisticSpectrum(*arrays, diagnostics)
 
 
-def _evaluate_fast(conditions, scan):
+def _evaluate_fast(conditions, scan, fidelity):
     try:
-        return _evaluate(conditions, scan, _FAST, 'fast')
+        if fidelity == 'fast_v1':
+            return _evaluate(conditions, scan, _FAST, fidelity)
+        return _evaluate(conditions, scan, _REFERENCE, fidelity, use_table=True)
     except ArithmeticError as error:
-        result = _evaluate(conditions, scan, _REFERENCE, 'fast')
+        result = _evaluate(conditions, scan, _REFERENCE, fidelity)
         result.diagnostics['fallback_reason'] = f'Fast quadrature did not converge ({error}). Evaluated the reference.'
         return result
 
 
-def _evaluate(conditions, scan_rad_s, resolution, requested='reference'):
+def _evaluate(conditions, scan_rad_s, resolution, requested='reference', *, use_table=False):
     scan = np.asarray(scan_rad_s, dtype=float)
     if scan.ndim != 1 or not len(scan) or not np.all(np.isfinite(scan)):
         raise ValueError('A nonempty finite one-dimensional detuning axis is required.')
+    fast_route = use_table or resolution is _FAST
     optics = _optics(conditions)
     length = conditions.cell_mm*1e-3
     column = length*optics.density*conditions.line_strength
@@ -335,7 +353,7 @@ def _evaluate(conditions, scan_rad_s, resolution, requested='reference'):
     row_meta = {}
     if peak > 0 and column > 0:
         intensity = _intensity_nodes(peak, resolution)
-        weak, table = _thermal_table(optics, scan, intensity, resolution, diagnostics=row_meta)
+        weak, table = _thermal_table(optics, scan, intensity, resolution, diagnostics=row_meta, use_table=use_table)
         fine_intensity, fine_table = _refine_intensity(intensity, table)
         od = _deplete(weak, fine_intensity, fine_table, peak, column)
     else:
@@ -344,7 +362,11 @@ def _evaluate(conditions, scan_rad_s, resolution, requested='reference'):
     maximum_gradient = float(np.max(weak)*optics.density*conditions.line_strength)
     manifold = species.build_manifold(species.RB85, 'D1')
     rayleigh = probe_saturation.cell_to_rayleigh_ratio(length, optics.waist*1e3, manifold.k_vec)
-    diagnostics = dict(fidelity_requested=requested, fidelity_used='fast' if resolution == _FAST else 'reference',
+    if 'rest_table_fallback_reason' in row_meta:
+        row_meta['fallback_reason'] = row_meta['rest_table_fallback_reason'] + ' Evaluated the reference directly.'
+        fast_route = False
+    diagnostics = dict(fidelity_requested='fast' if requested == 'fast_v1' else requested,
+                       fidelity_used='fast' if fast_route else 'reference',
                        propagation='local Gaussian-shaped transverse flux with axial power depletion',
                        physical_status=('analytical zero-power/length limit' if not peak or not column
                                         else 'conditional Gaussian profile and local-axial propagation'),

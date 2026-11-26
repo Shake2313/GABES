@@ -36,7 +36,8 @@ from .optical_pumping import MAGNETIC_PI, ProjectedProbe
 from .schemes.sas import (
     EXACT_WEAK_PROBE, LEGACY_WEAK_PROBE, OD_MODEL_KEY, RB_COMPOSITION_CUSTOM,
     GAUSSIAN_TRANSIT_MODEL, GAUSSIAN_TRANSIT_D20_MODEL, GAUSSIAN_TRANSIT_MODELS, GAUSSIAN_TRANSIT,
-    BALLISTIC_FAST, BALLISTIC_MODELS, BALLISTIC_REFERENCE, _ballistic_scope_reason,
+    BALLISTIC_FAST, BALLISTIC_FAST_V1, BALLISTIC_FIDELITIES, BALLISTIC_REFERENCE,
+    BALLISTIC_TRANSIT, BALLISTIC_FAST_TRANSIT, _ballistic_scope_reason,
     OD_TRANSIT_KEY, _species_path_density, _temperatures,
     RB_COMPOSITION_NATURAL, SASScheme, _isotope_composition, _probe_power_mw,
     _pump_free_model_id, _pump_free_model_reason, _rate_scope_reason,
@@ -116,7 +117,9 @@ MODELS = {model.model_id: model for model in (
             "measured Rb D2 self-broadening, any probe power",
             "implemented", True, engine="rate", accuracy=RATE_MODEL_ACCURACY,
             per_line_self_broadening=True),
-    ODModel(BALLISTIC_FAST, "Fast beam-crossing history for pure ⁸⁵Rb D1",
+    ODModel(BALLISTIC_FAST_V1, "Recorded Fast beam-crossing history with the original trajectory grid",
+            "implemented", True, engine="ballistic", accuracy=BALLISTIC_ACCURACY, per_line_self_broadening=True),
+    ODModel(BALLISTIC_FAST, "Fast beam-crossing history for pure ⁸⁵Rb D1 (reference trajectories)",
             "implemented", True, engine="ballistic", accuracy=BALLISTIC_ACCURACY, per_line_self_broadening=True),
     ODModel(BALLISTIC_REFERENCE, "Beam-crossing history for pure ⁸⁵Rb D1",
             "implemented", True, engine="ballistic", accuracy=BALLISTIC_ACCURACY, per_line_self_broadening=True),
@@ -254,9 +257,8 @@ class ODConditions:
         params[MODEL_KEY] = self.model_id
         if self.model_id in GAUSSIAN_TRANSIT_MODELS:
             params[OD_TRANSIT_KEY] = GAUSSIAN_TRANSIT
-        for mode, model_id in BALLISTIC_MODELS.items():
-            if self.model_id == model_id:
-                params[OD_TRANSIT_KEY] = mode
+        if self.model_id in BALLISTIC_FIDELITIES:
+            params[OD_TRANSIT_KEY] = BALLISTIC_TRANSIT if self.model_id == BALLISTIC_REFERENCE else BALLISTIC_FAST_TRANSIT
         return params
 
     def _transit_rate_s(self, isotope):
@@ -267,7 +269,7 @@ class ODConditions:
 
     def transit_rates_s(self):
         """Beam replacement rates in s⁻¹ for the isotopes present, keyed by isotope name."""
-        if self.model_id in BALLISTIC_MODELS.values():
+        if self.model_id in BALLISTIC_FIDELITIES:
             return {}
         components, *_ = _isotope_composition(self.to_params())
         return {isotope.name: self._transit_rate_s(isotope) for isotope, _ in components}
@@ -373,7 +375,7 @@ def _evaluate(conditions, offsets, scan):
         diagnostics = None
         if model.engine == "ballistic":
             from .ballistic_spectrum import evaluate_ballistic_spectrum
-            fidelity = "fast" if model.model_id == BALLISTIC_FAST else "reference"
+            fidelity = BALLISTIC_FIDELITIES[model.model_id]
             result = evaluate_ballistic_spectrum(conditions, scan, fidelity=fidelity)
             transmission, depth, od0 = result.transmission, result.optical_depth, result.od0
             diagnostics = result.diagnostics

@@ -77,8 +77,8 @@ def test_rest_frame_quadrature_at_every_component_and_at_tails():
 
 def test_fast_preserves_pointwise_frequencies_and_reports_reference_fallback(monkeypatch):
     # Distinct finite values reveal any accidental full-scan downgrade or reordering.
-    def fake_evaluation(conditions, scan, resolution, requested):
-        used = 'fast' if resolution == history._FAST else 'reference'
+    def fake_evaluation(conditions, scan, resolution, requested, *, use_table=False):
+        used = 'fast' if use_table else 'reference'
         depth = np.abs(scan)*1e-12 + (0.2 if used == 'fast' else 0.3)
         return history.BallisticSpectrum(np.exp(-depth), depth, depth*2,
             dict(fidelity_used=used, fidelity_requested=requested, max_weak_absorption_per_waist=0.5))
@@ -99,8 +99,8 @@ def test_fast_preserves_pointwise_frequencies_and_reports_reference_fallback(mon
 
 def test_fast_numerical_failure_retries_reference_and_retains_model_scope(monkeypatch):
     call = history._evaluate
-    def reject_fast(conditions, scan, resolution, requested):
-        if resolution == history._FAST:
+    def reject_fast(conditions, scan, resolution, requested, *, use_table=False):
+        if use_table:
             raise ArithmeticError('unresolved populations')
         return call(conditions, scan, resolution, requested)
     monkeypatch.setattr(history, '_evaluate', reject_fast)

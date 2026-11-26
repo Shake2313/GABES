@@ -14,7 +14,7 @@ from .experimental_csv import ExperimentalCSV, transform_x
 from .od_model import (MODELS, ODConditions, ODUnsupportedError, evaluate_od_display, is_rate_model,
                        od_unavailable)
 from .schemes.sas import (
-    BALLISTIC_MODELS, GAUSSIAN_TRANSIT_MODELS, GEOMETRY_MODELS, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
+    BALLISTIC_FIDELITIES, GAUSSIAN_TRANSIT_MODELS, GEOMETRY_MODELS, RB_COMPOSITION_CUSTOM, _od_model_setting, _probe_power_mw, _weak_probe_profile,
 )
 from .vapor_cell import CellTemperatureState
 
@@ -496,7 +496,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
     if not free or len(free) != len(set(free)) or any(key not in _FIT_PARAMETERS for key in free):
         raise ValueError("Choose distinct physical fit parameters from the supported list.")
     candidate_keys = tuple(key for key in free if key in CANDIDATE_PARAMETERS)
-    if candidate_keys and _fit_conditions(params, model_id).model_id in BALLISTIC_MODELS.values():
+    if candidate_keys and _fit_conditions(params, model_id).model_id in BALLISTIC_FIDELITIES:
         raise ValueError("For a beam-crossing fit, fix the isotope composition, measured beam radius and power.")
     if (set(candidate_keys) & set(_PROBE_PARAMETERS)
             and not is_rate_model(_fit_conditions(params, model_id).model_id)):
@@ -630,7 +630,7 @@ def fit_od_spectrum(data: ODFitInput, params, *, free=None,
                     mean=float(np.mean(r)), quantiles=np.quantile(r, [0.05, 0.5, 0.95]).tolist())
 
     applied_model = _fit_conditions(params, model_id).model_id
-    profile = None if applied_model in BALLISTIC_MODELS.values() else _weak_probe_profile(params)
+    profile = None if applied_model in BALLISTIC_FIDELITIES else _weak_probe_profile(params)
     finite = MODELS[applied_model].finite_power
     result = dict(
         status="converged" if best.success else "optimizer_limit",

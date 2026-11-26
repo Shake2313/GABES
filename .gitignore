@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.png
 *.npz
+!gabes/data/rb85_d1_ballistic_fast_v2.npz
 !tests/fixtures/autood_baseline_0_2_2/spectra.npz
 *.log
 *.bbl
