@@ -221,8 +221,45 @@
     "local_run": "runs/beam_self_action/20261116_final",
     "artifacts": "⟦AI⟧ PNG/PDF, raw propagation arrays, susceptibility tables, convergence evidence, focused-test receipt and exact source snapshots; run.json status complete and output hashes verified. Result artifacts remain ignored under runs/."
   },
-  "_consolidation_program_status_2026_11_16": {"source": "Consolidation survey of 2026-10-29 (16 candidates), reviewed against the code on 2026-11-16.", "done": ["1 atomic data", "4 Doppler averages", "5 stationary solves", "6 linewidth crossing", "7 detection and Planck", "8 vapor cell", "9 beam power to Rabi", "10 CSV decoding", "11 FWM gain-calibration modules", "12 fwm package split", "3 code move (c7c86c3)", "2 dissipator, reset, g-factors, dipoles, Zeeman generator", "16 SABES shared UI", "3 weak-probe absorption on Faddeeva", "2 level builders and resets", "13 scanner chain and conventions"], "closed_in_main": {"14": "⟦AI⟧ Grand Challenge audit scripts live in GABES-archive; new scripts there use shared harnesses. Nothing left in main.", "15": "⟦AI⟧ pytest.ini replaces conftest path setup; no single_thread fixture copies remain; sys.path edits remain only in the direct-run scripts tests/capture_baseline.py and tests/verify_hanle_eit_eia.py."}, "remaining": {}, "residual_sweep_2026_11_19": "⟦AI⟧ Human request 2026-11-19: '통합 작업 완료율 다시 체크해주시고, 남은 작업 확인해주세요', then 'Yes, do it' to fixing the SABES copies and recording the rest. A grep sweep of gabes, gabes_ui, sabes and gabes_lab at 21009ee found no copied physical constants. It found (a) four inline 2eI shot-noise copies in sabes/detection.py (readout, power_for_clearance) and sabes/noise.py (build_eom_noise_budget), now routed through gabes.detection.shot_noise_current_psd: 7 of 4,275 snapshot leaves moved by at most 2.75e-16 relative, the derived table is identical and 302 SABES/detection tests passed; (b) magneto-doppler-fallback-policy; (c) thermal-speed-shared-helper; (d) gabes-lab-pipeline-shared-formulas. In-place flags.writeable freezes of cached arrays were not counted as copies. These follow-ups do not reopen the program.", "status": "finished", "next_after": "User request 2026-11-16: finish consolidation first; then the Fast package (fwm-lab-gain-calibration-refit, fwm-fast-displayed-readout-error-certificate, skill gabes-fast-tier)."},
-  "_physics_extension_policy_2026_11_13": {"decision": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.", "applies_to": ["od-sas-segmented-cell-propagation", "lambda-spectrum-validity", "fwm-finite-seed-angular-doppler-production", "collisional-coefficient-provenance-and-pressure-shift"], "coefficient_source_rule": "User decision 2026-11-13: take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning."},
+  "_consolidation_program_status_2026_11_16": {
+    "source": "Consolidation survey of 2026-10-29 (16 candidates), reviewed against the code on 2026-11-16.",
+    "done": [
+      "1 atomic data",
+      "4 Doppler averages",
+      "5 stationary solves",
+      "6 linewidth crossing",
+      "7 detection and Planck",
+      "8 vapor cell",
+      "9 beam power to Rabi",
+      "10 CSV decoding",
+      "11 FWM gain-calibration modules",
+      "12 fwm package split",
+      "3 code move (c7c86c3)",
+      "2 dissipator, reset, g-factors, dipoles, Zeeman generator",
+      "16 SABES shared UI",
+      "3 weak-probe absorption on Faddeeva",
+      "2 level builders and resets",
+      "13 scanner chain and conventions"
+    ],
+    "closed_in_main": {
+      "14": "⟦AI⟧ Grand Challenge audit scripts live in GABES-archive; new scripts there use shared harnesses. Nothing left in main.",
+      "15": "⟦AI⟧ pytest.ini replaces conftest path setup; no single_thread fixture copies remain; sys.path edits remain only in the direct-run scripts tests/capture_baseline.py and tests/verify_hanle_eit_eia.py."
+    },
+    "remaining": {},
+    "residual_sweep_2026_11_19": "⟦AI⟧ Human request 2026-11-19: '통합 작업 완료율 다시 체크해주시고, 남은 작업 확인해주세요', then 'Yes, do it' to fixing the SABES copies and recording the rest. A grep sweep of gabes, gabes_ui, sabes and gabes_lab at 21009ee found no copied physical constants. It found (a) four inline 2eI shot-noise copies in sabes/detection.py (readout, power_for_clearance) and sabes/noise.py (build_eom_noise_budget), now routed through gabes.detection.shot_noise_current_psd: 7 of 4,275 snapshot leaves moved by at most 2.75e-16 relative, the derived table is identical and 302 SABES/detection tests passed; (b) magneto-doppler-fallback-policy; (c) thermal-speed-shared-helper; (d) gabes-lab-pipeline-shared-formulas. In-place flags.writeable freezes of cached arrays were not counted as copies. These follow-ups do not reopen the program.",
+    "status": "finished",
+    "next_after": "User request 2026-11-16: finish consolidation first; then the Fast package (fwm-lab-gain-calibration-refit, fwm-fast-displayed-readout-error-certificate, skill gabes-fast-tier)."
+  },
+  "_physics_extension_policy_2026_11_13": {
+    "decision": "User decision 2026-11-13: result-changing physics extensions enter as opt-in reference modes first, with convergence and the difference from the current default reported; switching the default is a separate per-item decision.",
+    "applies_to": [
+      "od-sas-segmented-cell-propagation",
+      "lambda-spectrum-validity",
+      "fwm-finite-seed-angular-doppler-production",
+      "collisional-coefficient-provenance-and-pressure-shift"
+    ],
+    "coefficient_source_rule": "User decision 2026-11-13: take the coefficients from primary measurements that state an uncertainty; when sources disagree, fold their spread into the uncertainty. A propagated uncertainty of at most 20 % may be a default; above that the quantity is opt-in with a warning."
+  },
   "_od_package_scope_2026_11_13": {
     "provenance": "User decisions 2026-11-13 on the separate Codex OD/SAS model package, each choosing the ⟦AI⟧-recommended option. ⟦AI⟧ The lane order, registered item IDs and file ownership are coordination records.",
     "status": "first-release-references-landed",
@@ -531,14 +568,17 @@
       "area": "GABES 기본 OD/SAS 이론 화면과 모델 비교",
       "title": "⟦AI⟧ 기본 스펙트럼의 검증된 시작 스냅샷 평가",
       "origin": "ai_review_of_external_feedback",
-      "status": "parked",
+      "status": "superseded",
       "priority": "P3",
       "effort": "medium",
       "activation_trigger": "⟦AI⟧ OD 모델·프리셋 변경이 착지한 뒤 실제 배포 환경의 첫 그래프 측정에서 기본 계산이 주요 지연으로 남을 때 진행한다.",
       "acceptance_criteria": [
         "⟦AI⟧ 기본 모델·데이터·격자·코드·의존성·판독 버전을 키로 사용하고 누락·손상·불일치 시 실시간으로 재계산한다.",
         "⟦AI⟧ 원시 배열·표시·내보내기 일치와 첫 그래프 시간을 검사한다. 실험 파일과 사용자 입력은 영속 캐시에 넣지 않는다."
-      ]
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: likely superseded, awaiting user confirmation (do not close). Default weak-probe OD now uses fast vectorized Exact Voigt (b992d53, e6c16e3) with lazy scheme loading (307dff8); keep parked unless deployed cold-start profiling still triggers it.",
+      "user_decision_2026_11_26": "User decision 2026-11-26 (Claude chat, re: 20261126-1923): \"닫기\" (close sas-default-startup-snapshot as superseded).",
+      "closure_note_2026_11_26": "⟦AI⟧ Closed as superseded on 2026-11-26 per user decision: default weak-probe OD now uses fast vectorized Exact Voigt (b992d53, e6c16e3) with lazy scheme loading (307dff8)."
     },
     {
       "id": "pole-doppler-pool-initialization",
@@ -818,7 +858,11 @@
       "priority": "P3",
       "status": "parked",
       "problem": "⟦AI⟧ At the EIA peak preset, Doppler on and zero residual transverse field, the reference raises LinAlgError in the shifted pole construction before the existing guard. All 121 rows reproduce independently at the prior and current behavior. The registered multilevel scheme uses a separate solver. Outside the approved rejected-row change.",
-      "evidence": "⟦AI⟧ See magneto-doppler-fallback-policy and runs/magneto_policy_20261120/singular/."
+      "evidence": "⟦AI⟧ See magneto-doppler-fallback-policy and runs/magneto_policy_20261120/singular/.",
+      "related_items": [
+        "magneto-multilevel-bz-axis-pole-reduction"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: distinct single-pair Delta_eff pole singularity (schemes/magneto.py:924) vs multilevel B_z Schur reduction; both stay P3 parked outside OD/FWM focus."
     },
     {
       "id": "thermal-speed-shared-helper",
@@ -1021,7 +1065,11 @@
         "⟦AI⟧ 평가 안 됨/실패/통과를 면별 표시하고 정량 배지는 실제 통과 범위에만 부여. 기존 Rb87 D1 검증 배열·판독값은 호환 경로에서 보존; 새 비교의 기준 완화가 필요하면 이유·미달값을 기록하고 자동 통과로 바꾸지 않음.",
         "⟦AI⟧ 하드 개구 회절 등에서 전체 면의 2차 모멘트가 수렴하지 않으면 반경을 미정의/window 의존으로 표시. 계산 window로 잘라 얻은 반경을 고유 빔 반경으로 제시하지 않음. 필요 시 명시한 물리적 수집 영역 또는 포함 파워 반경을 별도 정의하고 독립 수렴 기준 적용."
       ],
-      "last_reviewed_at": "2026-11-17"
+      "last_reviewed_at": "2026-11-17",
+      "related_items": [
+        "single-beam-axisymmetric-qdht-propagator"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: stays parked behind BP0/BP3/BP4; directly couples to single-beam-axisymmetric-qdht-propagator boundary and camera-plane convergence."
     },
     {
       "id": "sabes-profiler-state-cache-performance",
@@ -1046,7 +1094,12 @@
         "⟦AI⟧ 기준 PC·브라우저·격자·조건을 고정해 각 30회 측정: 로컬 교차선/표시 전환 p95 ≤100 ms, 캐시된 관측면 탐색 p95 ≤1 s 목표. 첫 계산·미캐시 구간 재전파는 별도 시간/메모리 보고; 목표 미달은 남은 일로 기록.",
         "⟦AI⟧ 명시적 Run, 진행 표시·안전한 중단/결과 폐기·재시도 제공. 입력 편집 중 자동으로 비싼 전체 계산 반복하지 않음. 메모리 상한·캐시 회수와 세션/빔 전환 상태 분리 확인."
       ],
-      "last_reviewed_at": "2026-11-17"
+      "last_reviewed_at": "2026-11-17",
+      "related_items": [
+        "optical-bloch-pi-mirror-pole-doppler",
+        "single-beam-axisymmetric-qdht-propagator"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: basic st.cache_data landed in 770ce89; full BP6 stays parked behind BP0-BP4. Engine latency is addressed upstream by optical-bloch-pi-mirror-pole-doppler and single-beam-axisymmetric-qdht-propagator."
     },
     {
       "id": "sabes-profiler-reproducible-export",
@@ -1105,7 +1158,9 @@
       "priority": "P2",
       "effort": "research",
       "status": "ready",
-      "source_reports": ["docs/magneto_budker_20261030/README.md"],
+      "source_reports": [
+        "docs/magneto_budker_20261030/README.md"
+      ],
       "problem": "⟦AI⟧ 다중 초미세 전이·속도 재분배·PSN 자기장 감도 구현으로 비공진 개선을 계산하지만, 약한 광학 여기·균일 세기 근사의 결과. 광학 포화, 종방향 공통 dark reservoir, 실제 셀 이완과 논문의 흡수 주파수 영점 정렬을 검증하기 전 절대 감도 재현으로 사용 불가.",
       "acceptance": [
         "⟦AI⟧ 동일 조건의 full excited-state OBE와 광세기/디튜닝 범위별 비교; 보수적 가상 여기 bound와 실제 오차 구분.",
@@ -1718,7 +1773,11 @@
         "gabes/od_model.py",
         "gabes/collisions.py"
       ],
-      "last_reviewed_at": "2026-11-24"
+      "last_reviewed_at": "2026-11-24",
+      "related_items": [
+        "optical-bloch-pi-mirror-pole-doppler"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: shares pole/Voigt elimination pattern with optical-bloch-pi-mirror-pole-doppler, but stays parked as a separate physics-regime/value deferral per 2026-11-24 user decision."
     },
     {
       "id": "sas-subdoppler-readout-trust",
@@ -3256,21 +3315,45 @@
         "numpy_fallback": "bitwise",
         "numba_displayed_text": "identical",
         "numba_worst_relative_to_scale": {
-          "uncoated_spectra_and_readouts": 5.0e-15,
-          "uncoated_transmission": 2.0e-14,
+          "uncoated_spectra_and_readouts": 5e-15,
+          "uncoated_transmission": 2e-14,
           "coated_spectra": 1.5e-12,
           "coated_finite_probe_table": 7.1e-13,
           "coated_finite_probe_optical_depth": 1.5e-11
         },
         "timings_s_before_after": {
-          "default_rb_natural_d1_0p5_mw": [0.392, 0.086],
-          "pump_off": [0.179, 0.009],
-          "rb_natural_d2": [0.669, 0.251],
-          "cs_d2": [0.408, 0.219],
-          "probe_20_uw": [0.557, 0.293],
-          "coated_cell": [1.081, 0.301],
-          "scan_4001_points": [1.113, 0.123],
-          "cell_200_c": [0.376, 0.044]
+          "default_rb_natural_d1_0p5_mw": [
+            0.392,
+            0.086
+          ],
+          "pump_off": [
+            0.179,
+            0.009
+          ],
+          "rb_natural_d2": [
+            0.669,
+            0.251
+          ],
+          "cs_d2": [
+            0.408,
+            0.219
+          ],
+          "probe_20_uw": [
+            0.557,
+            0.293
+          ],
+          "coated_cell": [
+            1.081,
+            0.301
+          ],
+          "scan_4001_points": [
+            1.113,
+            0.123
+          ],
+          "cell_200_c": [
+            0.376,
+            0.044
+          ]
         }
       },
       "review_note": "⟦AI⟧ kernels.sas_velocity_sums fuses the pump-population interpolation, the probe Lorentzian and its dispersive partner and the velocity-correlated sums into one parallel loop over the scan, with no (scan, velocity) array. It reproduces np.interp's bracket and edge values (bitwise on one velocity class) and evaluates every factor as the NumPy path does, so only the order of the velocity sum changes. Pump off skips the weight-1 products and reuses the absorptive sum as the finite-probe thermal sum, so that residual is exactly zero. kernels.velocity_interp_mean does the same for the coated-cell ground transfer. The 1 m/s, ±4σ velocity measure and the Γ/8 pump table are unchanged; without Numba the NumPy path is the previous code. The coated-cell differences are larger because the reservoir solve amplifies roundoff by about cycle/wall rate ≈ 1.6e4. First call with an empty Numba cache: 2.9 s (compile), 0.36 s with the cache.",
@@ -6190,7 +6273,12 @@
         "⟦AI⟧ Published report microbenchmark speedups are environment/load dependent and are not correctness urgency."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ species.build_manifold already bounded LRU; medium/atom construction is <1% default EIT cost in reports. Coated multi-RHS could share an operator but trace injection/conditioning need verification and overall gain is small. No urgency.; core.blas_single_thread constructs threadpool_limits each call; angular_momentum_matrices allocates for repeated F while zeeman_manifold and Hermitian basis already cache."
+      "problem": "⟦AI⟧ species.build_manifold already bounded LRU; medium/atom construction is <1% default EIT cost in reports. Coated multi-RHS could share an operator but trace injection/conditioning need verification and overall gain is small. No urgency.; core.blas_single_thread constructs threadpool_limits each call; angular_momentum_matrices allocates for repeated F while zeeman_manifold and Hermitian basis already cache.",
+      "related_items": [
+        "fwm-zeeman-mirror-symmetry-and-sector-assembly",
+        "floquet-conjugate-symmetry-and-longitudinal-poles"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: blas_single_thread reference-counting landed in 505caf7; zeeman.angular_momentum_matrices(F) and coated multi-RHS remain uncoded. Stays P3 parked unless profiling triggers it."
     },
     {
       "id": "biphoton-finite-coincidence-gate",
@@ -6472,7 +6560,12 @@
         "⟦AI⟧ Root task does not authorize default Maxwell measure changes, stride-only accuracy claims or broad mutable ndarray memoization as pure performance fixes."
       ],
       "depends_on": [],
-      "problem": "⟦AI⟧ Heavy source/readout cache partition is already implemented. The remaining proposed cache between susceptibility and propagation may help geometry sweeps but repeated current empirical-checkbox eigensolves are obsolete.; Root task does not authorize default Maxwell measure changes, stride-only accuracy claims or broad mutable ndarray memoization as pure performance fixes."
+      "problem": "⟦AI⟧ Heavy source/readout cache partition is already implemented. The remaining proposed cache between susceptibility and propagation may help geometry sweeps but repeated current empirical-checkbox eigensolves are obsolete.; Root task does not authorize default Maxwell measure changes, stride-only accuracy claims or broad mutable ndarray memoization as pure performance fixes.",
+      "related_items": [
+        "floquet-conjugate-symmetry-and-longitudinal-poles",
+        "fwm-zeeman-mirror-symmetry-and-sector-assembly"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: source/readout partition done and empirical-checkbox path retired; remaining susceptibility-vs-propagation split stays P3 parked (profile-gated on active FWM sweeps; owner: Codex FWM)."
     },
     {
       "id": "fwm-practical-jasperse-and-gain-calibration",
@@ -6955,7 +7048,11 @@
       "status": "done",
       "implementation_2026_11_16": "⟦AI⟧ Written 2026-11-16 by Claude: .claude/skills/gabes-fast-tier/SKILL.md (procedure: pin the reference model, freeze the gate, capture before, classify, implement, fall back or mark uncertified, gate and land), references/techniques.md (FWM Fast techniques, measured gains, traps, rejected attempts) and references/gate_template.md. The user hands it to Codex.",
       "user_decision_2026_11_16": "User decision 2026-11-16: do not choose between the cached Fast path and the exact-source opt-in by hand. Build a reusable skill (.claude/skills/gabes-fast-tier/SKILL.md) that creates a Fast tier for any scheme from the existing FWM Fast techniques and iterates until it reproduces the non-Fast computation closely enough to be useful; the same skill repairs a Fast tier when an error like the current one is found. FWM Fast is its first case. The skill gives the procedure only; the agent sets the acceptance criteria itself before starting and freezes them before collecting evidence.",
-      "acceptance_criteria": ["⟦AI⟧ The skill states the procedure: freeze a case matrix and error norms before evidence, build an independent non-Fast reference, apply the catalogued acceleration techniques, iterate until every frozen case passes, and route failures to refinement, reference fallback or a visible uncertified mark.", "⟦AI⟧ It catalogues the FWM Fast techniques with their measured gains and known traps, and works for creating a new Fast tier and repairing an existing one.", "⟦AI⟧ Claude writes it; the user hands it to Codex."]
+      "acceptance_criteria": [
+        "⟦AI⟧ The skill states the procedure: freeze a case matrix and error norms before evidence, build an independent non-Fast reference, apply the catalogued acceleration techniques, iterate until every frozen case passes, and route failures to refinement, reference fallback or a visible uncertified mark.",
+        "⟦AI⟧ It catalogues the FWM Fast techniques with their measured gains and known traps, and works for creating a new Fast tier and repairing an existing one.",
+        "⟦AI⟧ Claude writes it; the user hands it to Codex."
+      ]
     },
     {
       "id": "fwm-lab-gain-calibration-refit",
@@ -6972,7 +7069,11 @@
       "sequencing_2026_11_16": "User request 2026-11-16: finish the remaining consolidation work first; the Fast work is the next package after it. ⟦AI⟧ Deferred with the Fast repair because the Fast gate checks calibrated readouts with the refitted coefficients.",
       "user_decision_2026_11_16": "User decision 2026-11-16: refit the lab gain-calibration coefficients.",
       "problem": "⟦AI⟧ The frozen lab coefficients fit the cached Fast source coordinates. On current constants their maximum training-point error is 4.924 %/3.868 % (probe/conjugate) and 26.249 %/17.702 % at exact source coordinates (af62348).",
-      "acceptance_criteria": ["⟦AI⟧ Refit against the non-Fast reference at exact source coordinates on the same 23 measured points; report the new maximum training-point errors and coefficients.", "⟦AI⟧ Keep the original coefficients, training arrays and their tests as the historical contract; the correction still continues outside the measured interval with extrapolation tags (AGENTS practical FWM rule).", "⟦AI⟧ Own value commit: report the FWM lab and SABES default readout shifts and recapture any affected baseline."]
+      "acceptance_criteria": [
+        "⟦AI⟧ Refit against the non-Fast reference at exact source coordinates on the same 23 measured points; report the new maximum training-point errors and coefficients.",
+        "⟦AI⟧ Keep the original coefficients, training arrays and their tests as the historical contract; the correction still continues outside the measured interval with extrapolation tags (AGENTS practical FWM rule).",
+        "⟦AI⟧ Own value commit: report the FWM lab and SABES default readout shifts and recapture any affected baseline."
+      ]
     },
     {
       "id": "linear-hyperfine-backend-unification",
@@ -6988,7 +7089,11 @@
       "lane_split_2026_11_16": "⟦AI⟧ The OD/SAS package continues as an independent Codex track that owns gabes/schemes/sas.py and already added an exact Maxwell Voigt reference (ed65f39). Split: the convergence check and the FWM-side callers (fwm/references._reference_population_factors, fwm/seeded analytic factors, fwm/biphoton._leg_optical_depth, the schemes/absorption.py OBE call) belong to the 2026-11-16 consolidation wave after squeezing-scanner-chain-consolidation lands; the pump-off OD/SAS side goes to the OD track. This supersedes the 'start only after the OD/SAS lanes land' wait for the FWM side.",
       "user_decision_2026_11_16": "User decision 2026-11-16: unify the weak-probe linear absorption backends on the analytic Faddeeva (exact Voigt) solution.",
       "problem": "⟦AI⟧ Three backends compute the same weak-probe absorption: finite-window OBE, untruncated Faddeeva and resolved SAS velocity sums. Peak-normalized differences are 2.55e-4 to 3.83e-4 (OBE/Faddeeva) and 2.16e-4 to 3.44e-4 (OBE/SAS) for Rb-85 D1 at 313-423 K.",
-      "acceptance_criteria": ["⟦AI⟧ First show with a dense independent reference which backend is converged; if it is not Faddeeva, stop and report instead of choosing.", "⟦AI⟧ Pump-off weak-probe callers use the Faddeeva solution; pumped SAS keeps its own velocity sums, checked against it at zero pump.", "⟦AI⟧ Start only after the OD/SAS package lanes that edit gabes/schemes/sas.py land. Own value commit with the shifts reported and the FWM baseline recaptured."]
+      "acceptance_criteria": [
+        "⟦AI⟧ First show with a dense independent reference which backend is converged; if it is not Faddeeva, stop and report instead of choosing.",
+        "⟦AI⟧ Pump-off weak-probe callers use the Faddeeva solution; pumped SAS keeps its own velocity sums, checked against it at zero pump.",
+        "⟦AI⟧ Start only after the OD/SAS package lanes that edit gabes/schemes/sas.py land. Own value commit with the shifts reported and the FWM baseline recaptured."
+      ]
     },
     {
       "id": "lambda-joint-maxwell-default",
@@ -7000,7 +7105,11 @@
       "status": "done",
       "implementation_2026_11_18": "⟦AI⟧ 8ac9355. Automatic joint Maxwell for nonzero angle with Doppler on; 0.7/1 mrad EIT FWHM 0.186074/0.259206 -> 0.153044/0.187032 MHz, capped 5 mrad case withholds width. Collinear/Doppler-off and explicit Scalar replay byte-identical. Archive analysis/fast_tier/optional_2026_11_18/lambda_joint_default/.",
       "user_decision_2026_11_16": "User decision 2026-11-16: make joint Maxwell averaging the Λ default whenever the beam angle mismatch is above zero; the zero-angle default screen keeps its current path.",
-      "acceptance_criteria": ["⟦AI⟧ angled_doppler_model defaults to joint Maxwell when beam_angle_mrad > 0; zero angle and Doppler off keep their current outputs bit-identically.", "⟦AI⟧ The Scalar model stays selectable; quadrature-cap cases keep withholding quantitative readouts with the stated cause.", "⟦AI⟧ Own value commit with the readout shift at representative angles."]
+      "acceptance_criteria": [
+        "⟦AI⟧ angled_doppler_model defaults to joint Maxwell when beam_angle_mrad > 0; zero angle and Doppler off keep their current outputs bit-identically.",
+        "⟦AI⟧ The Scalar model stays selectable; quadrature-cap cases keep withholding quantitative readouts with the stated cause.",
+        "⟦AI⟧ Own value commit with the readout shift at representative angles."
+      ]
     },
     {
       "id": "cs-self-broadening-opt-in-reference",
@@ -7012,7 +7121,9 @@
       "status": "done",
       "implementation_2026_11_18": "⟦AI⟧ 66e575b. Opt-in OD/SAS Cs D1/D2 Jabbour angular FWHM coefficients 5.7e-13/6.7e-13 rad s^-1 m^3; visible uncertainty 22.97%/21.79%. Default off. Seven default/replay cases: 1018 identical leaves. 40 C, 75 mm transmission shifts -0.007841/-0.014750 percentage points. Archive analysis/fast_tier/optional_2026_11_18/{cs_self_broadening,cs_browser}/.",
       "problem": "⟦AI⟧ 3b6f070 removed Cs self-broadening from the default because its source uncertainty including spread (22.97 %/21.79 %, Jabbour et al.) exceeds the 20 % default threshold, but self_broadening_reference returns 'unsupported' for Cs, so no opt-in with a warning exists as the 2026-11-13 source rule requires.",
-      "acceptance_criteria": ["⟦AI⟧ An explicit opt-in applies the sourced Cs D1/D2 coefficient with its uncertainty and a visible warning; the default stays off and bit-identical."]
+      "acceptance_criteria": [
+        "⟦AI⟧ An explicit opt-in applies the sourced Cs D1/D2 coefficient with its uncertainty and a visible warning; the default stays off and bit-identical."
+      ]
     },
     {
       "id": "squeezing-scanner-chain-consolidation",
@@ -7027,7 +7138,11 @@
       "implementation_2026_11_16": "⟦AI⟧ 8aa61fc exposes shared seeded transfer and noise stages, used by the engine, delta-T, frontier and v6 scans while retaining historical measures. 38,913 seeded and 6,249 scanner leaves matched by bytes. Focused checks 57 passed.",
       "value_splits_2026_11_16": "⟦AI⟧ Legacy delta-T N_F=1 versus engine N_F=3 differed at sampled trace points by up to 3.792/3.899 in Gs/Gc and 0.3221 dB. Matching N_F=1 reduced the sampled differences to roundoff. Frontier historical loss mapping shifts noise by up to 1.1021 dB at 121 C, and the v6 sample by +0.70569 dB. Keep the existing conventions pending a value decision on any further merge.",
       "problem": "⟦AI⟧ Consolidation candidate 13 (survey 2026-10-29). Squeezing scanners re-implement the density, coupling, gain, saturation and noise chain of fwm.seeded.compute_spectrum (scan_squeezing_delta_T.py still says 'Mirror compute_spectrum'; theory_max and the frontier skill script carry pieces too). The earlier IDS-formula drift was this kind of copy. Value changes since then (CRC density with isotope share e436346, exact Maxwell ead9cb5, scanner measure caf9fbb) may have split the scanners from the scheme.",
-      "acceptance_criteria": ["⟦AI⟧ Survey every script under gabes_lab/pipelines/squeezing/ and the frontier skill script; list each copied step with file and line.", "⟦AI⟧ Before routing, pin each scanner's current outputs and the scheme's outputs at the same points. Where they differ, do not choose: record the split and its size here and ask the user.", "⟦AI⟧ Expose the chain as a public function in gabes/schemes/fwm that compute_spectrum and the scanners call; the scheme stays bit-identical (or within the 1e-12 rule) and historical scanner modes keep reproducing their recorded outputs."]
+      "acceptance_criteria": [
+        "⟦AI⟧ Survey every script under gabes_lab/pipelines/squeezing/ and the frontier skill script; list each copied step with file and line.",
+        "⟦AI⟧ Before routing, pin each scanner's current outputs and the scheme's outputs at the same points. Where they differ, do not choose: record the split and its size here and ask the user.",
+        "⟦AI⟧ Expose the chain as a public function in gabes/schemes/fwm that compute_spectrum and the scanners call; the scheme stays bit-identical (or within the 1e-12 rule) and historical scanner modes keep reproducing their recorded outputs."
+      ]
     },
     {
       "id": "sabes-ui-shared-components",
@@ -7039,7 +7154,11 @@
       "status": "done",
       "implementation_2026_11_16": "⟦AI⟧ 20eb743 shares theme tokens, the readout strip and figure renderer. Default AppTest readouts, tables and fixed-time export matched exactly. 284 tests passed. All seven tabs captured at both viewports with audit metrics, screenshots and AppTest proof in archive d66bc5b. Streamlit Reboot is needed after the user pushes.",
       "problem": "⟦AI⟧ Consolidation candidate 16 (survey 2026-10-29). gabes_ui/sabes/page.py (1,316 lines) carries its own CSS and controls and uses shared gabes_ui modules in only three imports, so SABES drifts from the GABES design system.",
-      "acceptance_criteria": ["⟦AI⟧ Styling comes from gabes_ui.theme tokens; controls, number formatting and plot cards use the shared gabes_ui components where an equivalent exists; SABES-specific pieces stay in gabes_ui/sabes with a reason.", "⟦AI⟧ Follow gabes_ui/DESIGN.md, docs/ui_redesign/README.md and docs/SABES/design_rules.md; report gabes_lab/tools/ui_audit.py before/after metrics and screenshots of each SABES tab.", "⟦AI⟧ SABES readouts and exports unchanged (AppTest at the defaults); gabes_ui keeps no physics."]
+      "acceptance_criteria": [
+        "⟦AI⟧ Styling comes from gabes_ui.theme tokens; controls, number formatting and plot cards use the shared gabes_ui components where an equivalent exists; SABES-specific pieces stay in gabes_ui/sabes with a reason.",
+        "⟦AI⟧ Follow gabes_ui/DESIGN.md, docs/ui_redesign/README.md and docs/SABES/design_rules.md; report gabes_lab/tools/ui_audit.py before/after metrics and screenshots of each SABES tab.",
+        "⟦AI⟧ SABES readouts and exports unchanged (AppTest at the defaults); gabes_ui keeps no physics."
+      ]
     },
     {
       "id": "od-sas-exact-weak-probe-voigt-reference",
@@ -7223,7 +7342,11 @@
         "runs/od_history_generalization_20261126/table_pilot/candidate2/README.md",
         "runs/od_history_generalization_20261126/common_panels/summary.json"
       ],
-      "common_frequency_grid_2026_11_26": "⟦AI⟧ 각 동위원소·전이선에 물리 디튜닝을 고정하고 24개 조건·각 2,001점에서 직접 궤적을 대조했다. 가변 8차 구적 대비 |Δσ|/σ_weak 최대 16.27 ppm. 국소 손실을 고정한 투과율 변화 ≤0.000077%p. 이는 보간된 비선형 출구 투과율이나 CSV 피팅의 검증이 아니다."
+      "common_frequency_grid_2026_11_26": "⟦AI⟧ 각 동위원소·전이선에 물리 디튜닝을 고정하고 24개 조건·각 2,001점에서 직접 궤적을 대조했다. 가변 8차 구적 대비 |Δσ|/σ_weak 최대 16.27 ppm. 국소 손실을 고정한 투과율 변화 ≤0.000077%p. 이는 보간된 비선형 출구 투과율이나 CSV 피팅의 검증이 아니다.",
+      "related_items": [
+        "field-ballistic-analytic-bipartite-sdirk"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: keep separate from field-ballistic-analytic-bipartite-sdirk (B=0 linear rate table vs arbitrary-B full-OBE SDIRK). High OD priority after Trick A1 (owner: Codex OD; Gemini parity review)."
     },
     {
       "id": "od-rb85-d1-ballistic-independent-waist-validation",
@@ -7303,7 +7426,12 @@
       "closeout_2026_11_17": "⟦AI⟧ D3 implemented in 8846193 with Exact Maxwell Voigt background and a 5-sigma pumped-minus-unpumped correction using a converged pump-state table. All 12 preregistered cases passed. Peak-normalized absorption/dispersion errors were 5.4713e-6/3.3999e-6, max transmission error 1.6464e-5 and zero-pump limit 1.5154e-7. Warm fresh-solve cost at most 1.936x and 204.54 MiB compiled; 4001-point NumPy fallback used 169.86 MiB. Legacy and old migrated settings reproduced 5659 leaves by bytes. Focused suite passed 273. Hot 87Rb D2 at 0.01 mW moved by -5.197 percentage points. Axial, coated, finite-probe, additional-species and other ineligible branches retain their prior measure.",
       "user_decision_2026_11_17": "User decision 2026-11-17: revisit the 2026-11-04 decision that kept the 1 m/s, ±4σ measure for pumped SAS (sas-od-dense-velocity-arithmetic). Remove the truncation from the default pumped path, either by widening the velocity window or by combining the Exact Voigt background with the grid-computed pump-induced change, whichever meets the reference at lower cost. ⟦AI⟧ Explicit Legacy and saved settings without a profile field keep replaying the ±4σ grid.",
       "problem": "⟦AI⟧ The 2026-11-04 decision rested on the pump-off defaults, where the ±4σ cutoff leaves 1.9e-4 of the peak. b992d53 made Automatic use Exact Voigt at zero pump. Its reproduction case (pure 87Rb D2, 90 °C, 75 mm, zero pump and probe, 1,201 points) gives Legacy 71.65584 % and Exact 66.45873 % transmission at −1.400961020 GHz from the D2 centroid (−5.19712 percentage points; refined extremum 5.23601). The F=2→F′=3 resonance there lies at 4.053σ, outside the window; untruncated integration agrees with Exact to 6.18e-12. Pumped SAS keeps the ±4σ grid, so in optically thick cells its transmission is biased high and the smallest positive pump steps away from the zero-pump Exact curve by the same amount.",
-      "acceptance_criteria": ["⟦AI⟧ Build an independent dense pumped-SAS reference (untruncated or widened velocity range with a converged step) over a matrix that includes the 90 °C 87Rb D2 75 mm case, the Rb D1/D2 defaults, cold and hot cells, and weak to saturating pump. Freeze the tolerance and cost budget before collecting evidence.", "⟦AI⟧ As pump power goes to zero the default pumped result approaches the zero-pump Exact Voigt curve within 1e-6 absolute transmission (the OD budget decision), so the step at the mode boundary disappears.", "⟦AI⟧ Fresh-solve time and memory stay within the OD budget decision (at most twice the previous time under the same conditions, 512 MiB). Explicit Legacy and old saved settings replay bit-identically. Pump comparisons use one measure for every sample.", "⟦AI⟧ Own value commit citing this decision, with readout shifts at the defaults and in the hot case. Axial, coated-cell and finite-probe paths that share the grid either adopt the same measure or are listed with their remaining truncation."]
+      "acceptance_criteria": [
+        "⟦AI⟧ Build an independent dense pumped-SAS reference (untruncated or widened velocity range with a converged step) over a matrix that includes the 90 °C 87Rb D2 75 mm case, the Rb D1/D2 defaults, cold and hot cells, and weak to saturating pump. Freeze the tolerance and cost budget before collecting evidence.",
+        "⟦AI⟧ As pump power goes to zero the default pumped result approaches the zero-pump Exact Voigt curve within 1e-6 absolute transmission (the OD budget decision), so the step at the mode boundary disappears.",
+        "⟦AI⟧ Fresh-solve time and memory stay within the OD budget decision (at most twice the previous time under the same conditions, 512 MiB). Explicit Legacy and old saved settings replay bit-identically. Pump comparisons use one measure for every sample.",
+        "⟦AI⟧ Own value commit citing this decision, with readout shifts at the defaults and in the hot case. Axial, coated-cell and finite-probe paths that share the grid either adopt the same measure or are listed with their remaining truncation."
+      ]
     },
     {
       "id": "jones-frame-transverse-field-convention",
@@ -7516,6 +7644,305 @@
       "origin": "ai_execution_of_human_request",
       "user_request": "사용자 승인 2026-11-26: \"이러면 유효한 미해결 관찰 신규 등록하고, 물리 모델 미채택 관찰도 신규 등록하고, 체크리스트에 done인 것 중 후속 분리 및 보충이 필요한 것도 수정하고, 기존 in-progress에 최신 리뷰 근거 보충하면 되는 건은 보충해주세요.\"",
       "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "optical-bloch-pi-mirror-pole-doppler",
+      "area": "gabes/optical_bloch.py · gabes/nonlinear_response.py · gabes/pole_doppler.py",
+      "title": "⟦AI⟧ B=0 선형편광 optical_bloch pi-프레임 대칭 축소(M-even 실수 기저) 및 pole_doppler 도플러 평균",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "in_progress",
+      "priority": "P1",
+      "effort": "medium",
+      "owner": "Gemini (engine implementation, when user says go); Claude (review)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ B=0 선형편광 optical_bloch.solve_optical_pump 및 nonlinear_response._maxwell_mean이 z-양자화 전체 복소 공간에서 속도점마다 밀집 풀이를 반복해 single_beam_profile 원자표 생성 등에 ~40 s(Rb85 D2 단건 4.08 s)를 소모한다. pi-양자화 회전과 M-반사 실수 에르미트 기저는 정확 대칭으로 차원을 축소(Rb87 D1 256->28, Rb85 D1 576->44, Rb87 D2 576->53, Rb85 D2 1296->89)하며, pole_doppler.discrete_mean으로 기존 velocity_quadrature 노드에서 2.2e-15..1.5e-14 일치(벤치마크 784x–3,463x, 단건 직접 실수 풀이 132x–211x)를 확인했다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ B=0 및 선형편광 적격 조건을 명시하고, 그 외 모든 입력(B!=0, 타원/원편광)은 기존 참조 경로를 유지한다.",
+        "⟦AI⟧ Step 1은 기존 velocity_quadrature 노드에 대한 pole_doppler.discrete_mean 동등성 리팩터링으로 한정한다(<= 1e-12 상대차, 표시값 완전 일치, 차이 기록).",
+        "⟦AI⟧ legacy=True 경로(solve_rb87_d1_mean, solve_psr_pump)는 바이트 동등성을 유지한다.",
+        "⟦AI⟧ solve_optical_pump의 z-기저 점유수 계약(include_atomic_state=False/True 일치)을 Wigner-D 역회전 또는 _maxwell_mean 전용 스칼라 고속 경로로 보존한다.",
+        "⟦AI⟧ Step 2(비절단 pole_doppler.gaussian_mean, 기존 6-sigma GL 대비 1.1e-9..6.7e-9 차이)는 별도 사용자 수치 변경 결정 후 진행한다.",
+        "⟦AI⟧ 실제 호출부 전체 출력과 wall-clock 시간을 스냅샷·계측한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_proposals.py",
+        "runs/gemini_math_opt_review_20261126/verification_results.json",
+        "runs/agent_hub/20261126-1751_gemini-to-all_math-optimization-review-verification.md",
+        "runs/agent_hub/20261126-1752_claude-to-all_re-math-optimization-review.md",
+        "runs/agent_hub/20261126-1753_codex-to-all_od-mixture-scope-and-optimization-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "od-sas-exact-maxwell-remaining-cell-regimes",
+        "sabes-profiler-state-cache-performance",
+        "sabes-profiler-in-cell-planes"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: separate from od-sas-exact-maxwell-remaining-cell-regimes (physics/value deferral) and sabes-profiler-state-cache-performance (UI BP6, blocked on BP0-BP4); directly cuts single-beam atomic table latency feeding BP4/BP6.",
+      "user_decision_2026_11_26": "User decision 2026-11-26 (Claude chat, re: 20261126-2152): \"수치 개선으로 채택\" (adopt the 4.87e-12 solve_optical_pump Rb85 D2 change vs old splu—2.60e-13 vs dense solver='full'—as a numerical improvement and commit G1 locally). Step 2 (untruncated pole_doppler.gaussian_mean) remains a separate, undecided value change.",
+      "implementation_step1_2026_11_26": "⟦AI⟧ Step 1 implemented by Gemini and signed off by Claude (20261126-2150, 20261126-2153; landed locally in 2ed05fb): gabes/optical_bloch.py (exact B=0 linear |S3|<=1e-13 M-even pi-frame real solve + SO(3) z-basis reconstruction, solver='full'/non-linear untouched), gabes/nonlinear_response.py (pole_doppler.AffineShiftSystem discrete_mean on exact velocity_quadrature with 3-node 1e-9 guard + batched reduced fallback; legacy=True untouched). Caller snapshots (2,146 entries): legacy_mean/psr/non-linear/full bit-identical (0 diffs), solve_rb_mean <= 9.00e-13, single_beam_profile <= 4.11e-14 (formatted UI readouts identical), solve_optical_pump Rb85 D2 2.60e-13 vs dense full (4.87e-12 vs old splu). Warm median-of-5 speedups: solve_rb_mean 19.0x-488.9x (Rb85 D2 4673->9.56 ms), SABES table 21.8->0.42 s (52.1x). Tests: 141 passed (Numba ON), 52 passed (Numba OFF). Step 2 (untruncated gaussian_mean) remains open."
+    },
+    {
+      "id": "fwm-zeeman-mirror-symmetry-and-sector-assembly",
+      "area": "gabes/fwm_zeeman_response.py",
+      "title": "⟦AI⟧ FWM Zeeman 사전 슬라이스 섹터 조립 + M-even 44차원 실수 펌프 + q=±1 대칭 절반화",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "done",
+      "priority": "P1",
+      "effort": "medium",
+      "owner": "Codex FWM (lane implementation, when user says go); Claude/Gemini (review)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ fwm_zeeman_response.prepare_pump는 576x576 전체 comm_super(h)를 조립한 뒤 88x88·80x80 블록만 슬라이스하는 데 358 ms 중 ~300 ms를 소비하며, M-even 대칭(88 복소 -> 44 실수, 순수 선형대수 4.6x, 사전 슬라이스 조립 결합 시 ~20x)과 q=+1/-1 동일성(M @ weak_coupling @ M^T = -weak_coupling -> 부호 상쇄, evaluate_prepared 정확 2x 및 pole_data 절반)을 활용하지 않고 있다. 구면텐서 T_0^(k)는 M-even과 동일한 44차원 부분공간이므로 별도 추가 절반화는 없다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ ZeemanModel에서 필요 섹터(h_base, h_pump_unit)를 직접 조립하고, 대칭이 성립하는 경우 44차원 실수 M-even 펌프와 q=+1/-1 응답 재사용을 적용한다.",
+        "⟦AI⟧ 두 도플러 백엔드(direct, poles)와 지원 편광 모두에 대해 독립 섹터 평가를 참조 경로로 보존한다.",
+        "⟦AI⟧ hyperfine_secular의 q-쌍 최대 상대차(Gemini 측정 1.05e-12)를 포함한 실제 호출부 전체를 스냅샷해 <= 1e-12 동등성과 표시값 일치를 강제 검증한다.",
+        "⟦AI⟧ 실제 호출부 종단간 wall-clock 이득을 계측해 기록한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_proposals.py",
+        "runs/gemini_math_opt_review_20261126/verification_results.json",
+        "runs/agent_hub/20261126-1751_gemini-to-all_math-optimization-review-verification.md",
+        "runs/agent_hub/20261126-1759_codex-to-all_fwm-optimization-ownership.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "shared-small-cache-and-loop-reuse",
+        "fwm-propagation-cache-partition",
+        "fwm-zeeman-resolved-reference-mode"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: distinct sector/symmetry speedup; shared-small-cache-and-loop-reuse and fwm-propagation-cache-partition stay parked (profile-gated); downstream beneficiary: fwm-zeeman-resolved-reference-mode.",
+      "partial_implementation_2026_11_26": "⟦AI⟧ Direct sector assembly landed locally in c3dd301 (Codex FWM; caches static, pump-drive and Lindblad blocks for Delta-m=0,+/-1 in gabes/fwm_zeeman_response.py; 8 preset/branch snapshots and 18 slider endpoints reproduced exactly; 24 focused tests passed; warm pump prep 10.38->2.03 ms at 1v and 37.35->25.49 ms at 64v, while 1,201-class and end-to-end pole-dominated runs showed no speedup). Both mirror substeps (44-dim real pump + q=+/-1 reuse) remain open because the combined prototype exceeded the 1e-12 gate on actual callers (up to 1.74e-12 probe gain, 3.85e-12 Im chi_pump; independent q=-1/+1 reached 1.65e-12 direct and 1.14e-10 poles at low drive).",
+      "user_decision_2026_11_26": "User decision 2026-11-26 (Codex FWM chat, relayed via 20261126-2026 & 20261126-2027): \"그 정도 차이면 수치 개선으로 봐도 될 것 같습니다. 기존 경로는 퇴역하고, 광학 코히런스 소거와 44차원 펌프를 새 솔버 버전으로 적용하는 게 나을 것 같은데, 만약 정말 기존 경로를 보존하는 게 낫다면(아카이브로 보내는 방법도 있습니다), 그냥 백엔드에만 두고 프론트엔드에는 표출시키지 마세요. 둘을 같이 썼을 때 실제 보정값과 계산 시간도 확인해주세요.\"",
+      "implementation_2026_11_26": "⟦AI⟧ Landed locally by Codex FWM in three commits: c3dd301 (direct Delta-m=0,+/-1 sector assembly), 26edf86 (paired-input row-equilibrated direct weak-field solve, max rel diff 1.069e-13 on real gain callers, 3.47->2.13 s prepared Sim Gold), and 66d50b2 (fwm-zeeman-response-v2 active backend: row-equilibrated 44-real mirror-even pump + optical-coherence elimination 40-coord paired solve; v1 replay kept backend-only via fwm_zeeman_gain.calibrate_spectrum(..., method='poles') and hidden from frontend). Combined verification (8 preset/branch cases, 21 pts + cursor): displayed gains match to 4 decimals (max rel 3.271e-12; 401-pt FWMScheme max rel 7.338e-12), times 8.58->1.29 s (lab), 8.03->1.36 s (Sim Gold), 7.97->1.24 s (Kim probe), 9.28->1.23 s (Kim conj), 401-pt fresh 9.79->3.10 s; 29 focused + 7 UI/export + 2 Numba-off tests passed. Separate periodic solver gate remains in periodic-floquet-schur-resolvent."
+    },
+    {
+      "id": "field-ballistic-analytic-bipartite-sdirk",
+      "area": "gabes/field_ballistic.py · gabes/field_history.py · gabes/field_spectrum.py",
+      "title": "⟦AI⟧ 정자기장 탄도 이력 해석적 암상태 역행렬(A_dark^-1) + 이분 D/O Schur 축소(Trick A)",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "in_progress",
+      "priority": "P1",
+      "effort": "large",
+      "owner": "Codex OD (lane implementation, when user says go); Claude (engine review); Gemini (parity review)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ 경사 자기장/타원 편광 정자기장 OD 스펙트럼(특히 Rb85 D2 1296차원)은 전 주파수·횡속도마다 대형 sparse LU와 복소 eig를 수행해 수 시간이 소요된다. L_dark가 D=(gg+ee)/O=(ge+eg) 블록대각 및 D 내부 일방향 삼각(ee->gg)이고 L_light가 D<->O만 결합하는 정확 이분 구조를 쓰면 A_dark^-1이 해석적으로 닫히고 SDIRK-2 고유값 문제가 실수 dim(O) (Rb85 D2 1296->576, D1 576->288)로 축소된다. Codex 1900 독립 재현: 48x4x4 단건 Rb85 D1 경사 4.76x(rel 7.58e-15), D2 경사 3.07x(rel 9.47e-15), D1 Faraday 1.31x(rel 1.17e-14). 음성 대조군: Hilbert 공간 CPTP Strang 분할은 |Delta|dt>>1에서 Quantum Zeno 분할 아티팩트로 기각(재시도 금지).",
+      "acceptance_criteria": [
+        "⟦AI⟧ Substep A1 (동일 격자 정확 동등성): 선언된 순수 광학 탈위상과 모든 자발방출 분기를 포함한 해석적 A_dark^-1 및 실수 에르미트 기저의 이분 Schur 축소(I_O - alpha^2 Q P) 구현(1810 실수 1x1/2x2 고유쌍 루프와 결합 가능).",
+        "⟦AI⟧ 비정규 QP에 대한 조건수 가드 및 단계 잔차 검사 시 기존 sparse 경로 폴백을 유지한다. 변환된 점프 연산자, trace, 물리 기저 점유수/재시도 게이트, 동일 격자 이산 약프로브 차감을 보존한다.",
+        "⟦AI⟧ 가변 스텝·환대 경계 검증 전까지 환대별 radial_rates는 기존 직접 적분기를 유지한다.",
+        "⟦AI⟧ 무자기장·Faraday·경사·타원 고출력 케이스 동등성 및 실제 2,001점 전체 OD/T 냉·온 실행시간·캐시·취소 동작을 검증한다(고립 속도비를 곱해 30–200x를 측정치로 기록하지 않는다).",
+        "⟦AI⟧ Faraday 체스보드 패리티 Pi=(-1)^(m+1_e) 절반화는 지원 자기장 방향과 실수 저수조에서 섹터 누설 0을 독립 검증한 뒤에만 적용한다.",
+        "⟦AI⟧ Substep A2 (이산화/반복 분리 게이트): dyadic dt 버킷화는 별도 구적 수렴 변경으로, 행렬비구성 Neumann/GMRES는 스펙트럼 반경 <0.2만이 아닌 실제 SDIRK 잔차 기준과 폴백으로 별도 게이트한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_deep_tricks.py",
+        "runs/gemini_math_opt_review_20261126/test_hilbert_cptp.py",
+        "runs/od_field_speed_pilot_20261126/basis.json",
+        "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
+        "runs/agent_hub/20261126-1859_claude-to-all_re-deep-math-wave2-and-delegation.md",
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "od-rb-ballistic-fast-multi-geometry-table"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: keep separate from od-rb-ballistic-fast-multi-geometry-table (B=0 linear rate-equation table vs arbitrary-B full-OBE SDIRK); both share OD Fast-tier gate discipline.",
+      "implementation_a1_2026_11_26": "⟦AI⟧ Substep A1 landed locally by Codex OD in 21aa7cd (gabes/_field_sdirk.py, gabes/field_ballistic.py, gabes/field_history.py, tests/test_field_ballistic.py). Independently verified by Gemini (runs/gemini_review_od_a1_20261126/) and signed off by Claude (20261126-2153): same-grid max rel diff 1.84e-13 across 10 field/polarization cases x 3 powers (0.12/10/100 uW; Faraday and perp-E bit-identical), reservoir/trace <= 1.76e-15, forced ill-conditioned basis and large-residual fallbacks bit-identical (0.0), annular radial_rates bit-identical (0.0). Codex 2,001-pt cold spectrum 1019.135->386.626 s (2.636x), warm 0.091->0.096 s; independent 48x4x4 oblique spot timings 3.19x-7.30x. Substep A2 remains open: Codex pilot (runs/od_exact_20261126/a2_pilot.json) showed 56/60 initial-stage cases had rho<0.2 yet one left residual 3.46e-12 after 8 updates, confirming A2 must gate on true SDIRK residual + fallback, not spectral radius."
+    },
+    {
+      "id": "floquet-conjugate-symmetry-and-longitudinal-poles",
+      "area": "gabes/core.py · gabes/schemes/fwm/longitudinal.py",
+      "title": "⟦AI⟧ Floquet ±h 공액 대칭 복원 및 longitudinal pole_doppler 속도 소거(Trick D)",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "ready",
+      "priority": "P1",
+      "effort": "medium",
+      "owner": "Gemini (core.floquet_solve_truncated, Claude review); Codex FWM (schemes/fwm/longitudinal.py)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ core.floquet_solve_truncated는 임의 n_f 일반화 시 ±h 전치-공액 대칭(Q[-h]=P conj(R[+h]) P)을 생략해 양방향 연분수를 모두 계산한다(에르미트 구동에서 1.75–2.24x, max abs err 7.13e-15). 또한 schemes/fwm/longitudinal.py의 _local은 공간 노드마다 945개 속도를 Python MCF로 직렬 풀이하며, 기존 pole_doppler.floquet_real_form + AffineShiftSystem(|R|=56) 적용 시 단건 노드 945속도에서 cold 231.7 ms(JIT 포함) / warm 2.21 ms vs direct 63.5–86.8 ms(rel err 1.37e-13)를 확인했다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ Substep D1 (core.floquet_solve_truncated): L0, S_v의 P-공액 불변성과 Cm == P conj(Cp) P를 모두 검사하는 정확 에르미트 가드를 두고, 미충족 일반 호출부는 기존 양방향 연분수 경로를 유지한다.",
+        "⟦AI⟧ Substep D1 테스트: 부호 있는 고조파 차수, 전체 재구성, 0/비0 고조파 trace, 임의 복소 장 및 모든 호출부(longitudinal, periodic, periodic_cell, dressed_cell_absorption, tests/baseline_focused.npz) <= 1e-12 동등성 및 표시값 일치.",
+        "⟦AI⟧ Substep D2 (schemes/fwm/longitudinal.py): 펌프/프로브/공액에 필요한 모든 고조파·판독값·손실항·noise_state 공간곱을 보존하고, 기존 노드·가중치와 일치시키며, 폴 조건수 실패 시 직접 경로 폴백을 유지한다.",
+        "⟦AI⟧ Substep D2 타이밍은 행렬 준비와 JIT 웜업을 포함한 종단간 시간으로 보고한다. U(1)xU(1) 게이지/캐시 재사용은 복소 관측량 역회전 검증과 함께 별도 체크로 분리한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_deep_tricks.py",
+        "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
+        "runs/agent_hub/20261126-1859_claude-to-all_re-deep-math-wave2-and-delegation.md",
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "shared-small-cache-and-loop-reuse",
+        "fwm-propagation-cache-partition",
+        "fwm-option-a-and-loss-ledger"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: keep shared-small-cache-and-loop-reuse and fwm-propagation-cache-partition parked (profile-gated); D2 longitudinal pole reduction directly benefits fwm-option-a-and-loss-ledger."
+    },
+    {
+      "id": "periodic-floquet-schur-resolvent",
+      "area": "gabes/quantum/periodic.py · gabes/quantum/periodic_field.py",
+      "title": "⟦AI⟧ 주기적 Floquet 리졸번트 복소 Schur 분해 재사용",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "ready",
+      "priority": "P2",
+      "effort": "medium",
+      "owner": "Codex FWM (implementation, when user says go); Claude (quantum-engine review)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ FloquetAtomicLift.spectrum() 및 주 생산 호출부 periodic_field.eliminate_periodic_atom()(K=4 포트)은 RF 주파수 점마다 밀집 LU를 반복한다. scipy.linalg.schur(output='complex') 1회 분해 재사용 시 spectrum()은 order 3/6에서 4.3x–5.2x(rel err <=2.7e-14, audit() 고유값 겸용), eliminate_periodic_atom()은 n_omega=25에서 1.2x–1.9x(rel err <=2.0e-14)이며 조밀한 RF 스윕(n_omega >> 25)에서 이득이 커진다. Block Thomas는 현재 소차수(order 3–6, m=15)에서 Python 루프 오버헤드로 0.46x–0.68x 느리므로 제외한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ FloquetAtomicLift.spectrum 및 생산 경로 eliminate_periodic_atom에서 Schur 재사용을 직접 풀이와 관련 차수·스윕 크기·좁은 공명에서 대조한다(<= 1e-12 동등성).",
+        "⟦AI⟧ 안정성 감사(audit) 및 확산(greater/lesser) 검사를 보존하고, 생산 투영 경로의 실제 처리량 이득을 실측으로 입증한다.",
+        "⟦AI⟧ 현재 소차수에서는 Block Thomas를 도입하지 않는다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_proposals.py",
+        "runs/gemini_math_opt_review_20261126/verification_results.json",
+        "runs/agent_hub/20261126-1751_gemini-to-all_math-optimization-review-verification.md",
+        "runs/agent_hub/20261126-1759_codex-to-all_fwm-optimization-ownership.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "fwm-quantum-langevin-microscopic-core",
+        "fwm-rf-squeezing-spectrum-and-bandwidth"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: downstream beneficiaries are fwm-quantum-langevin-microscopic-core and fwm-rf-squeezing-spectrum-and-bandwidth."
+    },
+    {
+      "id": "single-beam-axisymmetric-qdht-propagator",
+      "area": "gabes/paraxial.py · gabes/single_beam_profile.py",
+      "title": "⟦AI⟧ 축대칭 단일 빔용 1D QDHT(이산 Hankel 변환) 선택적 전파 백엔드",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "ready",
+      "priority": "P2",
+      "effort": "medium",
+      "owner": "Gemini (engine implementation, after optical-bloch-pi-mirror-pole-doppler and when user says go); Claude (review)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ 축대칭 단일 빔 전파(single_beam_profile)는 현재 2D FFT(N^2 격자)를 사용해 비선형 PCHIP 평가와 분할단계 전파 비용이 크다. 0차 QDHT(Yu 1998/Guizar-Sicairos 2004) 프로토타입은 256^2 2D FFT 대비 셀 투과율 2.39e-13, 출구 반경 3.46e-14, 파워 보존 1.88e-13 일치 및 해석적 chi 기준 3.4x–19x(진공 카메라 132x–829x)를 보였다. 현재 cold 시간의 89%(39.8 s)는 원자표 생성이므로 optical-bloch-pi-mirror-pole-doppler 이후 진행.",
+      "acceptance_criteria": [
+        "⟦AI⟧ optical-bloch-pi-mirror-pole-doppler 착지 이후 opt-in 축대칭 백엔드로 구현하며, 비축대칭/FWM 호출부용 기존 2D paraxial.propagate는 유지한다.",
+        "⟦AI⟧ UI/NPZ 내보내기용 온디맨드 2D 재구성과 r=0 정확 Hankel 평가를 제공한다.",
+        "⟦AI⟧ 원형 Dirichlet 대 사각 주기 경계 절단 차이를 문서화하고, 실제 전체 호출부 출력 정확도와 wall-clock 시간을 계측한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_proposals.py",
+        "runs/gemini_math_opt_review_20261126/verification_results.json",
+        "runs/agent_hub/20261126-1751_gemini-to-all_math-optimization-review-verification.md",
+        "runs/agent_hub/20261126-1752_claude-to-all_re-math-optimization-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "sabes-profiler-state-cache-performance",
+        "single-beam-camera-plane-refinement",
+        "sabes-profiler-field-route-transport",
+        "sabes-profiler-in-cell-planes"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: engine propagation backend distinct from UI BP6 (sabes-profiler-state-cache-performance) and multi-plane convergence gate BP5 (single-beam-camera-plane-refinement)."
+    },
+    {
+      "id": "transport-wavepacket-adjoint-factorization",
+      "area": "gabes/quantum/transport.py",
+      "title": "⟦AI⟧ quantum/transport wavepacket 정확 역방향 수반(adjoint) 인수분해 및 명시적 PSD 구적(Trick C)",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "ready",
+      "priority": "P2",
+      "effort": "medium",
+      "owner": "Gemini (engine implementation, when user says go); Claude/Codex FWM (review)",
+      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
+      "problem": "⟦AI⟧ AtomicCharacteristic.wavepacket()은 증강 Lyapunov DOP853 ODE(2*ns*nf*(m+p)^2 변수)에서 주파수 무관 동시각 공분산 Sigma_r(t)를 2*nf회 중복 적분한다. 역방향 수반행렬 -dPsi/dt = Psi A(t) + W(omega,t), Psi(T)=0 (nf*p*m 변수) 1회 적분 + Gauss-Legendre 구적으로 인수분해하면 Y_r^greater, Y_r^lesser, R_ret를 정확 복원(신규 영수증 err_G=8.23e-14, err_L=5.14e-13, err_R=1.97e-13; Codex 마이크로초 스케일 검증 7.07e-13)하며 Psi D_r Psi^H >= 0이 점별 명시적 PSD가 된다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ Psi 단독 DOP853 밀집 출력(dense output) 적분 + Gauss-Legendre 노드 구적으로 구현한다(ODE 상태 축소비 자체를 wall-time 배수로 주장하지 않는다).",
+        "⟦AI⟧ 지속시간 스케일링(duration conditioning)을 보존하고, mean_pulse는 독립 적분한다.",
+        "⟦AI⟧ 부호 있는 주파수, 복소 다중 구동 열, 저수조별 greater/lesser 및 교환자 균형, PSD 감사, 무구동 케이스, Poisson/transport_ensemble 호출부 전수 검증.",
+        "⟦AI⟧ 기존 deep_tricks_results.json(수정 전 err_retarded=0.948 기록)은 보존하고, 검증된 최신 영수증 trick_c_retarded_receipt_20261126.json을 참조한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_deep_tricks.py",
+        "runs/gemini_math_opt_review_20261126/trick_c_retarded_receipt_20261126.json",
+        "runs/gemini_math_opt_review_20261126/codex_microsecond_adjoint.json",
+        "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "fwm-quantum-langevin-microscopic-core",
+        "fwm-rf-squeezing-spectrum-and-bandwidth"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: downstream beneficiaries are fwm-quantum-langevin-microscopic-core and fwm-rf-squeezing-spectrum-and-bandwidth."
+    },
+    {
+      "id": "large-obe-rational-krylov-doppler",
+      "area": "gabes/optical_bloch.py · gabes/pole_doppler.py",
+      "title": "⟦AI⟧ 대형 비대칭 OBE 도플러 적분용 온라인 적응 유리근사(Rational Krylov / AAA)",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "parked",
+      "priority": "P3",
+      "effort": "research",
+      "owner": "engine lane (parked)",
+      "problem": "⟦AI⟧ B=0 선형 optical_bloch는 optical-bloch-pi-mirror-pole-doppler의 정확 pole_doppler로 이미 0.23–1.18 ms에 해결되므로 AAA 근사는 불필요하다. 또한 AAA는 정확 동치가 아닌 수치 유리근사이며 Froissart doublet 가드와 사전 평가 격자 대신 온라인 적응 샘플링(Rational Krylov/Loewner)이 필요하다. 향후 B!=0 또는 타원편광 대형 전체-OBE 도플러 스캔이 실제 병목이 될 때만 재개한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ 향후 B!=0/타원편광 대형 전체-OBE 도플러 스캔이 측정 병목이 된 경우에만 재활성화하며, Froissart doublet/근실축 폴 가드 및 직접 구적 폴백을 필수 포함한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_proposals.py",
+        "runs/agent_hub/20261126-1751_gemini-to-all_math-optimization-review-verification.md"
+      ],
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "psr-pi-frame-decoupling-and-elliptical-parity",
+      "area": "gabes/psr_spectrum.py · gabes/psr.py",
+      "title": "⟦AI⟧ PSR pi-프레임 직교 분리(27 실수 + 48 복소) 및 타원편광 체스보드 패리티(Trick B)",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "parked",
+      "priority": "P3",
+      "effort": "medium",
+      "owner": "engine lane (parked; outside near-term OD/FWM focus)",
+      "problem": "⟦AI⟧ x-선형 펌프 B=0 PSR(psr_spectrum.py)은 pi-프레임 회전으로 255 복소 공간이 27 실수 + 단일 48 복소로 정확 분리(drift_err=4.39e-13, x<->y 누설 3.97e-16)되며, 임의 타원편광(B=0 또는 Faraday B_z)에서는 체스보드 패리티 Pi=(-1)^(m+1_e)가 차원을 절반화(256->128, 누설 0.0)한다. 당분간 OD/FWM 집중 지시에 따라 PSR 본체는 보류하며, 공용 패리티 헬퍼 Pi만 Trick A 필요 시 독립 누설 검증 후 엔진에 추출 가능하다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ PSR 작업 재개 시 활성화한다. Trick A에서 패리티 헬퍼 Pi를 선행 차용할 경우 지원 자기장 방향과 실수 저수조에서 섹터 누설 0을 독립 검증한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_deep_tricks.py",
+        "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26"
+    },
+    {
+      "id": "magneto-multilevel-bz-axis-pole-reduction",
+      "area": "gabes/magneto_multilevel.py",
+      "title": "⟦AI⟧ magneto_multilevel B_z 축 폴 축소 및 평탄화 BLAS-3 수축(Trick E)",
+      "origin": "ai_review_of_external_feedback",
+      "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
+      "status": "parked",
+      "priority": "P3",
+      "effort": "medium",
+      "owner": "engine lane (parked; outside near-term OD/FWM focus)",
+      "problem": "⟦AI⟧ magneto_multilevel의 B_z 스캔 축에 G_z 영공간 Schur 소거 + 26x26 실수 고유분해를 적용하면 101점 B_z 스캔을 rel_err=1.36e-15로 재현한다. 단 현재 PoC는 3D maps 재구성 비용 때문에 종단간 1.12x에 그쳤으며, 실질 이득에는 mean_map 직접 평탄화 BLAS-3 GEMM 수축과 ±B_z 대칭 접기가 필요하다. 당분간 OD/FWM 집중 지시에 따라 보류한다.",
+      "acceptance_criteria": [
+        "⟦AI⟧ Magneto 작업 재개 시 활성화한다. 비0 횡자기장·타원편광/위상·부호 민감 판독값에 대한 명시적 대칭 검증 후 ±B_z 접기를 적용하고, 직접 수축의 종단간 실측 속도 향상을 입증한다."
+      ],
+      "local_evidence": [
+        "runs/gemini_math_opt_review_20261126/verify_deep_tricks.py",
+        "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+      ],
+      "last_reviewed_at": "2026-11-26",
+      "related_items": [
+        "single-pair-magneto-zero-transverse-singular-poles"
+      ],
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: same Magneto pole family as single-pair-magneto-zero-transverse-singular-poles (distinct single-pair Delta_eff vs multilevel B_z solver); both stay P3 parked outside OD/FWM focus."
     }
   ],
   "_daily_report_sync_history": [
