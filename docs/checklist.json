@@ -7825,11 +7825,10 @@
       "title": "⟦AI⟧ 축대칭 단일 빔용 1D QDHT(이산 Hankel 변환) 선택적 전파 백엔드",
       "origin": "ai_review_of_external_feedback",
       "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
-      "status": "ready",
+      "status": "done",
       "priority": "P2",
       "effort": "medium",
       "owner": "Gemini (engine implementation, after optical-bloch-pi-mirror-pole-doppler and when user says go); Claude (review)",
-      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
       "problem": "⟦AI⟧ 축대칭 단일 빔 전파(single_beam_profile)는 현재 2D FFT(N^2 격자)를 사용해 비선형 PCHIP 평가와 분할단계 전파 비용이 크다. 0차 QDHT(Yu 1998/Guizar-Sicairos 2004) 프로토타입은 256^2 2D FFT 대비 셀 투과율 2.39e-13, 출구 반경 3.46e-14, 파워 보존 1.88e-13 일치 및 해석적 chi 기준 3.4x–19x(진공 카메라 132x–829x)를 보였다. 현재 cold 시간의 89%(39.8 s)는 원자표 생성이므로 optical-bloch-pi-mirror-pole-doppler 이후 진행.",
       "acceptance_criteria": [
         "⟦AI⟧ optical-bloch-pi-mirror-pole-doppler 착지 이후 opt-in 축대칭 백엔드로 구현하며, 비축대칭/FWM 호출부용 기존 2D paraxial.propagate는 유지한다.",
@@ -7840,16 +7839,20 @@
         "runs/gemini_math_opt_review_20261126/verify_proposals.py",
         "runs/gemini_math_opt_review_20261126/verification_results.json",
         "runs/agent_hub/20261126-1751_gemini-to-all_math-optimization-review-verification.md",
-        "runs/agent_hub/20261126-1752_claude-to-all_re-math-optimization-review.md"
+        "runs/agent_hub/20261126-1752_claude-to-all_re-math-optimization-review.md",
+        "runs/gemini_qdht_20261127/README.md",
+        "runs/gemini_qdht_20261127/results.json",
+        "runs/agent_hub/20261127-1204_claude-to-gemini_qdht-signoff.md"
       ],
-      "last_reviewed_at": "2026-11-26",
+      "last_reviewed_at": "2026-11-27",
       "related_items": [
         "sabes-profiler-state-cache-performance",
         "single-beam-camera-plane-refinement",
         "sabes-profiler-field-route-transport",
         "sabes-profiler-in-cell-planes"
       ],
-      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: engine propagation backend distinct from UI BP6 (sabes-profiler-state-cache-performance) and multi-plane convergence gate BP5 (single-beam-camera-plane-refinement)."
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: engine propagation backend distinct from UI BP6 (sabes-profiler-state-cache-performance) and multi-plane convergence gate BP5 (single-beam-camera-plane-refinement).",
+      "implementation_2026_11_27": "⟦AI⟧ Landed locally by Gemini in cd7477f and signed off by Claude (20261127-1204): gabes/paraxial.py (additive RadialQDHTGrid, gaussian_radial_field, RadialParaxialResult, propagate_axisymmetric with cached normalized Bessel tables, exact r=0 Hankel evaluation, cached exact-Hankel 2D reconstruction, outer 5% radial annulus guard; 2D FFT propagate() untouched), gabes/single_beam_profile.py (opt-in propagator='fft'|'qdht' default 'fft', automatic QDHT camera continuation in profile_at_distance, explicit circular Dirichlet vs 2D FFT square periodic corner documentation in conditions['boundary_condition']), tests/test_paraxial.py, tests/test_single_beam_profile.py. Verified 62 passed (5.87 s); real Rb D1 85 C +1.2 GHz 15 mW benchmark: cell 2.81-3.96x (refine=True 6007 -> 1515 ms), camera 3.24-3.45x (119 -> 36.8 ms), in-cell power balance 1.26e-13 (<< 1e-9), T_rel 1.11e-6, radius_rel 1.61e-7, lens_rel 5.61e-5, FFT camera corner (r>R) power fraction 1.23e-6 documented. Adopting QDHT as SABES UI default remains a separate UI/value decision."
     },
     {
       "id": "transport-wavepacket-adjoint-factorization",
