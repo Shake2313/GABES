@@ -175,26 +175,60 @@ def _flight(model, first, second, roots, dt, stage, check):
     return removed
 
 
-def _iterative_stage(roots, dark_d, coherence, p, q, forcing, operator):
-    # An inexpensive sufficient contraction bound. Strong, near-resonant rays go
-    # straight to A1; the measured residual is the acceptance test for each RHS.
-    if max(roots)**2 * np.linalg.norm(operator, ord=np.inf) > 0.2:
-        return None
+def _stage_rhs(dark_d, coherence, q, forcing):
     dark_ground_excited = sparse.csr_matrix(dark_d)
     no = len(coherence)
     c = np.r_[coherence.real, coherence.real][:, None]
     s = coherence.imag[:, None]
 
+    def rhs(old_d, old_o, shape, amplitude):
+        dark_rhs = dark_ground_excited @ old_d
+        optical_rhs = c * old_o + np.vstack((-s * old_o[no:], s * old_o[:no]))
+        optical_rhs += forcing[:, None] * shape + amplitude * (q @ dark_rhs)
+        return dark_rhs, optical_rhs
+
+    return rhs
+
+
+def _iterative_stage(roots, p, operator, stage_rhs):
+    # The norm bound selects candidates; the residual certifies each RHS.
+    if max(roots)**2 * np.linalg.norm(operator, ord=np.inf) > 0.2:
+        return None
+
     def stage(old_d, old_o, shape, _audit):
         amplitude = roots * shape
-        dark_rhs = dark_ground_excited @ old_d
-        rhs = c * old_o + np.vstack((-s * old_o[no:], s * old_o[:no]))
-        rhs += forcing[:, None] * shape + amplitude * (q @ dark_rhs)
+        dark_rhs, rhs = stage_rhs(old_d, old_o, shape, amplitude)
         actual_o = _neumann(rhs, amplitude**2, operator)
         if actual_o is None:
             raise ArithmeticError("Unresolved Neumann drive stage.")
-        actual_d = dark_rhs + p @ (amplitude * actual_o)
-        return actual_d, actual_o
+        return dark_rhs + p @ (amplitude * actual_o), actual_o
+
+    return stage
+
+
+def _refined_eigen_stage(roots, p, operator, stage_rhs, modal_rhs, eigen):
+    real, imag, basis, factors = eigen
+    pairs = np.flatnonzero(imag > 0)
+
+    def stage(old_d, old_o, shape, _audit):
+        amplitude = roots * shape
+        squared = amplitude**2
+        dark_rhs, rhs = stage_rhs(old_d, old_o, shape, amplitude)
+        modal = modal_rhs(old_d, old_o, shape, amplitude)
+        actual_o = basis @ _apply_blocks(modal, squared, real, imag, pairs)
+        residual = (rhs - actual_o) + squared * (operator @ actual_o)
+        rhs_norm_squared = np.einsum("ij,ij->j", rhs, rhs)
+        # Keep a margin under the stage acceptance tolerance. The eigenbasis
+        # is only a preconditioner for the independently reconstructed residual.
+        refine = np.einsum("ij,ij->j", residual, residual) > 1e-28 * rhs_norm_squared
+        if np.any(refine):
+            correction = linalg.lu_solve(factors, residual[:, refine], check_finite=False)
+            actual_o[:, refine] += basis @ _apply_blocks(correction, squared[refine], real, imag, pairs)
+            residual = (rhs - actual_o) + squared * (operator @ actual_o)
+        if (not np.isfinite(rhs_norm_squared).all()
+                or not np.all(np.einsum("ij,ij->j", residual, residual) <= 1e-24 * rhs_norm_squared)):
+            raise ArithmeticError("Unresolved refined eigenbasis drive stage.")
+        return dark_rhs + p @ (amplitude * actual_o), actual_o
 
     return stage
 
@@ -205,8 +239,6 @@ def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpo
 
     Return None to request a retry with the original solver.
     """
-    # D2 off-resonant crossings can differ from the A1 eigenbasis solution
-    # beyond the replay tolerance, even with near-machine-precision residuals.
     if neumann is None:
         neumann = model.line == "D1"
     nb = len(first)
@@ -227,8 +259,10 @@ def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpo
         p = shift * (dark_d @ model.from_optical)
         q = shift * (dark_o @ model.to_optical)
         operator = q @ p
+        if neumann or model.line == "D2":
+            stage_rhs = _stage_rhs(dark_d, coherence, q, shift * (dark_o @ model.source))
         if neumann:
-            stage = _iterative_stage(roots, dark_d, coherence, p, q, shift * (dark_o @ model.source), operator)
+            stage = _iterative_stage(roots, p, operator, stage_rhs)
             if stage is not None:
                 removed = _flight(model, first, second, roots, dt, stage, check)
                 if removed is not None:
@@ -242,23 +276,30 @@ def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpo
         to_o = linalg.lu_solve(factors, dark_o, check_finite=False)
         to_d = linalg.lu_solve(factors, q @ dark_d, check_finite=False)
         source = shift * (to_o @ model.source)
-        restore_d = p @ basis
 
-        def stage(old_d, old_o, shape, audit):
-            amplitude = roots * shape
-            modal = to_o @ old_o + source[:, None] * shape + amplitude * (to_d @ old_d)
-            solution = _apply_blocks(modal, amplitude**2, re, im, pairs)
-            actual_o = basis @ solution
-            dark_rhs = dark_d @ old_d
-            actual_d = dark_rhs + restore_d @ (amplitude * solution)
-            if audit:
-                rhs_o = dark_o @ (old_o + shift * model.source[:, None] * shape)
-                coupling = amplitude * (q @ actual_d)
-                feedback = amplitude * (p @ actual_o)
-                if not (_within_residual(actual_o - coupling - rhs_o, actual_o, coupling, rhs_o)
-                        and _within_residual(actual_d - feedback - dark_rhs, actual_d, feedback, dark_rhs)):
-                    raise ArithmeticError("Unresolved reduced drive stage.")
-            return actual_d, actual_o
+        def modal_rhs(old_d, old_o, shape, amplitude):
+            return to_o @ old_o + source[:, None] * shape + amplitude * (to_d @ old_d)
+
+        if model.line == "D2":
+            stage = _refined_eigen_stage(roots, p, operator, stage_rhs, modal_rhs, eigen)
+        else:
+            restore_d = p @ basis
+
+            def stage(old_d, old_o, shape, audit):
+                amplitude = roots * shape
+                modal = modal_rhs(old_d, old_o, shape, amplitude)
+                solution = _apply_blocks(modal, amplitude**2, re, im, pairs)
+                actual_o = basis @ solution
+                dark_rhs = dark_d @ old_d
+                actual_d = dark_rhs + restore_d @ (amplitude * solution)
+                if audit:
+                    rhs_o = dark_o @ (old_o + shift * model.source[:, None] * shape)
+                    coupling = amplitude * (q @ actual_d)
+                    feedback = amplitude * (p @ actual_o)
+                    if not (_within_residual(actual_o - coupling - rhs_o, actual_o, coupling, rhs_o)
+                            and _within_residual(actual_d - feedback - dark_rhs, actual_d, feedback, dark_rhs)):
+                        raise ArithmeticError("Unresolved reduced drive stage.")
+                return actual_d, actual_o
 
         removed = _flight(model, first, second, roots, dt, stage, check)
         if removed is None:

@@ -238,14 +238,68 @@ def test_neumann_crossing_and_capped_a1_replay(monkeypatch):
     np.testing.assert_array_equal(actual, expected)
 
 
-def test_d2_retains_a1_when_neumann_is_not_certified(monkeypatch):
+def test_d2_refined_a1_crossing_matches_direct_schur(monkeypatch):
+    from functools import partial
+
+    from scipy import linalg
+
     from gabes import _field_sdirk
 
-    def unexpected(*args):
-        pytest.fail("D2 entered an uncertified Neumann route")
-
-    monkeypatch.setattr(_field_sdirk, "_iterative_stage", unexpected)
-    atom = FieldBallisticProbe(species.RB87, "D2", TEMPERATURE, field_ut=(23., -42., 57.),
+    atom = FieldBallisticProbe(species.RB87, "D2", 348.15, field_ut=(23., -42., 57.),
                               jones=(.8, .6j))
-    result = atom.cross_sections(500. * species.MHZ, [.12], WAIST, grid=GRID)
-    assert result[0, 0] > 0.
+    args = (500. * species.MHZ, [3 * .272 / 7], .00053)
+    grid = TrajectoryGrid(nx=48, nb=4, nv=4)
+    fixed = _field_sdirk.fixed_steps
+
+    def direct(rhs, squared, operator):
+        identity = np.eye(len(operator))
+        return np.column_stack([linalg.solve(identity - power * operator, column, check_finite=False)
+                                for power, column in zip(squared, rhs.T)])
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_field_sdirk, "_neumann", direct)
+        patch.setattr(_field_sdirk, "fixed_steps", partial(fixed, neumann=True))
+        expected = atom.cross_sections(*args, grid=grid)
+    def unexpected(*args):
+        pytest.fail("D2 default should evaluate the corrected reference")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_field_sdirk, "_iterative_stage", unexpected)
+        actual = atom.cross_sections(*args, grid=grid)
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=0.)
+
+    solve = _field_sdirk._neumann
+    monkeypatch.setattr(_field_sdirk, "_neumann", partial(solve, max_updates=0))
+    monkeypatch.setattr(_field_sdirk, "fixed_steps", partial(fixed, neumann=True))
+    replay = atom.cross_sections(*args, grid=grid)
+    np.testing.assert_array_equal(replay, actual)
+
+
+def test_refined_eigen_stage_checks_residual_after_correction(monkeypatch):
+    from gabes import _field_sdirk
+
+    operator = np.diag([.1, .2])
+    incoming = np.array([[1.], [-2.]])
+    roots = np.array([1.])
+    stage = _field_sdirk._refined_eigen_stage(
+        roots, operator, operator, lambda *args: (incoming, incoming), lambda *args: incoming,
+        _field_sdirk._eigen_blocks(operator),
+    )
+    apply = _field_sdirk._apply_blocks
+    seen = []
+
+    def perturbed(*args):
+        seen.append(True)
+        solution = apply(*args)
+        return solution + 1e-8 if len(seen) == 1 else solution
+
+    monkeypatch.setattr(_field_sdirk, "_apply_blocks", perturbed)
+    dark, optical = stage(incoming, incoming, roots, False)
+    expected = np.linalg.solve(np.eye(2) - operator, incoming)
+    np.testing.assert_allclose(optical, expected, atol=0., rtol=1e-12)
+    np.testing.assert_allclose(dark, incoming + operator @ expected, atol=0., rtol=1e-12)
+    assert len(seen) == 2
+
+    monkeypatch.setattr(_field_sdirk, "_apply_blocks", lambda *args: apply(*args) + 1e-8)
+    with pytest.raises(ArithmeticError, match="Unresolved refined"):
+        stage(incoming, incoming, roots, False)
