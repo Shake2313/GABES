@@ -181,3 +181,41 @@ def test_public_fast_reverts_to_full_reference_and_direct_reference_never_looks_
     assert fallback.diagnostics["fidelity_used"] == "reference"
     for name in ("transmission", "optical_depth", "od0"):
         np.testing.assert_array_equal(getattr(fallback, name), getattr(reference, name))
+
+
+def test_ballistic_worker_count_respects_container_and_env_limits(monkeypatch):
+    monkeypatch.setenv("GABES_BALLISTIC_WORKERS", "1")
+    assert history._ballistic_worker_count() == 1
+    monkeypatch.setenv("GABES_BALLISTIC_WORKERS", "8")
+    monkeypatch.setattr(history, "_cgroup_v2_cpu_quota", lambda: 2)
+    assert history._ballistic_worker_count() <= 2
+    monkeypatch.delenv("GABES_BALLISTIC_WORKERS", raising=False)
+    monkeypatch.setattr(history, "_cgroup_v2_cpu_quota", lambda: 1)
+    assert history._ballistic_worker_count() == 1
+
+
+def test_threaded_thermal_table_is_bit_identical_to_serial_and_propagates_errors(monkeypatch):
+    c = replace(conditions(99.0), probe_waist_mm=1.06, probe_power_uw=2.0)
+    scan = 2 * np.pi * np.array([-1.1e9, 0.0, 1.5e9])
+
+    history._rest_excess.cache_clear()
+    monkeypatch.setenv("GABES_BALLISTIC_WORKERS", "1")
+    serial = history.evaluate_ballistic_spectrum(c, scan, fidelity="reference")
+
+    history._rest_excess.cache_clear()
+    monkeypatch.setenv("GABES_BALLISTIC_WORKERS", "2")
+    monkeypatch.setattr(history, "_cgroup_v2_cpu_quota", lambda: None)
+    threaded = history.evaluate_ballistic_spectrum(c, scan, fidelity="reference")
+
+    for name in ("transmission", "optical_depth", "od0"):
+        np.testing.assert_array_equal(getattr(threaded, name), getattr(serial, name))
+    assert threaded.diagnostics["refined_path_rows"] == serial.diagnostics["refined_path_rows"]
+    assert threaded.diagnostics["max_transverse_steps"] == serial.diagnostics["max_transverse_steps"]
+
+    # Exceptions inside worker threads must propagate cleanly.
+    def _boom(*args, **kwargs):
+        raise RuntimeError("injected worker failure")
+
+    monkeypatch.setattr(history, "_rest_excess", _boom)
+    with pytest.raises(RuntimeError, match="injected worker failure"):
+        history.evaluate_ballistic_spectrum(c, scan, fidelity="reference")

@@ -6,13 +6,79 @@ The scalar propagation closure holds that shape fixed while its total power deca
 Its limits are reported with the result. In particular, solving the nonlinear
 absorption at each radius using an independent stationary atom would change the model.
 """
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from functools import lru_cache
+import os
+from pathlib import Path
+import threading
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 
-from . import beam, collisions, constants, linear_hyperfine, probe_saturation, species, vapor_cell
+from . import beam, collisions, constants, kernels, linear_hyperfine, probe_saturation, species, vapor_cell
+
+_POOL = None
+_POOL_WORKERS = 0
+_POOL_LOCK = threading.Lock()
+
+
+def _cgroup_v2_cpu_quota():
+    """Return floor(quota / period) from Linux cgroup v2 cpu.max, or None if unavailable."""
+    try:
+        text = Path("/sys/fs/cgroup/cpu.max").read_text(encoding="ascii").strip()
+    except OSError:
+        return None
+    parts = text.split()
+    if len(parts) != 2 or parts[0] == "max":
+        return None
+    try:
+        quota, period = int(parts[0]), int(parts[1])
+    except ValueError:
+        return None
+    if quota <= 0 or period <= 0:
+        return None
+    return max(1, quota // period)
+
+
+def _ballistic_worker_count():
+    """Effective CPU budget for live ballistic trajectory solves (container-safe)."""
+    limits = [max(1, int(os.cpu_count() or 1))]
+    if hasattr(os, "sched_getaffinity"):
+        try:
+            affinity = len(os.sched_getaffinity(0))
+            if affinity >= 1:
+                limits.append(affinity)
+        except OSError:
+            pass
+    cgroup = _cgroup_v2_cpu_quota()
+    if cgroup is not None:
+        limits.append(cgroup)
+    env_raw = os.environ.get("GABES_BALLISTIC_WORKERS")
+    if env_raw is not None and env_raw.strip():
+        try:
+            override = int(env_raw.strip())
+            if override >= 1:
+                limits.append(override)
+        except ValueError:
+            pass
+    return min(limits)
+
+
+def _ballistic_pool(workers):
+    """Single process-wide bounded executor, created lazily under a lock."""
+    global _POOL, _POOL_WORKERS
+    pool = _POOL
+    if pool is None or _POOL_WORKERS != workers:
+        with _POOL_LOCK:
+            if _POOL is None or _POOL_WORKERS != workers:
+                old = _POOL
+                _POOL = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="gabes-ballistic")
+                _POOL_WORKERS = workers
+                if old is not None:
+                    old.shutdown(wait=False)
+            pool = _POOL
+    return pool
 
 
 @dataclass(frozen=True)
@@ -191,8 +257,20 @@ def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use
             temperature = 300.
             waist = (optics.waist / constants.thermal_speed(optics.temperature, optics.isotope.mass)
                      * constants.thermal_speed(temperature, optics.isotope.mass))
-        sampled = [_rest_excess(temperature, optics.width, waist, float(power), resolution, *component)
-                   for power in intensity]
+        # Evaluate intensity rows in order. When Numba is active and multiple
+        # effective CPUs are available, _ballistic_kernel.integrate_native
+        # releases the GIL; duplicate _rest_excess lru_cache misses across
+        # concurrent threads are harmless because _rest_excess is deterministic.
+        workers = _ballistic_worker_count() if kernels.NUMBA_AVAILABLE else 1
+        if workers > 1 and len(intensity) > 1:
+            pool = _ballistic_pool(min(workers, 16))
+            sampled = list(pool.map(
+                lambda power: _rest_excess(temperature, optics.width, waist, float(power), resolution, *component),
+                intensity,
+            ))
+        else:
+            sampled = [_rest_excess(temperature, optics.width, waist, float(power), resolution, *component)
+                       for power in intensity]
         rest = np.stack([entry[0] for entry in sampled])
         if diagnostics is not None:
             diagnostics['refined_path_rows'] = sum(entry[1] for entry in sampled)
