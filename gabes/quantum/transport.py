@@ -11,10 +11,35 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from ..core import comm_super
 from .contracts import GeneratorFrequencyAxis, readonly_array
 from .diffusion import traceless_hermitian_basis, _state
 from .periodic import _psd
 from .reservoirs import ExplicitReservoirs
+
+_GL_NODES, _GL_WEIGHTS = np.polynomial.legendre.leggauss(10)
+_GL_NODES.setflags(write=False)
+_GL_WEIGHTS.setflags(write=False)
+
+
+def _panel_quadrature(lo, hi, knots, max_omega):
+    """Positive-weight Gauss-Legendre nodes/weights on [lo, hi] aligned to ODE knots."""
+    edges = np.sort(np.asarray(knots, dtype=float))
+    if edges[0] > lo:
+        edges = np.r_[lo, edges]
+    if edges[-1] < hi:
+        edges = np.r_[edges, hi]
+    nodes_list, weights_list = [], []
+    for a, b in zip(edges[:-1], edges[1:]):
+        if b <= a:
+            continue
+        n_sub = max(1, int(np.ceil(max_omega * (b - a)))) if max_omega > 0.0 else 1
+        sub = np.linspace(a, b, n_sub + 1)
+        half = 0.5 * (sub[1:] - sub[:-1])
+        mid = 0.5 * (sub[1:] + sub[:-1])
+        nodes_list.append((mid[:, None] + half[:, None] * _GL_NODES[None, :]).ravel())
+        weights_list.append((half[:, None] * _GL_WEIGHTS[None, :]).ravel())
+    return np.concatenate(nodes_list), np.concatenate(weights_list)
 
 
 @dataclass(frozen=True)
@@ -77,18 +102,30 @@ class AtomicCharacteristic:
         m = len(self.operators)
         self.jump_products = np.array(products).reshape(len(products), m, m, self.n, self.n)
         self.source_names = ('atomic_inflow',)+tuple('jump:'+c.name for c in reservoirs.channels)
+        self._dissipator = reservoirs.dissipator()
+        self._dissipator_drift = (self.basis.conj().T@self._dissipator@self.basis).real
         self._solutions = []
 
     def generator(self, age):
-        return self.reservoirs.generator(self.hamiltonian(age, self.path.position(age)))
+        h = np.asarray(self.hamiltonian(age, self.path.position(age)), dtype=complex)
+        if h.shape != (self.n, self.n) or not np.isfinite(h).all():
+            raise ValueError('Hamiltonian dimension mismatch')
+        scale = max(float(np.linalg.norm(h)), np.finfo(float).tiny)
+        if np.linalg.norm(h - h.conj().T) > 1e-12 * scale:
+            raise ValueError('Hamiltonian must be Hermitian')
+        return comm_super(h) + self._dissipator
 
-    def coefficients(self, age, rho):
+    def _drift(self, age):
         generator = self.generator(age)
         drift = self.basis.conj().T@generator@self.basis
         if np.linalg.norm(drift.imag) > 1e-11*max(np.linalg.norm(generator), 1e-300):
             raise ValueError('Hermitian atomic coordinates must give real drift')
+        return generator, drift.real
+
+    def coefficients(self, age, rho):
+        generator, drift = self._drift(age)
         diffusion = np.einsum('rijab,ba->rij', self.jump_products, rho)
-        return generator, drift.real, diffusion
+        return generator, drift, diffusion
 
     def state_at(self, age):
         age = float(age)
@@ -172,55 +209,89 @@ class AtomicCharacteristic:
             return value
         inputs = len(drives(0.))
         nf, ns, m = len(axis.omega_rad_s), len(self.source_names), len(self.operators)
+        omega = axis.omega_rad_s
+        max_omega = float(np.max(np.abs(omega))) if nf else 0.0
         duration = self.path.residence_time_s
-        dim = m+ports
-        shape = (2, ns, nf, dim, dim)
-        cov = np.zeros(shape, complex)
-        _, initial = _moments(self.boundary_state, self.operators)
-        cov[0, 0, :, :m, :m], cov[1, 0, :, :m, :m] = initial, initial.T
-        lengths = [cov.size, nf*ports, nf*m*inputs, nf*ports*inputs]
-        offsets = np.r_[0, np.cumsum(lengths)]
-        initial_y = np.r_[cov.ravel(), np.zeros(sum(lengths[1:]), complex)]
-        def unpack(y):
-            return (y[offsets[0]:offsets[1]].reshape(shape),
-                y[offsets[1]:offsets[2]].reshape(nf, ports),
-                y[offsets[2]:offsets[3]].reshape(nf, m, inputs),
-                y[offsets[3]:offsets[4]].reshape(nf, ports, inputs))
+        # Solve backward adjoint propagator:
+        #   -dPsi/dt = Psi A(t) + exp(+i*omega*t) * C(t) / duration,  Psi(T) = 0.
+        # Duration scaling preserves conditioning on microsecond SI paths.
+        # Every reservoir integral is a positive-weight Gram sum Psi D_r Psi^H >= 0.
         def rhs(age, y):
-            p, _mean, response, _output = unpack(y)
-            rho = self.state_at(age)
-            _, a, d = self.coefficients(age, rho)
+            psi = y.reshape(nf, ports, m)
+            _, a = self._drift(age)
             ops, c = self.readout(readout_operators, age)
             if len(ops) != ports:
                 raise ValueError('readout port count changed along characteristic')
-            # Integrate Y/duration, then undo this exact change of coordinates.
-            # Otherwise an SI microsecond pulse has covariance ~1e-12, which
-            # a dimensionless absolute ODE tolerance could silently ignore.
-            w = np.exp(1j*axis.omega_rad_s*age)[:, None, None]*c/duration
-            augmented = np.zeros((nf, dim, dim), complex)
-            augmented[:, :m, :m], augmented[:, m:, :m] = a, w
-            pdot = augmented@p+p@augmented.conj().swapaxes(-1, -2)
-            pdot[0, 1:, :, :m, :m] += d[:, None]
-            pdot[1, 1:, :, :m, :m] += d.swapaxes(-1, -2)[:, None]
-            mean = np.exp(1j*axis.omega_rad_s*age)[:, None]*np.einsum('jab,ba->j', ops, rho)/duration
-            v = drives(age)
-            if len(v) != inputs:
-                raise ValueError('drive column count changed along characteristic')
-            b = np.einsum('iab,jba->ij', self.operators, -1j*(v@rho-rho@v))
-            response_dot = (a+1j*axis.omega_rad_s[:, None, None]*np.eye(m))@response+b
-            output_dot = c@response/duration
-            return np.r_[pdot.ravel(), mean.ravel(), response_dot.ravel(), output_dot.ravel()]
-        y, evaluations = initial_y, 0
-        for lo, hi in zip(self.times_s[:-1], self.times_s[1:]):
-            ode = solve_ivp(rhs, (lo, hi), y, method='DOP853', rtol=rtol, atol=atol, max_step=(hi-lo)/4)
+            w = np.exp(1j * omega * age)[:, None, None] * c / duration
+            return -(psi @ a + w).ravel()
+
+        y = np.zeros(nf * ports * m, complex)
+        evaluations = 0
+        adjoint_odes = [None] * (len(self.times_s) - 1)
+        for idx in range(len(self.times_s) - 2, -1, -1):
+            lo, hi = float(self.times_s[idx]), float(self.times_s[idx + 1])
+            ode = solve_ivp(
+                rhs, (hi, lo), y, method='DOP853', dense_output=True,
+                rtol=rtol, atol=atol, max_step=(hi - lo) / 4,
+            )
             if not ode.success:
                 raise ValueError('characteristic wavepacket propagation failed')
-            y, evaluations = ode.y[:, -1], evaluations+ode.nfev
-        covariance, mean, _, response = unpack(y)
-        greater, lesser = covariance[:, :, :, m:, m:]*duration**2
-        mean, response = mean*duration, response*duration
-        # Augmented integrators compute the full double-time kernel exactly at
-        # the ODE tolerance: no sampled double integral or diagonal-z shortcut.
+            adjoint_odes[idx] = ode
+            y = ode.y[:, -1]
+            evaluations += ode.nfev
+
+        psi0 = y.reshape(nf, ports, m)
+        _, initial = _moments(self.boundary_state, self.operators)
+        greater = np.zeros((ns, nf, ports, ports), complex)
+        lesser = np.zeros((ns, nf, ports, ports), complex)
+        greater[0] = np.einsum('fpi,ij,fqj->fpq', psi0, initial, psi0.conj(), optimize=True) * duration**2
+        lesser[0] = np.einsum('fpi,ij,fqj->fpq', psi0, initial.T, psi0.conj(), optimize=True) * duration**2
+        mean = np.zeros((nf, ports), complex)
+        response = np.zeros((nf, ports, inputs), complex)
+
+        n2 = self.n * self.n
+        for idx in range(len(self.times_s) - 1):
+            lo, hi = float(self.times_s[idx]), float(self.times_s[idx + 1])
+            adj_ode = adjoint_odes[idx]
+            fwd_ode = self._solutions[idx]
+            knots = np.union1d(adj_ode.t, fwd_ode.t)
+            s_q, w_q = _panel_quadrature(lo, hi, knots, max_omega)
+            nq = len(s_q)
+            psi_q = adj_ode.sol(s_q).T.reshape(nq, nf, ports, m)
+            rho_q = fwd_ode.sol(s_q)[:n2].T.reshape(nq, self.n, self.n)
+
+            if ns > 1:
+                diff_q = np.einsum('rijab,tba->trij', self.jump_products, rho_q, optimize=True)
+                wpsi_conj = w_q[:, None, None, None] * psi_q.conj()
+                tmp_g = np.einsum('tfpi,trij->trfpj', psi_q, diff_q, optimize=True)
+                greater[1:] += np.einsum('trfpj,tfqj->rfpq', tmp_g, wpsi_conj, optimize=True) * duration**2
+                tmp_l = np.einsum('tfpi,trji->trfpj', psi_q, diff_q, optimize=True)
+                lesser[1:] += np.einsum('trfpj,tfqj->rfpq', tmp_l, wpsi_conj, optimize=True) * duration**2
+
+            exp_p = np.exp(1j * np.outer(s_q, omega))
+            ops_q = np.empty((nq, ports, self.n, self.n), complex)
+            for k, age in enumerate(s_q):
+                ops_k = readonly_array(readout_operators(float(age), self.path.position(float(age))))
+                if ops_k.ndim != 3 or ops_k.shape[1:] != (self.n, self.n) or len(ops_k) != ports:
+                    raise ValueError('readout port count changed along characteristic')
+                ops_q[k] = ops_k
+            tr_ops = np.einsum('qpab,qba->qp', ops_q, rho_q)
+            mean += np.einsum('q,qf,qp->fp', w_q, exp_p, tr_ops, optimize=True)
+
+            if inputs > 0:
+                v_q = np.empty((nq, inputs, self.n, self.n), complex)
+                for k, age in enumerate(s_q):
+                    v_k = drives(float(age))
+                    if len(v_k) != inputs:
+                        raise ValueError('drive column count changed along characteristic')
+                    v_q[k] = v_k
+                comm_q = -1j * (np.einsum('qkac,qcb->qkab', v_q, rho_q)
+                                - np.einsum('qac,qkcb->qkab', rho_q, v_q))
+                b_q = np.einsum('iab,qkba->qik', self.operators, comm_q)
+                response += np.einsum('q,qf,qfpi,qik->fpk', w_q, exp_p.conj(), psi_q, b_q, optimize=True) * duration
+
+        # Adjoint Gram quadrature computes the full double-time kernel at the
+        # ODE tolerance with manifest PSD: no sampled double integral or diagonal shortcut.
         audit = {name: _psd(value, rtol=1e-8) for name, value in (('greater', greater), ('lesser', lesser))}
         audit['passed'] = all(row['passed'] for row in audit.values())
         if not audit['passed']:
