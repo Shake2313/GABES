@@ -7758,11 +7758,10 @@
       "title": "⟦AI⟧ Floquet ±h 공액 대칭 복원 및 longitudinal pole_doppler 속도 소거(Trick D)",
       "origin": "ai_review_of_external_feedback",
       "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
-      "status": "in_progress",
+      "status": "done",
       "priority": "P1",
       "effort": "medium",
       "owner": "Gemini (core.floquet_solve_truncated, Claude review); Codex FWM (schemes/fwm/longitudinal.py)",
-      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
       "problem": "⟦AI⟧ core.floquet_solve_truncated는 임의 n_f 일반화 시 ±h 전치-공액 대칭(Q[-h]=P conj(R[+h]) P)을 생략해 양방향 연분수를 모두 계산한다(에르미트 구동에서 1.75–2.24x, max abs err 7.13e-15). 또한 schemes/fwm/longitudinal.py의 _local은 공간 노드마다 945개 속도를 Python MCF로 직렬 풀이하며, 기존 pole_doppler.floquet_real_form + AffineShiftSystem(|R|=56) 적용 시 단건 노드 945속도에서 cold 231.7 ms(JIT 포함) / warm 2.21 ms vs direct 63.5–86.8 ms(rel err 1.37e-13)를 확인했다.",
       "acceptance_criteria": [
         "⟦AI⟧ Substep D1 (core.floquet_solve_truncated): L0, S_v의 P-공액 불변성과 Cm == P conj(Cp) P를 모두 검사하는 정확 에르미트 가드를 두고, 미충족 일반 호출부는 기존 양방향 연분수 경로를 유지한다.",
@@ -7774,16 +7773,21 @@
         "runs/gemini_math_opt_review_20261126/verify_deep_tricks.py",
         "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
         "runs/agent_hub/20261126-1859_claude-to-all_re-deep-math-wave2-and-delegation.md",
-        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md",
+        "runs/gemini_d2_schur_diag_20261127/README.md",
+        "runs/gemini_d2_schur_impl_20261127/README.md",
+        "runs/agent_hub/20261127-1125_gemini-to-all_d2-schur-dyadic-basis-fix.md",
+        "runs/agent_hub/20261127-1136_claude-to-all_d2-signoff.md"
       ],
-      "last_reviewed_at": "2026-11-26",
+      "last_reviewed_at": "2026-11-27",
       "related_items": [
         "shared-small-cache-and-loop-reuse",
         "fwm-propagation-cache-partition",
         "fwm-option-a-and-loss-ledger"
       ],
       "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: keep shared-small-cache-and-loop-reuse and fwm-propagation-cache-partition parked (profile-gated); D2 longitudinal pole reduction directly benefits fwm-option-a-and-loss-ledger.",
-      "implementation_d1_2026_11_26": "⟦AI⟧ Substep D1 landed locally by Gemini in ed1bb7f and signed off by Claude (20261126-2211): gabes/core.py (_is_conjugate_symmetric_floquet exact zero-tolerance raw-vec guard + positive-chain-only continued fraction + rho[-h]=rho[+h]^H reconstruction, unchanged dual-chain fallback on any 1-ULP defect or non-finite input) and tests/test_floquet_symmetry.py. Caller snapshots (91 entries: direct n=2..4, dressed_cell, longitudinal, periodic, FWMScheme): max rel diff 8.19e-15, broken-symmetry fallback bit-identical, FWMScheme readouts identical, 1.50-1.73x direct / 1.61x longitudinal. Tests: 132 passed (incl. baseline_focused.npz), 50 passed / 4 skipped Numba off. Handed over to Codex FWM for Substep D2 (schemes/fwm/longitudinal.py)."
+      "implementation_d1_2026_11_26": "⟦AI⟧ Substep D1 landed locally by Gemini in ed1bb7f and signed off by Claude (20261126-2211): gabes/core.py (_is_conjugate_symmetric_floquet exact zero-tolerance raw-vec guard + positive-chain-only continued fraction + rho[-h]=rho[+h]^H reconstruction, unchanged dual-chain fallback on any 1-ULP defect or non-finite input) and tests/test_floquet_symmetry.py. Caller snapshots (91 entries: direct n=2..4, dressed_cell, longitudinal, periodic, FWMScheme): max rel diff 8.19e-15, broken-symmetry fallback bit-identical, FWMScheme readouts identical, 1.50-1.73x direct / 1.61x longitudinal. Tests: 132 passed (incl. baseline_focused.npz), 50 passed / 4 skipped Numba off. Handed over to Codex FWM for Substep D2 (schemes/fwm/longitudinal.py).",
+      "implementation_d2_2026_11_27": "⟦AI⟧ Substep D2 landed locally by Gemini in 32ecc04 and signed off by Claude (20261127-1136; one-item exception to FWM lane, longitudinal.py and pole_doppler.py returned to owners): gabes/pole_doppler.py (additive dyadic_hermitian_basis(n) with exact power-of-2 entries {0,+-1,+-0.5,+-1j,+-0.5j} eliminating 1/sqrt(2) Liouvillian rounding + RefinedAffineSchur with trace-row scaling, LU, complex Schur, refine=1, @kernels.njit(cache=True) and NumPy/SciPy fallback; core.hermitian_basis untouched), gabes/schemes/fwm/longitudinal.py (LongitudinalSeededMedium velocity_solver='schur'|'direct' default 'schur' with Codex harmonic equilibration, spot-check guard, and direct D1 fallback), and tests/test_fwm_longitudinal.py. Verified <= 5.39e-14 across Gold, Kim probe, and Kim conjugate at 12 and 24 segments (noise_ledger=True; noise_diffusion <= 8.82e-16, photon_balance abs <= 1.40e-15; 2.96-3.78x faster vs D1; cold JIT 0.43-0.47 s, warm 0.21-0.30 s, per-node 11.9-16.5 ms; fallbacks 12-seg 7/26/10, 24-seg 0/53/21). Tests: 91 passed (Numba ON, incl. tests/baseline_focused.npz), 29 passed / 1 skipped (Numba OFF)."
     },
     {
       "id": "periodic-floquet-schur-resolvent",
