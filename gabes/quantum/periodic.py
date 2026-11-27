@@ -6,9 +6,11 @@ This is an atomic second-moment model, not a finite-seed field squeezing solver.
 """
 
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.linalg import schur, solve_triangular
 
 from .. import core
 from .contracts import GeneratorFrequencyAxis, readonly_array
@@ -50,6 +52,97 @@ def _psd(matrices, rtol=1e-9):
             "minimum_eigenvalue": float(np.min(minimum)),
             "minimum_relative_eigenvalue": float(np.min(minimum/scale)),
             "maximum_hermiticity_relative_error": float(np.max(herm))}
+
+
+class _FloquetResolvent:
+    """One complex Schur basis for the full or left-projected resolvent."""
+
+    def __init__(self, drift, use_schur):
+        self.drift = drift
+        self.diagonal = np.diag_indices_from(drift)
+        self.identity = np.eye(len(drift))
+        self.factor = None
+        if use_schur:
+            try:
+                self.factor = schur(drift, output="complex", check_finite=False)
+            except np.linalg.LinAlgError:
+                pass
+        if self.factor is not None:
+            self.triangle, self.basis = self.factor
+            self.basis_h = self.basis.conj().T
+            self.poles = self.triangle.diagonal().copy()
+            diagonal = self.drift.diagonal()
+            row_norm = abs(self.drift).sum(axis=1)
+            self.scale = np.max(row_norm)
+            self.off_diagonal_row_norm = row_norm-abs(diagonal)
+
+    def eigenvalues(self):
+        if self.factor is not None:
+            # Use the reference stability test when the sign is unresolved at
+            # the scale of the Schur factorization error.
+            if abs(np.max(self.poles.real)) > np.sqrt(np.finfo(float).eps)*self.scale:
+                return self.poles
+        return np.linalg.eigvals(self.drift)
+
+    def _solve(self, omega, triangle, projection, projected_basis):
+        if self.factor is not None:
+            # Small spectral gaps can amplify backward error in the Schur
+            # factors. Keep the original LU at extremely narrow resonances.
+            gap = np.min(abs(-1j*omega-self.poles))
+            scale = max(self.scale, abs(omega))
+            if gap > np.sqrt(np.finfo(float).eps)*scale:
+                triangle[self.diagonal] = -self.poles-1j*omega
+                projected = projection is not None
+
+                def triangular_solve(rhs):
+                    if projected:
+                        return solve_triangular(triangle.T, rhs.T, lower=True,
+                                                check_finite=False).T @ self.basis_h
+                    return self.basis @ solve_triangular(triangle, rhs, check_finite=False)
+
+                rhs = projected_basis if projected else self.basis_h
+                value = triangular_solve(rhs)
+                # Refine in physical coordinates where cancellation against
+                # the lab frequency occurs, using the same triangular factors.
+                eps = np.finfo(float).eps
+                rhs_scale = np.max(abs(projection)) if projected else 1.
+                parity_budget = (1e-12/(4*eps))*rhs_scale
+                near_resonance = gap < (32*eps/1e-12)*scale
+                # A nonnormal lift can amplify the solve even far from all
+                # eigenvalues. Use a cheap upper bound for |value||matrix|
+                # (or the reverse product in the full solve) at every shift.
+                if not near_resonance:
+                    matrix_norm = np.max(
+                        self.off_diagonal_row_norm+abs(-1j*omega-self.drift.diagonal()))
+                    product_bound = np.max(abs(value).sum(axis=1))*matrix_norm
+                    if product_bound <= parity_budget and np.isfinite(value).all():
+                        return value
+
+                matrix = -1j*omega*self.identity-self.drift
+                product_scale = np.max(abs(value)@abs(matrix) if projected
+                                       else abs(matrix)@abs(value))
+                # The residual cannot reliably resolve a more strongly
+                # cancelling product. Replay it with the original LU.
+                if product_scale <= parity_budget:
+                    if projected:
+                        defect = projection-value@matrix
+                        value += triangular_solve(defect@self.basis)
+                    else:
+                        defect = self.identity-matrix@value
+                        value += triangular_solve(self.basis_h@defect)
+                    if np.isfinite(value).all():
+                        return value
+        matrix = -1j*omega*self.identity-self.drift
+        if projection is None:
+            return np.linalg.solve(matrix, self.identity)
+        return np.linalg.solve(matrix.T, projection.T).T
+
+    def sweep(self, omega, projection=None):
+        projected_basis = (projection@self.basis
+                           if projection is not None and self.factor is not None else None)
+        triangle = -self.triangle if self.factor is not None else None
+        for w in omega:
+            yield self._solve(w, triangle, projection, projected_basis)
 
 
 @dataclass(frozen=True)
@@ -97,12 +190,29 @@ class FloquetAtomicLift:
         for key in ("harmonics", "drift", "greater_by_reservoir", "lesser_by_reservoir"):
             object.__setattr__(self, key, readonly_array(getattr(self, key), real=key == "harmonics"))
 
-    def audit(self):
+    @cached_property
+    def _schur_resolvent(self):
+        return _FloquetResolvent(self.drift, use_schur=True)
+
+    @cached_property
+    def _drift_audit(self):
+        resolvent = self.__dict__.get("_schur_resolvent")
+        eigenvalues = (resolvent.eigenvalues() if resolvent is not None
+                       else np.linalg.eigvals(self.drift))
         result = {"greater": _psd(self.greater_by_reservoir), "lesser": _psd(self.lesser_by_reservoir),
-                  "maximum_drift_real_eigenvalue": float(np.max(np.linalg.eigvals(self.drift).real))}
+                  "maximum_drift_real_eigenvalue": float(np.max(eigenvalues.real))}
         result["passed"] = bool(result["greater"]["passed"] and result["lesser"]["passed"]
                                  and result["maximum_drift_real_eigenvalue"] < 0)
         return result
+
+    def audit(self):
+        """Check ordered diffusion and drift stability of the immutable lift.
+
+        The spectral abscissa can differ by roundoff if Schur factors were
+        already computed. Near zero the audit uses the direct eigensolve.
+        """
+        result = self._drift_audit
+        return dict(result, greater=dict(result["greater"]), lesser=dict(result["lesser"]))
 
     def spectrum(self, frequency_axis):
         """R D R†, with R=(-i omega - A_lift)^-1; units seconds.
@@ -115,19 +225,20 @@ class FloquetAtomicLift:
         omega = frequency_axis.omega_rad_s
         if np.any(omega < -abs(self.beat_rad_s)/2) or np.any(omega >= abs(self.beat_rad_s)/2):
             raise ValueError("base frequencies must lie in [-abs(nu)/2, abs(nu)/2)")
-        if not self.audit()["passed"]:
-            raise ValueError("unstable or nonpositive finite Floquet lift")
-        d = [self.greater_by_reservoir.sum(axis=0), self.lesser_by_reservoir.sum(axis=0)]
-        result = [[], []]
-        eye = np.eye(len(self.drift))
-        for w in omega:
-            r = np.linalg.solve(-1j*w*eye-self.drift, eye)
-            for out, diffusion in zip(result, d):
-                out.append(r@diffusion@r.conj().T)
-        spectrum = FloquetAtomicSpectrum(frequency_axis, self.harmonics, *result, self.operator_count)
-        if not spectrum.audit()["passed"]:
-            raise ValueError("Floquet atomic spectrum failed positivity; no clipping")
-        return spectrum
+        with core.blas_single_thread():
+            resolvent = (self._schur_resolvent if len(omega) >= 4
+                         else _FloquetResolvent(self.drift, use_schur=False))
+            if not self.audit()["passed"]:
+                raise ValueError("unstable or nonpositive finite Floquet lift")
+            d = [self.greater_by_reservoir.sum(axis=0), self.lesser_by_reservoir.sum(axis=0)]
+            result = [[], []]
+            for r in resolvent.sweep(omega):
+                for out, diffusion in zip(result, d):
+                    out.append(r@diffusion@r.conj().T)
+            spectrum = FloquetAtomicSpectrum(frequency_axis, self.harmonics, *result, self.operator_count)
+            if not spectrum.audit()["passed"]:
+                raise ValueError("Floquet atomic spectrum failed positivity; no clipping")
+            return spectrum
 
 
 @dataclass(frozen=True)
@@ -157,7 +268,7 @@ class PeriodicAtomicNoise:
                 "drift": _series(self.drift_harmonics, phases),
                 "diffusion_by_reservoir": np.stack([_series(d, phases) for d in self.diffusion_harmonics_by_reservoir])}
 
-    def lift(self, response_order):
+    def lift(self, response_order, *, _use_schur=False):
         order = _order(response_order, "response_order")
         harmonics = np.arange(-order, order+1)
         m = len(self.operators)
@@ -167,6 +278,8 @@ class PeriodicAtomicNoise:
         lesser = np.array([_toeplitz(d.swapaxes(-1, -2), harmonics) for d in self.diffusion_harmonics_by_reservoir])
         result = FloquetAtomicLift(self.beat_rad_s, harmonics, drift, greater, lesser,
                                   tuple(j.name for j in self.reservoirs.channels), m)
+        if _use_schur:
+            result._schur_resolvent
         if not result.audit()["passed"]:
             raise ValueError("finite Floquet lift failed stability or diffusion positivity")
         return result

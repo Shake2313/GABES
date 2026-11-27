@@ -10,9 +10,10 @@ from dataclasses import dataclass
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from .. import core
 from .channels import GaussianChannel
 from .contracts import GeneratorFrequencyAxis, readonly_array
-from .periodic import PeriodicAtomicNoise
+from .periodic import PeriodicAtomicNoise, _FloquetResolvent
 from .traveling import LocalNambuGenerator, NambuTransfer, _same_coordinates
 
 
@@ -45,7 +46,7 @@ class PeriodicFieldPorts:
                 tuple(s+suffix for suffix in (":a", ":adag") for s in self.mode_labels))
 
 
-def periodic_field_couplings(atom, ports, *, response_order):
+def periodic_field_couplings(atom, ports, *, response_order, _use_schur=False):
     """Independent density-operator driving B and Maxwell readout C0.
 
     B_(h,i)=-i*g_i*Tr(F [O_i†,rho_(h-h_i)]); C0 reads atomic harmonic h_i.
@@ -55,7 +56,7 @@ def periodic_field_couplings(atom, ports, *, response_order):
         raise TypeError("validated periodic atom and explicit optical ports required")
     if ports.lowering_operators.shape[1:] != atom.state_harmonics.shape[1:]:
         raise ValueError("atomic dimensions must match")
-    lift = atom.lift(response_order)
+    lift = atom.lift(response_order, _use_schur=_use_schur)
     hs, ops, g, signs, labels = ports.nambu_coordinates()
     if np.any(abs(hs) > response_order):
         raise ValueError("response ladder must contain every optical carrier harmonic")
@@ -75,6 +76,22 @@ def periodic_field_couplings(atom, ports, *, response_order):
     return lift, b, c0, signs, labels
 
 
+def _project_diffusion(cr, diffusion):
+    """Batch rows by frequency so all ports reuse each reservoir matrix."""
+    count, n_ports, n_atomic = cr.shape
+    result = np.empty((len(diffusion), count, n_ports, n_ports), dtype=cr.dtype)
+    # Bound the temporary atomic-width product on long RF grids.
+    bytes_per_frequency = diffusion.shape[0]*n_ports*n_atomic*cr.itemsize
+    batch_size = max(1, (16*1024**2)//bytes_per_frequency)
+    for start in range(0, count, batch_size):
+        chunk = slice(start, start+batch_size)
+        block = cr[chunk]
+        left = (block.reshape(-1, n_atomic) @ diffusion).reshape(
+            len(diffusion), len(block), n_ports, n_atomic)
+        result[:, chunk] = left @ block.conj().swapaxes(-1, -2)
+    return result
+
+
 def eliminate_periodic_atom(atom, ports, frequency_axis, *, response_order, linear_density_m_inverse):
     """Return photon-flux local M and both ordered D, all in m^-1."""
     if not isinstance(atom, PeriodicAtomicNoise) or not isinstance(ports, PeriodicFieldPorts):
@@ -86,16 +103,20 @@ def eliminate_periodic_atom(atom, ports, frequency_axis, *, response_order, line
         raise ValueError("finite nonnegative linear density required")
     if np.any(abs(frequency_axis.omega_rad_s) >= abs(atom.beat_rad_s)/2):
         raise ValueError("quasifrequencies must be strictly inside one Floquet zone")
-    lift, b, c0, signs, labels = periodic_field_couplings(atom, ports, response_order=response_order)
-    drift, greater, lesser = [], [], []
-    eye = np.eye(len(lift.drift))
-    for w in frequency_axis.omega_rad_s:
-        cr = np.linalg.solve((-1j*w*eye-lift.drift).T, c0.T).T
-        drift.append(density*cr@b)
-        greater.append(density*(cr@lift.greater_by_reservoir@cr.conj().T))
-        lesser.append(density*(cr@lift.lesser_by_reservoir@cr.conj().T))
-    result = LocalNambuGenerator(frequency_axis, signs, labels, drift,
-        np.swapaxes(greater, 0, 1), np.swapaxes(lesser, 0, 1), lift.reservoir_names)
+    omega = frequency_axis.omega_rad_s
+    # A short sweep does not amortize the Schur factor for a thin projection.
+    use_schur = len(omega) >= 25
+    with core.blas_single_thread():
+        lift, b, c0, signs, labels = periodic_field_couplings(
+            atom, ports, response_order=response_order, _use_schur=use_schur)
+        resolvent = (lift._schur_resolvent if use_schur
+                     else _FloquetResolvent(lift.drift, use_schur=False))
+        cr = np.array(list(resolvent.sweep(omega, projection=c0)))
+        drift = density*cr @ b
+        greater = density*_project_diffusion(cr, lift.greater_by_reservoir)
+        lesser = density*_project_diffusion(cr, lift.lesser_by_reservoir)
+    result = LocalNambuGenerator(frequency_axis, signs, labels, drift, greater, lesser,
+                                 lift.reservoir_names)
     if not result.audit()['passed']:
         raise ValueError(f'periodic field commutator/PSD failed; no noise repair: {result.audit()}')
     return result
