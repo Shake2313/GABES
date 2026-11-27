@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from scipy.integrate import solve_ivp
 
-from gabes import constants, hyperfine, linear_hyperfine
+from gabes import constants, hyperfine, linear_hyperfine, pole_doppler
 from gabes.schemes import fwm
 from gabes.schemes.fwm.longitudinal import LongitudinalSeededInputs, LongitudinalSeededMedium
 
@@ -97,3 +97,63 @@ def test_zero_coupling_leaves_all_three_input_carriers_unchanged():
                                   np.tile(solution["envelope_sqrt_W"][0], (3, 1)))
     assert not np.any(solution["cumulative_photon_sinks_s_inverse"])
     assert not np.any(solution["photon_balance_relative"])
+
+
+def test_dyadic_hermitian_basis_is_exact_power_of_two_and_read_only():
+    allowed = {0.0, 1.0, -1.0, 0.5, -0.5}
+    for n in (2, 4):
+        u, u_inv = pole_doppler.dyadic_hermitian_basis(n)
+        assert not u.flags.writeable and not u_inv.flags.writeable
+        np.testing.assert_array_equal(u_inv @ u, np.eye(n * n, dtype=complex))
+        assert set(u.real.ravel()).issubset(allowed)
+        assert set(u.imag.ravel()).issubset(allowed)
+        assert set(u_inv.real.ravel()).issubset(allowed)
+        assert set(u_inv.imag.ravel()).issubset(allowed)
+    with pytest.raises(ValueError):
+        pole_doppler.dyadic_hermitian_basis(0)
+
+
+def test_schur_velocity_solver_matches_direct_d1_and_handles_fallback(monkeypatch):
+    inputs = LongitudinalSeededInputs(
+        D_GHz=0.9, delta_mhz=-8.0, T=362.15, L=0.0004, P_pump=0.12,
+        P_probe=8e-6, w_pump=950e-6, w_probe=300e-6, w_conj=400e-6,
+        angle_deg=0.32, transit_rate=constants.GAMMA_GG, coupling_residual=1.0,
+    )
+    med_schur = LongitudinalSeededMedium(
+        inputs, velocity_step=25.0, velocity_cutoff=3.0,
+        transverse_order=2, floquet_order=3, velocity_solver="schur",
+    )
+    med_direct = LongitudinalSeededMedium(
+        inputs, velocity_step=25.0, velocity_cutoff=3.0,
+        transverse_order=2, floquet_order=3, velocity_solver="direct",
+    )
+    out_schur = med_schur.propagate(4, noise_ledger=True)
+    out_direct = med_direct.propagate(4, noise_ledger=True)
+    assert med_schur._schur_batches > 0
+    assert med_schur._schur_fallback_nodes == 0
+    np.testing.assert_allclose(out_schur["envelope_sqrt_W"], out_direct["envelope_sqrt_W"],
+                               rtol=1e-12, atol=1e-15)
+    assert out_schur["probe_gain"] == pytest.approx(out_direct["probe_gain"], rel=1e-12)
+    assert out_schur["conjugate_gain"] == pytest.approx(out_direct["conjugate_gain"], rel=1e-12)
+    np.testing.assert_allclose(
+        out_schur["noise_ledger"]["ordered_atomic_diffusion_s_inverse"],
+        out_direct["noise_ledger"]["ordered_atomic_diffusion_s_inverse"],
+        rtol=1e-12, atol=1e-15,
+    )
+
+    # Forced Schur failure must fall back cleanly to D1 bit-identically.
+    def _boom(*args, **kwargs):
+        raise np.linalg.LinAlgError("forced fallback")
+
+    monkeypatch.setattr(pole_doppler, "RefinedAffineSchur", _boom)
+    med_fb = LongitudinalSeededMedium(
+        inputs, velocity_step=25.0, velocity_cutoff=3.0,
+        transverse_order=2, floquet_order=3, velocity_solver="schur",
+    )
+    out_fb = med_fb.propagate(2, noise_ledger=False)
+    out_d2 = med_direct.propagate(2, noise_ledger=False)
+    assert med_fb._schur_fallback_nodes > 0
+    np.testing.assert_array_equal(out_fb["envelope_sqrt_W"], out_d2["envelope_sqrt_W"])
+
+    with pytest.raises(ValueError):
+        LongitudinalSeededMedium(inputs, velocity_solver="unknown")

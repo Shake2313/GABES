@@ -32,12 +32,14 @@ eliminating the S-null block, for systems where that block alone is singular.
 :func:`floquet_real_form` builds the real system for a finite-Floquet steady
 state whose couplings are adjoint partners.
 """
+import functools
 import math
 import os
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
 import numpy as np
+from scipy.linalg import lu_factor, lu_solve, schur as _scipy_schur, solve_triangular
 
 from . import core, doppler, kernels
 
@@ -473,3 +475,173 @@ def floquet_real_form(L, L_t, Cp, S, n_f, omega, omega_t, n_levels, readouts):
         if harmonic > 0:
             W[r, b(harmonic):b(harmonic) + M] = 1j * weight
     return A00, A01, S_ext, rhs, W
+
+
+@functools.lru_cache(maxsize=16)
+def dyadic_hermitian_basis(n):
+    """Exact power-of-two real Hermitian basis ``(U, U_inv)`` for ``n x n`` operators.
+
+    Unlike :func:`core.hermitian_basis`, every entry lies strictly in
+    ``{0, +-1, +-0.5, +-1j, +-0.5j}`` (exact IEEE-754 binary dyadic rationals),
+    eliminating ``1/sqrt(2)`` rounding when transforming stiff Liouvillians into
+    real Floquet coordinates. ``U_inv @ U == I`` bit-identically.
+    """
+    n = int(n)
+    if n < 1:
+        raise ValueError("n must be at least 1")
+    M = n * n
+    U = np.zeros((M, M), dtype=np.complex128)
+    U_inv = np.zeros((M, M), dtype=np.complex128)
+    col = 0
+    for s in range(n):
+        idx = s * n + s
+        U[idx, col] = 1.0
+        U_inv[col, idx] = 1.0
+        col += 1
+    for i in range(n):
+        for j in range(i + 1, n):
+            ij, ji = i * n + j, j * n + i
+            U[ij, col] = 1.0
+            U[ji, col] = 1.0
+            U_inv[col, ij] = 0.5
+            U_inv[col, ji] = 0.5
+            col += 1
+            U[ij, col] = 1j
+            U[ji, col] = -1j
+            U_inv[col, ij] = -0.5j
+            U_inv[col, ji] = 0.5j
+            col += 1
+    U.setflags(write=False)
+    U_inv.setflags(write=False)
+    return U, U_inv
+
+
+@kernels.njit(cache=True)
+def _schur_back_sub(T, shift, rhs, out):
+    """Solve ``(T - shift*I) out = rhs`` for upper-triangular complex ``T``."""
+    n = rhs.shape[0]
+    for i in range(n - 1, -1, -1):
+        val = rhs[i]
+        for k in range(i + 1, n):
+            val -= T[i, k] * out[k]
+        out[i] = val / (T[i, i] - shift)
+
+
+@kernels.njit(cache=True)
+def _schur_refined_average_nb(T, Q, QT, NN_inv, NR, RN, RR, NN, S_RR, S_inv,
+                              b_N, b_R, F, y, detunings, weights, refine):
+    """Weighted average of ``(A - D*S) x = b`` via complex Schur + residual refinement."""
+    avgR = np.zeros(b_R.shape[0], dtype=np.float64)
+    avgN = np.zeros(b_N.shape[0], dtype=np.float64)
+    rhs = (S_inv @ (b_R - RN @ y)).astype(np.complex128)
+    schur_rhs = QT @ rhs
+    x = np.empty(b_R.shape[0], dtype=np.complex128)
+    for k in range(detunings.shape[0]):
+        dk = detunings[k]
+        _schur_back_sub(T, dk, schur_rhs, x)
+        r = (Q @ x).real.copy()
+        z = y - F @ r
+        for _ in range(refine):
+            dN = NN_inv @ (b_N - NN @ z - NR @ r)
+            dR = b_R - RN @ z - RR @ r + dk * (S_RR @ r)
+            drhs = (S_inv @ (dR - RN @ dN)).astype(np.complex128)
+            _schur_back_sub(T, dk, QT @ drhs, x)
+            dr = (Q @ x).real.copy()
+            r += dr
+            z += dN - F @ dr
+        wk = weights[k]
+        avgR += wk * r
+        avgN += wk * z
+    return avgR, avgN
+
+
+def _schur_refined_average_np(T, Q, QT, NN_inv, NR, RN, RR, NN, S_RR, S_inv,
+                              b_N, b_R, F, y, detunings, weights, refine):
+    """NumPy/SciPy fallback for :func:`_schur_refined_average_nb`."""
+    avgR = np.zeros(b_R.shape[0], dtype=np.float64)
+    avgN = np.zeros(b_N.shape[0], dtype=np.float64)
+    rhs = (S_inv @ (b_R - RN @ y)).astype(np.complex128)
+    schur_rhs = QT @ rhs
+    n_r = T.shape[0]
+    diag_idx = np.arange(n_r)
+    T_work = T.copy()
+    T_diag = T.diagonal().copy()
+    for k in range(detunings.shape[0]):
+        dk = float(detunings[k])
+        T_work[diag_idx, diag_idx] = T_diag - dk
+        x = solve_triangular(T_work, schur_rhs, lower=False, check_finite=False)
+        r = (Q @ x).real.copy()
+        z = y - F @ r
+        for _ in range(refine):
+            dN = NN_inv @ (b_N - NN @ z - NR @ r)
+            dR = b_R - RN @ z - RR @ r + dk * (S_RR @ r)
+            drhs = (S_inv @ (dR - RN @ dN)).astype(np.complex128)
+            x = solve_triangular(T_work, QT @ drhs, lower=False, check_finite=False)
+            dr = (Q @ x).real.copy()
+            r += dr
+            z += dN - F @ dr
+        wk = float(weights[k])
+        avgR += wk * r
+        avgN += wk * z
+    return avgR, avgN
+
+
+class RefinedAffineSchur:
+    """Complex-Schur solver with residual refinement for ``(A - D*S) x = rhs``.
+
+    Eliminates the ``S``-null block once via LU, reduces the ``S``-range Schur
+    complement to upper-triangular complex Schur form ``Z = Q T Q^H``, and
+    averages over arbitrary real detuning nodes ``D`` with optional iterative
+    refinement in the full original equations.
+    """
+
+    def __init__(self, A, S, rhs, *, trace_scale=True):
+        A = np.array(A, dtype=np.float64, copy=True)
+        S = np.asarray(S, dtype=np.float64)
+        b = np.array(rhs, dtype=np.float64, copy=True)
+        if trace_scale and A.shape[0] > 1:
+            scale = max(float(np.max(np.abs(A[1:, :]))), 1.0)
+            A[0, :] *= scale
+            b[0] *= scale
+        R = np.any(S != 0.0, axis=0)
+        N = ~R
+        self._R = R
+        self._N = N
+        self._dim = b.shape[0]
+        take = lambda mat, r, c: np.ascontiguousarray(mat[np.ix_(r, c)])
+        NN = take(A, N, N)
+        NR = take(A, N, R)
+        RN = take(A, R, N)
+        RR = take(A, R, R)
+        S_RR = take(S, R, R)
+        lu_NN = lu_factor(NN)
+        F = np.ascontiguousarray(lu_solve(lu_NN, NR))
+        y = np.ascontiguousarray(lu_solve(lu_NN, b[N]))
+        NN_inv = np.ascontiguousarray(lu_solve(lu_NN, np.eye(NN.shape[0])))
+        S_inv = np.ascontiguousarray(np.linalg.inv(S_RR))
+        Z = S_inv @ (RR - RN @ F)
+        if not np.isfinite(Z).all():
+            raise np.linalg.LinAlgError("non-finite Schur complement")
+        T, Q = _scipy_schur(Z, output="complex", check_finite=False)
+        self.poles = np.diag(T).copy()
+        self._args = (
+            np.ascontiguousarray(T),
+            np.ascontiguousarray(Q),
+            np.ascontiguousarray(Q.conj().T),
+            NN_inv, NR, RN, RR, NN, S_RR, S_inv,
+            np.ascontiguousarray(b[N]),
+            np.ascontiguousarray(b[R]),
+            F, y,
+        )
+
+    def weighted_mean(self, detunings, weights, *, refine=1):
+        """Return ``sum_k weights[k] * x(detunings[k])`` in the full real coordinates."""
+        detunings = np.ascontiguousarray(detunings, dtype=np.float64)
+        weights = np.ascontiguousarray(weights, dtype=np.float64)
+        refine = int(refine)
+        fn = _schur_refined_average_nb if kernels.available() else _schur_refined_average_np
+        xr, xn = fn(*self._args, detunings, weights, refine)
+        x = np.empty(self._dim, dtype=np.float64)
+        x[self._R] = xr
+        x[self._N] = xn
+        return x

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ... import beam, constants, core, doppler, hyperfine, observables
+from ... import beam, constants, core, doppler, hyperfine, observables, pole_doppler
 from ...quantum.diffusion import ordered_jump_diffusion
 from ...quantum.reservoirs import CollapseChannel, ExplicitReservoirs, thermal_reset_channels
 from .common import (
@@ -60,13 +60,16 @@ class LongitudinalSeededMedium:
     """Reciprocal local drives and Maxwell projections for three optical modes."""
 
     def __init__(self, inputs, *, velocity_step=2.5, velocity_cutoff=6.0,
-                 transverse_order=3, floquet_order=3):
+                 transverse_order=3, floquet_order=3, velocity_solver="schur"):
         self.inputs = inputs
         if (int(transverse_order) != transverse_order or transverse_order < 1
                 or int(floquet_order) != floquet_order or floquet_order < 1
                 or not np.isfinite([velocity_step, velocity_cutoff]).all()
                 or min(velocity_step, velocity_cutoff) <= 0):
             raise ValueError("positive quadrature settings and integer Floquet order required")
+        if velocity_solver not in ("schur", "direct"):
+            raise ValueError("velocity_solver must be 'schur' or 'direct'")
+        self.velocity_solver = velocity_solver
         self.floquet_order = int(floquet_order)
         self.velocity_step = float(velocity_step)
         self.velocity_cutoff = float(velocity_cutoff)
@@ -112,6 +115,10 @@ class LongitudinalSeededMedium:
         xx, yy = np.meshgrid(x, y, indexing="ij")
         self.xy = np.column_stack([xx.ravel(), yy.ravel()])/np.sqrt(2)
         self.area_node_weights = np.tile((wt[:, None]*wy/np.pi).ravel()/3, 3)
+        self._dyadic_u, self._dyadic_u_inv = pole_doppler.dyadic_hermitian_basis(N_LEVELS)
+        self._dyadic_sv = (self._dyadic_u_inv @ self.atom.S_v @ self._dyadic_u).real
+        self._schur_batches = 0
+        self._schur_fallback_nodes = 0
 
     def _transverse(self, z):
         centers = (z - self.inputs.L/2)*self.slopes
@@ -126,16 +133,98 @@ class LongitudinalSeededMedium:
         profiles /= np.sqrt(weights @ profiles**2)
         return profiles, weights
 
-    def atomic_harmonics(self, rabi, *, dense=False):
-        """Physical pump frame. Probe and conjugate occupy harmonics ±1."""
+    def _atomic_system(self, rabi):
+        """Return ``(L0, C_plus, C_minus)`` for one local three-carrier drive."""
         pump, probe, conjugate = rabi
         pump_drive = 0.5*pump*self.lowering[0].conj().T
         h0 = self.zero_pump + pump_drive + pump_drive.conj().T
         h1 = 0.5*(probe*self.lowering[1].conj().T + conjugate.conjugate()*self.lowering[2])
+        return (core.build_liouvillian(h0, self.atom),
+                core.comm_super(h1),
+                core.comm_super(h1.conj().T))
+
+    def atomic_harmonics(self, rabi, *, dense=False):
+        """Physical pump frame. Probe and conjugate occupy harmonics ±1."""
+        l0, cp, cm = self._atomic_system(rabi)
         solve = core.floquet_solve_direct if dense else core.floquet_solve_truncated
-        return solve(core.build_liouvillian(h0, self.atom), core.comm_super(h1),
-                     core.comm_super(h1.conj().T), self.beat, self.deff, self.atom.S_v,
+        return solve(l0, cp, cm, self.beat, self.deff, self.atom.S_v,
                      N_LEVELS, self.floquet_order, return_harmonics=True)
+
+    def _decode_dyadic_harmonics(self, x):
+        nf = self.floquet_order
+        M = N_LEVELS * N_LEVELS
+        rho = np.empty((2 * nf + 1, N_LEVELS, N_LEVELS), dtype=complex)
+        rho[nf] = (self._dyadic_u @ x[:M]).reshape(N_LEVELS, N_LEVELS)
+        for h in range(1, nf + 1):
+            ah = x[(2 * h - 1) * M : (2 * h) * M]
+            bh = x[(2 * h) * M : (2 * h + 1) * M]
+            rh = (self._dyadic_u @ (ah + 1j * bh)).reshape(N_LEVELS, N_LEVELS)
+            rho[nf + h] = rh
+            rho[nf - h] = rh.conj().T
+        return rho
+
+    def _mean_atomic_harmonics(self, rabi):
+        """Maxwell-weighted Floquet harmonics using guarded dyadic Schur or direct D1."""
+        l0, cp, cm = self._atomic_system(rabi)
+        nf = self.floquet_order
+        if self.velocity_solver != "schur":
+            states = core.floquet_solve_truncated(
+                l0, cp, cm, self.beat, self.deff, self.atom.S_v,
+                N_LEVELS, nf, return_harmonics=True)
+            return np.einsum("v,vhij->hij", self.velocity_weights, states)
+
+        M = N_LEVELS * N_LEVELS
+        l_r = (self._dyadic_u_inv @ l0 @ self._dyadic_u).real
+        c_h = self._dyadic_u_inv @ cp @ self._dyadic_u
+        A, _, S, b, _ = pole_doppler.floquet_real_form(
+            l_r, np.zeros_like(l_r), c_h, self._dyadic_sv,
+            nf, self.beat, 0.0, N_LEVELS, ())
+        c_max = float(np.max(np.abs(c_h)))
+        if c_max > 0.0:
+            sc = min(1.0, c_max / max(abs(self.beat), 1e-30))
+            factors = np.repeat(np.r_[1.0, np.repeat(sc ** np.arange(1, nf + 1), 2)], M)
+            A = A * (factors[None, :] / factors[:, None])
+            b = b / factors
+        else:
+            factors = None
+
+        try:
+            solver = pole_doppler.RefinedAffineSchur(A, S, b, trace_scale=True)
+            poles = solver.poles
+            indices = np.unique(np.r_[
+                np.argmin(np.abs(poles[:, None] - self.deff), axis=1),
+                np.argmax(self.velocity_weights),
+            ])
+            points = self.deff[indices]
+            expected = core.floquet_solve_truncated(
+                l0, cp, cm, self.beat, points, self.atom.S_v,
+                N_LEVELS, nf, return_harmonics=True)
+
+            def _eval(d_arr, w_arr):
+                vec = solver.weighted_mean(d_arr, w_arr, refine=1)
+                if factors is not None:
+                    vec = vec * factors
+                return self._decode_dyadic_harmonics(vec)
+
+            actual = np.array([_eval(np.array([d]), np.array([1.0])) for d in points])
+            read = lambda mat: np.einsum("pij,vpji->vp", self.lowering, mat[:, [nf, nf + 1, nf - 1]])
+            expected_pol = read(expected)
+            scales = np.max(np.abs(expected), axis=(-2, -1), keepdims=True)
+            ok = (np.isfinite(actual).all()
+                  and np.all(np.abs(actual - expected) <= 1e-12 * scales)
+                  and np.all(np.abs(read(actual) - expected_pol) <= 1e-12 * np.abs(expected_pol)))
+            if ok:
+                mean_rho = _eval(self.deff, self.velocity_weights)
+                if np.isfinite(mean_rho).all():
+                    return mean_rho
+        except np.linalg.LinAlgError:
+            pass
+
+        self._schur_fallback_nodes += 1
+        states = core.floquet_solve_truncated(
+            l0, cp, cm, self.beat, self.deff, self.atom.S_v,
+            N_LEVELS, nf, return_harmonics=True)
+        return np.einsum("v,vhij->hij", self.velocity_weights, states)
 
     def _local(self, z, envelopes, *, noise_state=False):
         rate = np.zeros(3, complex)
@@ -143,6 +232,8 @@ class LongitudinalSeededMedium:
         states = np.zeros((3, 3, N_LEVELS, N_LEVELS), complex) if noise_state else None
         if self.density_coupled == 0:
             return rate, loss, states
+        if self.velocity_solver == "schur":
+            self._schur_batches += 1
         profiles, weights = self._transverse(z)
         # Put the vacuum loop phase on the conjugate. The local Hamiltonian
         # already sees the pump's accumulated material phase in its envelope.
@@ -151,8 +242,7 @@ class LongitudinalSeededMedium:
         for spatial, area in zip(profiles, weights):
             mode = spatial*phase
             rabi = self.rabi_per_sqrt_intensity * mode * envelopes
-            rho = np.einsum("v,vhij->hij", self.velocity_weights,
-                            self.atomic_harmonics(rabi))
+            rho = self._mean_atomic_harmonics(rabi)
             polarization = np.einsum("pij,pji->p", self.lowering, rho[[n, n+1, n-1]])
             rate += area * mode.conj() * polarization
             population = rho[n].diagonal().real
