@@ -7956,6 +7956,31 @@
         "single-pair-magneto-zero-transverse-singular-poles"
       ],
       "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: same Magneto pole family as single-pair-magneto-zero-transverse-singular-poles (distinct single-pair Delta_eff vs multilevel B_z solver); both stay P3 parked outside OD/FWM focus."
+    },
+    {
+      "id": "od-rb85-d1-ballistic-multiwaist-fast-and-threading",
+      "area": "gabes/ballistic_spectrum.py · gabes/_ballistic_reference_table.py · gabes/data/rb85_d1_ballistic_multiwaist_v1.npz",
+      "title": "⟦AI⟧ 순수 ⁸⁵Rb D1 다중 빔크기 플루언스 Fast 테이블(fast_v3) 및 컨테이너 인식 멀티스레드",
+      "origin": "user_request",
+      "user_request": "2026-11-27 14:56 KST (Gemini chat): \"beam-crossing history(Fast)에서 진행했고, 생각해보니까 0.53이 맞네요. 제가 빔 직경 1.06으로 잘못 넣음. 근데 실제로 정확히 저 빔 크기에서만 측정하는 건 아니니까, 플루언스 좌표 다중 빔크기 Fast 테이블을 적용하는 게 유리할 것 같습니다. 멀티스레드/병렬화도 당연히 적용해주세요. 다만 Streamlit Community Cloud 환경에서도 여전히 유리하게 작동해야 합니다.\"",
+      "status": "done",
+      "priority": "P1",
+      "effort": "medium",
+      "owner": "Gemini (implementation); Claude & Codex OD (review)",
+      "implementation_part_a_2026_11_27": "⟦AI⟧ Part A landed locally in c786a52: container-aware _ballistic_worker_count() (min of os.cpu_count, sched_getaffinity, Linux cgroup v2 cpu.max, GABES_BALLISTIC_WORKERS) with single lazy process-wide ThreadPoolExecutor in _thermal_table (serial on 1 vCPU or NUMBA_AVAILABLE=False; source_signature untouched). w=1.06 mm 12-row scaling: 1w 25.18s -> 2w 15.89s (1.58x) -> 4w 8.66s (2.91x) -> 12w 3.40s (7.10x), bit-identical.",
+      "implementation_part_b_2026_11_27": "⟦AI⟧ Part B landed locally in b9f92aa and signed off by Claude (20261127-1545): companion table gabes/data/rb85_d1_ballistic_multiwaist_v1.npz (969.8 KB compressed, 1.1 MB RAM; 4 log-spaced waists [0.265, 0.53, 1.06, 2.12] mm x 7 temperatures [95..107] C x 18 exact fluence knots; zero Phi interpolation, zero extrapolation; P_cap(w) = 160 uW * w/0.53 mm matching v2 at 0.53 mm). Preserves fast_v1 and fast_v2 (0.53 mm only) recorded CSV replay contracts; live Fast ID is fast_v3. 40 held-out cases (w in {0.35, 0.75, 1.50, 2.00} mm, T in {96, 98, 104} C, 1 uW to 95% P_cap): worst dT=6.81e-5, worst dOD=5.38e-5 (frozen <=2e-4 gate); 0.53 mm seam <=2.28e-7; 1-vCPU Streamlit Cloud timing at w=1.06 mm (2,001 pts): 13.3 ms cold / 12.9 ms warm (~1,800x vs 23.83 s). Tests: PYTHONUTF8=1 pytest -n 4 --dist loadgroup -> 153 passed (incl. test_repo_size_guard.py).",
+      "related_items": [
+        "od-rb-ballistic-fast-multi-geometry-table"
+      ],
+      "local_evidence": [
+        "runs/gemini_multiwaist_pilot_20261127/CRITERIA.md",
+        "runs/gemini_multiwaist_pilot_20261127/README.md",
+        "runs/gemini_multiwaist_pilot_20261127/criteria_verification.json",
+        "runs/gemini_multiwaist_pilot_20261127/high_power_verification.json",
+        "runs/agent_hub/20261127-1510_claude-to-gemini_ballistic-multiwaist-approval.md",
+        "runs/agent_hub/20261127-1545_claude-to-gemini_ballistic-part-b-signoff.md"
+      ],
+      "last_reviewed_at": "2026-11-27"
     }
   ],
   "_daily_report_sync_history": [
