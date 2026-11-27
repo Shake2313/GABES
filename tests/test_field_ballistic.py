@@ -260,19 +260,23 @@ def test_d2_refined_a1_crossing_matches_direct_schur(monkeypatch):
         patch.setattr(_field_sdirk, "_neumann", direct)
         patch.setattr(_field_sdirk, "fixed_steps", partial(fixed, neumann=True))
         expected = atom.cross_sections(*args, grid=grid)
+    with monkeypatch.context() as patch:
+        patch.setattr(_field_sdirk, "fixed_steps", partial(fixed, neumann=False))
+        corrected = atom.cross_sections(*args, grid=grid)
+    np.testing.assert_allclose(corrected, expected, rtol=1e-12, atol=0.)
+
     def unexpected(*args):
-        pytest.fail("D2 default should evaluate the corrected reference")
+        pytest.fail("Eligible D2 crossing should use Neumann without the eigenbasis")
 
     with monkeypatch.context() as patch:
-        patch.setattr(_field_sdirk, "_iterative_stage", unexpected)
+        patch.setattr(_field_sdirk, "_eigen_blocks", unexpected)
         actual = atom.cross_sections(*args, grid=grid)
-    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=0.)
+    np.testing.assert_allclose(actual, corrected, rtol=1e-12, atol=0.)
 
     solve = _field_sdirk._neumann
     monkeypatch.setattr(_field_sdirk, "_neumann", partial(solve, max_updates=0))
-    monkeypatch.setattr(_field_sdirk, "fixed_steps", partial(fixed, neumann=True))
     replay = atom.cross_sections(*args, grid=grid)
-    np.testing.assert_array_equal(replay, actual)
+    np.testing.assert_array_equal(replay, corrected)
 
 
 def test_refined_eigen_stage_checks_residual_after_correction(monkeypatch):

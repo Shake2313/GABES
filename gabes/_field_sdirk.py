@@ -234,13 +234,11 @@ def _refined_eigen_stage(roots, p, operator, stage_rhs, modal_rhs, eigen):
 
 
 def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpoint, check, *,
-                neumann=None):
+                neumann=True):
     """Eliminate gg/ee from both stages, with the original time and flux weights.
 
     Return None to request a retry with the original solver.
     """
-    if neumann is None:
-        neumann = model.line == "D1"
     nb = len(first)
     count = len(roots)
     first = np.repeat(first, count, axis=0)
