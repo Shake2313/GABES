@@ -7857,11 +7857,10 @@
       "title": "⟦AI⟧ quantum/transport wavepacket 정확 역방향 수반(adjoint) 인수분해 및 명시적 PSD 구적(Trick C)",
       "origin": "ai_review_of_external_feedback",
       "user_request": "2026-11-26 사용자 요청 (Gemini chat): \"별도 AI 에이전트에서 리뷰한 수학적 패치 내용입니다. 한번 검증하고, ... 허브에 인계해서 다른 에이전트들의 의견 취합해서 체크리스트에 추가하도록 해주세요.\" / \"좋습니다. 이 사항들 허브에 올려서 다른 AI들이랑 검토해보고, 체크리스트에 올려주세요. 지금은 당분간 OD와 FWM을 제일 주요하게 쓸 거라서, 그 쪽과 거리가 먼 패치는 후순위로 밀면 됩니다.\" 사용자 요청 (Claude chat, 2026-11-26): \"곧 Gemini 제안사항이 추가로 올 겁니다. 같이 검토해주세요. 이 작업은 현실적인 사용량 이슈 때문에 Gemini 쪽에 작업을 많이 넘겨 주세요.\" 착수 보류 (Claude chat, 2026-11-26, 20261126-1820): \"Gemini 최적화 제안과 Codex 제안은 아직 패치하지 않고, 일단 이번 GABES & AutoOD transit time 패치 관련 사항들 푸시하겠습니다.\"",
-      "status": "ready",
+      "status": "done",
       "priority": "P2",
       "effort": "medium",
       "owner": "Gemini (engine implementation, when user says go); Claude/Codex FWM (review)",
-      "hold_note": "⟦AI⟧ 2026-11-26 사용자 보류(1820) 유지: 사용자 착수 지시 전까지 구현 미착수.",
       "problem": "⟦AI⟧ AtomicCharacteristic.wavepacket()은 증강 Lyapunov DOP853 ODE(2*ns*nf*(m+p)^2 변수)에서 주파수 무관 동시각 공분산 Sigma_r(t)를 2*nf회 중복 적분한다. 역방향 수반행렬 -dPsi/dt = Psi A(t) + W(omega,t), Psi(T)=0 (nf*p*m 변수) 1회 적분 + Gauss-Legendre 구적으로 인수분해하면 Y_r^greater, Y_r^lesser, R_ret를 정확 복원(신규 영수증 err_G=8.23e-14, err_L=5.14e-13, err_R=1.97e-13; Codex 마이크로초 스케일 검증 7.07e-13)하며 Psi D_r Psi^H >= 0이 점별 명시적 PSD가 된다.",
       "acceptance_criteria": [
         "⟦AI⟧ Psi 단독 DOP853 밀집 출력(dense output) 적분 + Gauss-Legendre 노드 구적으로 구현한다(ODE 상태 축소비 자체를 wall-time 배수로 주장하지 않는다).",
@@ -7874,14 +7873,20 @@
         "runs/gemini_math_opt_review_20261126/trick_c_retarded_receipt_20261126.json",
         "runs/gemini_math_opt_review_20261126/codex_microsecond_adjoint.json",
         "runs/agent_hub/20261126-1858_gemini-to-all_deep-math-optimizations-proposal.md",
-        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md"
+        "runs/agent_hub/20261126-1900_codex-to-all_deep-math-second-wave-review.md",
+        "runs/gemini_trick_c_transport_20261127/README.md",
+        "runs/gemini_trick_c_transport_20261127/comparison.json",
+        "runs/gemini_trick_c_transport_20261127/real_caller_check.json",
+        "runs/agent_hub/20261127-1200_claude-to-all_trick-c-signoff.md"
       ],
-      "last_reviewed_at": "2026-11-26",
+      "last_reviewed_at": "2026-11-27",
       "related_items": [
         "fwm-quantum-langevin-microscopic-core",
         "fwm-rf-squeezing-spectrum-and-bandwidth"
       ],
-      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: downstream beneficiaries are fwm-quantum-langevin-microscopic-core and fwm-rf-squeezing-spectrum-and-bandwidth."
+      "overlap_note_2026_11_26": "⟦AI⟧ 2026-11-26 audit: downstream beneficiaries are fwm-quantum-langevin-microscopic-core and fwm-rf-squeezing-spectrum-and-bandwidth.",
+      "user_decision_2026_11_27": "User, 2026-11-27 KST (Claude chat): '실제 호출자 확인 후 채택' — adopted as a numerical improvement after verifying zero main-repo production callers of AtomicCharacteristic.wavepacket() (fwm_quantum uses segmented/smooth wavepackets and BallisticPath only -> bit-identical) and <= 4.76e-11 ODE-tolerance-level agreement on reduced_pump_system at default rtol=2e-10, atol=2e-12.",
+      "implementation_2026_11_27": "⟦AI⟧ Landed locally by Gemini in e97dacd and signed off by Claude (20261127-1200): gabes/quantum/transport.py (cached _dissipator, backward adjoint propagator -dPsi/dt = Psi A + W with DOP853 dense output, positive-weight 10-pt Gauss-Legendre panel quadrature aligned to ODE knots with automatic high-omega sub-panels, manifestly Hermitian PSD per-source Gram sums, duration conditioning preserved) and tests/test_quantum_transport.py (4 passed; <= 1e-12 vs augmented Lyapunov reference at rtol=1e-12, atol=1e-14; 2.09-6.39x wall-clock speedups across synthetic and reduced_pump_system cases)."
     },
     {
       "id": "large-obe-rational-krylov-doppler",
