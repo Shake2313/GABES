@@ -193,3 +193,27 @@ def test_complex_field_comparison_removes_only_global_phase():
     assert profile.field_shape_difference(field, grid, field*np.exp(.4j), grid) < 1e-14
     distorted = field*np.exp(1j*grid.radius_squared_m2/(.0004**2))
     assert profile.field_shape_difference(field, grid, distorted, grid) > .1
+
+
+def test_single_beam_profile_opt_in_qdht_matches_fft_and_documents_boundary():
+    atom = settings(density_m3=0.)
+    bundle = profile.build_response_table(atom, 1e5, cell_length_m=.02, initial_nodes=3)
+    cell_fft = profile.propagate_cell(bundle, **cell_inputs(samples=64, steps=16, refine=True, propagator="fft"))
+    cell_qdht = profile.propagate_cell(bundle, **cell_inputs(samples=64, steps=16, refine=True, propagator="qdht"))
+    assert cell_qdht["propagator"] == "qdht"
+    assert "circular Dirichlet" in cell_qdht["conditions"]["boundary_condition"]
+    assert cell_qdht["checks"]["passed"]
+    assert cell_qdht["input_key"] != cell_fft["input_key"]
+    assert cell_qdht["paths"]["full"].power_w[-1] == pytest.approx(cell_fft["paths"]["full"].power_w[-1], rel=1e-9)
+    assert cell_qdht["paths"]["full"].radius_m[-1] == pytest.approx(cell_fft["paths"]["full"].radius_m[-1], rel=1e-9)
+    assert cell_qdht["checks"]["physical_budgets"]["paths"]["full"]["relative_power_balance_error"] <= 1e-9
+
+    cam_fft = profile.profile_at_distance(cell_fft, .25, steps=16)
+    cam_qdht = profile.profile_at_distance(cell_qdht, .25, steps=16)
+    assert cam_qdht["propagator"] == "qdht"
+    assert cam_qdht["checks"]["passed"]
+    assert cam_qdht["paths"]["full"].radius_m[-1] == pytest.approx(cam_fft["paths"]["full"].radius_m[-1], rel=1e-6)
+    assert cam_qdht["paths"]["full"].power_w[-1] == pytest.approx(cam_fft["paths"]["full"].power_w[-1], rel=1e-9)
+
+    with pytest.raises(ValueError, match="propagator"):
+        profile.propagate_cell(bundle, **cell_inputs(refine=False, propagator="unknown"))

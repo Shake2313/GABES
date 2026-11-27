@@ -7,8 +7,10 @@ FFT boundaries are periodic; the boundary-power guard rejects occupied edges.
 This coherent field model does not infer a wavefront from an empirical M^2.
 """
 from dataclasses import dataclass
+import functools
 
 import numpy as np
+from scipy import special
 
 from ._arrays import readonly_float_array
 from .beam import peak_intensity
@@ -245,3 +247,279 @@ def propagate(field, grid, *, wavelength_m, length_m, steps,
         np.asarray(radii), np.asarray(powers), a, np.asarray(edges), largest_edge,
         material_change, powers[-1]-powers[0]-material_change,
         float(grid.y_m[row]))
+
+
+@functools.lru_cache(maxsize=32)
+def _qdht_unit_tables(samples):
+    """Normalized 0th-order QDHT tables (Yu 1998 / Guizar-Sicairos 2004).
+
+    Independent of physical aperture ``R``; cached by radial node count ``N``.
+    """
+    zeros = special.jn_zeros(0, samples + 1)
+    alpha = zeros[:samples]
+    alpha_max = float(zeros[samples])
+    j1 = special.j1(alpha)
+    scale = np.abs(j1)
+    arg = np.outer(alpha, alpha) / alpha_max
+    transform = 2.0 * special.j0(arg) / (alpha_max * np.outer(scale, scale))
+    unit_weights = 4.0 * np.pi / ((alpha_max ** 2) * (j1 ** 2))
+    for arr in (alpha, scale, transform, unit_weights):
+        arr.setflags(write=False)
+    return alpha, alpha_max, scale, transform, unit_weights
+
+
+@functools.lru_cache(maxsize=16)
+def _qdht_2d_hankel_table(samples, max_radius_m, x0, x1, nx, y0, y1, ny):
+    """Cached exact 0th-order Bessel evaluation matrix for 2D ParaxialGrid reconstruction."""
+    alpha, _, _, _, _ = _qdht_unit_tables(samples)
+    kr = alpha / max_radius_m
+    x = np.linspace(x0, x1, nx)
+    y = np.linspace(y0, y1, ny)
+    r_flat = np.sqrt(y[:, None] ** 2 + x[None, :] ** 2).ravel()
+    inside = r_flat <= max_radius_m
+    if not np.any(inside):
+        return inside, np.empty(0, dtype=np.intp), np.empty((0, samples), dtype=float)
+    unique_r, inv = np.unique(r_flat[inside], return_inverse=True)
+    j0_mat = special.j0(np.outer(unique_r, kr))
+    for arr in (inside, inv, j0_mat):
+        arr.setflags(write=False)
+    return inside, inv, j0_mat
+
+
+@dataclass(frozen=True)
+class RadialQDHTGrid:
+    """Axisymmetric 0th-order QDHT radial grid on ``[0, max_radius_m]`` with Dirichlet boundary.
+
+    Unlike :class:`ParaxialGrid` (square periodic FFT domain ``[-R, R]^2``),
+    QDHT imposes a circular Dirichlet boundary ``A(R) = 0`` at ``r = max_radius_m``.
+    """
+    max_radius_m: float
+    samples: int
+
+    def __post_init__(self):
+        object.__setattr__(self, "max_radius_m", _positive(self.max_radius_m, "max_radius_m"))
+        object.__setattr__(self, "samples", _integer(self.samples, "samples", 8))
+
+    @property
+    def _tables(self):
+        return _qdht_unit_tables(self.samples)
+
+    @property
+    def r_m(self):
+        alpha, alpha_max, _, _, _ = self._tables
+        return readonly_float_array(self.max_radius_m * alpha / alpha_max)
+
+    @property
+    def kr_rad_m(self):
+        alpha, _, _, _, _ = self._tables
+        return readonly_float_array(alpha / self.max_radius_m)
+
+    @property
+    def weights_m2(self):
+        _, _, _, _, unit_weights = self._tables
+        return readonly_float_array((self.max_radius_m ** 2) * unit_weights)
+
+    @property
+    def scale(self):
+        return self._tables[2]
+
+    @property
+    def transform(self):
+        return self._tables[3]
+
+    def evaluate(self, radial_field, r_eval_m):
+        """Exact 0th-order Hankel evaluation at arbitrary radii ``r_eval_m`` (including ``r=0``).
+
+        Radii outside ``max_radius_m`` evaluate to ``0`` (circular Dirichlet boundary).
+        """
+        a = np.asarray(radial_field, dtype=complex)
+        if a.shape != (self.samples,) or not np.isfinite(a).all():
+            raise ValueError("radial_field must be finite and match radial grid samples")
+        r_eval = np.asarray(r_eval_m, dtype=float)
+        if not np.isfinite(r_eval).all() or np.any(r_eval < 0):
+            raise ValueError("r_eval_m must be finite and nonnegative")
+        alpha, alpha_max, scale, transform, _ = self._tables
+        spec = transform @ (a / scale)
+        coeff = (2.0 / alpha_max) * (spec / scale)
+        kr = alpha / self.max_radius_m
+        flat = r_eval.ravel()
+        out = np.zeros(flat.shape, dtype=complex)
+        inside = flat <= self.max_radius_m
+        if np.any(inside):
+            unique_r, inv = np.unique(flat[inside], return_inverse=True)
+            vals = special.j0(np.outer(unique_r, kr)) @ coeff
+            out[inside] = vals[inv]
+        return out.reshape(r_eval.shape)
+
+    def reconstruct_2d(self, radial_field, cart_grid):
+        """On-demand 2D complex field reconstruction on a :class:`ParaxialGrid`."""
+        if not isinstance(cart_grid, ParaxialGrid):
+            raise TypeError("cart_grid must be a ParaxialGrid")
+        a = np.asarray(radial_field, dtype=complex)
+        if a.shape != (self.samples,) or not np.isfinite(a).all():
+            raise ValueError("radial_field must be finite and match radial grid samples")
+        _, alpha_max, scale, transform, _ = self._tables
+        spec = transform @ (a / scale)
+        coeff = (2.0 / alpha_max) * (spec / scale)
+        inside, inv, j0_mat = _qdht_2d_hankel_table(
+            self.samples, self.max_radius_m,
+            float(cart_grid.x_m[0]), float(cart_grid.x_m[-1]), len(cart_grid.x_m),
+            float(cart_grid.y_m[0]), float(cart_grid.y_m[-1]), len(cart_grid.y_m),
+        )
+        out = np.zeros(cart_grid.shape[0] * cart_grid.shape[1], dtype=complex)
+        if inv.size:
+            out[inside] = (j0_mat @ coeff)[inv]
+        return out.reshape(cart_grid.shape)
+
+
+def gaussian_radial_field(radial_grid, power_w, waist_m, wavelength_m, curvature_radius_m=np.inf):
+    """Axisymmetric Gaussian on a :class:`RadialQDHTGrid`."""
+    if not isinstance(radial_grid, RadialQDHTGrid):
+        raise TypeError("radial_grid must be a RadialQDHTGrid")
+    power_w = float(power_w)
+    if not np.isfinite(power_w) or power_w < 0:
+        raise ValueError("power_w must be finite and nonnegative")
+    waist_m = _positive(waist_m, "waist_m")
+    k = 2 * np.pi / _positive(wavelength_m, "wavelength_m")
+    curvature_radius_m = float(curvature_radius_m)
+    if np.isnan(curvature_radius_m) or curvature_radius_m == 0:
+        raise ValueError("curvature radius must be nonzero or infinite")
+    r2 = radial_grid.r_m ** 2
+    return np.sqrt(peak_intensity(power_w, waist_m)) * np.exp(
+        -r2 / waist_m**2 + 0.5j * k * r2 / curvature_radius_m)
+
+
+@dataclass(frozen=True)
+class RadialParaxialResult:
+    """Axisymmetric QDHT propagation output with on-demand 2D reconstruction."""
+    z_m: np.ndarray
+    r_m: np.ndarray
+    radial_intensity_w_m2: np.ndarray
+    on_axis_intensity_w_m2: np.ndarray
+    radius_m: np.ndarray
+    power_w: np.ndarray
+    final_radial_field: np.ndarray
+    boundary_power_fraction: np.ndarray
+    max_boundary_power_fraction: float
+    material_power_change_w: float
+    power_balance_error_w: float
+    radial_grid: RadialQDHTGrid
+
+    def __post_init__(self):
+        for name in ("z_m", "r_m", "radial_intensity_w_m2", "on_axis_intensity_w_m2",
+                     "radius_m", "power_w", "boundary_power_fraction"):
+            object.__setattr__(self, name, readonly_float_array(getattr(self, name)))
+        field = np.array(self.final_radial_field, dtype=complex, copy=True)
+        field.setflags(write=False)
+        object.__setattr__(self, "final_radial_field", field)
+
+    def to_2d_field(self, cart_grid):
+        """Reconstruct ``final_radial_field`` onto a 2D :class:`ParaxialGrid`."""
+        return self.radial_grid.reconstruct_2d(self.final_radial_field, cart_grid)
+
+
+def propagate_axisymmetric(radial_field, radial_grid, *, wavelength_m, length_m, steps,
+                           susceptibility=None, snapshot_stride=1, boundary_tolerance=1e-5):
+    """Axisymmetric 0th-order QDHT Strang diffraction + exponential-midpoint material steps.
+
+    Opt-in radial backend for axisymmetric single-beam propagation. Boundary
+    condition is circular Dirichlet at ``r = radial_grid.max_radius_m`` (not
+    periodic square as in :func:`propagate`); outer 5 percent radial annulus is
+    monitored against ``boundary_tolerance``.
+    """
+    if not isinstance(radial_grid, RadialQDHTGrid):
+        raise TypeError("radial_grid must be a RadialQDHTGrid")
+    wavelength_m = _positive(wavelength_m, "wavelength_m")
+    length_m = float(length_m)
+    if not np.isfinite(length_m) or length_m < 0:
+        raise ValueError("length_m must be finite and nonnegative")
+    steps = _integer(steps, "steps")
+    snapshot_stride = _integer(snapshot_stride, "snapshot_stride")
+    if boundary_tolerance is not None:
+        if not np.isfinite(boundary_tolerance) or not 0 < boundary_tolerance < 1:
+            raise ValueError("boundary_tolerance must lie in (0, 1), or be None")
+    if susceptibility is not None and not callable(susceptibility):
+        raise TypeError("susceptibility must be callable or None")
+    a = np.array(radial_field, dtype=complex, copy=True)
+    if a.shape != (radial_grid.samples,) or not np.isfinite(a).all():
+        raise ValueError("radial_field must be finite and match radial grid samples")
+
+    k = 2.0 * np.pi / wavelength_m
+    dz = length_m / steps
+    r = radial_grid.r_m
+    r2 = r ** 2
+    kr = radial_grid.kr_rad_m
+    weights = radial_grid.weights_m2
+    scale = radial_grid.scale
+    T = radial_grid.transform
+    half_diff = np.exp(-0.25j * dz * (kr ** 2) / k)
+    edge = r >= 0.95 * radial_grid.max_radius_m
+    if not np.any(edge):
+        edge[-1] = True
+    alpha, alpha_max, _, _, _ = radial_grid._tables
+    on_axis_coeff = (2.0 / alpha_max) / scale
+
+    z_values, rad_ints, on_axis_ints, radii, powers, edges = [], [], [], [], [], []
+    material_change = 0.0
+    largest_edge = 0.0
+
+    def inspect(index, save):
+        nonlocal largest_edge
+        intensity = np.abs(a) ** 2
+        total_power = float(np.sum(intensity * weights))
+        edge_fraction = float(np.sum(intensity[edge] * weights[edge]) / total_power) if total_power else 0.0
+        largest_edge = max(largest_edge, edge_fraction)
+        if boundary_tolerance is not None and edge_fraction > boundary_tolerance:
+            raise ValueError(
+                f"transverse boundary power fraction {edge_fraction:.3g} exceeds "
+                f"{boundary_tolerance:.3g} at z={index*dz:.6g} m; enlarge the grid window")
+        if save:
+            z_values.append(index * dz)
+            rad_ints.append(intensity.copy())
+            spec = T @ (a / scale)
+            a0 = complex(np.dot(on_axis_coeff, spec))
+            on_axis_ints.append(abs(a0) ** 2)
+            radii.append(np.sqrt(2.0 * float(np.sum(intensity * r2 * weights)) / total_power)
+                         if total_power else np.nan)
+            powers.append(total_power)
+            edges.append(edge_fraction)
+
+    def chi(intensity):
+        result = np.asarray(susceptibility(intensity), dtype=complex)
+        try:
+            result = np.broadcast_to(result, r.shape)
+        except ValueError as error:
+            raise ValueError("susceptibility must broadcast to radial grid shape") from error
+        if not np.isfinite(result).all():
+            raise ValueError("susceptibility returned nonfinite values")
+        return result
+
+    inspect(0, True)
+    if length_m > 0:
+        if susceptibility is None:
+            # Vacuum diffraction is exact in QDHT spectral space (zero splitting error).
+            spec0 = T @ (a / scale)
+            for index in range(1, steps + 1):
+                save = (index % snapshot_stride == 0) or (index == steps)
+                a = scale * (T @ (np.exp(-0.5j * (index * dz) * (kr ** 2) / k) * spec0))
+                if not np.isfinite(a).all():
+                    raise ValueError("field became nonfinite during propagation")
+                inspect(index, save)
+        else:
+            for index in range(1, steps + 1):
+                a = scale * (T @ (half_diff * (T @ (a / scale))))
+                intensity = np.abs(a) ** 2
+                before = float(np.sum(intensity * weights))
+                with np.errstate(over="raise", invalid="raise"):
+                    mid_intensity = intensity * np.exp(-0.5 * k * dz * chi(intensity).imag)
+                    a *= np.exp(0.5j * k * dz * chi(mid_intensity))
+                material_change += float(np.sum((np.abs(a) ** 2) * weights)) - before
+                a = scale * (T @ (half_diff * (T @ (a / scale))))
+                if not np.isfinite(a).all():
+                    raise ValueError("field became nonfinite during propagation")
+                inspect(index, index % snapshot_stride == 0 or index == steps)
+
+    return RadialParaxialResult(
+        np.asarray(z_values), r, np.asarray(rad_ints), np.asarray(on_axis_ints),
+        np.asarray(radii), np.asarray(powers), a, np.asarray(edges), largest_edge,
+        material_change, powers[-1] - powers[0] - material_change, radial_grid)

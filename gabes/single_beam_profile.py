@@ -20,7 +20,11 @@ from . import species
 from .beam import peak_intensity
 from .nonlinear_response import ComplexSusceptibilityTable, solve_rb_mean
 from .optical_frequency import RbComposition, RbOpticalFrequency
-from .paraxial import ParaxialGrid, gaussian_field, propagate, relative_lens_power
+from .paraxial import (
+    ParaxialGrid, ParaxialResult, RadialQDHTGrid,
+    gaussian_field, gaussian_radial_field,
+    propagate, propagate_axisymmetric, relative_lens_power,
+)
 
 
 MODEL_ID = "rb_single_beam_profile_v1"
@@ -275,16 +279,42 @@ def _compare_cell(reference, ref_grid, candidate, candidate_grid, incident):
                     and all(np.isfinite(v) and v < .01 for v in (width_error, power_error, field_error))))
 
 
+def _radial_to_paraxial_result(radial_res, cart_grid):
+    """Wrap a 1D QDHT result as a ParaxialResult with exact Hankel 2D final_field."""
+    row = int(np.argmin(np.abs(cart_grid.y_m)))
+    r_axis = np.r_[0.0, radial_res.r_m]
+    r_cut = np.abs(cart_grid.x_m)
+    cuts = np.empty((len(radial_res.z_m), len(cart_grid.x_m)), dtype=float)
+    for idx in range(len(radial_res.z_m)):
+        profile_r = np.r_[radial_res.on_axis_intensity_w_m2[idx], radial_res.radial_intensity_w_m2[idx]]
+        cuts[idx] = np.interp(r_cut, r_axis, profile_r, right=0.0)
+    final_2d = radial_res.to_2d_field(cart_grid)
+    return ParaxialResult(
+        radial_res.z_m, cart_grid.x_m, cart_grid.y_m, cuts,
+        radial_res.radius_m, radial_res.power_w, final_2d,
+        radial_res.boundary_power_fraction, radial_res.max_boundary_power_fraction,
+        radial_res.material_power_change_w, radial_res.power_balance_error_w,
+        float(cart_grid.y_m[row]),
+    )
+
+
 def propagate_cell(response, *, power_w, radius_m, curvature_radius_m=np.inf,
                    cell_length_m, half_width_m, samples=128, steps=80,
-                   refine=True, progress=None):
+                   refine=True, progress=None, propagator="fft"):
     """Propagate an entrance-plane Gaussian through one selected Rb D line.
 
     Returned paths are full response, intensity-dependent absorption only, and
     vacuum. Grid, longitudinal step, window and intensity-table refinements are
     optional and explicitly unassessed when omitted. Camera navigation is a
     separate call. A changed cell length requires a matching acceptance bundle.
+
+    ``propagator="fft"`` (default) uses 2D periodic FFT propagation.
+    ``propagator="qdht"`` selects the opt-in axisymmetric 0th-order QDHT backend
+    with circular Dirichlet boundary at ``r = half_width_m`` and on-demand 2D
+    Hankel reconstruction.
     """
+    if propagator not in ("fft", "qdht"):
+        raise ValueError("propagator must be 'fft' or 'qdht'")
     settings = response["settings"]
     length = _positive(cell_length_m, "cell_length_m", zero=True)
     if length != response["cell_length_m"]:
@@ -309,18 +339,31 @@ def propagate_cell(response, *, power_w, radius_m, curvature_radius_m=np.inf,
 
     def run(table, *, n=count, width=half_width, nz=step_count, vacuum=False):
         grid = ParaxialGrid.square(width, n)
-        field = gaussian_field(grid, power, radius, wavelength, curvature)
         paths = {}
+        radial_paths = {} if propagator == "qdht" else None
         modes = ("full", "absorption_only", "vacuum") if vacuum else ("full", "absorption_only")
+        if propagator == "qdht":
+            rgrid = RadialQDHTGrid(width, n)
+            rfield = gaussian_radial_field(rgrid, power, radius, wavelength, curvature)
+            for mode in modes:
+                susceptibility = (None if mode == "vacuum" else table if mode == "full" else
+                                  lambda intensity: table(0.).real+1j*table(intensity).imag)
+                rres = propagate_axisymmetric(
+                    rfield, rgrid, wavelength_m=wavelength, length_m=length,
+                    steps=nz, susceptibility=susceptibility, snapshot_stride=max(1, nz//80))
+                radial_paths[mode] = rres
+                paths[mode] = _radial_to_paraxial_result(rres, grid)
+            return grid, paths, radial_paths
+        field = gaussian_field(grid, power, radius, wavelength, curvature)
         for mode in modes:
             susceptibility = (None if mode == "vacuum" else table if mode == "full" else
                               lambda intensity: table(0.).real+1j*table(intensity).imag)
             paths[mode] = propagate(field, grid, wavelength_m=wavelength, length_m=length,
                 steps=nz, susceptibility=susceptibility, snapshot_stride=max(1, nz//80))
-        return grid, paths
+        return grid, paths, None
 
     tell(0., "Propagating cell and controls")
-    grid, paths = run(response["table"], vacuum=True)
+    grid, paths, radial_paths = run(response["table"], vacuum=True)
     incident = float(paths["full"].power_w[0])
     budgets = {name: _budget(path, incident) for name, path in paths.items()}
     sampling_error = float(abs(incident/power-1))
@@ -335,7 +378,7 @@ def propagate_cell(response, *, power_w, radius_m, curvature_radius_m=np.inf,
         refinements = {}
         for index, (name, options, table) in enumerate(variants):
             tell(.2+.2*index, "Checking "+name.replace("_", " "))
-            candidate_grid, candidate = run(table, **options)
+            candidate_grid, candidate, _ = run(table, **options)
             check = _compare_cell(paths["full"], grid, candidate["full"], candidate_grid, incident)
             control_check = _compare_cell(paths["absorption_only"], grid,
                                           candidate["absorption_only"], candidate_grid, incident)
@@ -367,14 +410,26 @@ def propagate_cell(response, *, power_w, radius_m, curvature_radius_m=np.inf,
         paths=budgets, input_sampling_relative_error=sampling_error), propagation=spatial,
         passed=bool(response["checks"]["passed"] and budgets_passed and spatial["passed"]))
     tell(1., "Cell profile ready")
-    return dict(model_id=MODEL_ID, settings=settings, response_key=response["cache_key"],
-        input_key=(response["cache_key"], power, radius, curvature, length, half_width, count, step_count, bool(refine)),
+    base_key = (response["cache_key"], power, radius, curvature, length, half_width, count, step_count, bool(refine))
+    input_key = base_key if propagator == "fft" else base_key + (propagator,)
+    conditions = dict(atomic=settings.as_dict(), power_w=power, radius_m=radius,
+        curvature_radius_m=curvature, input_plane="cell entrance", coherent_m2=1.,
+        cell_length_m=length, half_width_m=half_width, samples=count, steps=step_count,
+        propagator=propagator,
+        boundary_condition=(
+            "circular Dirichlet aperture at r=half_width_m (0th-order QDHT); "
+            "camera-plane outer wings differ from 2D FFT square periodic corners"
+            if propagator == "qdht" else "2D square periodic FFT window [-half_width_m, half_width_m]^2"
+        ),
+        scope="one linearly polarized CW beam, B=0, local steady state; other drives absent")
+    out = dict(model_id=MODEL_ID, settings=settings, response_key=response["cache_key"],
+        input_key=input_key, propagator=propagator,
         grid=grid, wavelength_m=wavelength, cell_length_m=length, paths=paths,
         checks=checks, nonlinear_lens=lens, incident_power_w=incident,
-        conditions=dict(atomic=settings.as_dict(), power_w=power, radius_m=radius,
-            curvature_radius_m=curvature, input_plane="cell entrance", coherent_m2=1.,
-            cell_length_m=length, half_width_m=half_width, samples=count, steps=step_count,
-            scope="one linearly polarized CW beam, B=0, local steady state; other drives absent"))
+        conditions=conditions)
+    if radial_paths is not None:
+        out["radial_paths"] = radial_paths
+    return out
 
 
 def profile_at_distance(cell_result, distance_m, *, steps=32):
@@ -388,10 +443,20 @@ def profile_at_distance(cell_result, distance_m, *, steps=32):
     count = _integer(steps, "steps", 1)
     grid, wavelength = cell_result["grid"], cell_result["wavelength_m"]
     incident = cell_result["incident_power_w"]
+    use_qdht = cell_result.get("propagator") == "qdht" and "radial_paths" in cell_result
     paths, combined, budgets = {}, {}, {}
+    radial_cam_paths = {} if use_qdht else None
     for name, cell in cell_result["paths"].items():
-        camera = propagate(cell.final_field, grid, wavelength_m=wavelength,
-                           length_m=distance, steps=count)
+        if use_qdht:
+            r_cell = cell_result["radial_paths"][name]
+            r_cam = propagate_axisymmetric(
+                r_cell.final_radial_field, r_cell.radial_grid,
+                wavelength_m=wavelength, length_m=distance, steps=count)
+            radial_cam_paths[name] = r_cam
+            camera = _radial_to_paraxial_result(r_cam, grid)
+        else:
+            camera = propagate(cell.final_field, grid, wavelength_m=wavelength,
+                               length_m=distance, steps=count)
         paths[name] = camera
         budget = _budget(camera, incident)
         drift = float(abs(camera.power_w[-1]-camera.power_w[0])/incident)
@@ -404,9 +469,13 @@ def profile_at_distance(cell_result, distance_m, *, steps=32):
             centerline_intensity_w_m2=np.concatenate((cell.centerline_intensity_w_m2,
                                                      camera.centerline_intensity_w_m2[1:])))
     budget_passed = all(item["passed"] for item in budgets.values())
-    return dict(model_id=MODEL_ID, input_key=(cell_result["input_key"], distance, count),
+    out = dict(model_id=MODEL_ID, input_key=(cell_result["input_key"], distance, count),
+        propagator=cell_result.get("propagator", "fft"),
         grid=grid, wavelength_m=wavelength, distance_m=distance, paths=paths, combined=combined,
         checks=dict(cell=cell_result["checks"], free_space_budgets=dict(passed=budget_passed, paths=budgets),
                     camera_convergence=dict(assessed=False, status="camera radius/profile not independently refined; cell exit convergence and camera budgets only"),
                     passed=bool(cell_result["checks"]["passed"] and budget_passed)),
         nonlinear_lens=cell_result["nonlinear_lens"], conditions=cell_result["conditions"])
+    if radial_cam_paths is not None:
+        out["radial_paths"] = radial_cam_paths
+    return out

@@ -3,8 +3,9 @@ import numpy as np
 import pytest
 from scipy.optimize import brentq
 
-from gabes.paraxial import (ParaxialGrid, gaussian_field, propagate,
-                            relative_lens_power, thin_lens)
+from gabes.paraxial import (ParaxialGrid, RadialQDHTGrid, gaussian_field,
+                            gaussian_radial_field, propagate,
+                            propagate_axisymmetric, relative_lens_power, thin_lens)
 
 WAVELENGTH = 795e-9
 
@@ -142,3 +143,48 @@ def test_diffracting_saturable_medium_has_second_order_step_convergence():
     errors = [np.linalg.norm(fields[i]-fields[i+1])/np.linalg.norm(fields[i+1]) for i in (0, 1)]
     assert 3.8 < errors[0]/errors[1] < 4.2
     assert errors[1] < 1e-6
+
+
+def test_qdht_vacuum_gaussian_exact_on_axis_and_2d_reconstruction():
+    waist, power = 180e-6, .004
+    rgrid = RadialQDHTGrid(1.2e-3, 128)
+    rfield = gaussian_radial_field(rgrid, power, waist, WAVELENGTH)
+    zr = np.pi * waist**2 / WAVELENGTH
+    res = propagate_axisymmetric(rfield, rgrid, wavelength_m=WAVELENGTH, length_m=zr, steps=12, snapshot_stride=4)
+    expected_w = waist * np.sqrt(1 + (res.z_m / zr)**2)
+    np.testing.assert_allclose(res.radius_m, expected_w, rtol=1e-10)
+    np.testing.assert_allclose(res.power_w, power, rtol=1e-13)
+    assert abs(res.power_balance_error_w) / power < 1e-13
+    # Exact r=0 Hankel intensity vs analytic 2*P/(pi*w(z)^2)
+    expected_i0 = 2 * power / (np.pi * expected_w**2)
+    np.testing.assert_allclose(res.on_axis_intensity_w_m2, expected_i0, rtol=1e-10)
+    # On-demand 2D reconstruction inside aperture matches analytic Gaussian
+    cart = ParaxialGrid.square(1.2e-3, 64)
+    field_2d = res.to_2d_field(cart)
+    analytic = np.sqrt(2 * power / (np.pi * waist**2)) / (1 + 1j) * np.exp(
+        -cart.radius_squared_m2 / (waist**2 * (1 + 1j)))
+    inside = cart.radius_squared_m2 <= (0.9 * 1.2e-3)**2
+    np.testing.assert_allclose(field_2d[inside], analytic[inside], atol=2e-6)
+    # Circular Dirichlet: outside max_radius_m evaluates to 0
+    assert np.all(field_2d[cart.radius_squared_m2 > 1.2e-3**2] == 0.0)
+
+
+def test_qdht_saturable_cell_matches_2d_fft_power_balance_and_radius():
+    waist, power, delta, scale = 180e-6, .001, 10., 2e-4
+    R = 1.5e-3
+    isat = (2 * power / (np.pi * waist**2)) / (1 + delta**2)
+    chi = lambda intensity: scale * (-delta + 1j) / (1 + delta**2 + intensity / isat)
+    grid = ParaxialGrid.square(R, 128)
+    fft_res = propagate(gaussian_field(grid, power, waist, WAVELENGTH), grid,
+                        wavelength_m=WAVELENGTH, length_m=.012, steps=80, susceptibility=chi)
+    rgrid = RadialQDHTGrid(R, 128)
+    qdht_res = propagate_axisymmetric(gaussian_radial_field(rgrid, power, waist, WAVELENGTH), rgrid,
+                                      wavelength_m=WAVELENGTH, length_m=.012, steps=80, susceptibility=chi)
+    assert abs(qdht_res.power_balance_error_w) / power < 1e-12
+    assert qdht_res.power_w[-1] == pytest.approx(fft_res.power_w[-1], rel=1e-10)
+    assert qdht_res.radius_m[-1] == pytest.approx(fft_res.radius_m[-1], rel=1e-10)
+    # Boundary guard on small aperture
+    small = RadialQDHTGrid(180e-6, 32)
+    with pytest.raises(ValueError, match='enlarge the grid window'):
+        propagate_axisymmetric(gaussian_radial_field(small, .001, 180e-6, WAVELENGTH), small,
+                               wavelength_m=WAVELENGTH, length_m=.01, steps=2)
