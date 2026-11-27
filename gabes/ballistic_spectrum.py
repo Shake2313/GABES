@@ -230,7 +230,7 @@ def _rest_excess(temperature, width, waist, intensity, resolution, isotope=speci
     return local, refined, max_steps
 
 
-def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use_table=False, reuse_flights=False):
+def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use_table=False, reuse_flights=False, peak=None):
     """Convolve a local absorption *excess* with the Maxwell velocity distribution.
 
     The Gaussian in rest frequency has unit integral. It is never renormalized
@@ -241,11 +241,19 @@ def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use
     nodes, weights = _panels(optics.width, resolution.panel_order, resolution.wing_widths, *component)
     weak = _weak(optics, scan)
     rest = None
+    used_intensity = intensity
     if use_table:
         if component:
             raise ValueError("The recorded Fast v2 table is specific to Rb85 D1.")
-        from ._ballistic_reference_table import lookup
-        rest, provenance = lookup(optics, intensity, nodes, weights)
+        from ._ballistic_reference_table import lookup, lookup_multiwaist
+        v2_radius = abs(optics.waist - 0.53e-3) <= 8 * np.spacing(0.53) * 1e-3 + np.spacing(optics.waist)
+        if v2_radius:
+            rest, provenance = lookup(optics, intensity, nodes, weights)
+        else:
+            query_peak = float(peak) if peak is not None else float(intensity[-1])
+            mw_intensity, rest, provenance = lookup_multiwaist(optics, query_peak, nodes, weights)
+            if rest is not None:
+                used_intensity = mw_intensity
         if diagnostics is not None:
             diagnostics.update(provenance)
     if rest is None:
@@ -279,7 +287,7 @@ def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use
                 diagnostics['rest_method'] = 'direct reference trajectories cached by thermal crossing time'
             if use_table:
                 diagnostics['rest_method'] = 'direct reference trajectories'
-    table = np.empty((len(intensity), len(scan)))
+    table = np.empty((len(used_intensity), len(scan)))
     sigma = optics.sigma
     for start in range(0, len(scan), 512):
         sl = slice(start, start+512)
@@ -287,7 +295,7 @@ def _thermal_table(optics, scan, intensity, resolution, *, diagnostics=None, use
         table[:,sl] = weak[sl] + rest @ (density*weights).T
     if not np.all(np.isfinite(table)) or np.any(table <= 0):
         raise ArithmeticError('Distributed-transit thermal quadrature produced a nonpositive absorption.')
-    return weak, table
+    return weak, table, used_intensity
 
 
 def _intensity_nodes(peak, resolution):
@@ -360,8 +368,8 @@ def _deplete(weak, nodes, table, peak, column):
 
 def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference'):
     """Evaluate a pure 85Rb D1 scan in its fine-centroid frame."""
-    if fidelity not in ('reference', 'fast', 'fast_v1'):
-        raise ValueError('Choose reference, fast or recorded fast_v1 distributed-transit fidelity.')
+    if fidelity not in ('reference', 'fast', 'fast_v1', 'fast_v2'):
+        raise ValueError('Choose reference, fast, fast_v1 or fast_v2 distributed-transit fidelity.')
     scan = np.asarray(scan_rad_s, dtype=float)
     if fidelity == 'reference':
         return _evaluate(conditions, scan, _REFERENCE, fidelity)
@@ -372,13 +380,20 @@ def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference')
     zero = conditions.probe_power_uw == 0 or conditions.cell_mm == 0
     # Unit conversions in imported data can shift the same radius by a few ulps.
     # The v1 replay keeps its original exact-equality eligibility boundary.
-    radius_matches = (conditions.probe_waist_mm == 0.53 if fidelity == 'fast_v1' else
-                      abs(conditions.probe_waist_mm - 0.53) <= 8*np.spacing(0.53))
+    from ._ballistic_reference_table import _MULTIWAIST_MAX_MM, _MULTIWAIST_MIN_MM, multiwaist_max_power_uw
+    v2_radius = (conditions.probe_waist_mm == 0.53 if fidelity == 'fast_v1' else
+                 abs(conditions.probe_waist_mm - 0.53) <= 8*np.spacing(0.53))
+    mw_radius = (fidelity == 'fast' and not v2_radius
+                 and _MULTIWAIST_MIN_MM - 8*np.spacing(_MULTIWAIST_MIN_MM) <= conditions.probe_waist_mm
+                 <= _MULTIWAIST_MAX_MM + 8*np.spacing(_MULTIWAIST_MAX_MM))
+    power_ok = (0 <= conditions.probe_power_uw <= 160 if v2_radius else
+                (0 <= conditions.probe_power_uw <= multiwaist_max_power_uw(conditions.probe_waist_mm)
+                 if mw_radius else False))
     measured_geometry = (
-        radius_matches and 0 < conditions.cell_mm <= 12.5
+        (v2_radius or mw_radius) and power_ok and 0 < conditions.cell_mm <= 12.5
         and conditions.line_strength == 1 and conditions.extra_homogeneous_fwhm_hz == 0
         and (conditions.doppler_temp_c is None or conditions.doppler_temp_c == conditions.temp_c)
-        and 95 <= conditions.temp_c <= 107 and 0 <= conditions.probe_power_uw <= 160
+        and 95 <= conditions.temp_c <= 107
     )
     if not (zero or measured_geometry):
         result = _evaluate(conditions, scan, _REFERENCE, fidelity)
@@ -410,6 +425,7 @@ def evaluate_ballistic_spectrum(conditions, scan_rad_s, *, fidelity='reference')
     # Each partition can have different rest and trajectory grids and recovery steps.
     grid_fields = ('transverse_nodes', 'rest_nodes', 'intensity_rows', 'refined_path_rows', 'max_transverse_steps',
                    'rest_method', 'rest_table_sha256', 'rest_temperature_nodes_c', 'rest_temperature_interpolation',
+                   'rest_waist_nodes_mm', 'rest_waist_interpolation',
                    'rest_table_refined_rows_at_knots', 'rest_table_max_steps_at_knots', 'rest_table_fallback_reason')
     diagnostics['partitions'] = [
         dict(samples=count, fidelity_used=part['fidelity_used'],
@@ -495,15 +511,20 @@ def _evaluate(conditions, scan_rad_s, resolution, requested='reference', *,
     intensity = _intensity_nodes(peak, resolution) if peak > 0 and column > 0 else np.array([])
     row_meta = {}
     weak = np.zeros_like(scan)
-    table = np.zeros((len(intensity), len(scan)))
+    table = None
     species_meta = []
     for part, fraction, offset in components:
         local_scan = scan - offset
         detail = {}
         if intensity.size:
-            part_weak, part_table = _thermal_table(part, local_scan, intensity, resolution,
-                                                   diagnostics=detail, use_table=use_table, reuse_flights=reuse_flights)
-            table += fraction*part_table
+            part_weak, part_table, used_intensity = _thermal_table(
+                part, local_scan, intensity, resolution,
+                diagnostics=detail, use_table=use_table, reuse_flights=reuse_flights, peak=peak)
+            if table is None:
+                intensity = used_intensity
+                table = fraction * part_table
+            else:
+                table += fraction * part_table
         else:
             part_weak = _weak(part, local_scan)
         weak += fraction*part_weak
@@ -526,7 +547,7 @@ def _evaluate(conditions, scan_rad_s, resolution, requested='reference', *,
     if 'rest_table_fallback_reason' in row_meta:
         row_meta['fallback_reason'] = row_meta['rest_table_fallback_reason'] + ' Evaluated the reference directly.'
         fast_route = False
-    diagnostics = dict(fidelity_requested='fast' if requested == 'fast_v1' else requested,
+    diagnostics = dict(fidelity_requested='fast' if requested in ('fast_v1', 'fast_v2') else requested,
                        fidelity_used='fast' if fast_route else 'reference',
                        propagation='local Gaussian-shaped transverse flux with axial power depletion',
                        physical_status=('analytical zero-power/length limit' if not peak or not column

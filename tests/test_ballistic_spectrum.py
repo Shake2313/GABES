@@ -92,7 +92,9 @@ def test_fast_preserves_pointwise_frequencies_and_reports_reference_fallback(mon
     separate = [history.evaluate_ballistic_spectrum(c, [x], fidelity='fast').transmission[0] for x in scan]
     np.testing.assert_array_equal(output.transmission, separate)
     assert not output.transmission.flags.writeable
-    fallback = history.evaluate_ballistic_spectrum(replace(c, probe_waist_mm=1.), scan, fidelity='fast')
+    in_multiwaist = history.evaluate_ballistic_spectrum(replace(c, probe_waist_mm=1.), scan, fidelity='fast')
+    assert in_multiwaist.diagnostics['fidelity_used'] == 'mixed'
+    fallback = history.evaluate_ballistic_spectrum(replace(c, probe_waist_mm=3.), scan, fidelity='fast')
     assert fallback.diagnostics['fidelity_used'] == 'reference'
     assert 'validation range' in fallback.diagnostics['fallback_reason']
 

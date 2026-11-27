@@ -167,20 +167,71 @@ def test_public_fast_reverts_to_full_reference_and_direct_reference_never_looks_
 
     probes.clear()
     meshes.clear()
-    # Explicit v1 in an older recording must replay its original reduced mesh.
+    # Explicit v1/v2 in older recordings must replay their original contracts.
     legacy_id = "od_rb85_d1_ballistic_history_fast_v1"
-    assert c.model_id == "od_rb85_d1_ballistic_history_fast_v2"
+    legacy_v2_id = "od_rb85_d1_ballistic_history_fast_v2"
+    assert c.model_id == "od_rb85_d1_ballistic_history_fast_v3"
     saved = evaluate_od_display(replace(c, model_id=legacy_id), scan)
     assert saved.model_id == legacy_id
     assert not probes and meshes and all(mesh is history._FAST for mesh in meshes)
     meshes.clear()
-    outside = replace(c, probe_waist_mm=1.)
+    # Recorded v2 outside 0.53 mm must still fall back to reference (not multi-waist).
+    saved_v2_off = evaluate_od_display(replace(c, model_id=legacy_v2_id, probe_waist_mm=1.06), scan)
+    assert saved_v2_off.model_id == legacy_v2_id
+    assert saved_v2_off.diagnostics["fidelity_used"] == "reference"
+    assert not probes and meshes and all(mesh is history._REFERENCE for mesh in meshes)
+    meshes.clear()
+    outside = replace(c, probe_waist_mm=3.0)
     fallback = history.evaluate_ballistic_spectrum(outside, scan, fidelity="fast")
     reference = history.evaluate_ballistic_spectrum(outside, scan, fidelity="reference")
     assert not probes and meshes and all(mesh is history._REFERENCE for mesh in meshes)
     assert fallback.diagnostics["fidelity_used"] == "reference"
     for name in ("transmission", "optical_depth", "od0"):
         np.testing.assert_array_equal(getattr(fallback, name), getattr(reference, name))
+
+
+def test_multiwaist_fast_table_lookup_accuracy_seam_and_domain_guards():
+    scan = 2 * np.pi * np.linspace(-4e9, 4e9, 401)
+    # Exact waist knot w=1.06 mm at T=99 C
+    c106 = replace(conditions(99.0), probe_waist_mm=1.06, probe_power_uw=20.0)
+    fast_106 = history.evaluate_ballistic_spectrum(c106, scan, fidelity="fast")
+    assert fast_106.diagnostics["fidelity_used"] == "fast"
+    assert fast_106.diagnostics["rest_method"] == "tabulated multi-waist fluence reference trajectories"
+    assert fast_106.diagnostics["rest_waist_interpolation"] == "exact knot"
+    assert fast_106.diagnostics["rest_temperature_interpolation"] == "exact knot"
+
+    # Off-knot waist w=0.75 mm, off-knot temperature T=98 C vs live reference
+    c075 = replace(conditions(98.0), probe_waist_mm=0.75, probe_power_uw=50.0)
+    fast_075 = history.evaluate_ballistic_spectrum(c075, scan, fidelity="fast")
+    ref_075 = history.evaluate_ballistic_spectrum(c075, scan, fidelity="reference")
+    assert fast_075.diagnostics["fidelity_used"] == "fast"
+    assert fast_075.diagnostics["rest_waist_interpolation"] == "cubic log-waist"
+    assert fast_075.diagnostics["rest_temperature_interpolation"] == "local cubic"
+    assert float(np.max(np.abs(fast_075.transmission - ref_075.transmission))) < 2e-4
+    assert float(np.max(np.abs(fast_075.optical_depth - ref_075.optical_depth))
+                 / np.max(np.abs(ref_075.optical_depth))) < 2e-4
+
+    # Seam continuity at w = 0.53 mm (v2) vs 0.53*(1+1e-6) (multi-waist)
+    c053 = replace(conditions(99.0), probe_waist_mm=0.53, probe_power_uw=100.0)
+    c053p = replace(c053, probe_waist_mm=0.53 * (1.0 + 1e-6))
+    s_v2 = history.evaluate_ballistic_spectrum(c053, scan, fidelity="fast")
+    s_mw = history.evaluate_ballistic_spectrum(c053p, scan, fidelity="fast")
+    assert s_v2.diagnostics["rest_method"] == "tabulated reference trajectories"
+    assert s_mw.diagnostics["rest_method"] == "tabulated multi-waist fluence reference trajectories"
+    assert float(np.max(np.abs(s_mw.transmission - s_v2.transmission))) < 1e-5
+
+    # Consistent 160 uW cap at w=0.53 mm seam: both exact 0.53 and 0.53*(1+1e-6) fall back above 160 uW.
+    for w_check in (0.53, 0.53 * (1.0 + 1e-6)):
+        over_seam = replace(conditions(99.0), probe_waist_mm=w_check, probe_power_uw=165.0)
+        fb_seam = history.evaluate_ballistic_spectrum(over_seam, scan[:3], fidelity="fast")
+        assert fb_seam.diagnostics["fidelity_used"] == "reference"
+
+    # Out-of-domain power (above v2-equivalent fluence cap) falls back cleanly to reference
+    over_power = replace(conditions(99.0), probe_waist_mm=0.265,
+                         probe_power_uw=table.multiwaist_max_power_uw(0.265) * 1.05)
+    fb_pow = history.evaluate_ballistic_spectrum(over_power, scan[:3], fidelity="fast")
+    assert fb_pow.diagnostics["fidelity_used"] == "reference"
+    assert "outside the Fast validation range" in fb_pow.diagnostics["fallback_reason"]
 
 
 def test_ballistic_worker_count_respects_container_and_env_limits(monkeypatch):

@@ -110,7 +110,8 @@ _NTOTAL_MODEL_IDS = {
 BALLISTIC_REFERENCE = "od_rb85_d1_ballistic_history_v1"
 BALLISTIC_TRANSIT = "ballistic_history"
 BALLISTIC_FAST_V1 = "od_rb85_d1_ballistic_history_fast_v1"
-BALLISTIC_FAST = "od_rb85_d1_ballistic_history_fast_v2"
+BALLISTIC_FAST_V2 = "od_rb85_d1_ballistic_history_fast_v2"
+BALLISTIC_FAST = "od_rb85_d1_ballistic_history_fast_v3"
 BALLISTIC_FAST_TRANSIT = "ballistic_history_fast"
 FIELD_HISTORY_REFERENCE = "od_rb_field_history_v1"
 FIELD_HISTORY_TRANSIT = "ballistic_field_history"
@@ -118,8 +119,9 @@ FIELD_HISTORY_KEYS = ("od_field_x_ut", "od_field_y_ut", "od_field_z_ut",
                       "od_probe_azimuth_deg", "od_probe_ellipticity_deg")
 BALLISTIC_MODELS = {BALLISTIC_TRANSIT: BALLISTIC_REFERENCE, BALLISTIC_FAST_TRANSIT: BALLISTIC_FAST,
                     FIELD_HISTORY_TRANSIT: FIELD_HISTORY_REFERENCE}
-# An explicit prior Fast ID replays the original trajectory grid.
-BALLISTIC_FIDELITIES = {BALLISTIC_REFERENCE: "reference", BALLISTIC_FAST_V1: "fast_v1", BALLISTIC_FAST: "fast"}
+# Explicit prior Fast IDs replay their original single-waist / trajectory contracts.
+BALLISTIC_FIDELITIES = {BALLISTIC_REFERENCE: "reference", BALLISTIC_FAST_V1: "fast_v1",
+                        BALLISTIC_FAST_V2: "fast_v2", BALLISTIC_FAST: "fast"}
 RB_HISTORY_REFERENCE = "od_rb_ballistic_history_v1"
 RB_HISTORY_FAST = "od_rb_ballistic_history_fast_v1"
 RB_HISTORY_MODELS = (RB_HISTORY_REFERENCE, RB_HISTORY_FAST)
@@ -923,7 +925,7 @@ class SASScheme(Scheme):
         returns to its original composition. Explicit solver requests stay strict.
         """
         recorded = params.get(OD_MODEL_KEY)
-        if (recorded not in (BALLISTIC_REFERENCE, BALLISTIC_FAST_V1, BALLISTIC_FAST)
+        if (recorded not in (BALLISTIC_REFERENCE, BALLISTIC_FAST_V1, BALLISTIC_FAST_V2, BALLISTIC_FAST)
                 or params.get("species") not in _RB_MEDIA or params.get("line") not in ("D1", "D2")
                 or _pure_rb85_d1(params)):
             return params

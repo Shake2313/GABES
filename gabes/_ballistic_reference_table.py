@@ -16,6 +16,20 @@ import numpy as np
 
 _TABLE = Path(__file__).with_name('data') / 'rb85_d1_ballistic_fast_v2.npz'
 _TABLE_SHA256 = 'cef73b4dae5f3845f9e234fd14eb82b5f1777d71098662fa7ec7bf4455bce59d'
+_MULTIWAIST_TABLE = Path(__file__).with_name('data') / 'rb85_d1_ballistic_multiwaist_v1.npz'
+_MULTIWAIST_TABLE_SHA256 = 'd764bed116e2d15447e9843bd3cece91d790af48df03b39c7ef6b74573b50023'
+_MULTIWAIST_W_REF_M = 0.53e-3
+_MULTIWAIST_MIN_MM = 0.265
+_MULTIWAIST_MAX_MM = 2.12
+# Fluence cap equivalent to the v2 validated range (160 uW at w_ref=0.53 mm),
+# matching the exact 160 uW cap at the 0.53 mm seam with an upper guard knot.
+_MULTIWAIST_V2_MAX_POWER_UW = 160.0
+_MULTIWAIST_MAX_PHI_W_M2 = (2.0 * _MULTIWAIST_V2_MAX_POWER_UW * 1e-6) / (np.pi * _MULTIWAIST_W_REF_M ** 2)
+
+
+def multiwaist_max_power_uw(waist_mm):
+    """Maximum eligible probe power [uW] at ``waist_mm`` (v2-equivalent fluence cap: 160 uW * w/0.53)."""
+    return float(_MULTIWAIST_V2_MAX_POWER_UW * (float(waist_mm) / (_MULTIWAIST_W_REF_M * 1e3)))
 
 
 @lru_cache(maxsize=1)
@@ -147,4 +161,98 @@ def lookup(optics, intensities, nodes, weights):
         'rest_temperature_interpolation': 'exact knot' if len(indices) == 1 else 'local cubic',
         'rest_table_refined_rows_at_knots': refinements[:, :, 0].sum(axis=1).tolist(),
         'rest_table_max_steps_at_knots': refinements[:, :, 1].max(axis=1).tolist(),
+    }
+
+
+@lru_cache(maxsize=1)
+def _load_multiwaist_table():
+    try:
+        content = _MULTIWAIST_TABLE.read_bytes()
+        if sha256(content).hexdigest() != _MULTIWAIST_TABLE_SHA256:
+            return None, 'Multi-waist trajectory table checksum mismatch.'
+        with np.load(BytesIO(content), allow_pickle=False) as archive:
+            recorded, live = str(archive['source_signature']), source_signature()
+            if recorded != live:
+                return None, 'The direct trajectory model differs from the multi-waist table.'
+            data = {k: archive[k] for k in (
+                'temperatures', 'waists_mm', 'fluence_intensities', 'widths',
+                'nodes', 'weights', 'rest_excess', 'refinements',
+            )}
+        return data, None
+    except (OSError, TypeError, ValueError, KeyError, BadZipFile) as error:
+        return None, f'Multi-waist trajectory table unavailable ({type(error).__name__}).'
+
+
+def _lagrange_weights(axis, value):
+    right = int(np.searchsorted(axis, value))
+    if right < len(axis) and abs(axis[right] - value) <= 8 * np.spacing(max(abs(axis[right]), 1.0)):
+        return np.array([right]), [1.0], True
+    if right > 0 and abs(axis[right - 1] - value) <= 8 * np.spacing(max(abs(axis[right - 1]), 1.0)):
+        return np.array([right - 1]), [1.0], True
+    first = max(0, min(right - 2, len(axis) - 4))
+    indices = np.arange(first, first + 4)
+    knots = axis[indices]
+    factors = []
+    for i, knot in enumerate(knots):
+        other = np.delete(knots, i)
+        factors.append(float(np.prod((value - other) / (knot - other))))
+    return indices, factors, False
+
+
+def lookup_multiwaist(optics, peak_intensity, nodes, weights):
+    """Interpolate rest-frame excess in (T, log w) on exact fluence intensities ``I = Phi * w_ref / w``.
+
+    Returns ``(intensities, rest_excess, provenance)`` or ``(None, None, provenance)`` on fallback.
+    """
+    data, reason = _load_multiwaist_table()
+    if reason:
+        return None, None, {'rest_table_fallback_reason': reason}
+    t = optics.temperature - 273.15
+    w_mm = optics.waist * 1e3
+    t_axis = data['temperatures']
+    w_axis = data['waists_mm']
+    phi_axis = data['fluence_intensities']
+    t_tol = 8 * np.spacing(max(abs(t), 1.0))
+    w_lo_tol = 8 * np.spacing(w_axis[0])
+    w_hi_tol = 8 * np.spacing(w_axis[-1])
+    if not (t_axis[0] - t_tol <= t <= t_axis[-1] + t_tol
+            and w_axis[0] - w_lo_tol <= w_mm <= w_axis[-1] + w_hi_tol):
+        return None, None, {'rest_table_fallback_reason': 'Temperature or radius outside the multi-waist table.'}
+
+    i_grid = phi_axis * (_MULTIWAIST_W_REF_M / optics.waist)
+    max_i = min(float(i_grid[-2]), _MULTIWAIST_MAX_PHI_W_M2 * (_MULTIWAIST_W_REF_M / optics.waist))
+    if peak_intensity > max_i * (1.0 + 8 * np.finfo(float).eps):
+        return None, None, {'rest_table_fallback_reason': 'Intensity exceeds the multi-waist validated fluence cap.'}
+    hi = max(2, min(len(i_grid), int(np.searchsorted(i_grid, peak_intensity, side='right')) + 2))
+    i_slice = i_grid[:hi]
+
+    # Verify panel alignment against live optical width across the enclosing temperature interval.
+    widths = data['widths']
+    t_clamped = float(np.clip(t, t_axis[0], t_axis[-1]))
+    t_right = int(np.searchsorted(t_axis, t_clamped))
+    lower = max(0, min(t_right - 1, len(t_axis) - 2))
+    fraction = (optics.width - widths[lower]) / (widths[lower + 1] - widths[lower])
+    for key, live in (('nodes', nodes), ('weights', weights)):
+        a, b = data[key][lower:lower + 2]
+        if (a.shape != live.shape or not -1e-10 <= fraction <= 1.0 + 1e-10
+                or not np.allclose(live, a + fraction * (b - a), rtol=1e-11, atol=1e-4)):
+            return None, None, {'rest_table_fallback_reason': 'Live rest-frame quadrature differs from the multi-waist table.'}
+
+    t_idx, t_fac, t_exact = _lagrange_weights(t_axis, t_clamped)
+    w_clamped = float(np.clip(w_mm, w_axis[0], w_axis[-1]))
+    w_idx, w_fac, w_exact = _lagrange_weights(np.log(w_axis), np.log(w_clamped))
+    rows = data['rest_excess']
+    # Separable interpolation: cubic Lagrange in T, then cubic Lagrange in log(w) at fixed fluence.
+    t_interp = sum(tf * rows[ti, :, :hi] for ti, tf in zip(t_idx, t_fac))
+    result = sum(wf * t_interp[wi] for wi, wf in zip(w_idx, w_fac))
+    ref_sub = data['refinements'][np.ix_(t_idx, w_idx, np.arange(hi))]
+    return i_slice, result, {
+        'rest_method': 'tabulated multi-waist fluence reference trajectories',
+        'rest_table_sha256': _MULTIWAIST_TABLE_SHA256,
+        'rest_temperature_nodes_c': t_axis[t_idx].tolist(),
+        'rest_temperature_interpolation': 'exact knot' if t_exact else 'local cubic',
+        'rest_waist_nodes_mm': w_axis[w_idx].tolist(),
+        'rest_waist_interpolation': 'exact knot' if w_exact else 'cubic log-waist',
+        'rest_table_refined_rows_at_knots': ref_sub[:, :, :, 0].sum(axis=(1, 2)).tolist(),
+        'rest_table_max_steps_at_knots': ref_sub[:, :, :, 1].max(axis=(1, 2)).tolist(),
     }
