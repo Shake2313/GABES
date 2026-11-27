@@ -34,6 +34,7 @@ class _DarkBlock:
 
 @dataclass(frozen=True)
 class _Reduction:
+    line: str
     ground: _DarkBlock
     excited: _DarkBlock
     optical_frequencies: np.ndarray
@@ -88,7 +89,7 @@ def prepare(isotope, line, field, jones, quantization, optical_increment):
     pe = (np.einsum("ij,ik->ijk", ue, ue.conj()).reshape(ne, -1) @ ue_h).real
     populations = linalg.block_diag(pg, pe)
     thermal = np.r_[np.full(ng, 1./ng), np.zeros(ne)]
-    return _Reduction(_DarkBlock(_energy_differences(eg), ug_h, 0.),
+    return _Reduction(line, _DarkBlock(_energy_differences(eg), ug_h, 0.),
                       _DarkBlock(_energy_differences(ee), ue_h, atom.gamma),
                       (ee[:, None] - eg).ravel(), atom.gamma / 2 + optical_increment,
                       recycling, to_optical, from_optical, populations,
@@ -133,14 +134,85 @@ def _within_residual(residual, *terms):
     return np.all(np.max(abs(residual), axis=0) <= 3e-11 * np.maximum(scale, np.finfo(float).tiny))
 
 
-def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpoint, check):
+def _neumann(rhs, amplitude_squared, operator, max_updates=10):
+    """Check the reduced SDIRK equation per RHS, including at the update cap."""
+    tolerance_squared = 1e-24 * np.einsum("ij,ij->j", rhs, rhs)
+    if not np.isfinite(tolerance_squared).all():
+        return None
+    solution = rhs.copy()
+    residual = amplitude_squared * (operator @ solution)
+    for update in range(max_updates + 1):
+        if np.all(np.einsum("ij,ij->j", residual, residual) <= tolerance_squared):
+            return solution
+        if update == max_updates:
+            return None
+        solution += residual
+        residual = (rhs - solution) + amplitude_squared * (operator @ solution)
+
+
+def _flight(model, first, second, roots, dt, stage, check):
+    state_d = np.zeros((model.populations.shape[1], len(roots)))
+    state_o = np.zeros((len(model.loss), len(roots)))
+    removed = np.zeros(len(roots))
+    d = field_history.SDIRK_DIAGONAL
+
+    def checked(old_d, old_o, shape, audit):
+        actual_d, actual_o = stage(old_d, old_o, shape, audit)
+        pop = model.populations @ actual_d
+        check(model.thermal[:, None] + roots * pop, 1. + roots * pop.sum(axis=0))
+        return actual_d, actual_o
+
+    try:
+        for step, (a, c) in enumerate(zip(first.T, second.T)):
+            audit = step in (0, first.shape[1]//2, first.shape[1]-1)
+            u_d, u_o = checked(state_d, state_o, a, audit)
+            rhs_d = state_d + ((1-d)/d) * (u_d - state_d)
+            rhs_o = state_o + ((1-d)/d) * (u_o - state_o)
+            state_d, state_o = checked(rhs_d, rhs_o, c, audit)
+            removed += dt * ((1-d) * a * (model.loss @ u_o) + d * c * (model.loss @ state_o))
+    except ArithmeticError:
+        return None
+    return removed
+
+
+def _iterative_stage(roots, dark_d, coherence, p, q, forcing, operator):
+    # An inexpensive sufficient contraction bound. Strong, near-resonant rays go
+    # straight to A1; the measured residual is the acceptance test for each RHS.
+    if max(roots)**2 * np.linalg.norm(operator, ord=np.inf) > 0.2:
+        return None
+    dark_ground_excited = sparse.csr_matrix(dark_d)
+    no = len(coherence)
+    c = np.r_[coherence.real, coherence.real][:, None]
+    s = coherence.imag[:, None]
+
+    def stage(old_d, old_o, shape, _audit):
+        amplitude = roots * shape
+        dark_rhs = dark_ground_excited @ old_d
+        rhs = c * old_o + np.vstack((-s * old_o[no:], s * old_o[:no]))
+        rhs += forcing[:, None] * shape + amplitude * (q @ dark_rhs)
+        actual_o = _neumann(rhs, amplitude**2, operator)
+        if actual_o is None:
+            raise ArithmeticError("Unresolved Neumann drive stage.")
+        actual_d = dark_rhs + p @ (amplitude * actual_o)
+        return actual_d, actual_o
+
+    return stage
+
+
+def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpoint, check, *,
+                neumann=None):
     """Eliminate gg/ee from both stages, with the original time and flux weights.
 
     Return None to request a retry with the original solver.
     """
+    # D2 off-resonant crossings can differ from the A1 eigenbasis solution
+    # beyond the replay tolerance, even with near-machine-precision residuals.
+    if neumann is None:
+        neumann = model.line == "D1"
     nb = len(first)
     count = len(roots)
-    rays = np.repeat(np.arange(nb), count)
+    first = np.repeat(first, count, axis=0)
+    second = np.repeat(second, count, axis=0)
     roots = np.tile(roots, nb)
     photons = np.zeros((nb, count))
     d = field_history.SDIRK_DIAGONAL
@@ -154,7 +226,15 @@ def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpo
         dark_o = _block_to_real(np.diag(coherence))
         p = shift * (dark_d @ model.from_optical)
         q = shift * (dark_o @ model.to_optical)
-        eigen = _eigen_blocks(q @ p)
+        operator = q @ p
+        if neumann:
+            stage = _iterative_stage(roots, dark_d, coherence, p, q, shift * (dark_o @ model.source), operator)
+            if stage is not None:
+                removed = _flight(model, first, second, roots, dt, stage, check)
+                if removed is not None:
+                    photons += flux[:, v, None] * removed.reshape(nb, count)
+                    continue
+        eigen = _eigen_blocks(operator)
         if eigen is None:
             return None
         re, im, basis, factors = eigen
@@ -163,9 +243,6 @@ def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpo
         to_d = linalg.lu_solve(factors, q @ dark_d, check_finite=False)
         source = shift * (to_o @ model.source)
         restore_d = p @ basis
-        state_d = np.zeros((p.shape[0], len(roots)))
-        state_o = np.zeros((q.shape[0], len(roots)))
-        removed = np.zeros(len(roots))
 
         def stage(old_d, old_o, shape, audit):
             amplitude = roots * shape
@@ -181,20 +258,10 @@ def fixed_steps(model, detuning, first, second, dx, scales, flux, roots, checkpo
                 if not (_within_residual(actual_o - coupling - rhs_o, actual_o, coupling, rhs_o)
                         and _within_residual(actual_d - feedback - dark_rhs, actual_d, feedback, dark_rhs)):
                     raise ArithmeticError("Unresolved reduced drive stage.")
-            populations = model.populations @ actual_d
-            check(model.thermal[:, None] + roots * populations, 1. + roots * populations.sum(axis=0))
             return actual_d, actual_o
 
-        try:
-            for step, (a, c) in enumerate(zip(first.T, second.T)):
-                audit = step in (0, first.shape[1]//2, first.shape[1]-1)
-                a, c = a[rays], c[rays]
-                u_d, u_o = stage(state_d, state_o, a, audit)
-                rhs_d = state_d + ((1-d)/d) * (u_d - state_d)
-                rhs_o = state_o + ((1-d)/d) * (u_o - state_o)
-                state_d, state_o = stage(rhs_d, rhs_o, c, audit)
-                removed += dt * ((1-d) * a * (model.loss @ u_o) + d * c * (model.loss @ state_o))
-        except ArithmeticError:
+        removed = _flight(model, first, second, roots, dt, stage, check)
+        if removed is None:
             return None
         photons += flux[:, v, None] * removed.reshape(nb, count)
     return photons.sum(axis=0)

@@ -178,6 +178,7 @@ def test_reduced_stage_fallback_and_cancellation(monkeypatch):
     with pytest.raises(CancelledError):
         atom.cross_sections(frequency, peak, WAIST, grid=GRID, checkpoint=cancel)
 
+    monkeypatch.setattr(_field_sdirk, "_iterative_stage", lambda *args: None)
     original = field_ballistic._fixed_steps
     seen = []
     def fallback(*args):
@@ -194,3 +195,57 @@ def test_reduced_stage_fallback_and_cancellation(monkeypatch):
         recovered = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
         np.testing.assert_allclose(recovered, fast, rtol=1e-12, atol=0.)
     assert len(seen) == 2
+
+
+def test_neumann_residual_cap():
+    from gabes import _field_sdirk
+
+    # The zero RHS passes immediately. The second RHS needs nine updates.
+    rhs = np.array([[0., 2.]])
+    amplitude_squared = np.ones(2)
+    operator = np.array([[0.06]])
+    assert _field_sdirk._neumann(rhs, amplitude_squared, operator, max_updates=8) is None
+    result = _field_sdirk._neumann(rhs, amplitude_squared, operator, max_updates=9)
+    assert result is not None
+    assert result[0, 0] == 0.
+    assert abs((rhs - result + operator @ result)[0, 1]) <= 1e-12 * rhs[0, 1]
+
+
+def test_neumann_crossing_and_capped_a1_replay(monkeypatch):
+    from functools import partial
+
+    from gabes import _field_sdirk
+
+    atom = FieldBallisticProbe(species.RB87, "D1", TEMPERATURE, field_ut=(23., -42., 57.),
+                              jones=(.8, .6j))
+    frequency = -500. * species.MHZ
+    peak = [0., .1, .27]
+    fixed = _field_sdirk.fixed_steps
+    with monkeypatch.context() as patch:
+        patch.setattr(_field_sdirk, "fixed_steps", partial(fixed, neumann=False))
+        expected = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
+    with monkeypatch.context() as patch:
+        def unexpected(matrix):
+            pytest.fail("weak off-resonant crossing fell back to A1")
+
+        patch.setattr(_field_sdirk, "_eigen_blocks", unexpected)
+        actual = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
+    np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=0.)
+
+    solve = _field_sdirk._neumann
+    monkeypatch.setattr(_field_sdirk, "_neumann", partial(solve, max_updates=0))
+    actual = atom.cross_sections(frequency, peak, WAIST, grid=GRID)
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_d2_retains_a1_when_neumann_is_not_certified(monkeypatch):
+    from gabes import _field_sdirk
+
+    def unexpected(*args):
+        pytest.fail("D2 entered an uncertified Neumann route")
+
+    monkeypatch.setattr(_field_sdirk, "_iterative_stage", unexpected)
+    atom = FieldBallisticProbe(species.RB87, "D2", TEMPERATURE, field_ut=(23., -42., 57.),
+                              jones=(.8, .6j))
+    result = atom.cross_sections(500. * species.MHZ, [.12], WAIST, grid=GRID)
+    assert result[0, 0] > 0.
