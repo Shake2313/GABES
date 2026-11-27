@@ -35,57 +35,82 @@ def setting():
     return hcoll, BallisticProbe85D1(TEMP).speed_sigma
 
 
+@pytest.fixture(scope="module")
+def crossing_cache():
+    """Share identical crossing solves across tests without relaxing any check."""
+    return {}
+
+
 def _photons(setting, rest, field=(0.0, 0.0, 0.0), jones=(1.0, 0.0), steps=384, quantization="k",
-             intensity=INTENSITY):
+             intensity=INTENSITY, cache=None):
+    key = (float(rest), tuple(float(v) for v in field), tuple(complex(v) for v in jones),
+           int(steps), quantization, float(intensity))
+    if cache is not None and key in cache:
+        return cache[key]
     hcoll, speed = setting
     ops = fh.operators("Rb85", "D1", rest, field_ut=field, jones=jones,
                        optical_hwhm_increment_rad_s=hcoll, quantization=quantization)
-    return fh.crossing(ops, intensity, WAIST, speed, steps=steps)
+    result = fh.crossing(ops, intensity, WAIST, speed, steps=steps)
+    if cache is not None:
+        cache[key] = result
+    return result
 
 
-@pytest.mark.parametrize("key", sorted(RECORDED))
-def test_reproduces_the_independent_obe_control(setting, key):
+@pytest.mark.parametrize("key", [
+    pytest.param(key, marks=pytest.mark.xdist_group("field_history_k_axis"))
+    if key[0] == RESONANT else key
+    for key in sorted(RECORDED)
+])
+def test_reproduces_the_independent_obe_control(setting, crossing_cache, key):
     rest, field = key
     # 768 steps: the 768 -> 1536 change is ~5e-10 relative (runs/field_history_2026_11_26).
-    result = _photons(setting, rest, (0.0, 0.0, field), steps=768)
+    result = _photons(setting, rest, (0.0, 0.0, field), steps=768, cache=crossing_cache)
     assert result["photons"] == pytest.approx(RECORDED[key], rel=1e-6)
     assert result["trace_error"] < 1e-12
     assert result["min_population"] > -1e-12
 
 
-def test_field_along_k_raises_resonant_absorption_by_the_recorded_amount(setting):
-    zero = _photons(setting, RESONANT)["photons"]
-    perp = _photons(setting, RESONANT, (0.0, 0.0, 50.0))["photons"]
+@pytest.mark.xdist_group("field_history_k_axis")
+def test_field_along_k_raises_resonant_absorption_by_the_recorded_amount(setting, crossing_cache):
+    # Reuses the 768-step resonant control crossings when run in the same worker.
+    zero = _photons(setting, RESONANT, steps=768, cache=crossing_cache)["photons"]
+    perp = _photons(setting, RESONANT, (0.0, 0.0, 50.0), steps=768, cache=crossing_cache)["photons"]
     assert perp / zero - 1 == pytest.approx(0.2909, abs=2e-3)
 
 
 @pytest.mark.parametrize("jones, parallel, perpendicular", [
-    ((1.0, 0.0), (50.0, 0.0, 0.0), (0.0, 50.0, 0.0)),
+    pytest.param((1.0, 0.0), (50.0, 0.0, 0.0), (0.0, 50.0, 0.0),
+                 marks=pytest.mark.xdist_group("field_history_x_linear")),
     ((0.0, 1.0), (0.0, 50.0, 0.0), (50.0, 0.0, 0.0)),
     ((1.0, 1.0), (35.0, 35.0, 0.0), (35.0, -35.0, 0.0)),
 ])
-def test_field_parallel_to_linear_light_does_not_mix(setting, jones, parallel, perpendicular):
-    zero = _photons(setting, RESONANT, jones=jones)["photons"]
-    assert _photons(setting, RESONANT, parallel, jones)["photons"] == pytest.approx(zero, rel=1e-6)
-    assert _photons(setting, RESONANT, perpendicular, jones)["photons"] / zero - 1 > 0.2
+def test_field_parallel_to_linear_light_does_not_mix(setting, crossing_cache, jones, parallel, perpendicular):
+    zero = _photons(setting, RESONANT, jones=jones, cache=crossing_cache)["photons"]
+    assert _photons(setting, RESONANT, parallel, jones, cache=crossing_cache)["photons"] == pytest.approx(zero, rel=1e-6)
+    assert _photons(setting, RESONANT, perpendicular, jones, cache=crossing_cache)["photons"] / zero - 1 > 0.2
 
 
-@pytest.mark.parametrize("field", [(50.0, 0.0, 0.0), (0.0, 50.0, 0.0), (30.0, 20.0, -40.0)])
-def test_beam_axis_and_polarization_axis_quantization_agree(setting, field):
-    k = _photons(setting, RESONANT, field)["photons"]
-    e = _photons(setting, RESONANT, field, quantization="E")["photons"]
+@pytest.mark.parametrize("field", [
+    pytest.param((50.0, 0.0, 0.0), marks=pytest.mark.xdist_group("field_history_x_linear")),
+    pytest.param((0.0, 50.0, 0.0), marks=pytest.mark.xdist_group("field_history_x_linear")),
+    (30.0, 20.0, -40.0),
+])
+def test_beam_axis_and_polarization_axis_quantization_agree(setting, crossing_cache, field):
+    k = _photons(setting, RESONANT, field, cache=crossing_cache)["photons"]
+    e = _photons(setting, RESONANT, field, quantization="E", cache=crossing_cache)["photons"]
     assert e == pytest.approx(k, rel=1e-9)
 
 
-def test_weak_drive_is_linear(setting):
-    low = _photons(setting, RESONANT, intensity=INTENSITY * 1e-8)["photons"]
-    double = _photons(setting, RESONANT, intensity=INTENSITY * 2e-8)["photons"]
+def test_weak_drive_is_linear(setting, crossing_cache):
+    low = _photons(setting, RESONANT, intensity=INTENSITY * 1e-8, cache=crossing_cache)["photons"]
+    double = _photons(setting, RESONANT, intensity=INTENSITY * 2e-8, cache=crossing_cache)["photons"]
     assert double / low == pytest.approx(2.0, rel=1e-5)
 
 
-def test_step_doubling_converges(setting):
-    coarse = _photons(setting, RESONANT, (0.0, 50.0, 0.0), steps=384)["photons"]
-    fine = _photons(setting, RESONANT, (0.0, 50.0, 0.0), steps=768)["photons"]
+@pytest.mark.xdist_group("field_history_x_linear")
+def test_step_doubling_converges(setting, crossing_cache):
+    coarse = _photons(setting, RESONANT, (0.0, 50.0, 0.0), steps=384, cache=crossing_cache)["photons"]
+    fine = _photons(setting, RESONANT, (0.0, 50.0, 0.0), steps=768, cache=crossing_cache)["photons"]
     assert fine == pytest.approx(coarse, rel=1e-5)
 
 
