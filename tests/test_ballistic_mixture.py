@@ -88,7 +88,7 @@ def test_saturated_isotopes_share_one_propagating_beam(monkeypatch):
     def local(optics, scan, intensities, resolution, **kwargs):
         scale = intrinsic[optics.isotope]*(1 + .15*np.sin(scan/sample_scale)) / column
         table = scale[None, :] * (intensities[:, None]/peak)**(-exponent)
-        return table[0], table
+        return table[0], table, np.asarray(intensities, dtype=float)
 
     monkeypatch.setattr(history, "_thermal_table", local)
     result = history.evaluate_rb_ballistic_spectrum(c, SCAN)
@@ -116,7 +116,7 @@ def test_live_finite_transverse_trajectories_reduce_thermal_absorption(iso, line
     atom = species.build_manifold(iso, line)
     scan = np.array([atom.omega[0], atom.omega[-1], atom.omega[0]])
     mesh = history._Resolution(path_nodes=(32,4,6), panel_order=2, wing_widths=64)
-    weak, finite = history._thermal_table(part, scan, [10.], mesh)
+    weak, finite, _ = history._thermal_table(part, scan, [10.], mesh)
     assert np.all(finite > 0) and np.all(finite[0] < weak)
     assert finite[0, 0] == pytest.approx(finite[0, 2], rel=1e-14, abs=0)
 
