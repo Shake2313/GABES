@@ -460,7 +460,9 @@ class LevelStructure:
     mass: float                      # kg
 
 
-@functools.lru_cache(maxsize=8)
+# Large enough for every supported and planned isotope/line pair, so a cached
+# build_multilevel_atom never outlives the level structure it shares arrays with.
+@functools.lru_cache(maxsize=32)
 def level_structure(isotope, line):
     """Signed dipoles C_q, energies, Γ and d0² for a registry key or isotope record."""
     iso = isotope if isinstance(isotope, Isotope) else ISOTOPES[isotope]
